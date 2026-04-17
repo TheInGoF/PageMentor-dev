@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       piper_langs:
-        description: "Piper voice languages to bake in (comma-separated, e.g. de,en,fr)"
+        description: "Piper voice languages (comma-separated, e.g. de,en,fr). Must match an existing pagementor-piper-voices tag — otherwise run that workflow first."
         required: false
         default: ""
 
@@ -32,11 +32,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve piper-voices tag
+        id: voices
+        run: |
+          raw="${{ inputs.piper_langs != '' && inputs.piper_langs || vars.PIPER_LANGS || 'de,en' }}"
+          tag="$(echo "$raw" \
+            | tr '[:upper:]' '[:lower:]' \
+            | tr -d ' ' \
+            | tr ',' '\n' \
+            | sort -u \
+            | paste -sd- -)"
+          echo "image=ghcr.io/lordvonbaum/pagementor-piper-voices:${tag}" >> "$GITHUB_OUTPUT"
+
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # Repository owner lowercased — ghcr.io requires lowercase.
           images: ghcr.io/lordvonbaum/pagementor
           tags: |
             type=ref,event=branch
@@ -51,12 +62,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # PIPER_LANGS resolution order:
-          #   1. workflow_dispatch input (one-off build with custom langs)
-          #   2. repository variable PIPER_LANGS (persistent override,
-          #      set under Settings → Secrets and variables → Actions → Variables)
-          #   3. Dockerfile ARG default (de,en)
+          # Main app never downloads voices itself — it COPYs from the
+          # pre-built piper-voices image resolved above.
           build-args: |
-            PIPER_LANGS=${{ inputs.piper_langs != '' && inputs.piper_langs || vars.PIPER_LANGS || 'de,en' }}
+            PIPER_VOICES_IMAGE=${{ steps.voices.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

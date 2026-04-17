@@ -1,12 +1,18 @@
 # syntax=docker/dockerfile:1.7
 
+# Upstream piper-voices image (binary + baked voice models). Built by
+# a separate workflow when PIPER_LANGS or the download script changes,
+# so normal app builds skip the ~230–540 MB voice download entirely.
+ARG PIPER_VOICES_IMAGE=ghcr.io/lordvonbaum/pagementor-piper-voices:latest
+
 # ---------------------------------------------------------------------------
 # Backend deps (Bun)
 # ---------------------------------------------------------------------------
 FROM oven/bun:1-slim AS backend-deps
 WORKDIR /app/backend
 COPY backend/package.json backend/bun.lock* ./
-RUN bun install --frozen-lockfile || bun install
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile || bun install
 
 # ---------------------------------------------------------------------------
 # Frontend build (Node)
@@ -14,60 +20,40 @@ RUN bun install --frozen-lockfile || bun install
 FROM node:22-alpine AS frontend
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --no-audit --no-fund
 COPY frontend/ .
-RUN npm run build
+RUN --mount=type=cache,target=/root/.npm \
+    npm run build
 
 # ---------------------------------------------------------------------------
-# Piper binary + voice models (built once, baked into image)
-#
-# PIPER_LANGS is a comma-separated list of ISO language codes (e.g.
-# "de,en,fr"). Each known language pulls a single curated voice during
-# image build. At runtime the container uses only those cached files —
-# no network required for TTS.
+# Piper assets — pulled from the pre-built image above. No download in
+# this build.
 # ---------------------------------------------------------------------------
-FROM debian:12-slim AS piper-voices
-ARG PIPER_LANGS=de,en
-ARG PIPER_VERSION=2023.11.14-2
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl \
- && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /opt
-# Piper release tarball for linux/amd64. NB: our GHA runner builds linux/amd64
-# only; if multi-arch is ever enabled, swap the URL based on TARGETARCH.
-RUN curl -fsSL -o piper.tar.gz \
-      "https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_linux_x86_64.tar.gz" \
- && tar -xzf piper.tar.gz \
- && rm piper.tar.gz \
- && chmod +x /opt/piper/piper
-
-WORKDIR /voices
-COPY docker/download-piper-voices.sh /usr/local/bin/download-piper-voices.sh
-RUN chmod +x /usr/local/bin/download-piper-voices.sh \
- && /usr/local/bin/download-piper-voices.sh "${PIPER_LANGS}" /voices
+FROM ${PIPER_VOICES_IMAGE} AS piper-assets
 
 # ---------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------
 FROM oven/bun:1-slim
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
  && apt-get install -y --no-install-recommends \
       ffmpeg curl poppler-utils tesseract-ocr \
       tesseract-ocr-deu tesseract-ocr-eng \
-      libstdc++6 libc6 \
- && rm -rf /var/lib/apt/lists/*
+      libstdc++6 libc6
 
 WORKDIR /app
 COPY --from=backend-deps /app/backend/node_modules ./node_modules
 COPY backend/ .
 COPY --from=frontend /app/dist ./public
 
-# Piper binary + libs + voice models
-COPY --from=piper-voices /opt/piper /opt/piper
-COPY --from=piper-voices /voices /app/piper-voices
+# Piper binary + libs + voice models come straight from the piper-voices
+# image — the main build never downloads these itself.
+COPY --from=piper-assets /opt/piper /opt/piper
+COPY --from=piper-assets /voices /app/piper-voices
 
 ENV PM_PIPER_BIN=/opt/piper/piper \
     PM_PIPER_DIR=/app/piper-voices \
