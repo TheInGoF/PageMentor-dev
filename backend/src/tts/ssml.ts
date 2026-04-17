@@ -27,9 +27,10 @@ export function buildSsml(segment: Segment, opts: BuildOptions): string {
 
   const inner: string[] = [];
   if (opts.announce) {
-    inner.push(
-      `<emphasis level="moderate">${escapeXml(opts.announce)}</emphasis><break time="1200ms"/>`
-    );
+    // Kapitelansage als normaler Satz — <emphasis> wird von Multilingual-
+    // Stimmen (Seraphina/Florian) inkonsistent unterstützt und triggert
+    // gerne silent-reject (Server liefert 0 Bytes statt Fehler).
+    inner.push(`${escapeXml(opts.announce)}.<break time="1200ms"/>`);
   }
   for (let i = 0; i < segment.paragraphs.length; i++) {
     if (i > 0) inner.push(`<break time="600ms"/>`);

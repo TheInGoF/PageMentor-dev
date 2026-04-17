@@ -156,20 +156,40 @@ export const edgeEngine: TtsEngine = {
 
     const fileStream = createWriteStream(params.outPath);
     let bytes = 0;
+    let streamError: Error | null = null;
     audioStream.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
+    });
+    audioStream.on("error", (err: Error) => {
+      streamError = err;
     });
 
     try {
       await pipeline(audioStream as unknown as Readable, fileStream);
+    } catch (err) {
+      // Pipeline-Errors (WebSocket-Abbruch, Server-Reject) durchreichen —
+      // die sind informativer als das stumme 0-Byte-Ende.
+      streamError = err instanceof Error ? err : new Error(String(err));
     } finally {
       tts.close();
     }
 
     if (bytes === 0) {
+      // Klare Diagnose, wenn Edge nichts liefert.
+      const details = [
+        `voice=${params.voice.id}`,
+        `locale=${params.locale}`,
+        `ssml_chars=${ssml.length}`,
+        `segment_paragraphs=${params.segment.paragraphs.length}`,
+        `announce=${params.announce ? "yes" : "no"}`,
+        streamError ? `stream_error=${streamError.message}` : "stream_error=none",
+      ].join(" ");
+      console.error(`[edge-tts] empty audio — ${details}`);
+      if (params.announce) {
+        console.error(`[edge-tts] ssml preview: ${ssml.slice(0, 220).replace(/\s+/g, " ")}…`);
+      }
       throw new Error(`Edge TTS returned empty audio for voice=${params.voice.id}`);
     }
-    // statSync nur als sanity check — Edge bricht oben schon ab wenn leer.
     const size = statSync(params.outPath).size;
     return { path: params.outPath, bytes: size };
   },
