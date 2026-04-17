@@ -3,11 +3,14 @@
 # Before first start, create the folders on the NAS (File Station or SSH):
 #   /volume1/docker/pagementor/data
 #   /volume1/docker/pagementor/meili
-#   /volume1/docker/pagementor/ollama          (optional, only with --profile ai)
 #
 # Then either:
 #   A) CLI:       docker compose up -d
 #   B) Portainer: paste this file into "Stacks > Add Stack > Web editor".
+#
+# All LLM endpoints (Ollama URLs, API keys, models) are configured
+# live in the Settings modal — they persist to data/llm-config.json
+# and survive container rebuilds. No ENV juggling needed.
 
 name: pagementor
 
@@ -23,19 +26,6 @@ services:
       PM_DATA_DIR: /data
       MEILI_URL: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-pm-dev-key}
-      # LLM provider chain — first that answers is used.
-      # All optional; runtime-overridable via the Settings modal
-      # (persisted to data/llm-config.json).
-      PM_OLLAMA_URL_PC: ${PM_OLLAMA_URL_PC:-}
-      PM_OLLAMA_URL_MAC: ${PM_OLLAMA_URL_MAC:-}
-      PM_OLLAMA_URL: ${PM_OLLAMA_URL:-}
-      PM_OLLAMA_MODEL: ${PM_OLLAMA_MODEL:-llama3.1:8b}
-      PM_ANTHROPIC_API_KEY: ${PM_ANTHROPIC_API_KEY:-}
-      PM_ANTHROPIC_MODEL: ${PM_ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
-      PM_OPENAI_API_KEY: ${PM_OPENAI_API_KEY:-}
-      PM_OPENAI_MODEL: ${PM_OPENAI_MODEL:-gpt-4o-mini}
-      PM_GOOGLE_API_KEY: ${PM_GOOGLE_API_KEY:-}
-      PM_GOOGLE_MODEL: ${PM_GOOGLE_MODEL:-gemini-2.0-flash}
     volumes:
       - /volume1/docker/pagementor/data:/data
     depends_on:
@@ -56,11 +46,3 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: pm-ollama
-    profiles: ["ai"]
-    restart: unless-stopped
-    volumes:
-      - /volume1/docker/pagementor/ollama:/root/.ollama

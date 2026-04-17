@@ -30,8 +30,10 @@ export interface Provider {
 }
 
 function buildCandidates(): Provider[] {
-  const defaultOllama =
-    effective("ollamaModel", "PM_OLLAMA_MODEL") || "llama3.1:8b";
+  // For Ollama endpoints, an empty default means "auto-pick the first
+  // model pulled on that server". The concrete resolve happens per
+  // call in resolveOllamaModel().
+  const defaultOllama = effective("ollamaModel", "PM_OLLAMA_MODEL") || "";
   const defaultClaude =
     effective("anthropicModel", "PM_ANTHROPIC_MODEL") ||
     "claude-haiku-4-5-20251001";
@@ -115,6 +117,36 @@ async function pingOllama(url: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Query an Ollama server for the models it actually has pulled. */
+async function ollamaTags(url: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${url}/api/tags`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { models?: Array<{ name: string }> };
+    return (data.models ?? []).map((m) => m.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve the model name for an Ollama call:
+ *  - if a specific name is requested and the server has it, use it
+ *  - else pick the first available model on that server
+ *  - else fall back to the requested name and let Ollama surface the error
+ */
+async function resolveOllamaModel(
+  url: string,
+  requested: string | undefined
+): Promise<string> {
+  const available = await ollamaTags(url);
+  if (requested && available.includes(requested)) return requested;
+  if (available.length > 0) return available[0];
+  return requested || "llama3.2:3b";
 }
 
 export async function pickProvider(force = false): Promise<Provider | null> {
@@ -226,9 +258,10 @@ export async function generate(params: {
   const p = await pickProvider();
   if (!p) throw new Error("No LLM provider configured");
   const started = Date.now();
-  const model = params.model || p.model;
+  let model = params.model || p.model;
 
   if (p.type === "ollama" && p.url) {
+    model = await resolveOllamaModel(p.url, model);
     const res = await fetch(`${p.url}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -322,9 +355,10 @@ export async function generateStream(params: {
 }): Promise<{ full: string; model: string }> {
   const p = await pickProvider();
   if (!p) throw new Error("No LLM provider configured");
-  const model = params.model || p.model;
+  let model = params.model || p.model;
 
   if (p.type === "ollama" && p.url) {
+    model = await resolveOllamaModel(p.url, model);
     const res = await fetch(`${p.url}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

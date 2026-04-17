@@ -403,7 +403,7 @@ const en: Record<string, string> = {
   "settings.llm.ollamaUrlPc": "PC (NVIDIA) Ollama URL",
   "settings.llm.ollamaUrlMac": "Mac (Apple Silicon) Ollama URL",
   "settings.llm.ollamaUrl": "Fallback Ollama URL (NAS, same-host …)",
-  "settings.llm.ollamaModel": "Default Ollama model",
+  "settings.llm.ollamaModel": "Default Ollama model (leave empty for auto-detect)",
   "settings.llm.anthropicApiKey": "Claude API key",
   "settings.llm.anthropicKeyStored": "A key is stored. Leave blank to keep it.",
   "settings.llm.anthropicKeyPlaceholder": "sk-ant-…",
@@ -837,7 +837,7 @@ const de: Record<string, string> = {
   "settings.llm.ollamaUrlPc": "PC (NVIDIA) Ollama-URL",
   "settings.llm.ollamaUrlMac": "Mac (Apple Silicon) Ollama-URL",
   "settings.llm.ollamaUrl": "Fallback Ollama-URL (NAS, same-host …)",
-  "settings.llm.ollamaModel": "Default Ollama-Modell",
+  "settings.llm.ollamaModel": "Default Ollama-Modell (leer = Auto-Detect)",
   "settings.llm.anthropicApiKey": "Claude-API-Key",
   "settings.llm.anthropicKeyStored":
     "Ein Key ist gespeichert. Feld leer lassen, um ihn zu behalten.",

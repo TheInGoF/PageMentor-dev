@@ -287,7 +287,7 @@ export function SettingsModal({ open, onClose }: Props) {
             label={t("settings.llm.ollamaModel")}
             value={llmConfig.ollamaModel ?? ""}
             onChange={(e) => setLlmConfig({ ...llmConfig, ollamaModel: e.target.value })}
-            placeholder="llama3.1:8b"
+            placeholder="auto"
           />
 
           <ApiProviderBlock
