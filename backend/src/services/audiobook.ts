@@ -169,14 +169,11 @@ export async function generateAudiobook(params: {
         });
       } catch (err) {
         if (err instanceof AudiobookCanceled) throw err;
-        upsertAudio({
-          chapterId: ch.id,
-          storedRelPath: relPath(outFile),
-          durationMs: 0,
-          voice: voiceId,
-          engine: engineId,
-          status: "failed",
-        });
+        // Kein Failed-DB-Row mehr anlegen — nutzlos, muss nur manuell
+        // aufgeräumt werden. Wenn ein früherer Run eine alte Datei/Row
+        // für dieses Kapitel hinterlassen hat, jetzt wegräumen, damit
+        // das UI das Kapitel sauber als "noch kein Audio" anzeigt.
+        deleteAudioForChapter(ch.id, outFile);
         emit({
           phase: "audiobook.chapter.failed",
           docId: doc.id,
@@ -378,6 +375,18 @@ function upsertAudio(params: {
       params.status
     );
   }
+}
+
+/** Entfernt Audio-Row + MP3-Datei für ein einzelnes Kapitel. Wird beim
+ *  Scheitern einer Synthese aufgerufen, damit die Bibliothek keinen
+ *  toten Failed-Eintrag zurücklässt. */
+function deleteAudioForChapter(chapterId: string, chapterFilePath: string): void {
+  try {
+    if (existsSync(chapterFilePath)) rmSync(chapterFilePath, { force: true });
+  } catch {
+    // best effort
+  }
+  db().prepare("DELETE FROM audio WHERE chapter_id = ?").run(chapterId);
 }
 
 /** Entfernt alle generierten Hörbuch-Dateien für ein Dokument. */

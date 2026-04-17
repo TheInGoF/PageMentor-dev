@@ -21,7 +21,7 @@ const app = new Hono();
 app.use("/*", cors());
 
 // Public
-app.get("/api/health", (c) => c.json({ status: "ok", version: "1.10.002" }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: "1.10.003" }));
 app.route("/api/auth", authRoutes);
 // Podcast-Feed liegt öffentlich (Token-Auth im Pfad), damit Apple
 // Podcasts / Overcast ihn ohne Cookie ziehen können.

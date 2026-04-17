@@ -19,7 +19,10 @@ import type { Voice } from "./engines/base";
 
 /** Edge-spezifischer Backoff zwischen Chunks, um Microsofts
  *  Anti-Abuse-Gate nicht zu triggern. Piper hat kein Rate-Limit. */
-const EDGE_INTER_CHUNK_DELAY_MS = 150;
+const EDGE_INTER_CHUNK_DELAY_MS = 500;
+/** Längerer Cooldown wenn Edge stumm 0 Bytes geliefert hat — das ist
+ *  Microsofts Rate-Limit-Signatur, ein einfacher Retry bringt nichts. */
+const EDGE_EMPTY_AUDIO_COOLDOWN_MS = 5000;
 const MAX_RETRIES = 2;
 
 export interface ChunkSynthesisParams {
@@ -66,7 +69,15 @@ export async function synthesizeChunk(
     } catch (err) {
       lastErr = err;
       if (attempt < MAX_RETRIES) {
-        await sleep(400 * Math.pow(2, attempt));
+        // Edge-Empty-Audio ist Rate-Limit — kurzer Backoff bringt nichts.
+        const isEdgeEmpty =
+          engine.id === "edge" &&
+          err instanceof Error &&
+          /empty audio/i.test(err.message);
+        const backoff = isEdgeEmpty
+          ? EDGE_EMPTY_AUDIO_COOLDOWN_MS
+          : 400 * Math.pow(2, attempt);
+        await sleep(backoff);
       }
     }
   }
