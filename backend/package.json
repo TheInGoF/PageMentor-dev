@@ -1,6 +1,6 @@
 {
   "name": "pagementor-backend",
-  "version": "1.04.001",
+  "version": "1.04.002",
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",
@@ -9,7 +9,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "@google/generative-ai": "^0.24.1",
-    "better-sqlite3": "^11.7.0",
     "hono": "^4.7.0",
     "meilisearch": "^0.57.0",
     "msedge-tts": "^2.0.5",
@@ -17,7 +16,6 @@
     "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^25.6.0",
     "@types/pdf-parse": "^1.1.4",
     "bun-types": "^1.2.0",

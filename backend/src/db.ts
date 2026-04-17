@@ -1,16 +1,18 @@
-import Database from "better-sqlite3";
-import { join } from "path";
+import { Database } from "bun:sqlite";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const DB_PATH = join(DATA_DIR, "pagementor.db");
 
-let _db: Database.Database;
+let _db: Database;
 
-export function db(): Database.Database {
+export function db(): Database {
   if (!_db) {
-    _db = new Database(DB_PATH);
-    _db.pragma("journal_mode = WAL");
-    _db.pragma("foreign_keys = ON");
+    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+    _db = new Database(DB_PATH, { create: true });
+    _db.exec("PRAGMA journal_mode = WAL");
+    _db.exec("PRAGMA foreign_keys = ON");
   }
   return _db;
 }
