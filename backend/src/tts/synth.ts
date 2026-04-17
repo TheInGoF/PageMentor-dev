@@ -1,52 +1,94 @@
 /**
- * Einstiegspunkt für Kapitel-TTS (Piper).
+ * Engine-Dispatcher. Routet jeden Chunk zur passenden Engine und
+ * führt Retries mit Backoff aus — bewusst *ohne* stummen Fallback auf
+ * eine andere Engine. Wenn Edge wegen Rate-Limit dauerhaft 0 Bytes
+ * liefert, soll der User das Kapitel rot blinken sehen und selbst
+ * entscheiden, ob er eine andere Stimme wählt.
  *
- * Piper kennt kein SSML — Input ist Plain-Text, Pausen ergeben sich
- * aus Satzzeichen und Zeilenumbrüchen. Der Chapter-Runner prepended
- * die Kapitelansage als eigenen Satz.
+ * Strategie:
+ *   - Pro Chunk bis zu 2 Retries mit 400 ms / 800 ms Backoff.
+ *   - Edge-Chunks kriegen zusätzlich 150 ms Inter-Chunk-Pause, damit
+ *     Microsofts Anti-Abuse-Gate nicht bei Schlag 20 kippt.
+ *   - Bei endgültigem Fail: `ChunkSynthesisFailure` nach oben.
  */
 
-import { mkdtempSync, rmSync, statSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import {
-  synthesizePiperPreview,
-  synthesizeTextToWav,
-  wavToMp3,
-} from "./piper";
+import { setTimeout as sleep } from "timers/promises";
+import { findVoice, engineFor } from "./voices";
+import type { Segment } from "./segment";
+import type { Voice } from "./engines/base";
 
-export async function synthesizeSegmentToFile(params: {
+/** Edge-spezifischer Backoff zwischen Chunks, um Microsofts
+ *  Anti-Abuse-Gate nicht zu triggern. Piper hat kein Rate-Limit. */
+const EDGE_INTER_CHUNK_DELAY_MS = 150;
+const MAX_RETRIES = 2;
+
+export interface ChunkSynthesisParams {
+  segment: Segment;
   text: string;
-  voice: string;
+  voice: Voice;
+  locale: string;
+  rate: string;
+  announce?: string;
   outPath: string;
-}): Promise<{ path: string; bytes: number }> {
-  const dir = mkdtempSync(join(tmpdir(), "piper-chunk-"));
-  const wav = join(dir, "chunk.wav");
-  try {
-    await synthesizeTextToWav({
-      text: params.text,
-      voiceId: params.voice,
-      outPath: wav,
-    });
-    await wavToMp3(wav, params.outPath);
-    const bytes = statSync(params.outPath).size;
-    if (bytes === 0) {
-      throw new Error(`Piper produced empty audio for voice=${params.voice}`);
-    }
-    return { path: params.outPath, bytes };
-  } finally {
-    try {
-      rmSync(dir, { recursive: true, force: true });
-    } catch {
-      // best effort
-    }
+}
+
+export class ChunkSynthesisFailure extends Error {
+  constructor(public voiceId: string, public cause: unknown) {
+    super(`Chunk synthesis failed for voice=${voiceId}: ${String((cause as Error)?.message ?? cause)}`);
   }
 }
 
-/** Kurzes Preview — liefert MP3-Buffer. */
+/**
+ * Synthesisiert einen Chunk über die für die Voice passende Engine.
+ * Führt Retries mit Backoff aus. Wirft `ChunkSynthesisFailure` wenn
+ * alle Versuche scheitern — der Caller darf das als Signal zum
+ * Engine-Switch interpretieren.
+ */
+export async function synthesizeChunk(
+  params: ChunkSynthesisParams
+): Promise<{ path: string; bytes: number; engineId: "piper" | "edge" }> {
+  const engine = engineFor(params.voice.engine);
+  if (!engine) throw new Error(`Unknown TTS engine: ${params.voice.engine}`);
+
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await engine.synthesize({
+        segment: params.segment,
+        text: params.text,
+        voice: params.voice,
+        locale: params.locale,
+        rate: params.rate,
+        announce: params.announce,
+        outPath: params.outPath,
+      });
+      return { ...result, engineId: engine.id };
+    } catch (err) {
+      lastErr = err;
+      if (attempt < MAX_RETRIES) {
+        await sleep(400 * Math.pow(2, attempt));
+      }
+    }
+  }
+  throw new ChunkSynthesisFailure(params.voice.id, lastErr);
+}
+
+/** Engine-aware Inter-Chunk-Pause. Nur Edge braucht sie. */
+export async function interChunkPause(engineId: "piper" | "edge"): Promise<void> {
+  if (engineId === "edge") await sleep(EDGE_INTER_CHUNK_DELAY_MS);
+}
+
+/** Preview → Buffer. Keine Retries/Fallbacks — wenn die Engine nicht
+ *  antwortet, sieht der User das sofort. */
 export async function synthesizePreview(params: {
   voice: string;
+  locale: string;
   text: string;
 }): Promise<Buffer> {
-  return synthesizePiperPreview({ voiceId: params.voice, text: params.text });
+  const voice = findVoice(params.voice);
+  if (!voice) throw new Error(`Unknown voice: ${params.voice}`);
+  const engine = engineFor(voice.engine);
+  if (!engine) throw new Error(`Unknown TTS engine: ${voice.engine}`);
+  return engine.preview({ voice, locale: params.locale, text: params.text });
 }
+

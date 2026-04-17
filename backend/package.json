@@ -1,6 +1,6 @@
 {
   "name": "pagementor-backend",
-  "version": "1.09.000",
+  "version": "1.10.000",
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",
@@ -11,6 +11,7 @@
     "@google/generative-ai": "^0.24.1",
     "hono": "^4.7.0",
     "meilisearch": "^0.57.0",
+    "msedge-tts": "^2.0.5",
     "openai": "^6.34.0",
     "pdf-parse": "^1.1.1"
   },

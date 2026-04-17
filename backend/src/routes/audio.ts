@@ -10,6 +10,7 @@ import {
   isGenerating,
   clearAudio,
   clearAudioForChapter,
+  cancelAudiobook,
 } from "../services/audiobook";
 import { subscribe, getRecent } from "../services/events";
 import { tt } from "../lib/i18n";
@@ -34,7 +35,7 @@ audioRoutes.get("/preview", async (c) => {
     : "Welcome to PageMentor. This is how your audiobook will sound.";
 
   try {
-    const buf = await synthesizePreview({ voice: voiceId, text: sample });
+    const buf = await synthesizePreview({ voice: voiceId, locale: voice.locale, text: sample });
     // Use the underlying ArrayBuffer so Response accepts it cleanly under both Bun and Node types.
     const body = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) as unknown as BodyInit;
     return new Response(body, {
@@ -109,6 +110,13 @@ audioRoutes.delete("/chapter/:audioId", (c) => {
   const ok = clearAudioForChapter(c.req.param("audioId"));
   if (!ok) return c.json({ error: tt(c, "err.notReady") }, 404);
   return c.json({ status: "ok" });
+});
+
+// Cancel an in-progress audiobook generation. Chapters already finished
+// remain in place; the worker stops before the next chunk.
+audioRoutes.post("/cancel/:docId", (c) => {
+  const ok = cancelAudiobook(c.req.param("docId"));
+  return c.json({ status: ok ? "canceling" : "not-running" });
 });
 
 // Stream a chapter MP3 with HTTP Range support (for seek/scrub).

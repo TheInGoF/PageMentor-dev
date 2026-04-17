@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, rmSync, readdirSync } from "fs";
 import { join as pathJoin } from "path";
 import { db } from "../db";
 import { segmentText } from "../tts/segment";
-import { synthesizeSegmentToFile } from "../tts/synth";
+import { synthesizeChunk, interChunkPause } from "../tts/synth";
 import { concatMp3, normalizeAndTag, buildM4B } from "../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../tts/voices";
 import { emit } from "./events";
@@ -28,10 +28,26 @@ interface Document {
   language: string;
 }
 
-const running = new Set<string>();
+const running = new Map<string, AbortController>();
 
 export function isGenerating(docId: string): boolean {
   return running.has(docId);
+}
+
+export class AudiobookCanceled extends Error {
+  constructor() {
+    super("audiobook.canceled");
+    this.name = "AudiobookCanceled";
+  }
+}
+
+/** Signalisiert dem laufenden Worker, nach dem aktuellen Chunk zu
+ *  stoppen. Bereits fertige Kapitel bleiben erhalten. */
+export function cancelAudiobook(docId: string): boolean {
+  const ctrl = running.get(docId);
+  if (!ctrl) return false;
+  ctrl.abort();
+  return true;
 }
 
 export async function generateAudiobook(params: {
@@ -40,7 +56,9 @@ export async function generateAudiobook(params: {
   rate?: string;
 }): Promise<void> {
   if (running.has(params.docId)) return;
-  running.add(params.docId);
+  const abortController = new AbortController();
+  running.set(params.docId, abortController);
+  const signal = abortController.signal;
 
   const d = db();
   const doc = d.prepare("SELECT id, title, language FROM documents WHERE id = ?").get(params.docId) as
@@ -66,10 +84,17 @@ export async function generateAudiobook(params: {
   if (!voiceId) {
     running.delete(params.docId);
     throw new Error(
-      "No Piper voice available. Rebuild the image with PIPER_LANGS including this language."
+      "No TTS voice available for this language."
     );
   }
   const voice = findVoice(voiceId);
+  if (!voice) {
+    running.delete(params.docId);
+    throw new Error(`Unknown voice: ${voiceId}`);
+  }
+  const engineId = voice.engine;
+  const locale = voice.locale;
+  const rate = params.rate || "+0%";
 
   const audioDir = join(DATA_DIR, "audio", doc.id);
   mkdirSync(audioDir, { recursive: true });
@@ -86,6 +111,7 @@ export async function generateAudiobook(params: {
 
   try {
     for (let i = 0; i < chapters.length; i++) {
+      if (signal.aborted) throw new AudiobookCanceled();
       const ch = chapters[i];
       const outFile = chapterFile(audioDir, ch);
       emit({
@@ -102,8 +128,11 @@ export async function generateAudiobook(params: {
         const { durationMs } = await synthesizeChapter({
           chapter: ch,
           audioDir,
-          voiceId,
+          voice,
+          locale,
+          rate,
           outFile,
+          signal,
           onChunk: (chunkIdx, chunkTotal) =>
             emit({
               phase: "audiobook.chapter.progress",
@@ -120,7 +149,7 @@ export async function generateAudiobook(params: {
           storedRelPath: relPath(outFile),
           durationMs,
           voice: voiceId,
-          engine: "piper",
+          engine: engineId,
           status: "done",
         });
 
@@ -139,12 +168,13 @@ export async function generateAudiobook(params: {
           total: chapters.length,
         });
       } catch (err) {
+        if (err instanceof AudiobookCanceled) throw err;
         upsertAudio({
           chapterId: ch.id,
           storedRelPath: relPath(outFile),
           durationMs: 0,
           voice: voiceId,
-          engine: "piper",
+          engine: engineId,
           status: "failed",
         });
         emit({
@@ -182,12 +212,20 @@ export async function generateAudiobook(params: {
 
     emit({ phase: "audiobook.done", docId: doc.id, total: chapters.length });
   } catch (err) {
-    emit({
-      phase: "audiobook.failed",
-      docId: doc.id,
-      message: err instanceof Error ? err.message : String(err),
-    });
-    throw err;
+    if (err instanceof AudiobookCanceled) {
+      emit({
+        phase: "audiobook.canceled",
+        docId: doc.id,
+        message: "aborted by user",
+      });
+    } else {
+      emit({
+        phase: "audiobook.failed",
+        docId: doc.id,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   } finally {
     running.delete(params.docId);
   }
@@ -196,11 +234,14 @@ export async function generateAudiobook(params: {
 async function synthesizeChapter(params: {
   chapter: Chapter;
   audioDir: string;
-  voiceId: string;
+  voice: import("../tts/engines/base").Voice;
+  locale: string;
+  rate: string;
   outFile: string;
+  signal: AbortSignal;
   onChunk: (current: number, total: number) => void;
 }): Promise<{ durationMs: number }> {
-  const { chapter, audioDir, voiceId, outFile } = params;
+  const { chapter, audioDir, voice, locale, rate, outFile, signal } = params;
 
   if (!chapter.text || chapter.text.trim().length < 20) {
     throw new Error("Chapter text is too short or empty.");
@@ -215,6 +256,7 @@ async function synthesizeChapter(params: {
 
     const chunkFiles: string[] = [];
     for (let i = 0; i < segments.length; i++) {
+      if (signal.aborted) throw new AudiobookCanceled();
       const announcement =
         i === 0 ? chapter.title || `Kapitel ${chapter.number}` : undefined;
       const paragraphText = segments[i].paragraphs.join("\n\n");
@@ -222,13 +264,20 @@ async function synthesizeChapter(params: {
         ? `${announcement}.\n\n${paragraphText}`
         : paragraphText;
       const chunkPath = join(tmpDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
-      await synthesizeSegmentToFile({
+      const { engineId } = await synthesizeChunk({
+        segment: segments[i],
         text: plainText,
-        voice: voiceId,
+        voice,
+        locale,
+        rate,
+        announce: announcement,
         outPath: chunkPath,
       });
       chunkFiles.push(chunkPath);
       params.onChunk(i + 1, segments.length);
+      if (i < segments.length - 1) {
+        await interChunkPause(engineId);
+      }
     }
 
     const mergedPath = join(tmpDir, "merged.mp3");
@@ -298,7 +347,7 @@ function upsertAudio(params: {
   storedRelPath: string;
   durationMs: number;
   voice: string;
-  engine: "piper";
+  engine: "piper" | "edge";
   status: "done" | "failed" | "running" | "pending";
 }): void {
   const d = db();

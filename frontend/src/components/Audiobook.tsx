@@ -34,6 +34,14 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [state, setState] = useState<AudioDocument | null>(null);
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [chapterProgress, setChapterProgress] = useState<Map<string, ProgressEvent>>(new Map());
+  const [bookProgress, setBookProgress] = useState<{
+    totalChapters: number;
+    currentChapter: number;
+    chunkCurrent: number;
+    chunkTotal: number;
+    startedAt: number;
+  } | null>(null);
+  const [elapsedTick, setElapsedTick] = useState(0);
   const [busy, setBusy] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -73,9 +81,54 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           return next;
         });
       }
+      // Book-level Progress aus den phase-Events ableiten.
+      if (ev.phase === "audiobook.start") {
+        setBookProgress({
+          totalChapters: ev.total ?? 0,
+          currentChapter: 0,
+          chunkCurrent: 0,
+          chunkTotal: 0,
+          startedAt: Date.now(),
+        });
+      } else if (ev.phase === "audiobook.chapter.start") {
+        setBookProgress((prev) => ({
+          totalChapters: ev.total ?? prev?.totalChapters ?? 0,
+          currentChapter: ev.current ?? prev?.currentChapter ?? 0,
+          chunkCurrent: 0,
+          chunkTotal: 0,
+          startedAt: prev?.startedAt ?? Date.now(),
+        }));
+      } else if (ev.phase === "audiobook.chapter.progress") {
+        setBookProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                chunkCurrent: ev.current ?? 0,
+                chunkTotal: ev.total ?? 0,
+              }
+            : prev
+        );
+      } else if (ev.phase === "audiobook.chapter.done") {
+        setBookProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentChapter: ev.current ?? prev.currentChapter,
+                chunkCurrent: prev.chunkTotal,
+              }
+            : prev
+        );
+      } else if (
+        ev.phase === "audiobook.done" ||
+        ev.phase === "audiobook.failed" ||
+        ev.phase === "audiobook.canceled"
+      ) {
+        setBookProgress(null);
+      }
       if (
         ev.phase === "audiobook.done" ||
         ev.phase === "audiobook.failed" ||
+        ev.phase === "audiobook.canceled" ||
         ev.phase === "audiobook.chapter.done" ||
         ev.phase === "audiobook.book.building"
       ) {
@@ -93,6 +146,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       await api.audio.generate(docId, voiceId, rate);
       toast.show(t("audiobook.queued"), "success");
       setChapterProgress(new Map());
+      setBookProgress(null);
       const refreshed = await api.audio.get(docId);
       setState(refreshed);
     } catch (err) {
@@ -109,6 +163,17 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       const refreshed = await api.audio.get(docId);
       setState(refreshed);
       toast.show(t("audiobook.cleared"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  async function cancelRun() {
+    if (!confirm(t("audiobook.cancelConfirm"))) return;
+    try {
+      await api.audio.cancel(docId);
+      toast.show(t("audiobook.canceled"), "success");
+      setBookProgress(null);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
@@ -147,9 +212,26 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     () => voices.filter((v) => v.language !== documentLanguage),
     [voices, documentLanguage]
   );
+  const langEdge = useMemo(
+    () => langVoices.filter((v) => v.engine === "edge"),
+    [langVoices]
+  );
+  const langPiper = useMemo(
+    () => langVoices.filter((v) => v.engine === "piper"),
+    [langVoices]
+  );
 
   const generating = state?.generating || progress?.phase.startsWith("audiobook.") === true;
   const phaseMessage = progress ? describePhase(progress) : null;
+
+  // Tick 1× pro Sekunde, damit Laufzeit + Restzeit sichtbar weiterzählen
+  // (Book-Progress-State selbst ändert sich nur bei SSE-Events).
+  useEffect(() => {
+    if (!bookProgress) return;
+    const iv = setInterval(() => setElapsedTick((n) => n + 1), 1000);
+    return () => clearInterval(iv);
+  }, [bookProgress]);
+  void elapsedTick;
 
   return (
     <div className="flex flex-col gap-5">
@@ -178,26 +260,52 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           </div>
         </div>
 
+        {bookProgress && <BookProgressPanel progress={bookProgress} />}
+
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
           <div>
             <label className="text-xs font-medium text-neutral-400 block mb-2">
               {t("audiobook.voice")}
             </label>
-            <div className="flex flex-wrap gap-2">
-              {langVoices.map((v) => (
-                <VoiceChip
-                  key={v.id}
-                  voice={v}
-                  active={voiceId === v.id}
-                  onSelect={() => setVoiceId(v.id)}
-                />
-              ))}
-              {langVoices.length === 0 && (
-                <p className="text-xs text-neutral-500">
-                  {t("audiobook.voice.emptyForLang", { lang: documentLanguage })}
-                </p>
-              )}
-            </div>
+            {langEdge.length > 0 && (
+              <div className="mb-3">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                  {t("audiobook.voice.group.edge")}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {langEdge.map((v) => (
+                    <VoiceChip
+                      key={v.id}
+                      voice={v}
+                      active={voiceId === v.id}
+                      onSelect={() => setVoiceId(v.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {langPiper.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                  {t("audiobook.voice.group.piper")}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {langPiper.map((v) => (
+                    <VoiceChip
+                      key={v.id}
+                      voice={v}
+                      active={voiceId === v.id}
+                      onSelect={() => setVoiceId(v.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {langVoices.length === 0 && (
+              <p className="text-xs text-neutral-500">
+                {t("audiobook.voice.emptyForLang", { lang: documentLanguage })}
+              </p>
+            )}
             {otherVoices.length > 0 && (
               <details className="mt-3">
                 <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-300">
@@ -248,6 +356,11 @@ export function Audiobook({ docId, documentLanguage }: Props) {
               ? t("audiobook.regenerate")
               : t("audiobook.generate")}
           </Button>
+          {generating && (
+            <Button variant="danger" onClick={cancelRun}>
+              {t("audiobook.cancel")}
+            </Button>
+          )}
           {phaseMessage && (
             <span className="text-xs text-neutral-400 truncate">{phaseMessage}</span>
           )}
@@ -471,4 +584,68 @@ function formatDuration(ms: number): string {
     return `${hh}:${String(mm % 60).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   }
   return `${mm}:${String(ss).padStart(2, "0")}`;
+}
+
+function BookProgressPanel({
+  progress,
+}: {
+  progress: {
+    totalChapters: number;
+    currentChapter: number;
+    chunkCurrent: number;
+    chunkTotal: number;
+    startedAt: number;
+  };
+}) {
+  const { totalChapters, currentChapter, chunkCurrent, chunkTotal, startedAt } = progress;
+  const chapterShare = chunkTotal > 0 ? chunkCurrent / chunkTotal : 0;
+  const done = Math.max(0, currentChapter - 1) + chapterShare;
+  const frac = totalChapters > 0 ? Math.min(1, done / totalChapters) : 0;
+  const pct = Math.round(frac * 100);
+
+  const elapsedMs = Date.now() - startedAt;
+  // ETA nur sinnvoll sobald es echten Fortschritt gibt, sonst extrapolieren
+  // wir ins Uferlose.
+  const eta =
+    frac > 0.02 ? Math.max(0, Math.round((elapsedMs * (1 - frac)) / frac)) : null;
+
+  return (
+    <div className="card p-4 bg-bg-elevated flex flex-col gap-2 border-accent-subtle">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold text-accent font-mono">{pct}%</span>
+          <span className="text-xs text-neutral-400">
+            {t("audiobook.progress.chapter", {
+              current: currentChapter,
+              total: totalChapters,
+            })}
+          </span>
+        </div>
+        <div className="text-[11px] text-neutral-500 font-mono text-right">
+          <div>
+            {t("audiobook.progress.elapsed", { time: formatDuration(elapsedMs) })}
+          </div>
+          {eta !== null && (
+            <div>
+              {t("audiobook.progress.eta", { time: formatDuration(eta) })}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="h-2 bg-black/40 rounded overflow-hidden">
+        <div
+          className="h-full bg-accent transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {chunkTotal > 0 && (
+        <div className="text-[11px] text-neutral-500">
+          {t("audiobook.progress.chunk", {
+            current: chunkCurrent,
+            total: chunkTotal,
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
