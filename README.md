@@ -164,10 +164,14 @@ Vite proxies `/api` to `:3000`, so the app opens at
 | `PM_OLLAMA_MODEL` | `llama3.1:8b` | Default Ollama model |
 | `PM_ANTHROPIC_API_KEY` | — | Paid Claude fallback if no Ollama responds |
 | `PM_ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | Default Claude model |
+| `PM_OPENAI_API_KEY` | — | Paid OpenAI fallback (after Claude) |
+| `PM_OPENAI_MODEL` | `gpt-4o-mini` | Default OpenAI model |
+| `PM_GOOGLE_API_KEY` | — | Google Gemini fallback (after OpenAI) |
+| `PM_GOOGLE_MODEL` | `gemini-2.0-flash` | Default Gemini model |
 
 Meilisearch is optional (full-text search disables itself if missing).
 The **LLM chain** tries PC Ollama → Mac Ollama → generic Ollama →
-Claude → none — the first reachable wins. All of these can be changed
+Claude → OpenAI → Gemini → none — the first reachable wins. All of these can be changed
 at runtime from the Settings modal; the override lives in
 `$PM_DATA_DIR/llm-config.json` and survives redeploys. If nothing
 responds, the Summary and AI-Card tabs show a "not configured" hint

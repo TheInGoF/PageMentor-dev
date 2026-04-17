@@ -15,9 +15,11 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { effective } from "./llmConfig";
 
-export type ProviderType = "ollama" | "anthropic" | "none";
+export type ProviderType = "ollama" | "anthropic" | "openai" | "google" | "none";
 
 export interface Provider {
   type: ProviderType;
@@ -62,13 +64,31 @@ function buildCandidates(): Provider[] {
       model: defaultOllama,
     });
   }
-  const apiKey = effective("anthropicApiKey", "PM_ANTHROPIC_API_KEY");
-  if (apiKey) {
+  const claudeKey = effective("anthropicApiKey", "PM_ANTHROPIC_API_KEY");
+  if (claudeKey) {
     out.push({
       type: "anthropic",
       label: "Claude API",
-      apiKey,
+      apiKey: claudeKey,
       model: defaultClaude,
+    });
+  }
+  const openaiKey = effective("openaiApiKey", "PM_OPENAI_API_KEY");
+  if (openaiKey) {
+    out.push({
+      type: "openai",
+      label: "OpenAI · ChatGPT",
+      apiKey: openaiKey,
+      model: effective("openaiModel", "PM_OPENAI_MODEL") || "gpt-4o-mini",
+    });
+  }
+  const googleKey = effective("googleApiKey", "PM_GOOGLE_API_KEY");
+  if (googleKey) {
+    out.push({
+      type: "google",
+      label: "Google · Gemini",
+      apiKey: googleKey,
+      model: effective("googleModel", "PM_GOOGLE_MODEL") || "gemini-2.0-flash",
     });
   }
   return out;
@@ -104,7 +124,7 @@ export async function pickProvider(force = false): Promise<Provider | null> {
   for (const c of buildCandidates()) {
     let ok = false;
     if (c.type === "ollama" && c.url) ok = await pingOllama(c.url);
-    else if (c.type === "anthropic" && c.apiKey) ok = true;
+    else if ((c.type === "anthropic" || c.type === "openai" || c.type === "google") && c.apiKey) ok = true;
     if (ok) {
       cached = { provider: c, checkedAt: Date.now() };
       return c;
@@ -161,12 +181,30 @@ export async function listModels(): Promise<string[]> {
     }
   }
   if (p.type === "anthropic") {
-    // Anthropic's API doesn't expose a /models list; hard-code the
-    // current family (cheapest first).
     return [
       "claude-haiku-4-5-20251001",
       "claude-sonnet-4-6",
       "claude-opus-4-7",
+    ];
+  }
+  if (p.type === "openai" && p.apiKey) {
+    try {
+      const client = new OpenAI({ apiKey: p.apiKey });
+      const res = await client.models.list();
+      return res.data
+        .map((m) => m.id)
+        .filter((id) => id.startsWith("gpt-") || id.startsWith("o1") || id.startsWith("o3"))
+        .sort();
+    } catch {
+      return ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"];
+    }
+  }
+  if (p.type === "google") {
+    return [
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-exp",
+      "gemini-1.5-pro",
+      "gemini-1.5-flash",
     ];
   }
   return [];
@@ -230,6 +268,42 @@ export async function generate(params: {
     return {
       response: text,
       model: resp.model,
+      provider: p.label,
+      totalMs: Date.now() - started,
+    };
+  }
+
+  if (p.type === "openai" && p.apiKey) {
+    const client = new OpenAI({ apiKey: p.apiKey });
+    const resp = await client.chat.completions.create({
+      model,
+      max_tokens: 4096,
+      temperature: 0.3,
+      messages: [
+        ...(params.system ? [{ role: "system" as const, content: params.system }] : []),
+        { role: "user" as const, content: params.prompt },
+      ],
+    });
+    const text = resp.choices[0]?.message?.content?.trim() ?? "";
+    return {
+      response: text,
+      model: resp.model,
+      provider: p.label,
+      totalMs: Date.now() - started,
+    };
+  }
+
+  if (p.type === "google" && p.apiKey) {
+    const genai = new GoogleGenerativeAI(p.apiKey);
+    const gmodel = genai.getGenerativeModel({
+      model,
+      systemInstruction: params.system,
+    });
+    const resp = await gmodel.generateContent(params.prompt);
+    const text = resp.response.text().trim();
+    return {
+      response: text,
+      model,
       provider: p.label,
       totalMs: Date.now() - started,
     };
@@ -316,6 +390,51 @@ export async function generateStream(params: {
     finalModel = msg.model;
     if (params.onDone) params.onDone(full, finalModel);
     return { full: full.trim(), model: finalModel };
+  }
+
+  if (p.type === "openai" && p.apiKey) {
+    const client = new OpenAI({ apiKey: p.apiKey });
+    const stream = await client.chat.completions.create({
+      model,
+      stream: true,
+      max_tokens: 4096,
+      temperature: 0.3,
+      messages: [
+        ...(params.system ? [{ role: "system" as const, content: params.system }] : []),
+        { role: "user" as const, content: params.prompt },
+      ],
+    });
+    let full = "";
+    let finalModel = model;
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) {
+        full += delta;
+        params.onToken(delta);
+      }
+      if (chunk.model) finalModel = chunk.model;
+    }
+    if (params.onDone) params.onDone(full, finalModel);
+    return { full: full.trim(), model: finalModel };
+  }
+
+  if (p.type === "google" && p.apiKey) {
+    const genai = new GoogleGenerativeAI(p.apiKey);
+    const gmodel = genai.getGenerativeModel({
+      model,
+      systemInstruction: params.system,
+    });
+    const result = await gmodel.generateContentStream(params.prompt);
+    let full = "";
+    for await (const chunk of result.stream) {
+      const text = chunk.text();
+      if (text) {
+        full += text;
+        params.onToken(text);
+      }
+    }
+    if (params.onDone) params.onDone(full, model);
+    return { full: full.trim(), model };
   }
 
   throw new Error("No LLM provider available");

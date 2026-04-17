@@ -19,14 +19,20 @@ llmConfigRoutes.put("/", async (c) => {
     ollamaModel?: string;
     anthropicApiKey?: string;
     anthropicModel?: string;
+    openaiApiKey?: string;
+    openaiModel?: string;
+    googleApiKey?: string;
+    googleModel?: string;
   }>();
 
-  // Preserve existing Anthropic key if the client sent an empty string as
-  // a "no change" signal (UI masks the key with ••• and only overwrites
-  // when the user explicitly types something).
+  // Only overwrite an API key when the client sends a non-empty string.
+  // Empty / undefined means "keep what's stored".
   const patch = { ...body };
-  if (patch.anthropicApiKey === undefined || patch.anthropicApiKey === "•••") {
-    delete patch.anthropicApiKey;
+  for (const keyField of ["anthropicApiKey", "openaiApiKey", "googleApiKey"] as const) {
+    const v = patch[keyField];
+    if (v === undefined || v === "" || v === "•••") {
+      delete patch[keyField];
+    }
   }
 
   setLlmConfig(patch);
@@ -37,8 +43,14 @@ llmConfigRoutes.put("/", async (c) => {
   });
 });
 
-llmConfigRoutes.delete("/anthropic", (c) => {
-  setLlmConfig({ anthropicApiKey: "" });
+llmConfigRoutes.delete("/:provider", (c) => {
+  const provider = c.req.param("provider");
+  const patch: Record<string, string> = {};
+  if (provider === "anthropic") patch.anthropicApiKey = "";
+  else if (provider === "openai") patch.openaiApiKey = "";
+  else if (provider === "google") patch.googleApiKey = "";
+  else return c.json({ error: "Unknown provider" }, 400);
+  setLlmConfig(patch);
   reloadCandidates();
   return c.json({ config: publicConfig() });
 });

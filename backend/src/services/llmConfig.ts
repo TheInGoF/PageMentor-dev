@@ -20,6 +20,10 @@ export interface LlmConfig {
   ollamaModel?: string;
   anthropicApiKey?: string;
   anthropicModel?: string;
+  openaiApiKey?: string;
+  openaiModel?: string;
+  googleApiKey?: string;
+  googleModel?: string;
 }
 
 let cached: LlmConfig | null = null;
@@ -64,12 +68,19 @@ export function effective(key: keyof LlmConfig, envKey: string): string | undefi
   return undefined;
 }
 
-/** Sanitised view (no raw API key) for the UI. */
-export function publicConfig(): LlmConfig & { anthropicApiKeyPresent: boolean } {
+/** Sanitised view (never returns raw API keys) for the UI. */
+export function publicConfig() {
   const cfg = getLlmConfig();
-  const { anthropicApiKey, ...rest } = cfg;
+  const {
+    anthropicApiKey,
+    openaiApiKey,
+    googleApiKey,
+    ...rest
+  } = cfg;
   return {
     ...rest,
     anthropicApiKeyPresent: !!anthropicApiKey,
+    openaiApiKeyPresent: !!openaiApiKey,
+    googleApiKeyPresent: !!googleApiKey,
   };
 }

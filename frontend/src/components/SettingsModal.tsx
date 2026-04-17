@@ -14,6 +14,10 @@ interface LlmConfig {
   ollamaModel?: string;
   anthropicModel?: string;
   anthropicApiKeyPresent?: boolean;
+  openaiModel?: string;
+  openaiApiKeyPresent?: boolean;
+  googleModel?: string;
+  googleApiKeyPresent?: boolean;
 }
 
 interface Props {
@@ -37,6 +41,8 @@ export function SettingsModal({ open, onClose }: Props) {
   const [meiliEnabled, setMeiliEnabled] = useState<boolean | null>(null);
   const [llmConfig, setLlmConfig] = useState<LlmConfig>({});
   const [anthropicKeyInput, setAnthropicKeyInput] = useState("");
+  const [openaiKeyInput, setOpenaiKeyInput] = useState("");
+  const [googleKeyInput, setGoogleKeyInput] = useState("");
   const [llmBusy, setLlmBusy] = useState(false);
   const toast = useToast();
 
@@ -53,6 +59,8 @@ export function SettingsModal({ open, onClose }: Props) {
       })
       .catch(() => setOllama(null));
     setAnthropicKeyInput("");
+    setOpenaiKeyInput("");
+    setGoogleKeyInput("");
   }, [open]);
 
   async function saveLlmConfig() {
@@ -64,12 +72,18 @@ export function SettingsModal({ open, onClose }: Props) {
         ollamaUrl: llmConfig.ollamaUrl ?? "",
         ollamaModel: llmConfig.ollamaModel ?? "",
         anthropicModel: llmConfig.anthropicModel ?? "",
+        openaiModel: llmConfig.openaiModel ?? "",
+        googleModel: llmConfig.googleModel ?? "",
       };
       if (anthropicKeyInput.trim()) patch.anthropicApiKey = anthropicKeyInput.trim();
+      if (openaiKeyInput.trim()) patch.openaiApiKey = openaiKeyInput.trim();
+      if (googleKeyInput.trim()) patch.googleApiKey = googleKeyInput.trim();
       const res = await api.llmConfig.put(patch);
       setLlmConfig(res.config as LlmConfig);
       setOllama(res.status);
       setAnthropicKeyInput("");
+      setOpenaiKeyInput("");
+      setGoogleKeyInput("");
       toast.show(t("settings.llm.saved"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -78,9 +92,9 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   }
 
-  async function removeAnthropicKey() {
+  async function removeApiKey(provider: "anthropic" | "openai" | "google") {
     try {
-      await api.llmConfig.removeAnthropic();
+      await api.llmConfig.removeKey(provider);
       const r = await api.llmConfig.get();
       setLlmConfig(r.config);
       setOllama(r.status);
@@ -276,35 +290,44 @@ export function SettingsModal({ open, onClose }: Props) {
             placeholder="llama3.1:8b"
           />
 
-          <div className="pt-3 border-t border-border flex flex-col gap-3">
-            <Input
-              label={t("settings.llm.anthropicApiKey")}
-              type="password"
-              value={anthropicKeyInput}
-              onChange={(e) => setAnthropicKeyInput(e.target.value)}
-              placeholder={t("settings.llm.anthropicKeyPlaceholder")}
-            />
-            {llmConfig.anthropicApiKeyPresent && (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-neutral-500">
-                  🔒 {t("settings.llm.anthropicKeyStored")}
-                </span>
-                <Button
-                  variant="danger"
-                  onClick={removeAnthropicKey}
-                  className="!px-2 !py-1 text-xs"
-                >
-                  {t("settings.llm.anthropicRemove")}
-                </Button>
-              </div>
-            )}
-            <Input
-              label={t("settings.llm.anthropicModel")}
-              value={llmConfig.anthropicModel ?? ""}
-              onChange={(e) => setLlmConfig({ ...llmConfig, anthropicModel: e.target.value })}
-              placeholder="claude-haiku-4-5-20251001"
-            />
-          </div>
+          <ApiProviderBlock
+            label={t("settings.llm.anthropicApiKey")}
+            placeholder={t("settings.llm.anthropicKeyPlaceholder")}
+            keyPresent={!!llmConfig.anthropicApiKeyPresent}
+            keyInput={anthropicKeyInput}
+            onKeyChange={setAnthropicKeyInput}
+            onRemove={() => removeApiKey("anthropic")}
+            modelLabel={t("settings.llm.anthropicModel")}
+            modelPlaceholder="claude-haiku-4-5-20251001"
+            modelValue={llmConfig.anthropicModel ?? ""}
+            onModelChange={(v) => setLlmConfig({ ...llmConfig, anthropicModel: v })}
+          />
+
+          <ApiProviderBlock
+            label={t("settings.llm.openaiApiKey")}
+            placeholder={t("settings.llm.openaiKeyPlaceholder")}
+            keyPresent={!!llmConfig.openaiApiKeyPresent}
+            keyInput={openaiKeyInput}
+            onKeyChange={setOpenaiKeyInput}
+            onRemove={() => removeApiKey("openai")}
+            modelLabel={t("settings.llm.openaiModel")}
+            modelPlaceholder="gpt-4o-mini"
+            modelValue={llmConfig.openaiModel ?? ""}
+            onModelChange={(v) => setLlmConfig({ ...llmConfig, openaiModel: v })}
+          />
+
+          <ApiProviderBlock
+            label={t("settings.llm.googleApiKey")}
+            placeholder={t("settings.llm.googleKeyPlaceholder")}
+            keyPresent={!!llmConfig.googleApiKeyPresent}
+            keyInput={googleKeyInput}
+            onKeyChange={setGoogleKeyInput}
+            onRemove={() => removeApiKey("google")}
+            modelLabel={t("settings.llm.googleModel")}
+            modelPlaceholder="gemini-2.0-flash"
+            modelValue={llmConfig.googleModel ?? ""}
+            onModelChange={(v) => setLlmConfig({ ...llmConfig, googleModel: v })}
+          />
 
           <Button onClick={saveLlmConfig} disabled={llmBusy}>
             {llmBusy ? t("common.saving") : t("settings.llm.save")}
@@ -364,6 +387,51 @@ export function SettingsModal({ open, onClose }: Props) {
         </section>
       </div>
     </Modal>
+  );
+}
+
+function ApiProviderBlock(props: {
+  label: string;
+  placeholder: string;
+  keyPresent: boolean;
+  keyInput: string;
+  onKeyChange: (v: string) => void;
+  onRemove: () => void;
+  modelLabel: string;
+  modelPlaceholder: string;
+  modelValue: string;
+  onModelChange: (v: string) => void;
+}) {
+  return (
+    <div className="pt-3 border-t border-border flex flex-col gap-2">
+      <Input
+        label={props.label}
+        type="password"
+        value={props.keyInput}
+        onChange={(e) => props.onKeyChange(e.target.value)}
+        placeholder={props.placeholder}
+      />
+      {props.keyPresent && (
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-neutral-500">
+            🔒 {t("settings.llm.anthropicKeyStored")}
+          </span>
+          <Button
+            variant="danger"
+            onClick={props.onRemove}
+            className="!px-2 !py-1 text-xs"
+          >
+            {t("settings.llm.anthropicRemove")}
+          </Button>
+        </div>
+      )}
+      <Input
+        label={props.modelLabel}
+        value={props.modelValue}
+        onChange={(e) => props.onModelChange(e.target.value)}
+        placeholder={props.modelPlaceholder}
+      />
+    </div>
   );
 }
 

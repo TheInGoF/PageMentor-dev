@@ -397,6 +397,10 @@ export const api = {
           ollamaModel?: string;
           anthropicModel?: string;
           anthropicApiKeyPresent: boolean;
+          openaiModel?: string;
+          openaiApiKeyPresent: boolean;
+          googleModel?: string;
+          googleApiKeyPresent: boolean;
         };
         status: OllamaStatus;
       }>("/api/llm/config"),
@@ -407,13 +411,17 @@ export const api = {
       ollamaModel?: string;
       anthropicApiKey?: string;
       anthropicModel?: string;
+      openaiApiKey?: string;
+      openaiModel?: string;
+      googleApiKey?: string;
+      googleModel?: string;
     }) =>
       request<{ config: unknown; status: OllamaStatus }>("/api/llm/config", {
         method: "PUT",
         body: JSON.stringify(body),
       }),
-    removeAnthropic: () =>
-      request<{ config: unknown }>("/api/llm/config/anthropic", { method: "DELETE" }),
+    removeKey: (provider: "anthropic" | "openai" | "google") =>
+      request<{ config: unknown }>(`/api/llm/config/${provider}`, { method: "DELETE" }),
   },
   summary: {
     status: () => request<OllamaStatus>("/api/summary/status"),
