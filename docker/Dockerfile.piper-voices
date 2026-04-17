@@ -1,0 +1,31 @@
+# Standalone image that carries the piper binary + a fixed set of voice
+# models. Built by .github/workflows/piper-voices.yml only when the
+# download script, this Dockerfile, or the PIPER_LANGS repo variable
+# changes. The main app Dockerfile COPYs from this image as a stage,
+# so normal app builds skip the ~230–540 MB voice download entirely.
+
+FROM debian:12-slim
+ARG PIPER_LANGS=de,en
+ARG PIPER_VERSION=2023.11.14-2
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN curl -fsSL -o piper.tar.gz \
+      "https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_linux_x86_64.tar.gz" \
+ && tar -xzf piper.tar.gz \
+ && rm piper.tar.gz \
+ && chmod +x /opt/piper/piper
+
+WORKDIR /voices
+COPY download-piper-voices.sh /usr/local/bin/download-piper-voices.sh
+RUN chmod +x /usr/local/bin/download-piper-voices.sh \
+ && /usr/local/bin/download-piper-voices.sh "${PIPER_LANGS}" /voices
+
+# No CMD — the image exists purely to be COPY'd from in the main build.
+CMD ["/bin/sh", "-c", "echo 'piper-voices image — nothing to run here' && exit 0"]
