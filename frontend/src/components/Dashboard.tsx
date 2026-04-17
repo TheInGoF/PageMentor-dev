@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { api, type DashboardData } from "../lib/api";
-import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
-import { Logo } from "./Logo";
+import { TopBar } from "./TopBar";
 
 interface Props {
   onOpenLibrary: () => void;
@@ -34,19 +33,14 @@ export function Dashboard({ onOpenLibrary, onOpenModules, onOpenDocument, onLogo
 
   return (
     <div className="min-h-full flex flex-col">
-      <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Logo size={22} />
-          <div className="flex-1" />
-          <Button variant="outline" onClick={onOpenModules}>
-            {t("modules.title")}
-          </Button>
-          <Button onClick={onOpenLibrary}>{t("dash.openLibrary")}</Button>
-          <Button variant="ghost" onClick={onLogout}>
-            {t("library.logout")}
-          </Button>
-        </div>
-      </header>
+      <TopBar
+        onLogout={onLogout}
+        onOpenDocument={onOpenDocument}
+        currentView="dashboard"
+        onGoDashboard={() => {}}
+        onGoLibrary={onOpenLibrary}
+        onGoModules={onOpenModules}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">
         <section>

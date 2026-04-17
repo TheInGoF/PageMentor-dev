@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, subscribeProgress, type Document, type DocType, type ProgressEvent } from "../lib/api";
+import {
+  api,
+  subscribeProgress,
+  type Document,
+  type DocType,
+  type ModuleListItem,
+  type ProgressEvent,
+} from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
 import { DocumentCard } from "./DocumentCard";
 import { UploadModal } from "./UploadModal";
@@ -8,10 +15,13 @@ import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
 import { DocumentEditModal } from "./DocumentEditModal";
 
+type ModuleFilter = "all" | "unassigned" | string;
+
 interface Props {
   onLogout: () => void;
   onOpen: (docId: string) => void;
-  onBack?: () => void;
+  onGoDashboard?: () => void;
+  onGoModules?: () => void;
 }
 
 const TYPE_FILTERS: Array<"all" | DocType> = [
@@ -23,10 +33,12 @@ const TYPE_FILTERS: Array<"all" | DocType> = [
   "sonstiges",
 ];
 
-export function Library({ onLogout, onOpen, onBack }: Props) {
+export function Library({ onLogout, onOpen, onGoDashboard, onGoModules }: Props) {
   const [docs, setDocs] = useState<Document[] | null>(null);
+  const [modules, setModules] = useState<ModuleListItem[]>([]);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | DocType>("all");
+  const [moduleFilter, setModuleFilter] = useState<ModuleFilter>("all");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
@@ -47,6 +59,10 @@ export function Library({ onLogout, onOpen, onBack }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
   }
+
+  useEffect(() => {
+    api.modules.list().then(setModules).catch(() => setModules([]));
+  }, []);
 
   useEffect(() => {
     load();
@@ -128,6 +144,8 @@ export function Library({ onLogout, onOpen, onBack }: Props) {
     if (!docs) return null;
     return docs.filter((d) => {
       if (typeFilter !== "all" && d.type !== typeFilter) return false;
+      if (moduleFilter === "unassigned" && d.module_id) return false;
+      if (moduleFilter !== "all" && moduleFilter !== "unassigned" && d.module_id !== moduleFilter) return false;
       if (activeTags.length && !activeTags.every((tg) => d.tags.includes(tg))) return false;
       if (search) {
         const q = search.toLowerCase();
@@ -136,7 +154,7 @@ export function Library({ onLogout, onOpen, onBack }: Props) {
       }
       return true;
     });
-  }, [docs, typeFilter, activeTags, search]);
+  }, [docs, typeFilter, moduleFilter, activeTags, search]);
 
   function toggleTag(tg: string) {
     setActiveTags((xs) => (xs.includes(tg) ? xs.filter((x) => x !== tg) : [...xs, tg]));
@@ -169,11 +187,14 @@ export function Library({ onLogout, onOpen, onBack }: Props) {
         onLogout={handleLogout}
         onUpload={() => setUploadOpen(true)}
         onOpenDocument={onOpen}
-        onBack={onBack}
+        currentView="library"
+        onGoDashboard={onGoDashboard}
+        onGoLibrary={() => {}}
+        onGoModules={onGoModules}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6">
-        <div className="flex items-center gap-2 flex-wrap mb-5">
+        <div className="flex items-center gap-2 flex-wrap mb-3">
           <span className="text-xs uppercase tracking-wide text-neutral-500 mr-2">
             {t("library.filter.type")}
           </span>
@@ -192,6 +213,33 @@ export function Library({ onLogout, onOpen, onBack }: Props) {
             </button>
           ))}
         </div>
+
+        {modules.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap mb-5">
+            <span className="text-xs uppercase tracking-wide text-neutral-500 mr-2">
+              {t("library.filter.module")}
+            </span>
+            <ModuleChip
+              label={t("common.all")}
+              active={moduleFilter === "all"}
+              onClick={() => setModuleFilter("all")}
+            />
+            <ModuleChip
+              label={t("library.filter.module.unassigned")}
+              active={moduleFilter === "unassigned"}
+              onClick={() => setModuleFilter("unassigned")}
+            />
+            {modules.map((m) => (
+              <ModuleChip
+                key={m.id}
+                label={`${m.icon} ${m.name}`}
+                color={m.color}
+                active={moduleFilter === m.id}
+                onClick={() => setModuleFilter(m.id)}
+              />
+            ))}
+          </div>
+        )}
 
         {allTags.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap mb-6">
@@ -257,6 +305,34 @@ export function Library({ onLogout, onOpen, onBack }: Props) {
         }}
       />
     </div>
+  );
+}
+
+function ModuleChip({
+  label,
+  active,
+  color,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  color?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "px-3 py-1 rounded-full text-xs border transition-colors " +
+        (active
+          ? "bg-accent/15 border-accent-subtle text-accent"
+          : "border-border text-neutral-400 hover:border-border-strong hover:text-neutral-200")
+      }
+      style={active && color ? { borderColor: color, color } : undefined}
+    >
+      {label}
+    </button>
   );
 }
 

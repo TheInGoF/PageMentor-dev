@@ -69,7 +69,9 @@ export function App() {
       return (
         <Modules
           onOpenModule={(id) => setOpenModuleId(id)}
-          onBack={() => setView("dashboard")}
+          onOpenDocument={(id) => setOpenDocId(id)}
+          onGoDashboard={() => setView("dashboard")}
+          onGoLibrary={() => setView("library")}
           onLogout={handleLogout}
         />
       );
@@ -78,7 +80,8 @@ export function App() {
         <Library
           onLogout={handleLogout}
           onOpen={(id) => setOpenDocId(id)}
-          onBack={() => setView("dashboard")}
+          onGoDashboard={() => setView("dashboard")}
+          onGoModules={() => setView("modules")}
         />
       );
     return (

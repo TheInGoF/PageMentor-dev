@@ -1,6 +1,6 @@
 {
   "name": "pagementor",
-  "version": "1.10.000",
+  "version": "1.10.001",
   "private": true,
   "description": "Lokales Lern-Tool: Vorlesungs-PDFs → Hörbücher, Lernkarten, Zusammenfassungen",
   "scripts": {

@@ -6,15 +6,17 @@ import { Input } from "./ui/Input";
 import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
-import { Logo } from "./Logo";
+import { TopBar } from "./TopBar";
 
 interface Props {
   onOpenModule: (moduleId: string) => void;
-  onBack: () => void;
+  onOpenDocument: (docId: string) => void;
+  onGoDashboard: () => void;
+  onGoLibrary: () => void;
   onLogout: () => void;
 }
 
-export function Modules({ onOpenModule, onBack, onLogout }: Props) {
+export function Modules({ onOpenModule, onOpenDocument, onGoDashboard, onGoLibrary, onLogout }: Props) {
   useLocale();
   const [modules, setModules] = useState<ModuleListItem[] | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -49,26 +51,24 @@ export function Modules({ onOpenModule, onBack, onLogout }: Props) {
 
   return (
     <div className="min-h-full flex flex-col">
-      <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Logo size={22} />
-          <div className="flex-1" />
-          <Button variant="ghost" onClick={onBack}>
-            ← {t("dash.title")}
-          </Button>
-          <Button onClick={openCreate}>{t("modules.new")}</Button>
-          <Button variant="ghost" onClick={onLogout}>
-            {t("library.logout")}
-          </Button>
-        </div>
-      </header>
+      <TopBar
+        onLogout={onLogout}
+        onOpenDocument={onOpenDocument}
+        currentView="modules"
+        onGoDashboard={onGoDashboard}
+        onGoLibrary={onGoLibrary}
+        onGoModules={() => {}}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">
-        <section>
-          <h1 className="text-2xl font-semibold">{t("modules.title")}</h1>
-          <p className="text-sm text-neutral-500 mt-1 max-w-2xl">
-            {t("modules.subtitle")}
-          </p>
+        <section className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-semibold">{t("modules.title")}</h1>
+            <p className="text-sm text-neutral-500 mt-1 max-w-2xl">
+              {t("modules.subtitle")}
+            </p>
+          </div>
+          <Button onClick={openCreate}>{t("modules.new")}</Button>
         </section>
 
         {!modules ? (
