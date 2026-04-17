@@ -1,0 +1,885 @@
+import { useEffect, useState } from "react";
+import { getSettings, onSettingsChange, setSettings } from "./settings";
+
+export type Locale = "en" | "de";
+
+/**
+ * Locale-Auswahl: Settings-Override > Browser-Default > "en".
+ * Default ist Englisch, Deutsch wird nur gewählt wenn der Browser
+ * explizit eine de-*-Sprache meldet und kein Override gesetzt ist.
+ */
+export function detectInitialLocale(): Locale {
+  const fromSettings = getSettings().locale;
+  if (fromSettings === "en" || fromSettings === "de") return fromSettings;
+  if (typeof navigator !== "undefined") {
+    const langs = [navigator.language, ...(navigator.languages ?? [])];
+    for (const l of langs) {
+      if (l && l.toLowerCase().startsWith("de")) return "de";
+    }
+  }
+  return "en";
+}
+
+export function currentLocale(): Locale {
+  return detectInitialLocale();
+}
+
+export function setLocale(l: Locale): void {
+  setSettings({ locale: l });
+  document.documentElement.lang = l;
+}
+
+/** Hook: triggert Re-Render bei Locale-Wechsel. */
+export function useLocale(): Locale {
+  const [l, set] = useState<Locale>(currentLocale());
+  useEffect(() => {
+    const unsub = onSettingsChange(() => set(currentLocale()));
+    // Sync on mount (SSR/tests/navigator)
+    set(currentLocale());
+    return unsub;
+  }, []);
+  return l;
+}
+
+/** Übersetzt einen Key + optionale Platzhalter wie `{count}`. */
+export function t(key: string, params?: Record<string, string | number>): string {
+  const locale = currentLocale();
+  const s = dicts[locale][key] ?? dicts.en[key] ?? key;
+  if (!params) return s;
+  return s.replace(/\{(\w+)\}/g, (_, k) => {
+    const v = params[k];
+    return v == null ? `{${k}}` : String(v);
+  });
+}
+
+/** Sprach-Labels für Settings-Dropdowns (nie übersetzt). */
+export const LOCALE_LABELS: Record<Locale, string> = {
+  en: "English",
+  de: "Deutsch",
+};
+
+// ---------------------------------------------------------------------------
+// Dictionaries
+// ---------------------------------------------------------------------------
+
+const en: Record<string, string> = {
+  // App
+  "app.name": "PageMentor",
+  "app.tagline": "Turn lecture PDFs into audiobooks, flashcards, summaries",
+
+  // Common
+  "common.loading": "Loading …",
+  "common.error": "Error",
+  "common.retry": "Try again",
+  "common.save": "Save",
+  "common.saving": "Saving …",
+  "common.cancel": "Cancel",
+  "common.close": "Close",
+  "common.delete": "Delete",
+  "common.edit": "Edit",
+  "common.back": "Back",
+  "common.confirm": "OK",
+  "common.done": "Done",
+  "common.required": "required",
+  "common.optional": "optional",
+  "common.all": "All",
+  "common.none": "—",
+  "common.yes": "Yes",
+  "common.no": "No",
+
+  // Login
+  "login.title": "PageMentor",
+  "login.subtitle": "Password required",
+  "login.password": "Password",
+  "login.submit": "Sign in",
+  "login.wrong": "Wrong password",
+
+  // Library
+  "library.title": "Library",
+  "library.empty.title": "No documents yet",
+  "library.empty.hint": "Upload a PDF to get started.",
+  "library.empty.nomatches.title": "No matches",
+  "library.empty.nomatches.hint": "Adjust the filter or reset it.",
+  "library.upload": "Upload",
+  "library.search.library": "Filter library …",
+  "library.search.global": "Full-text search across all documents …",
+  "library.search.disabled": "Search (Meilisearch unavailable)",
+  "library.filter.tags": "Tags",
+  "library.filter.type": "Type",
+  "library.logout": "Sign out",
+  "library.openDoc": "Open",
+  "library.delete": "Delete",
+  "library.deleteConfirm": "Really delete this document?",
+  "library.deleted": "{title} deleted",
+  "library.uploadStarted": "Upload started. OCR runs in the background.",
+  "library.retry": "Retry",
+  "library.retryStarted": "Pipeline restarted",
+  "library.editHint": "Click to edit",
+  "library.chaptersShort": "ch",
+  "library.pagesShort": "p",
+
+  // Document types
+  "type.studienheft": "Textbook",
+  "type.script": "Lecture script",
+  "type.klausur": "Exam",
+  "type.uebung": "Exercise sheet",
+  "type.sonstiges": "Other",
+
+  // OCR status
+  "ocr.pending": "Queued",
+  "ocr.running": "Processing",
+  "ocr.done": "Ready",
+  "ocr.failed": "Failed",
+
+  // Pipeline steps (dashboard dots)
+  "pipe.text": "Text",
+  "pipe.chapters": "Chapters",
+  "pipe.audio": "Audio",
+  "pipe.cards": "Cards",
+  "pipe.summary": "Summary",
+
+  // Upload
+  "upload.title": "Upload PDF",
+  "upload.dropHere": "Drop PDFs here or click to choose",
+  "upload.type": "Document type",
+  "upload.language": "Content language",
+  "upload.tags": "Tags (comma separated)",
+  "upload.tagsPlaceholder": "#physics, #semester3",
+  "upload.submit": "Upload",
+  "upload.uploading": "Uploading …",
+  "upload.uploadingProgress": "Uploading {current}/{total} …",
+  "upload.submitMany": "Upload {n}",
+  "upload.remove": "Remove",
+
+  // Learn tabs
+  "learn.back": "Library",
+  "learn.tab.reader": "Read",
+  "learn.tab.chapters": "Chapters",
+  "learn.tab.audiobook": "Audiobook",
+  "learn.tab.exercises": "Cards",
+  "learn.tab.exam": "Exam Trainer",
+  "learn.tab.summary": "Summary",
+
+  // Chapters
+  "chapters.title": "Chapters",
+  "chapters.empty": "No chapters detected yet.",
+  "chapters.detect": "Re-detect chapters",
+  "chapters.detectConfirm": "Re-detecting chapters will overwrite the current chapter structure. Continue?",
+  "chapters.detectedToast": "{n} chapters detected",
+  "chapters.merge": "Merge {n}",
+  "chapters.merged": "{n} chapters merged",
+  "chapters.deleteConfirm": "Really delete chapter \u201C{title}\u201D?",
+  "chapters.pages": "p.",
+  "chapters.chars": "{n} chars",
+
+  // PDF viewer
+  "reader.reset": "Reset",
+  "reader.downloadOriginal": "↓ Original",
+  "reader.loading": "Loading PDF …",
+  "reader.error": "PDF could not be loaded.",
+  "reader.pageOf": "/ {total}",
+  "reader.selectionCta": "+ Make card",
+  "reader.selectionModalTitle": "Card from selection",
+  "reader.selectionPage": "Page {page}",
+  "reader.selectionChapter": "Page {page} · Chapter {num} {title}",
+  "reader.selectionQuestionDefault": "What does \u201C{text}\u201D mean?",
+  "reader.cardCreated": "Card created",
+
+  // Audiobook
+  "audiobook.title": "Generate audiobook",
+  "audiobook.subtitle":
+    "Microsoft Neural TTS · 24 kHz · EBU R128 loudness · MP3 per chapter + complete M4B",
+  "audiobook.voice": "Voice",
+  "audiobook.voice.more": "More voices ({n})",
+  "audiobook.voice.top": "Top",
+  "audiobook.rate": "Speed",
+  "audiobook.preview": "▶ Preview",
+  "audiobook.previewFailed": "Preview failed — voice may not be available",
+  "audiobook.generate": "Generate audiobook",
+  "audiobook.regenerate": "Regenerate",
+  "audiobook.generating": "Generating …",
+  "audiobook.clear": "Clear all",
+  "audiobook.clearConfirm": "Delete all generated audiobook files?",
+  "audiobook.cleared": "Audiobook deleted",
+  "audiobook.download.m4b": "Download M4B",
+  "audiobook.apple": "📱 Send to Apple",
+  "audiobook.empty": "No audiobook yet. Pick a voice and start generation.",
+  "audiobook.queued": "Generation queued …",
+  "audiobook.chapterPartsWaiting": "Waiting …",
+  "audiobook.chapterPartsRunning": "Part {current}/{total}",
+  "audiobook.chapterFailed": "Failed",
+  "audiobook.downloadMp3": "↓ MP3",
+  "audiobook.generatedBy": "Generated with {voice}",
+
+  // Progress phrases (live status)
+  "phase.pipeline.start": "Pipeline starting …",
+  "phase.pipeline.extract": "Extracting text …",
+  "phase.pipeline.chapters": "Detecting chapters …",
+  "phase.pipeline.done": "Pipeline complete",
+  "phase.pipeline.failed": "Pipeline error: {msg}",
+  "phase.audiobook.start": "Audiobook: {total} chapters",
+  "phase.audiobook.chapter.start": "Audio {current}/{total}: {msg}",
+  "phase.audiobook.chapter.progress": "Ch. {num} · Part {current}/{total}",
+  "phase.audiobook.chapter.done": "Audio {current}/{total} done",
+  "phase.audiobook.chapter.failed": "Chapter {num} failed: {msg}",
+  "phase.audiobook.book.building": "Assembling M4B …",
+  "phase.audiobook.done": "Audiobook ready ✓",
+  "phase.audiobook.failed": "Error: {msg}",
+
+  // Cards
+  "cards.title": "Flashcards",
+  "cards.subtitle": "Tasks extracted from chapter text, SM-2 spaced repetition",
+  "cards.new": "+ New card",
+  "cards.extract": "Extract from chapters",
+  "cards.extractedToast": "{n} cards extracted",
+  "cards.ai": "✨ AI cards",
+  "cards.aiGenerated": "{n} cards generated with {model}",
+  "cards.exportCsv": "↓ CSV",
+  "cards.exportTitle": "CSV export (Anki-compatible)",
+  "cards.importCsv": "↑ CSV",
+  "cards.importTitle": "Import CSV file",
+  "cards.importedToast": "{n} cards imported",
+  "cards.learn": "Learn ({n} due)",
+  "cards.learnNoneDue": "No cards due — all caught up!",
+  "cards.deleteConfirm": "Really delete this card?\n\n{preview}",
+  "cards.stats.total": "Cards",
+  "cards.stats.due": "Due",
+  "cards.stats.learned": "Learned",
+  "cards.filter.chapter": "Chapter",
+  "cards.empty.none": "No cards yet. Click \u201CExtract from chapters\u201D or add one manually.",
+  "cards.empty.filter": "No cards in this chapter.",
+  "cards.source.extracted": "extracted",
+  "cards.source.ai": "AI",
+  "cards.source.manual": "manual",
+  "cards.reviewed": "{n}× reviewed",
+  "cards.hintChip": "💡 Hint",
+  "cards.noAnswer": "No solution attached.",
+  "cards.modal.new": "New card",
+  "cards.modal.edit": "Edit card",
+  "cards.modal.create": "Create",
+  "cards.field.chapter": "Chapter (optional)",
+  "cards.field.question": "Question",
+  "cards.field.answer": "Answer / solution",
+  "cards.field.hint":
+    "Hint (optional — shown during review before you reveal the answer)",
+  "cards.field.difficulty": "Difficulty",
+  "cards.diff.easy": "Easy",
+  "cards.diff.medium": "Medium",
+  "cards.diff.hard": "Hard",
+
+  // AI-generate modal
+  "cards.ai.title": "Generate cards with AI",
+  "cards.ai.description":
+    "Uses your local Ollama LLM. The prompt instructs the model to create cards from the chapter text.",
+  "cards.ai.count": "Count",
+  "cards.ai.difficulty": "Difficulty",
+  "cards.ai.style": "Style",
+  "cards.ai.style.basic": "Basics",
+  "cards.ai.style.deep": "In-depth",
+  "cards.ai.style.exam": "Exam level",
+  "cards.ai.submit": "Generate",
+  "cards.ai.submitting": "Generating …",
+
+  // Review
+  "review.title": "Review",
+  "review.revealHint": "Show hint",
+  "review.reveal": "Reveal answer (Space)",
+  "review.solution": "Solution",
+  "review.noSolution": "No solution attached — rate by feel.",
+  "review.forgot": "Didn't know",
+  "review.partial": "Partial",
+  "review.known": "Got it",
+  "review.key": "Key {k}",
+  "review.chapterTag": "Chapter {num}{sep}{title}",
+  "review.summaryTitle": "Session complete",
+  "review.summary.known": "Got it",
+  "review.summary.partial": "Partial",
+  "review.summary.forgot": "Didn't know",
+  "review.summary.back": "Back to overview",
+
+  // Exam trainer
+  "exam.title": "Exam Trainer",
+  "exam.subtitle":
+    "Random selection from your cards. Answer under time pressure, then self-rate — score is tracked in history.",
+  "exam.count": "Number of cards",
+  "exam.duration": "Duration",
+  "exam.duration.noLimit": "No time limit",
+  "exam.start": "Start exam",
+  "exam.starting": "Starting …",
+  "exam.cancel": "Cancel",
+  "exam.cancelConfirm": "Abort exam? Progress will be lost.",
+  "exam.answerLabel": "Your answer",
+  "exam.answerPlaceholder": "Write your answer here …",
+  "exam.prev": "← Previous",
+  "exam.next": "Next →",
+  "exam.submit": "Submit",
+  "exam.review.title": "Self-assessment",
+  "exam.review.subtitle":
+    "Compare your answer with the reference and rate honestly.",
+  "exam.review.yourAnswer": "Your answer",
+  "exam.review.reference": "Reference solution",
+  "exam.review.empty": "empty",
+  "exam.review.noReference": "no reference given",
+  "exam.review.submit": "Submit exam",
+  "exam.review.submitted": "Exam submitted — {score} %",
+  "exam.history": "History",
+  "exam.history.count": "{n} sessions",
+  "exam.history.empty": "No exams completed yet.",
+  "exam.history.deleteConfirm": "Really delete this session?",
+  "exam.history.open": "open",
+  "exam.history.closed": "submitted",
+
+  // Summaries
+  "summary.title": "Summaries",
+  "summary.subtitle": "Local LLM via Ollama · three detail levels per chapter",
+  "summary.noOllama.title": "Ollama not available",
+  "summary.noOllama.hint":
+    "Summaries need a running Ollama server. Start it locally ({cmd}) or set {envVar} to your instance.",
+  "summary.noOllama.tried": "Tried:",
+  "summary.model": "Model",
+  "summary.level.bullets": "Bullet points",
+  "summary.level.paragraph": "Paragraph",
+  "summary.level.detailed": "Detailed",
+  "summary.level.bullets.hint": "6–9 bullet points",
+  "summary.level.paragraph.hint": "≤ 120 words",
+  "summary.level.detailed.hint": "with key terms",
+  "summary.generate.new": "+ Generate",
+  "summary.generate.regen": "↻ Regenerate",
+  "summary.generatingLive": "Streaming …",
+  "summary.generatedToast": "Summary ready: chapter {num}",
+  "summary.empty.chapters": "No chapters detected yet.",
+  "summary.delete": "Delete",
+  "summary.deleteConfirm": "Delete this summary?",
+
+  // Search
+  "search.disabled": "Search (Meilisearch unavailable)",
+  "search.placeholder": "Full-text search across all documents …",
+  "search.empty": "No matches for \u201C{q}\u201D",
+  "search.group.documents": "Documents ({n})",
+  "search.group.chapters": "Chapters ({n})",
+
+  // Podcast share
+  "podcast.title": "Send to Apple",
+  "podcast.books": "Apple Books (audiobook)",
+  "podcast.books.description":
+    "Download the M4B file with chapter markers, then AirDrop or iCloud Drive it to your iPhone. Books.app opens it as an audiobook.",
+  "podcast.books.download": "↓ Download M4B",
+  "podcast.books.copyUrl": "Copy URL",
+  "podcast.books.urlCopied": "M4B URL copied",
+  "podcast.pc.title": "Apple Podcasts / Overcast",
+  "podcast.pc.description":
+    "Subscribe to this private feed — each chapter becomes an episode with chapter skips and auto-sync. On Mac: \u201CFile \u2192 Subscribe to Show by URL\u201D. In Overcast/Pocket Casts: \u201CAdd by URL\u201D.",
+  "podcast.pc.copy": "Copy feed URL",
+  "podcast.pc.urlCopied": "Feed URL copied",
+  "podcast.pc.open": "Open",
+  "podcast.pc.openTitle": "Open Apple Podcasts",
+  "podcast.pc.note":
+    "The token is derived from PM_PASSWORD — changing it invalidates the feed. The server must be reachable from your iPhone (local network, Tailscale, Cloudflare Tunnel, etc.).",
+  "podcast.clipboardFail": "Clipboard unavailable",
+
+  // Settings
+  "settings.title": "Settings",
+  "settings.saved": "Settings saved",
+  "settings.section.locale": "Language",
+  "settings.locale": "Interface language",
+  "settings.section.library": "Library & Upload",
+  "settings.defaultLanguage": "Default language for uploads",
+  "settings.section.audiobook": "Audiobook",
+  "settings.defaultVoice": "Default voice",
+  "settings.voice.server": "Server recommendation",
+  "settings.defaultRate": "Speed",
+  "settings.section.exam": "Exam Trainer",
+  "settings.defaultExamCount": "Default card count",
+  "settings.defaultExamMinutes": "Default duration (min, 0 = no limit)",
+  "settings.section.ai": "AI / Ollama",
+  "settings.defaultOllamaModel": "Default model",
+  "settings.ollama.server": "Server default ({model})",
+  "settings.ollama.connected": "Connected to {url}",
+  "settings.ollama.disabled":
+    "Ollama not available — summaries and AI cards are disabled.",
+  "settings.section.status": "Status",
+  "settings.status.checking": "checking …",
+  "settings.status.online": "online",
+  "settings.status.offline": "offline",
+
+  // Shortcuts
+  "shortcuts.title": "Keyboard shortcuts",
+  "shortcuts.section.global": "Global",
+  "shortcuts.section.review": "Flashcard review",
+  "shortcuts.global.help": "This help",
+  "shortcuts.global.close": "Close modal",
+  "shortcuts.global.search": "Focus full-text search",
+  "shortcuts.review.reveal": "Reveal answer",
+  "shortcuts.review.forgot": "Didn't know",
+  "shortcuts.review.partial": "Partial",
+  "shortcuts.review.known": "Got it",
+  "shortcuts.key.space": "Space",
+  "shortcuts.key.esc": "Esc",
+
+  // Error boundary
+  "err.title": "Something went wrong.",
+  "err.description":
+    "The UI hit an exception. The error is logged to the console. Your last saved state (uploads, chapters, cards) is safe in the DB — just reload.",
+  "err.reload": "Reload",
+
+  // Rate labels
+  "rate.-10": "−10 %",
+  "rate.0": "Normal",
+  "rate.+10": "+10 %",
+  "rate.+20": "+20 %",
+  "rate.+30": "+30 %",
+
+  // Dashboard
+  "dash.title": "Overview",
+  "dash.subtitle": "Your study progress at a glance.",
+  "dash.openLibrary": "Open library →",
+  "dash.stats.documents": "Documents",
+  "dash.stats.cards": "Cards",
+  "dash.stats.due": "Due today",
+  "dash.stats.learned": "Learned",
+  "dash.stats.audio": "Chapters narrated",
+  "dash.stats.exams": "Exams taken",
+  "dash.stats.avgScore": "Avg. exam score",
+  "dash.streak.title": "Study streak",
+  "dash.streak.days": "{n} days",
+  "dash.streak.none": "Start a review today to build your streak.",
+  "dash.activity.title": "Reviews in the last 30 days",
+  "dash.activity.empty": "No reviews yet — pick a document and start learning.",
+  "dash.weak.title": "Topics that need attention",
+  "dash.weak.empty": "Nothing flagged yet. Keep learning!",
+  "dash.weak.subtitle": "{count} cards · avg ease {ease}",
+  "dash.recent.title": "Recently added",
+  "dash.recent.empty": "Upload a PDF to get started.",
+
+  // Reader extras
+  "reader.thumbnails": "Thumbnails",
+  "reader.thumbnailsToggle": "Toggle thumbnail sidebar",
+
+  // Similar cards
+  "review.similar": "+ More like this",
+  "review.similarGenerated": "{n} similar cards generated",
+  "review.similarBusy": "Generating …",
+
+  // Piper / TTS notice
+  "tts.notice.title": "Use Microsoft Neural Voices?",
+  "tts.notice.body":
+    "PageMentor calls Microsoft's Edge Read-Aloud endpoint to synthesise audio. The endpoint is reachable publicly but is not officially documented for third-party use. The Neural voice models remain Microsoft property and usage is a terms-of-service grey area. Large-scale automated use may violate Microsoft's terms.",
+  "tts.notice.alternative":
+    "A local Piper fallback is on the roadmap but not yet available.",
+  "tts.notice.cancel": "Cancel",
+  "tts.notice.accept": "I understand, continue",
+  "tts.notice.rememberLabel": "Don't ask again",
+};
+
+const de: Record<string, string> = {
+  // App
+  "app.name": "PageMentor",
+  "app.tagline": "Vorlesungs-PDFs → Hörbücher, Lernkarten, Zusammenfassungen",
+
+  // Common
+  "common.loading": "Lade …",
+  "common.error": "Fehler",
+  "common.retry": "Erneut versuchen",
+  "common.save": "Speichern",
+  "common.saving": "Speichere …",
+  "common.cancel": "Abbrechen",
+  "common.close": "Schließen",
+  "common.delete": "Löschen",
+  "common.edit": "Bearbeiten",
+  "common.back": "Zurück",
+  "common.confirm": "OK",
+  "common.done": "Fertig",
+  "common.required": "erforderlich",
+  "common.optional": "optional",
+  "common.all": "Alle",
+  "common.none": "—",
+  "common.yes": "Ja",
+  "common.no": "Nein",
+
+  // Login
+  "login.title": "PageMentor",
+  "login.subtitle": "Passwort erforderlich",
+  "login.password": "Passwort",
+  "login.submit": "Anmelden",
+  "login.wrong": "Falsches Passwort",
+
+  // Library
+  "library.title": "Bibliothek",
+  "library.empty.title": "Noch keine Dokumente",
+  "library.empty.hint": "Lade ein PDF hoch, um anzufangen.",
+  "library.empty.nomatches.title": "Keine Treffer",
+  "library.empty.nomatches.hint": "Filter anpassen oder zurücksetzen.",
+  "library.upload": "Hochladen",
+  "library.search.library": "In Bibliothek filtern …",
+  "library.search.global": "Volltextsuche über alle Dokumente …",
+  "library.search.disabled": "Suche (Meilisearch nicht erreichbar)",
+  "library.filter.tags": "Tags",
+  "library.filter.type": "Typ",
+  "library.logout": "Abmelden",
+  "library.openDoc": "Öffnen",
+  "library.delete": "Löschen",
+  "library.deleteConfirm": "Dokument wirklich löschen?",
+  "library.deleted": "{title} gelöscht",
+  "library.uploadStarted": "Upload gestartet. OCR läuft im Hintergrund.",
+  "library.retry": "Retry",
+  "library.retryStarted": "Pipeline neu gestartet",
+  "library.editHint": "Zum Bearbeiten klicken",
+  "library.chaptersShort": "Kap.",
+  "library.pagesShort": "S.",
+
+  // Document types
+  "type.studienheft": "Studienheft",
+  "type.script": "Script",
+  "type.klausur": "Klausur",
+  "type.uebung": "Übung",
+  "type.sonstiges": "Sonstiges",
+
+  // OCR status
+  "ocr.pending": "Wartet",
+  "ocr.running": "Verarbeite",
+  "ocr.done": "Bereit",
+  "ocr.failed": "Fehler",
+
+  // Pipeline steps
+  "pipe.text": "Text",
+  "pipe.chapters": "Kapitel",
+  "pipe.audio": "Audio",
+  "pipe.cards": "Karten",
+  "pipe.summary": "Zsf.",
+
+  // Upload
+  "upload.title": "PDF hochladen",
+  "upload.dropHere": "PDFs hier ablegen oder klicken",
+  "upload.type": "Dokumenttyp",
+  "upload.language": "Sprache des Inhalts",
+  "upload.tags": "Tags (komma-getrennt)",
+  "upload.tagsPlaceholder": "#bwl, #semester3",
+  "upload.submit": "Hochladen",
+  "upload.uploading": "Lade hoch …",
+  "upload.uploadingProgress": "Lade {current}/{total} …",
+  "upload.submitMany": "{n} hochladen",
+  "upload.remove": "Entfernen",
+
+  // Learn tabs
+  "learn.back": "Bibliothek",
+  "learn.tab.reader": "Lesen",
+  "learn.tab.chapters": "Kapitel",
+  "learn.tab.audiobook": "Hörbuch",
+  "learn.tab.exercises": "Karten",
+  "learn.tab.exam": "Klausur-Trainer",
+  "learn.tab.summary": "Zusammenfassung",
+
+  // Chapters
+  "chapters.title": "Kapitel",
+  "chapters.empty": "Noch keine Kapitel erkannt.",
+  "chapters.detect": "Kapitel neu erkennen",
+  "chapters.detectConfirm":
+    "Kapitel neu erkennen überschreibt die aktuelle Kapitel-Struktur. Fortfahren?",
+  "chapters.detectedToast": "{n} Kapitel erkannt",
+  "chapters.merge": "{n} verschmelzen",
+  "chapters.merged": "{n} Kapitel verschmolzen",
+  "chapters.deleteConfirm": "Kapitel \u201E{title}\u201C wirklich löschen?",
+  "chapters.pages": "S.",
+  "chapters.chars": "{n} Zeichen",
+
+  // PDF viewer
+  "reader.reset": "Reset",
+  "reader.downloadOriginal": "↓ Original",
+  "reader.loading": "PDF wird geladen …",
+  "reader.error": "PDF konnte nicht geladen werden.",
+  "reader.pageOf": "/ {total}",
+  "reader.selectionCta": "+ Als Karte",
+  "reader.selectionModalTitle": "Karte aus Auswahl",
+  "reader.selectionPage": "Seite {page}",
+  "reader.selectionChapter": "Seite {page} · Kapitel {num} {title}",
+  "reader.selectionQuestionDefault": "Was bedeutet \u201E{text}\u201C?",
+  "reader.cardCreated": "Karte erstellt",
+
+  // Audiobook
+  "audiobook.title": "Hörbuch erzeugen",
+  "audiobook.subtitle":
+    "Microsoft Neural TTS · 24 kHz · EBU R128 Loudness · MP3 pro Kapitel + M4B komplett",
+  "audiobook.voice": "Stimme",
+  "audiobook.voice.more": "Weitere Stimmen ({n})",
+  "audiobook.voice.top": "Top",
+  "audiobook.rate": "Geschwindigkeit",
+  "audiobook.preview": "▶ Preview",
+  "audiobook.previewFailed": "Preview fehlgeschlagen — Voice evtl. nicht verfügbar",
+  "audiobook.generate": "Hörbuch erzeugen",
+  "audiobook.regenerate": "Neu erzeugen",
+  "audiobook.generating": "Generiere …",
+  "audiobook.clear": "Alles löschen",
+  "audiobook.clearConfirm": "Alle generierten Hörbuch-Dateien löschen?",
+  "audiobook.cleared": "Hörbuch gelöscht",
+  "audiobook.download.m4b": "M4B herunterladen",
+  "audiobook.apple": "📱 An Apple senden",
+  "audiobook.empty": "Noch kein Hörbuch erzeugt. Wähle eine Stimme und starte die Generierung.",
+  "audiobook.queued": "Generierung gestartet …",
+  "audiobook.chapterPartsWaiting": "Warte …",
+  "audiobook.chapterPartsRunning": "Teil {current}/{total}",
+  "audiobook.chapterFailed": "Fehlgeschlagen",
+  "audiobook.downloadMp3": "↓ MP3",
+  "audiobook.generatedBy": "Generiert mit {voice}",
+
+  // Progress phrases
+  "phase.pipeline.start": "Pipeline startet …",
+  "phase.pipeline.extract": "Extrahiere Text …",
+  "phase.pipeline.chapters": "Erkenne Kapitel …",
+  "phase.pipeline.done": "Pipeline fertig",
+  "phase.pipeline.failed": "Pipeline-Fehler: {msg}",
+  "phase.audiobook.start": "Hörbuch: {total} Kapitel",
+  "phase.audiobook.chapter.start": "Audio {current}/{total}: {msg}",
+  "phase.audiobook.chapter.progress": "Kap. {num} · Teil {current}/{total}",
+  "phase.audiobook.chapter.done": "Audio {current}/{total} fertig",
+  "phase.audiobook.chapter.failed": "Kapitel {num} fehlgeschlagen: {msg}",
+  "phase.audiobook.book.building": "Baue M4B …",
+  "phase.audiobook.done": "Hörbuch fertig ✓",
+  "phase.audiobook.failed": "Fehler: {msg}",
+
+  // Cards
+  "cards.title": "Lernkarten",
+  "cards.subtitle": "Aus Kapiteltext extrahierte Aufgaben mit SM-2 Spaced Repetition",
+  "cards.new": "+ Neue Karte",
+  "cards.extract": "Aus Kapiteln extrahieren",
+  "cards.extractedToast": "{n} Karten extrahiert",
+  "cards.ai": "✨ KI-Karten",
+  "cards.aiGenerated": "{n} Karten mit {model} generiert",
+  "cards.exportCsv": "↓ CSV",
+  "cards.exportTitle": "CSV-Export (Anki-kompatibel)",
+  "cards.importCsv": "↑ CSV",
+  "cards.importTitle": "CSV-Datei importieren",
+  "cards.importedToast": "{n} Karten importiert",
+  "cards.learn": "Lernen ({n} fällig)",
+  "cards.learnNoneDue": "Keine fälligen Karten — alles gelernt!",
+  "cards.deleteConfirm": "Karte wirklich löschen?\n\n{preview}",
+  "cards.stats.total": "Karten",
+  "cards.stats.due": "Fällig",
+  "cards.stats.learned": "Gelernt",
+  "cards.filter.chapter": "Kapitel",
+  "cards.empty.none":
+    "Noch keine Karten. Klicke \u201EAus Kapiteln extrahieren\u201C oder lege eine manuell an.",
+  "cards.empty.filter": "Keine Karten in diesem Kapitel.",
+  "cards.source.extracted": "extrahiert",
+  "cards.source.ai": "KI",
+  "cards.source.manual": "manuell",
+  "cards.reviewed": "{n}× gelernt",
+  "cards.hintChip": "💡 Hinweis",
+  "cards.noAnswer": "Keine Lösung zugeordnet.",
+  "cards.modal.new": "Neue Karte",
+  "cards.modal.edit": "Karte bearbeiten",
+  "cards.modal.create": "Anlegen",
+  "cards.field.chapter": "Kapitel (optional)",
+  "cards.field.question": "Frage",
+  "cards.field.answer": "Antwort / Lösung",
+  "cards.field.hint":
+    "Hinweis (optional — hilft beim Review, bevor du die Lösung ansiehst)",
+  "cards.field.difficulty": "Schwierigkeit",
+  "cards.diff.easy": "Leicht",
+  "cards.diff.medium": "Mittel",
+  "cards.diff.hard": "Schwer",
+
+  // AI-generate modal
+  "cards.ai.title": "Karten mit KI generieren",
+  "cards.ai.description":
+    "Nutzt lokales Ollama-LLM. Der Prompt instruiert das Modell, Karten aus dem Kapiteltext zu erstellen.",
+  "cards.ai.count": "Anzahl",
+  "cards.ai.difficulty": "Schwierigkeit",
+  "cards.ai.style": "Stil",
+  "cards.ai.style.basic": "Grundlagen",
+  "cards.ai.style.deep": "Vertiefung",
+  "cards.ai.style.exam": "Klausur",
+  "cards.ai.submit": "Generieren",
+  "cards.ai.submitting": "Generiere …",
+
+  // Review
+  "review.title": "Lerneinheit",
+  "review.revealHint": "Hinweis zeigen",
+  "review.reveal": "Lösung zeigen (Leertaste)",
+  "review.solution": "Lösung",
+  "review.noSolution": "Keine Lösung hinterlegt. Rate nach eigenem Empfinden.",
+  "review.forgot": "Nicht gewusst",
+  "review.partial": "Teilweise",
+  "review.known": "Gewusst",
+  "review.key": "Taste {k}",
+  "review.chapterTag": "Kapitel {num}{sep}{title}",
+  "review.summaryTitle": "Session beendet",
+  "review.summary.known": "Gewusst",
+  "review.summary.partial": "Teilweise",
+  "review.summary.forgot": "Nicht gewusst",
+  "review.summary.back": "Zurück zur Übersicht",
+
+  // Exam trainer
+  "exam.title": "Klausur-Trainer",
+  "exam.subtitle":
+    "Zufällige Auswahl aus den Karten. Du beantwortest unter Zeitdruck, anschließend Selbst-Bewertung — Score fließt in die Historie.",
+  "exam.count": "Kartenanzahl",
+  "exam.duration": "Dauer",
+  "exam.duration.noLimit": "Ohne Zeitlimit",
+  "exam.start": "Klausur starten",
+  "exam.starting": "Starte …",
+  "exam.cancel": "Abbrechen",
+  "exam.cancelConfirm": "Klausur abbrechen? Fortschritt geht verloren.",
+  "exam.answerLabel": "Deine Antwort",
+  "exam.answerPlaceholder": "Schreibe deine Antwort hier …",
+  "exam.prev": "← Zurück",
+  "exam.next": "Weiter →",
+  "exam.submit": "Abgeben",
+  "exam.review.title": "Selbst-Bewertung",
+  "exam.review.subtitle":
+    "Vergleiche deine Antworten mit der Muster-Lösung und rate ehrlich.",
+  "exam.review.yourAnswer": "Deine Antwort",
+  "exam.review.reference": "Musterlösung",
+  "exam.review.empty": "leer",
+  "exam.review.noReference": "keine hinterlegt",
+  "exam.review.submit": "Abgeben",
+  "exam.review.submitted": "Klausur abgegeben — {score} %",
+  "exam.history": "Historie",
+  "exam.history.count": "{n} Sessions",
+  "exam.history.empty": "Noch keine Klausuren absolviert.",
+  "exam.history.deleteConfirm": "Session wirklich löschen?",
+  "exam.history.open": "offen",
+  "exam.history.closed": "abgegeben",
+
+  // Summaries
+  "summary.title": "Zusammenfassungen",
+  "summary.subtitle": "Lokales LLM via Ollama · drei Detailstufen pro Kapitel",
+  "summary.noOllama.title": "Ollama nicht erreichbar",
+  "summary.noOllama.hint":
+    "Zusammenfassungen brauchen einen laufenden Ollama-Server. Starte ihn lokal ({cmd}) oder setze {envVar} auf deine Instanz.",
+  "summary.noOllama.tried": "Versucht:",
+  "summary.model": "Modell",
+  "summary.level.bullets": "Bulletpoints",
+  "summary.level.paragraph": "Absatz",
+  "summary.level.detailed": "Detailliert",
+  "summary.level.bullets.hint": "6–9 Stichpunkte",
+  "summary.level.paragraph.hint": "≤ 120 Wörter",
+  "summary.level.detailed.hint": "mit Kernbegriffen",
+  "summary.generate.new": "+ Generieren",
+  "summary.generate.regen": "↻ Neu generieren",
+  "summary.generatingLive": "Streame …",
+  "summary.generatedToast": "Zusammenfassung erstellt: Kapitel {num}",
+  "summary.empty.chapters": "Noch keine Kapitel erkannt.",
+  "summary.delete": "Löschen",
+  "summary.deleteConfirm": "Zusammenfassung löschen?",
+
+  // Search
+  "search.disabled": "Suche (Meilisearch nicht erreichbar)",
+  "search.placeholder": "Volltextsuche über alle Dokumente …",
+  "search.empty": "Keine Treffer für \u201E{q}\u201C",
+  "search.group.documents": "Dokumente ({n})",
+  "search.group.chapters": "Kapitel ({n})",
+
+  // Podcast share
+  "podcast.title": "An Apple senden",
+  "podcast.books": "Apple Bücher (Hörbuch)",
+  "podcast.books.description":
+    "Lade die M4B-Datei mit Kapitelmarken, schicke sie per AirDrop oder iCloud Drive aufs iPhone. Bücher.app öffnet sie als Hörbuch.",
+  "podcast.books.download": "↓ M4B herunterladen",
+  "podcast.books.copyUrl": "URL kopieren",
+  "podcast.books.urlCopied": "M4B-URL kopiert",
+  "podcast.pc.title": "Apple Podcasts / Overcast",
+  "podcast.pc.description":
+    "Abonniere diesen privaten Feed — jedes Kapitel wird eine Episode, mit Kapitelsprung und Auto-Sync. Auf dem Mac: \u201EDatei \u2192 Sendung über URL abonnieren\u201C. In Overcast/Pocket Casts: \u201EAdd by URL\u201C.",
+  "podcast.pc.copy": "Feed-URL kopieren",
+  "podcast.pc.urlCopied": "Feed-URL kopiert",
+  "podcast.pc.open": "Öffnen",
+  "podcast.pc.openTitle": "Apple Podcasts öffnen",
+  "podcast.pc.note":
+    "Der Token ist aus PM_PASSWORD abgeleitet — beim Passwort-Wechsel wird der Feed ungültig. Der Server muss vom iPhone erreichbar sein (lokales Netz, Tailscale, Cloudflare Tunnel o. ä.).",
+  "podcast.clipboardFail": "Clipboard nicht verfügbar",
+
+  // Settings
+  "settings.title": "Einstellungen",
+  "settings.saved": "Einstellungen gespeichert",
+  "settings.section.locale": "Sprache",
+  "settings.locale": "Sprache der Oberfläche",
+  "settings.section.library": "Bibliothek & Upload",
+  "settings.defaultLanguage": "Default-Sprache für Upload",
+  "settings.section.audiobook": "Hörbuch",
+  "settings.defaultVoice": "Default-Stimme",
+  "settings.voice.server": "Server-Empfehlung",
+  "settings.defaultRate": "Geschwindigkeit",
+  "settings.section.exam": "Klausur-Trainer",
+  "settings.defaultExamCount": "Default-Kartenanzahl",
+  "settings.defaultExamMinutes": "Default-Dauer (min, 0 = ohne Limit)",
+  "settings.section.ai": "KI / Ollama",
+  "settings.defaultOllamaModel": "Default-Modell",
+  "settings.ollama.server": "Server-Default ({model})",
+  "settings.ollama.connected": "Verbunden mit {url}",
+  "settings.ollama.disabled":
+    "Ollama nicht erreichbar — Zusammenfassungen und KI-Karten sind deaktiviert.",
+  "settings.section.status": "Status",
+  "settings.status.checking": "prüfe …",
+  "settings.status.online": "online",
+  "settings.status.offline": "offline",
+
+  // Shortcuts
+  "shortcuts.title": "Tastaturkürzel",
+  "shortcuts.section.global": "Global",
+  "shortcuts.section.review": "Lernkarten-Review",
+  "shortcuts.global.help": "Diese Übersicht",
+  "shortcuts.global.close": "Modal schließen",
+  "shortcuts.global.search": "Volltextsuche fokussieren",
+  "shortcuts.review.reveal": "Lösung aufdecken",
+  "shortcuts.review.forgot": "Nicht gewusst",
+  "shortcuts.review.partial": "Teilweise",
+  "shortcuts.review.known": "Gewusst",
+  "shortcuts.key.space": "Leertaste",
+  "shortcuts.key.esc": "Esc",
+
+  // Error boundary
+  "err.title": "Oops, etwas ist kaputt gegangen.",
+  "err.description":
+    "Die UI hat sich verfangen. Der Zustand wurde auf die Konsole geloggt. Dein letzter Stand (Upload, Kapitel, Karten) ist in der DB gespeichert — einfach neu laden.",
+  "err.reload": "Neu laden",
+
+  // Rate labels
+  "rate.-10": "−10 %",
+  "rate.0": "Normal",
+  "rate.+10": "+10 %",
+  "rate.+20": "+20 %",
+  "rate.+30": "+30 %",
+
+  // Dashboard
+  "dash.title": "Übersicht",
+  "dash.subtitle": "Dein Lernfortschritt auf einen Blick.",
+  "dash.openLibrary": "Bibliothek öffnen →",
+  "dash.stats.documents": "Dokumente",
+  "dash.stats.cards": "Karten",
+  "dash.stats.due": "Heute fällig",
+  "dash.stats.learned": "Gelernt",
+  "dash.stats.audio": "Vertonte Kapitel",
+  "dash.stats.exams": "Klausuren",
+  "dash.stats.avgScore": "Ø Klausur-Score",
+  "dash.streak.title": "Lern-Streak",
+  "dash.streak.days": "{n} Tage",
+  "dash.streak.none": "Starte heute eine Lerneinheit, um einen Streak aufzubauen.",
+  "dash.activity.title": "Reviews in den letzten 30 Tagen",
+  "dash.activity.empty": "Noch keine Reviews — öffne ein Dokument und starte.",
+  "dash.weak.title": "Themen, die Aufmerksamkeit brauchen",
+  "dash.weak.empty": "Nichts markiert. Weiter so!",
+  "dash.weak.subtitle": "{count} Karten · Ø Ease {ease}",
+  "dash.recent.title": "Zuletzt hinzugefügt",
+  "dash.recent.empty": "Lade ein PDF hoch, um zu starten.",
+
+  // Reader extras
+  "reader.thumbnails": "Thumbnails",
+  "reader.thumbnailsToggle": "Thumbnail-Leiste umschalten",
+
+  // Similar cards
+  "review.similar": "+ Mehr wie diese",
+  "review.similarGenerated": "{n} ähnliche Karten generiert",
+  "review.similarBusy": "Generiere …",
+
+  // Piper / TTS notice
+  "tts.notice.title": "Microsoft Neural Voices nutzen?",
+  "tts.notice.body":
+    "PageMentor ruft für die Audio-Synthese die Edge-Read-Aloud-API von Microsoft auf. Die ist öffentlich erreichbar, aber nicht offiziell für Drittanbieter dokumentiert. Die Neural-Voice-Modelle bleiben Eigentum von Microsoft, und die Nutzung bewegt sich in einem ToS-Graubereich. Großflächige automatisierte Nutzung verletzt möglicherweise Microsofts Bedingungen.",
+  "tts.notice.alternative":
+    "Ein lokaler Piper-Fallback ist geplant, aber noch nicht verfügbar.",
+  "tts.notice.cancel": "Abbrechen",
+  "tts.notice.accept": "Verstanden, fortfahren",
+  "tts.notice.rememberLabel": "Nicht nochmal fragen",
+};
+
+const dicts: Record<Locale, Record<string, string>> = { en, de };

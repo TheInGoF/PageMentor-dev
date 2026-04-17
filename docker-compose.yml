@@ -1,0 +1,59 @@
+name: pagementor
+
+services:
+  app:
+    build: .
+    container_name: pm-app
+    restart: unless-stopped
+    ports:
+      - "${PM_PORT:-3100}:3000"
+    environment:
+      PM_PASSWORD: ${PM_PASSWORD:-changeme}
+      PM_DATA_DIR: /data
+      MEILI_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-pm-dev-key}
+      PM_OLLAMA_URL: ${PM_OLLAMA_URL:-http://ollama:11434}
+      PM_OLLAMA_MODEL: ${PM_OLLAMA_MODEL:-llama3.1:8b}
+    volumes:
+      - pm-data:/data
+    depends_on:
+      meilisearch: { condition: service_healthy }
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: pm-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-pm-dev-key}
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - pm-meili:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: lokaler Ollama-Server für Zusammenfassungen und KI-Karten.
+  # Aktivieren mit:  docker compose --profile ai up -d
+  ollama:
+    image: ollama/ollama:latest
+    container_name: pm-ollama
+    profiles: ["ai"]
+    restart: unless-stopped
+    volumes:
+      - pm-ollama:/root/.ollama
+    # Wenn du eine NVIDIA-GPU hast, uncomment den deploy-Block:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  pm-data:
+  pm-meili:
+  pm-ollama:

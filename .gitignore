@@ -1,0 +1,10 @@
+node_modules/
+dist/
+data/
+.env
+*.db
+*.tsbuildinfo
+
+# Tooling-only, not shipped
+CLAUDE.md
+.claude/

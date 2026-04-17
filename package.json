@@ -1,0 +1,16 @@
+{
+  "name": "pagementor",
+  "version": "1.00.000",
+  "private": true,
+  "description": "Lokales Lern-Tool: Vorlesungs-PDFs → Hörbücher, Lernkarten, Zusammenfassungen",
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c red,white \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "cd backend && bun run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:all": "cd backend && bun install && cd ../frontend && npm install",
+    "build:frontend": "cd frontend && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
