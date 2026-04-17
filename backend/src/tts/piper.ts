@@ -1,8 +1,13 @@
 /**
  * Piper-Wrapper: spawnt das `piper`-Binary, füttert Text über stdin,
- * erhält 22 kHz Mono-WAV an stdout. Die Binary liegt im Image unter
+ * erhält Mono-WAV an --output_file. Die Binary liegt im Image unter
  * PM_PIPER_BIN (Default /opt/piper/piper), Voice-Modelle unter
  * PM_PIPER_DIR (Default /app/piper-voices).
+ *
+ * Multi-Speaker-Modelle (z. B. thorsten_emotional-medium mit 8 Emotionen,
+ * MLS-Corpus mit vielen Sprechern) werden beim Scan in je einen eigenen
+ * Voice-Eintrag pro Sprecher-Key aufgefaltet. Die Voice-ID trägt dann
+ * ein Suffix `.speakerKey`, z. B. `de_DE-thorsten_emotional-medium.neutral`.
  *
  * Piper kennt kein SSML — Eingabe ist Plain Text. Satzpausen ergeben
  * sich aus Interpunktion und Zeilenumbrüchen.
@@ -17,15 +22,30 @@ const PIPER_BIN = process.env.PM_PIPER_BIN || "/opt/piper/piper";
 const PIPER_DIR = process.env.PM_PIPER_DIR || "/app/piper-voices";
 const PIPER_LIB = process.env.LD_LIBRARY_PATH || "/opt/piper";
 
+/** Trennzeichen zwischen Modell-ID und Speaker-Key in der Voice-ID.
+ *  Muss URL-sicher sein (kein `#`, keine Umlaute). */
+export const SPEAKER_SEPARATOR = ".";
+
 export interface PiperVoiceInfo {
-  voiceId: string;        // z. B. "de_DE-thorsten-high"
-  modelPath: string;      // absolute path zu .onnx
-  configPath: string;     // absolute path zu .onnx.json
-  language: string;       // "de", "en"
-  locale: string;         // "de_DE", "en_US"
-  sampleRate: number;     // aus config, typ. 22050
-  quality: string;        // "low" | "medium" | "high" | "x_low"
+  voiceId: string;          // z. B. "de_DE-thorsten-high" oder "de_DE-thorsten_emotional-medium.neutral"
+  modelId: string;          // Dateiname ohne Extension, z. B. "de_DE-thorsten_emotional-medium"
+  speakerKey?: string;      // z. B. "neutral" (bei Multi-Speaker)
+  speakerId?: number;       // numerische Piper-speaker-id
+  modelPath: string;
+  configPath: string;
+  language: string;         // "de", "en"
+  locale: string;           // "de_DE", "en_US"
+  sampleRate: number;
+  quality: string;          // "low" | "medium" | "high" | "x_low"
   speakerCount: number;
+}
+
+interface Manifest {
+  audio?: { sample_rate?: number };
+  language?: { code?: string; family?: string };
+  num_speakers?: number;
+  /** Piper schreibt `{"speaker_name": 0, ...}`. */
+  speaker_id_map?: Record<string, number>;
 }
 
 let cache: PiperVoiceInfo[] | null = null;
@@ -34,7 +54,8 @@ export function isPiperAvailable(): boolean {
   return existsSync(PIPER_BIN) && existsSync(PIPER_DIR);
 }
 
-/** Liest alle *.onnx-Modelle aus PM_PIPER_DIR und baut eine Voice-Liste. */
+/** Liest alle *.onnx-Modelle aus PM_PIPER_DIR und baut eine Voice-Liste.
+ *  Multi-Speaker-Modelle werden pro Speaker-Key aufgefaltet. */
 export function listPiperVoices(): PiperVoiceInfo[] {
   if (cache) return cache;
   if (!isPiperAvailable()) {
@@ -48,14 +69,9 @@ export function listPiperVoices(): PiperVoiceInfo[] {
     const configPath = `${modelPath}.json`;
     if (!existsSync(configPath)) continue;
     try {
-      const meta = JSON.parse(readFileSync(configPath, "utf8")) as {
-        audio?: { sample_rate?: number };
-        espeak?: { voice?: string };
-        language?: { code?: string; family?: string };
-        num_speakers?: number;
-      };
-      const voiceId = basename(entry, ".onnx");
-      const parts = voiceId.split("-");
+      const meta = JSON.parse(readFileSync(configPath, "utf8")) as Manifest;
+      const modelId = basename(entry, ".onnx");
+      const parts = modelId.split("-");
       const localeHint = parts[0] ?? meta.language?.code ?? "";
       const quality = parts[parts.length - 1] ?? "medium";
       const language =
@@ -64,16 +80,32 @@ export function listPiperVoices(): PiperVoiceInfo[] {
       const locale = localeHint.includes("_")
         ? localeHint
         : meta.language?.code ?? localeHint;
-      out.push({
-        voiceId,
+      const sampleRate = meta.audio?.sample_rate ?? 22050;
+      const numSpeakers = meta.num_speakers ?? 1;
+
+      const base: Omit<PiperVoiceInfo, "voiceId" | "speakerKey" | "speakerId"> = {
+        modelId,
         modelPath,
         configPath,
         language: language || "",
         locale: locale || language || "",
-        sampleRate: meta.audio?.sample_rate ?? 22050,
+        sampleRate,
         quality,
-        speakerCount: meta.num_speakers ?? 1,
-      });
+        speakerCount: numSpeakers,
+      };
+
+      if (numSpeakers > 1 && meta.speaker_id_map) {
+        for (const [speakerKey, speakerId] of Object.entries(meta.speaker_id_map)) {
+          out.push({
+            ...base,
+            voiceId: `${modelId}${SPEAKER_SEPARATOR}${speakerKey}`,
+            speakerKey,
+            speakerId,
+          });
+        }
+      } else {
+        out.push({ ...base, voiceId: modelId });
+      }
     } catch {
       // Defektes Manifest ignorieren, sonst blockiert ein einzelnes File alles.
     }
@@ -100,6 +132,9 @@ export async function synthesizeTextToWav(params: {
     "--config", voice.configPath,
     "--output_file", params.outPath,
   ];
+  if (voice.speakerId !== undefined) {
+    args.push("--speaker", String(voice.speakerId));
+  }
 
   const child = spawn(PIPER_BIN, args, {
     env: { ...process.env, LD_LIBRARY_PATH: PIPER_LIB },
@@ -108,9 +143,8 @@ export async function synthesizeTextToWav(params: {
 
   const stderrChunks: Buffer[] = [];
   child.stderr.on("data", (c: Buffer) => stderrChunks.push(c));
-  // Wir lesen stdout nicht explizit — Piper schreibt die WAV-Datei direkt
-  // an --output_file. stdout bleibt leer, muss aber abgeführt werden damit
-  // der Prozess nicht blockiert.
+  // stdout bleibt leer (Piper schreibt in --output_file), muss aber
+  // abgeführt werden damit der Prozess nicht blockiert.
   child.stdout.resume();
 
   child.stdin.write(params.text);
@@ -152,7 +186,7 @@ export async function synthesizePiperPreview(params: {
   }
 }
 
-/** WAV → MP3 via ffmpeg. 96 kbit CBR, mono — analog Edge-Pipeline. */
+/** WAV → MP3 via ffmpeg. 96 kbit CBR, mono — analog alter Pipeline. */
 export async function wavToMp3(inputWav: string, outputMp3: string): Promise<void> {
   const ff = spawn("ffmpeg", [
     "-y",
