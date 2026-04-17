@@ -34,12 +34,15 @@ export interface Chapter {
   has_audio?: number;
 }
 
+export type TtsEngine = "edge" | "piper";
+
 export interface Voice {
   id: string;
   label: string;
   language: string;
   locale: string;
   gender: "female" | "male";
+  engine: TtsEngine;
   flagship?: boolean;
   note?: string;
 }

@@ -149,6 +149,14 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     () => voices.filter((v) => v.language !== documentLanguage),
     [voices, documentLanguage]
   );
+  const langLocal = useMemo(
+    () => langVoices.filter((v) => v.engine === "piper"),
+    [langVoices]
+  );
+  const langCloud = useMemo(
+    () => langVoices.filter((v) => v.engine === "edge"),
+    [langVoices]
+  );
 
   const generating = state?.generating || progress?.phase.startsWith("audiobook.") === true;
   const phaseMessage = progress ? describePhase(progress) : null;
@@ -185,16 +193,40 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             <label className="text-xs font-medium text-neutral-400 block mb-2">
               {t("audiobook.voice")}
             </label>
-            <div className="flex flex-wrap gap-2">
-              {langVoices.map((v) => (
-                <VoiceChip
-                  key={v.id}
-                  voice={v}
-                  active={voiceId === v.id}
-                  onSelect={() => setVoiceId(v.id)}
-                />
-              ))}
-            </div>
+            {langLocal.length > 0 && (
+              <div className="mb-3">
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                  {t("audiobook.voice.group.local")}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {langLocal.map((v) => (
+                    <VoiceChip
+                      key={v.id}
+                      voice={v}
+                      active={voiceId === v.id}
+                      onSelect={() => setVoiceId(v.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            {langCloud.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+                  {t("audiobook.voice.group.cloud")}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {langCloud.map((v) => (
+                    <VoiceChip
+                      key={v.id}
+                      voice={v}
+                      active={voiceId === v.id}
+                      onSelect={() => setVoiceId(v.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             {otherVoices.length > 0 && (
               <details className="mt-3">
                 <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-300">

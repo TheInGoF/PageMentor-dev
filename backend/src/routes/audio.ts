@@ -3,7 +3,7 @@ import { db } from "../db";
 import { join } from "path";
 import { existsSync, createReadStream, statSync } from "fs";
 import { streamSSE } from "hono/streaming";
-import { VOICES, findVoice, defaultVoiceFor } from "../tts/voices";
+import { allVoices, findVoice, defaultVoiceFor } from "../tts/voices";
 import { synthesizePreview } from "../tts/synth";
 import { generateAudiobook, isGenerating, clearAudio } from "../services/audiobook";
 import { subscribe, getRecent } from "../services/events";
@@ -15,7 +15,7 @@ export const audioRoutes = new Hono();
 
 // Voice catalog
 audioRoutes.get("/voices", (c) => {
-  return c.json({ voices: VOICES });
+  return c.json({ voices: allVoices() });
 });
 
 // Short sample in the requested voice — played on picker click.

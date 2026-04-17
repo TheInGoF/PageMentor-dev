@@ -5,7 +5,7 @@ import { join as pathJoin } from "path";
 import { db } from "../db";
 import { segmentText } from "../tts/segment";
 import { buildSsml } from "../tts/ssml";
-import { synthesizeSsmlToFile } from "../tts/synth";
+import { synthesizeSegmentToFile } from "../tts/synth";
 import { concatMp3, normalizeAndTag, buildM4B } from "../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../tts/voices";
 import { emit } from "./events";
@@ -119,6 +119,7 @@ export async function generateAudiobook(params: {
           storedRelPath: relPath(outFile),
           durationMs,
           voice: voiceId,
+          engine: voice?.engine ?? "edge",
           status: "done",
         });
 
@@ -142,6 +143,7 @@ export async function generateAudiobook(params: {
           storedRelPath: relPath(outFile),
           durationMs: 0,
           voice: voiceId,
+          engine: voice?.engine ?? "edge",
           status: "failed",
         });
         emit({
@@ -212,16 +214,33 @@ async function synthesizeChapter(params: {
     const segments = segmentText(chapter.text);
     if (segments.length === 0) throw new Error("Keine Segmente aus Kapiteltext.");
 
+    const voice = findVoice(voiceId);
+    const engine = voice?.engine ?? "edge";
     const chunkFiles: string[] = [];
     for (let i = 0; i < segments.length; i++) {
-      const ssml = buildSsml(segments[i], {
-        voice: voiceId,
-        locale,
-        rate,
-        announce: i === 0 ? (chapter.title || `Kapitel ${chapter.number}`) : undefined,
-      });
+      const announcement =
+        i === 0 ? chapter.title || `Kapitel ${chapter.number}` : undefined;
+      const ssml =
+        engine === "edge"
+          ? buildSsml(segments[i], {
+              voice: voiceId,
+              locale,
+              rate,
+              announce: announcement,
+            })
+          : "";
+      const paragraphText = segments[i].paragraphs.join("\n\n");
+      const plainText =
+        announcement && engine === "piper"
+          ? `${announcement}.\n\n${paragraphText}`
+          : paragraphText;
       const chunkPath = join(tmpDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
-      await synthesizeSsmlToFile({ ssml, voice: voiceId, outPath: chunkPath });
+      await synthesizeSegmentToFile({
+        ssml,
+        text: plainText,
+        voice: voiceId,
+        outPath: chunkPath,
+      });
       chunkFiles.push(chunkPath);
       params.onChunk(i + 1, segments.length);
     }
@@ -293,6 +312,7 @@ function upsertAudio(params: {
   storedRelPath: string;
   durationMs: number;
   voice: string;
+  engine: "edge" | "piper";
   status: "done" | "failed" | "running" | "pending";
 }): void {
   const d = db();
@@ -301,16 +321,24 @@ function upsertAudio(params: {
     | undefined;
   if (existing) {
     d.prepare(
-      "UPDATE audio SET stored_path = ?, duration_ms = ?, engine = 'edge-tts', voice = ?, status = ? WHERE chapter_id = ?"
-    ).run(params.storedRelPath, params.durationMs, params.voice, params.status, params.chapterId);
+      "UPDATE audio SET stored_path = ?, duration_ms = ?, engine = ?, voice = ?, status = ? WHERE chapter_id = ?"
+    ).run(
+      params.storedRelPath,
+      params.durationMs,
+      params.engine,
+      params.voice,
+      params.status,
+      params.chapterId
+    );
   } else {
     d.prepare(
-      "INSERT INTO audio (id, chapter_id, stored_path, duration_ms, engine, voice, status) VALUES (?, ?, ?, ?, 'edge-tts', ?, ?)"
+      "INSERT INTO audio (id, chapter_id, stored_path, duration_ms, engine, voice, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
     ).run(
       randomUUID(),
       params.chapterId,
       params.storedRelPath,
       params.durationMs,
+      params.engine,
       params.voice,
       params.status
     );
