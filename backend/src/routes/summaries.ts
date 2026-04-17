@@ -6,9 +6,8 @@ import {
   generateStream,
   isAvailable,
   listModels,
-  ollamaDefaultModel,
-  ollamaUrl,
-} from "../services/ollama";
+  llmStatus,
+} from "../services/llm";
 import { tt } from "../lib/i18n";
 
 export const summaryRoutes = new Hono();
@@ -73,16 +72,12 @@ function pickPrompt(level: Level, lang: string): PromptPair {
   return PROMPTS[l][level];
 }
 
-// Status endpoint
+// Status endpoint — exposes the active LLM provider, model list and
+// the full candidate chain so the UI can show which box answered.
 summaryRoutes.get("/status", async (c) => {
-  const ok = await isAvailable();
-  const models = ok ? await listModels() : [];
-  return c.json({
-    available: ok,
-    url: ollamaUrl(),
-    defaultModel: ollamaDefaultModel(),
-    models: models.map((m) => m.name),
-  });
+  void isAvailable; // retained for back-compat imports
+  void listModels;
+  return c.json(await llmStatus());
 });
 
 // List existing summaries for a chapter.

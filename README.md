@@ -90,7 +90,7 @@ mkdir -p /volume1/docker/pagementor/ollama    # optional, only if you enable the
 
 1. **Stacks → Add stack → Web editor**
 2. **Name:** `pagementor`
-3. Paste the contents of [`docker-compose.synology.yml`](docker-compose.synology.yml) — this file is self-contained, don't mix it with the default `docker-compose.yml`.
+3. Paste the contents of [`docker-compose.yml`](docker-compose.yml) — it ships pre-configured with `/volume1/docker/pagementor/{data,meili,ollama}` bind mounts for Synology.
 4. **Environment variables → Advanced mode** — paste and tweak:
 
    ```env
@@ -158,12 +158,20 @@ Vite proxies `/api` to `:3000`, so the app opens at
 | `PM_DATA_DIR` | `./data` | Uploads + SQLite + audio files |
 | `MEILI_URL` | `http://meilisearch:7700` | Meilisearch endpoint |
 | `MEILI_MASTER_KEY` | `pm-dev-key` | Meilisearch API key |
-| `PM_OLLAMA_URL` | `http://ollama:11434` | Ollama endpoint (optional) |
-| `PM_OLLAMA_MODEL` | `llama3.1:8b` | Default model |
+| `PM_OLLAMA_URL_PC` | — | Ollama on your workstation (NVIDIA, 1st choice) |
+| `PM_OLLAMA_URL_MAC` | — | Ollama on a Mac (Apple Silicon, 2nd choice) |
+| `PM_OLLAMA_URL` | — | Generic Ollama fallback (NAS, same-stack …) |
+| `PM_OLLAMA_MODEL` | `llama3.1:8b` | Default Ollama model |
+| `PM_ANTHROPIC_API_KEY` | — | Paid Claude fallback if no Ollama responds |
+| `PM_ANTHROPIC_MODEL` | `claude-haiku-4-5-20251001` | Default Claude model |
 
-Meilisearch and Ollama are both optional. Without Meilisearch the full-text
-search disables itself; without Ollama the summary and AI-card tabs show
-a clear "not reachable" hint and the rest of the app keeps working.
+Meilisearch is optional (full-text search disables itself if missing).
+The **LLM chain** tries PC Ollama → Mac Ollama → generic Ollama →
+Claude → none — the first reachable wins. All of these can be changed
+at runtime from the Settings modal; the override lives in
+`$PM_DATA_DIR/llm-config.json` and survives redeploys. If nothing
+responds, the Summary and AI-Card tabs show a "not configured" hint
+and the rest of the app keeps working.
 
 ## Stack
 

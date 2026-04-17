@@ -11,6 +11,7 @@ import { searchRoutes } from "./routes/search";
 import { summaryRoutes } from "./routes/summaries";
 import { feedApiRoutes, feedPublicRoutes } from "./routes/feed";
 import { dashboardRoutes } from "./routes/dashboard";
+import { llmConfigRoutes } from "./routes/llmConfig";
 import { ensureReady as ensureSearchReady } from "./services/search";
 import { initDb } from "./db";
 
@@ -19,7 +20,7 @@ const app = new Hono();
 app.use("/*", cors());
 
 // Public
-app.get("/api/health", (c) => c.json({ status: "ok", version: "1.02.000" }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: "1.03.000" }));
 app.route("/api/auth", authRoutes);
 // Podcast-Feed liegt öffentlich (Token-Auth im Pfad), damit Apple
 // Podcasts / Overcast ihn ohne Cookie ziehen können.
@@ -36,6 +37,7 @@ app.route("/api/search", searchRoutes);
 app.route("/api/summary", summaryRoutes);
 app.route("/api/feed", feedApiRoutes);
 app.route("/api/dashboard", dashboardRoutes);
+app.route("/api/llm/config", llmConfigRoutes);
 
 // Static frontend (production)
 app.use("/*", serveStatic({ root: "./public" }));

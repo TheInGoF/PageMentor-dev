@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { db } from "../db";
 import { extractCards } from "../services/cards";
 import { initialState, updateProgress, type Quality } from "../services/sm2";
-import { generate as ollamaGenerate, isAvailable as ollamaAvailable } from "../services/ollama";
+import { generate as ollamaGenerate, isAvailable as ollamaAvailable } from "../services/llm";
 import { tt } from "../lib/i18n";
 
 export const cardRoutes = new Hono();

@@ -201,6 +201,10 @@ export interface OllamaStatus {
   url: string;
   defaultModel: string;
   models: string[];
+  // v1.03+: multi-provider chain (Ollama-PC → Mac → Claude → none)
+  providerType?: "ollama" | "anthropic" | null;
+  label?: string;
+  candidates?: Array<{ label: string; type: string; url: string }>;
 }
 
 export type ProgressPhase =
@@ -382,6 +386,34 @@ export const api = {
         body: form,
       });
     },
+  },
+  llmConfig: {
+    get: () =>
+      request<{
+        config: {
+          ollamaUrlPc?: string;
+          ollamaUrlMac?: string;
+          ollamaUrl?: string;
+          ollamaModel?: string;
+          anthropicModel?: string;
+          anthropicApiKeyPresent: boolean;
+        };
+        status: OllamaStatus;
+      }>("/api/llm/config"),
+    put: (body: {
+      ollamaUrlPc?: string;
+      ollamaUrlMac?: string;
+      ollamaUrl?: string;
+      ollamaModel?: string;
+      anthropicApiKey?: string;
+      anthropicModel?: string;
+    }) =>
+      request<{ config: unknown; status: OllamaStatus }>("/api/llm/config", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    removeAnthropic: () =>
+      request<{ config: unknown }>("/api/llm/config/anthropic", { method: "DELETE" }),
   },
   summary: {
     status: () => request<OllamaStatus>("/api/summary/status"),

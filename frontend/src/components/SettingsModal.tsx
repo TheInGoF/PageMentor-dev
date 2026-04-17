@@ -7,6 +7,15 @@ import { api, type OllamaStatus, type Voice } from "../lib/api";
 import { useToast } from "./ui/Toast";
 import { LOCALE_LABELS, t, useLocale, type Locale } from "../lib/i18n";
 
+interface LlmConfig {
+  ollamaUrlPc?: string;
+  ollamaUrlMac?: string;
+  ollamaUrl?: string;
+  ollamaModel?: string;
+  anthropicModel?: string;
+  anthropicApiKeyPresent?: boolean;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -26,15 +35,59 @@ export function SettingsModal({ open, onClose }: Props) {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [ollama, setOllama] = useState<OllamaStatus | null>(null);
   const [meiliEnabled, setMeiliEnabled] = useState<boolean | null>(null);
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>({});
+  const [anthropicKeyInput, setAnthropicKeyInput] = useState("");
+  const [llmBusy, setLlmBusy] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     if (!open) return;
     setS(getSettings());
     api.audio.voices().then((r) => setVoices(r.voices)).catch(() => setVoices([]));
-    api.summary.status().then(setOllama).catch(() => setOllama(null));
     api.search.status().then((r) => setMeiliEnabled(r.enabled)).catch(() => setMeiliEnabled(false));
+    api.llmConfig
+      .get()
+      .then((r) => {
+        setLlmConfig(r.config);
+        setOllama(r.status);
+      })
+      .catch(() => setOllama(null));
+    setAnthropicKeyInput("");
   }, [open]);
+
+  async function saveLlmConfig() {
+    setLlmBusy(true);
+    try {
+      const patch: Record<string, string | undefined> = {
+        ollamaUrlPc: llmConfig.ollamaUrlPc ?? "",
+        ollamaUrlMac: llmConfig.ollamaUrlMac ?? "",
+        ollamaUrl: llmConfig.ollamaUrl ?? "",
+        ollamaModel: llmConfig.ollamaModel ?? "",
+        anthropicModel: llmConfig.anthropicModel ?? "",
+      };
+      if (anthropicKeyInput.trim()) patch.anthropicApiKey = anthropicKeyInput.trim();
+      const res = await api.llmConfig.put(patch);
+      setLlmConfig(res.config as LlmConfig);
+      setOllama(res.status);
+      setAnthropicKeyInput("");
+      toast.show(t("settings.llm.saved"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setLlmBusy(false);
+    }
+  }
+
+  async function removeAnthropicKey() {
+    try {
+      await api.llmConfig.removeAnthropic();
+      const r = await api.llmConfig.get();
+      setLlmConfig(r.config);
+      setOllama(r.status);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
 
   function save() {
     setSettings(s);
@@ -172,6 +225,90 @@ export function SettingsModal({ open, onClose }: Props) {
               }
             />
           </div>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs uppercase tracking-wide text-neutral-500">
+            {t("settings.llm.title")}
+          </h3>
+          <p className="text-[11px] text-neutral-500">{t("settings.llm.subtitle")}</p>
+
+          <div className="text-xs">
+            {ollama?.available ? (
+              <span className="text-emerald-400">
+                ✓ {t("settings.llm.active", { label: ollama.label ?? ollama.url })}
+              </span>
+            ) : (
+              <span className="text-accent">✗ {t("settings.llm.inactive")}</span>
+            )}
+            {ollama?.candidates && (
+              <span className="text-neutral-500 ml-2">
+                · {t("settings.llm.candidates", { n: ollama.candidates.length })}
+              </span>
+            )}
+          </div>
+
+          <Input
+            label={t("settings.llm.ollamaUrlPc")}
+            type="url"
+            value={llmConfig.ollamaUrlPc ?? ""}
+            onChange={(e) => setLlmConfig({ ...llmConfig, ollamaUrlPc: e.target.value })}
+            placeholder="http://192.168.1.100:11434"
+          />
+          <Input
+            label={t("settings.llm.ollamaUrlMac")}
+            type="url"
+            value={llmConfig.ollamaUrlMac ?? ""}
+            onChange={(e) => setLlmConfig({ ...llmConfig, ollamaUrlMac: e.target.value })}
+            placeholder="http://mac.local:11434"
+          />
+          <Input
+            label={t("settings.llm.ollamaUrl")}
+            type="url"
+            value={llmConfig.ollamaUrl ?? ""}
+            onChange={(e) => setLlmConfig({ ...llmConfig, ollamaUrl: e.target.value })}
+            placeholder="http://ollama:11434"
+          />
+          <Input
+            label={t("settings.llm.ollamaModel")}
+            value={llmConfig.ollamaModel ?? ""}
+            onChange={(e) => setLlmConfig({ ...llmConfig, ollamaModel: e.target.value })}
+            placeholder="llama3.1:8b"
+          />
+
+          <div className="pt-3 border-t border-border flex flex-col gap-3">
+            <Input
+              label={t("settings.llm.anthropicApiKey")}
+              type="password"
+              value={anthropicKeyInput}
+              onChange={(e) => setAnthropicKeyInput(e.target.value)}
+              placeholder={t("settings.llm.anthropicKeyPlaceholder")}
+            />
+            {llmConfig.anthropicApiKeyPresent && (
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-neutral-500">
+                  🔒 {t("settings.llm.anthropicKeyStored")}
+                </span>
+                <Button
+                  variant="danger"
+                  onClick={removeAnthropicKey}
+                  className="!px-2 !py-1 text-xs"
+                >
+                  {t("settings.llm.anthropicRemove")}
+                </Button>
+              </div>
+            )}
+            <Input
+              label={t("settings.llm.anthropicModel")}
+              value={llmConfig.anthropicModel ?? ""}
+              onChange={(e) => setLlmConfig({ ...llmConfig, anthropicModel: e.target.value })}
+              placeholder="claude-haiku-4-5-20251001"
+            />
+          </div>
+
+          <Button onClick={saveLlmConfig} disabled={llmBusy}>
+            {llmBusy ? t("common.saving") : t("settings.llm.save")}
+          </Button>
         </section>
 
         <section className="flex flex-col gap-3">

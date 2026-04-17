@@ -1,12 +1,13 @@
 {
   "name": "pagementor-backend",
-  "version": "1.02.000",
+  "version": "1.03.000",
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "better-sqlite3": "^11.7.0",
     "hono": "^4.7.0",
     "meilisearch": "^0.57.0",
