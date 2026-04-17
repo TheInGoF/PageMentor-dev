@@ -1,201 +1,89 @@
 /**
- * Voice-Katalog für zwei Engines:
+ * Voice-Katalog — Piper (lokal, ONNX) als einzige Engine.
  *
- *   - `edge`  — Microsofts Neural-Stimmen via Edge Read-Aloud-Websocket.
- *               Beste Prosodie, aber angewiesen auf Azure-Erreichbarkeit.
- *   - `piper` — Lokale ONNX-Modelle (offline). Wird aus PM_PIPER_DIR
- *               beim Start gescannt; welche Sprachen verfügbar sind,
- *               entscheidet der Build-Arg `PIPER_LANGS`.
+ * Edge Read-Aloud wurde entfernt: Microsofts Websocket-API liefert
+ * unzuverlässig leere Antworten, sobald ihr trusted-client-token
+ * abläuft. Piper läuft offline, braucht keinen externen Dienst und
+ * ist die zweite Hälfte der „ollama + piper"-Pipeline.
  *
- * Rate/Pitch-Defaults sind bewusst auf "natürlich" eingestellt. Edge
- * unterstützt SSML-Rate; Piper wird über Satzsegmentierung gesteuert.
+ * Welche Sprachen verfügbar sind, entscheidet das Docker-Build-Arg
+ * `PIPER_LANGS`; gescannt wird PM_PIPER_DIR beim Start.
  */
 
 import { listPiperVoices } from "./piper";
 
-export type TtsEngine = "edge" | "piper";
+export type TtsEngine = "piper";
 
 export interface Voice {
   id: string;
   label: string;
   language: string;        // "de", "en"
-  locale: string;          // "de-DE", "en-US" — Edge-Format
+  locale: string;          // "de-DE", "en-US"
   gender: "female" | "male";
   engine: TtsEngine;
   flagship?: boolean;
   note?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Edge Neural voices
-// ---------------------------------------------------------------------------
-const EDGE_VOICES: Voice[] = [
-  {
-    id: "de-DE-SeraphinaMultilingualNeural",
-    label: "Seraphina (DE, Multilingual)",
-    language: "de",
-    locale: "de-DE",
-    gender: "female",
-    engine: "edge",
-    flagship: true,
-    note: "Warme, klare Vorlesestimme — Studio-Qualität.",
-  },
-  {
-    id: "de-DE-FlorianMultilingualNeural",
-    label: "Florian (DE, Multilingual)",
-    language: "de",
-    locale: "de-DE",
-    gender: "male",
-    engine: "edge",
-    flagship: true,
-    note: "Ruhige, männliche Vorlesestimme mit exzellenter Prosodie.",
-  },
-  {
-    id: "de-DE-KatjaNeural",
-    label: "Katja (DE)",
-    language: "de",
-    locale: "de-DE",
-    gender: "female",
-    engine: "edge",
-  },
-  {
-    id: "de-DE-ConradNeural",
-    label: "Conrad (DE)",
-    language: "de",
-    locale: "de-DE",
-    gender: "male",
-    engine: "edge",
-  },
-  {
-    id: "de-AT-IngridNeural",
-    label: "Ingrid (AT)",
-    language: "de",
-    locale: "de-AT",
-    gender: "female",
-    engine: "edge",
-  },
-  {
-    id: "de-CH-LeniNeural",
-    label: "Leni (CH)",
-    language: "de",
-    locale: "de-CH",
-    gender: "female",
-    engine: "edge",
-  },
-
-  {
-    id: "en-US-AvaMultilingualNeural",
-    label: "Ava (US, Multilingual)",
-    language: "en",
-    locale: "en-US",
-    gender: "female",
-    engine: "edge",
-    flagship: true,
-    note: "Microsoft flagship voice — natural, expressive.",
-  },
-  {
-    id: "en-US-AndrewMultilingualNeural",
-    label: "Andrew (US, Multilingual)",
-    language: "en",
-    locale: "en-US",
-    gender: "male",
-    engine: "edge",
-    flagship: true,
-  },
-  {
-    id: "en-US-EmmaMultilingualNeural",
-    label: "Emma (US, Multilingual)",
-    language: "en",
-    locale: "en-US",
-    gender: "female",
-    engine: "edge",
-  },
-  {
-    id: "en-US-BrianMultilingualNeural",
-    label: "Brian (US, Multilingual)",
-    language: "en",
-    locale: "en-US",
-    gender: "male",
-    engine: "edge",
-  },
-  {
-    id: "en-GB-SoniaNeural",
-    label: "Sonia (UK)",
-    language: "en",
-    locale: "en-GB",
-    gender: "female",
-    engine: "edge",
-  },
-  {
-    id: "en-GB-RyanNeural",
-    label: "Ryan (UK)",
-    language: "en",
-    locale: "en-GB",
-    gender: "male",
-    engine: "edge",
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Metadata overrides for known Piper voices (label, gender, locale).
-// Unbekannte Voice-IDs bekommen einen generischen Label-Fallback.
-// ---------------------------------------------------------------------------
+// Metadaten-Overrides für kuratierte Piper-Stimmen. Unbekannte Voices
+// (falls sie manuell in PM_PIPER_DIR gelegt werden) kriegen einen
+// generischen Label-Fallback.
 const PIPER_META: Record<
   string,
   { label: string; gender: "female" | "male"; locale: string; note?: string; flagship?: boolean }
 > = {
   "de_DE-thorsten-high": {
-    label: "Thorsten (DE, lokal)",
+    label: "Thorsten (DE)",
     gender: "male",
     locale: "de-DE",
     note: "Audiobuch-trainierte, natürliche Hörbuchstimme.",
     flagship: true,
   },
   "de_DE-eva_k-x_low": {
-    label: "Eva (DE, lokal, schnell)",
+    label: "Eva (DE, schnell)",
     gender: "female",
     locale: "de-DE",
   },
   "de_DE-kerstin-low": {
-    label: "Kerstin (DE, lokal)",
+    label: "Kerstin (DE)",
     gender: "female",
     locale: "de-DE",
   },
   "en_US-lessac-high": {
-    label: "Lessac (US, local)",
+    label: "Lessac (US)",
     gender: "female",
     locale: "en-US",
     note: "LibriVox-trained high-quality audiobook voice.",
     flagship: true,
   },
   "en_US-amy-medium": {
-    label: "Amy (US, local)",
+    label: "Amy (US)",
     gender: "female",
     locale: "en-US",
   },
-  "fr_FR-siwis-medium": { label: "Siwis (FR, local)", gender: "female", locale: "fr-FR" },
-  "es_ES-sharvard-medium": { label: "Sharvard (ES, local)", gender: "female", locale: "es-ES" },
-  "it_IT-riccardo-x_low": { label: "Riccardo (IT, local)", gender: "male", locale: "it-IT" },
-  "nl_NL-mls-medium": { label: "Dutch (NL, local)", gender: "male", locale: "nl-NL" },
-  "pl_PL-mls_6892-low": { label: "Polish (PL, local)", gender: "male", locale: "pl-PL" },
-  "pt_PT-tugao-medium": { label: "Tugao (PT, local)", gender: "male", locale: "pt-PT" },
-  "ru_RU-irina-medium": { label: "Irina (RU, local)", gender: "female", locale: "ru-RU" },
+  "fr_FR-siwis-medium": { label: "Siwis (FR)", gender: "female", locale: "fr-FR" },
+  "es_ES-sharvard-medium": { label: "Sharvard (ES)", gender: "female", locale: "es-ES" },
+  "it_IT-riccardo-x_low": { label: "Riccardo (IT)", gender: "male", locale: "it-IT" },
+  "nl_NL-mls-medium": { label: "Dutch (NL)", gender: "male", locale: "nl-NL" },
+  "pl_PL-mls_6892-low": { label: "Polish (PL)", gender: "male", locale: "pl-PL" },
+  "pt_PT-tugao-medium": { label: "Tugao (PT)", gender: "male", locale: "pt-PT" },
+  "ru_RU-irina-medium": { label: "Irina (RU)", gender: "female", locale: "ru-RU" },
   "uk_UA-ukrainian_tts-medium": {
-    label: "Ukrainian (UA, local)",
+    label: "Ukrainian (UA)",
     gender: "female",
     locale: "uk-UA",
   },
-  "zh_CN-huayan-medium": { label: "Huayan (ZH, local)", gender: "female", locale: "zh-CN" },
-  "tr_TR-dfki-medium": { label: "Turkish (TR, local)", gender: "male", locale: "tr-TR" },
+  "zh_CN-huayan-medium": { label: "Huayan (ZH)", gender: "female", locale: "zh-CN" },
+  "tr_TR-dfki-medium": { label: "Turkish (TR)", gender: "male", locale: "tr-TR" },
 };
 
-function piperVoices(): Voice[] {
+export function allVoices(): Voice[] {
   return listPiperVoices().map((p) => {
     const meta = PIPER_META[p.voiceId];
     const locale = meta?.locale ?? p.locale.replace("_", "-");
     return {
       id: p.voiceId,
-      label: meta?.label ?? `${p.voiceId} (local)`,
+      label: meta?.label ?? `${p.voiceId}`,
       language: p.language,
       locale,
       gender: meta?.gender ?? "female",
@@ -206,29 +94,14 @@ function piperVoices(): Voice[] {
   });
 }
 
-export function allVoices(): Voice[] {
-  return [...EDGE_VOICES, ...piperVoices()];
-}
-
 export function defaultVoiceFor(language: string): string {
   const voices = allVoices();
-  // Prefer a local (Piper) flagship — works offline — over Edge, which has
-  // been flaky for us when Azure throttles Microsoft's Edge-WebSocket API.
-  const piperFlagship = voices.find(
-    (v) => v.engine === "piper" && v.language === language && v.flagship
-  );
-  if (piperFlagship) return piperFlagship.id;
-  const piperAny = voices.find((v) => v.engine === "piper" && v.language === language);
-  if (piperAny) return piperAny.id;
-  const edgeFlagship = voices.find(
-    (v) => v.engine === "edge" && v.language === language && v.flagship
-  );
-  if (edgeFlagship) return edgeFlagship.id;
+  const flagship = voices.find((v) => v.language === language && v.flagship);
+  if (flagship) return flagship.id;
   const any = voices.find((v) => v.language === language);
-  return any?.id ?? voices[0]?.id ?? "de-DE-SeraphinaMultilingualNeural";
+  return any?.id ?? voices[0]?.id ?? "";
 }
 
 export function findVoice(id: string): Voice | undefined {
   return allVoices().find((v) => v.id === id);
 }
-

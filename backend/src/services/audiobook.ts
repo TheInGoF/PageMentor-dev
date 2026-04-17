@@ -4,7 +4,6 @@ import { existsSync, mkdirSync, rmSync, readdirSync } from "fs";
 import { join as pathJoin } from "path";
 import { db } from "../db";
 import { segmentText } from "../tts/segment";
-import { buildSsml } from "../tts/ssml";
 import { synthesizeSegmentToFile } from "../tts/synth";
 import { concatMp3, normalizeAndTag, buildM4B } from "../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../tts/voices";
@@ -63,10 +62,14 @@ export async function generateAudiobook(params: {
     throw new Error("No chapters - run chapter detection first.");
   }
 
-  const voiceId = params.voiceId || defaultVoiceFor(doc.language) || "de-DE-SeraphinaMultilingualNeural";
+  const voiceId = params.voiceId || defaultVoiceFor(doc.language);
+  if (!voiceId) {
+    running.delete(params.docId);
+    throw new Error(
+      "No Piper voice available. Rebuild the image with PIPER_LANGS including this language."
+    );
+  }
   const voice = findVoice(voiceId);
-  const locale = voice?.locale ?? voiceFallbackLocale(voiceId);
-  const rate = params.rate || "+0%";
 
   const audioDir = join(DATA_DIR, "audio", doc.id);
   mkdirSync(audioDir, { recursive: true });
@@ -100,8 +103,6 @@ export async function generateAudiobook(params: {
           chapter: ch,
           audioDir,
           voiceId,
-          locale,
-          rate,
           outFile,
           onChunk: (chunkIdx, chunkTotal) =>
             emit({
@@ -119,7 +120,7 @@ export async function generateAudiobook(params: {
           storedRelPath: relPath(outFile),
           durationMs,
           voice: voiceId,
-          engine: voice?.engine ?? "edge",
+          engine: "piper",
           status: "done",
         });
 
@@ -143,7 +144,7 @@ export async function generateAudiobook(params: {
           storedRelPath: relPath(outFile),
           durationMs: 0,
           voice: voiceId,
-          engine: voice?.engine ?? "edge",
+          engine: "piper",
           status: "failed",
         });
         emit({
@@ -196,12 +197,10 @@ async function synthesizeChapter(params: {
   chapter: Chapter;
   audioDir: string;
   voiceId: string;
-  locale: string;
-  rate: string;
   outFile: string;
   onChunk: (current: number, total: number) => void;
 }): Promise<{ durationMs: number }> {
-  const { chapter, audioDir, voiceId, locale, rate, outFile } = params;
+  const { chapter, audioDir, voiceId, outFile } = params;
 
   if (!chapter.text || chapter.text.trim().length < 20) {
     throw new Error("Chapter text is too short or empty.");
@@ -214,29 +213,16 @@ async function synthesizeChapter(params: {
     const segments = segmentText(chapter.text);
     if (segments.length === 0) throw new Error("Keine Segmente aus Kapiteltext.");
 
-    const voice = findVoice(voiceId);
-    const engine = voice?.engine ?? "edge";
     const chunkFiles: string[] = [];
     for (let i = 0; i < segments.length; i++) {
       const announcement =
         i === 0 ? chapter.title || `Kapitel ${chapter.number}` : undefined;
-      const ssml =
-        engine === "edge"
-          ? buildSsml(segments[i], {
-              voice: voiceId,
-              locale,
-              rate,
-              announce: announcement,
-            })
-          : "";
       const paragraphText = segments[i].paragraphs.join("\n\n");
-      const plainText =
-        announcement && engine === "piper"
-          ? `${announcement}.\n\n${paragraphText}`
-          : paragraphText;
+      const plainText = announcement
+        ? `${announcement}.\n\n${paragraphText}`
+        : paragraphText;
       const chunkPath = join(tmpDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
       await synthesizeSegmentToFile({
-        ssml,
         text: plainText,
         voice: voiceId,
         outPath: chunkPath,
@@ -312,7 +298,7 @@ function upsertAudio(params: {
   storedRelPath: string;
   durationMs: number;
   voice: string;
-  engine: "edge" | "piper";
+  engine: "piper";
   status: "done" | "failed" | "running" | "pending";
 }): void {
   const d = db();
@@ -345,11 +331,6 @@ function upsertAudio(params: {
   }
 }
 
-function voiceFallbackLocale(voiceId: string): string {
-  const m = voiceId.match(/^([a-z]{2})-([A-Z]{2})/);
-  return m ? `${m[1]}-${m[2]}` : "en-US";
-}
-
 /** Entfernt alle generierten Hörbuch-Dateien für ein Dokument. */
 export function clearAudio(docId: string): void {
   const dir = join(DATA_DIR, "audio", docId);
@@ -362,5 +343,41 @@ export function clearAudio(docId: string): void {
   db().prepare(
     `DELETE FROM audio WHERE chapter_id IN (SELECT id FROM chapters WHERE document_id = ?)`
   ).run(docId);
+}
+
+/** Entfernt eine einzelne Kapitel-Audio-Datei + DB-Row. Das Buch-M4B
+ *  wird ebenfalls verworfen, weil es sonst auf eine nicht mehr
+ *  existente Spur verweist. */
+export function clearAudioForChapter(audioId: string): boolean {
+  const d = db();
+  const row = d
+    .prepare(
+      `SELECT a.id, a.stored_path, c.document_id
+       FROM audio a JOIN chapters c ON c.id = a.chapter_id
+       WHERE a.id = ?`
+    )
+    .get(audioId) as { id: string; stored_path: string; document_id: string } | undefined;
+  if (!row) return false;
+
+  const fullPath = join(DATA_DIR, row.stored_path);
+  if (existsSync(fullPath)) {
+    try {
+      rmSync(fullPath, { force: true });
+    } catch {
+      // best effort — DB row wird trotzdem entfernt, damit das UI aufräumt
+    }
+  }
+
+  const bookPath = join(DATA_DIR, "audio", row.document_id, "book.m4b");
+  if (existsSync(bookPath)) {
+    try {
+      rmSync(bookPath, { force: true });
+    } catch {
+      // best effort
+    }
+  }
+
+  d.prepare("DELETE FROM audio WHERE id = ?").run(audioId);
+  return true;
 }
 

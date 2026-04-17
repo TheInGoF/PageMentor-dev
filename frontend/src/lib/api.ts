@@ -34,7 +34,7 @@ export interface Chapter {
   has_audio?: number;
 }
 
-export type TtsEngine = "edge" | "piper";
+export type TtsEngine = "piper";
 
 export interface Voice {
   id: string;
@@ -626,6 +626,8 @@ export const api = {
       }),
     clear: (docId: string) =>
       request<{ status: string }>(`/api/audio/document/${docId}`, { method: "DELETE" }),
+    clearChapter: (audioId: string) =>
+      request<{ status: string }>(`/api/audio/chapter/${audioId}`, { method: "DELETE" }),
     fileUrl: (audioId: string) => `/api/audio/file/${audioId}`,
     bookUrl: (docId: string) => `/api/audio/book/${docId}`,
     streamUrl: (docId: string) => `/api/audio/stream/${docId}`,

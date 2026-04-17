@@ -191,8 +191,9 @@ const en: Record<string, string> = {
     "Microsoft Neural TTS · 24 kHz · EBU R128 loudness · MP3 per chapter + complete M4B",
   "audiobook.voice": "Voice",
   "audiobook.voice.more": "More voices ({n})",
-  "audiobook.voice.group.local": "Local (Piper)",
-  "audiobook.voice.group.cloud": "Cloud (Edge)",
+  "audiobook.voice.emptyForLang": "No local voice installed for language \"{lang}\". Rebuild the image with PIPER_LANGS including this code.",
+  "audiobook.clearChapter": "Delete this chapter",
+  "audiobook.clearChapterConfirm": "Delete audio for this chapter? You can regenerate it afterwards.",
   "audiobook.voice.top": "Top",
   "audiobook.rate": "Speed",
   "audiobook.preview": "▶ Preview",
@@ -553,15 +554,6 @@ const en: Record<string, string> = {
   "review.similarGenerated": "{n} similar cards generated",
   "review.similarBusy": "Generating …",
 
-  // Piper / TTS notice
-  "tts.notice.title": "Use Microsoft Neural Voices?",
-  "tts.notice.body":
-    "PageMentor calls Microsoft's Edge Read-Aloud endpoint to synthesise audio. The endpoint is reachable publicly but is not officially documented for third-party use. The Neural voice models remain Microsoft property and usage is a terms-of-service grey area. Large-scale automated use may violate Microsoft's terms.",
-  "tts.notice.alternative":
-    "A local Piper fallback is on the roadmap but not yet available.",
-  "tts.notice.cancel": "Cancel",
-  "tts.notice.accept": "I understand, continue",
-  "tts.notice.rememberLabel": "Don't ask again",
 };
 
 const de: Record<string, string> = {
@@ -694,8 +686,9 @@ const de: Record<string, string> = {
     "Microsoft Neural TTS · 24 kHz · EBU R128 Loudness · MP3 pro Kapitel + M4B komplett",
   "audiobook.voice": "Stimme",
   "audiobook.voice.more": "Weitere Stimmen ({n})",
-  "audiobook.voice.group.local": "Lokal (Piper)",
-  "audiobook.voice.group.cloud": "Cloud (Edge)",
+  "audiobook.voice.emptyForLang": "Keine lokale Stimme für Sprache \"{lang}\" installiert. Image mit PIPER_LANGS inkl. dieses Codes neu bauen.",
+  "audiobook.clearChapter": "Dieses Kapitel löschen",
+  "audiobook.clearChapterConfirm": "Audio für dieses Kapitel löschen? Kann danach neu generiert werden.",
   "audiobook.voice.top": "Top",
   "audiobook.rate": "Geschwindigkeit",
   "audiobook.preview": "▶ Preview",
@@ -1058,15 +1051,6 @@ const de: Record<string, string> = {
   "review.similarGenerated": "{n} ähnliche Karten generiert",
   "review.similarBusy": "Generiere …",
 
-  // Piper / TTS notice
-  "tts.notice.title": "Microsoft Neural Voices nutzen?",
-  "tts.notice.body":
-    "PageMentor ruft für die Audio-Synthese die Edge-Read-Aloud-API von Microsoft auf. Die ist öffentlich erreichbar, aber nicht offiziell für Drittanbieter dokumentiert. Die Neural-Voice-Modelle bleiben Eigentum von Microsoft, und die Nutzung bewegt sich in einem ToS-Graubereich. Großflächige automatisierte Nutzung verletzt möglicherweise Microsofts Bedingungen.",
-  "tts.notice.alternative":
-    "Ein lokaler Piper-Fallback ist geplant, aber noch nicht verfügbar.",
-  "tts.notice.cancel": "Abbrechen",
-  "tts.notice.accept": "Verstanden, fortfahren",
-  "tts.notice.rememberLabel": "Nicht nochmal fragen",
 };
 
 const dicts: Record<Locale, Record<string, string>> = { en, de };

@@ -5,7 +5,12 @@ import { existsSync, createReadStream, statSync } from "fs";
 import { streamSSE } from "hono/streaming";
 import { allVoices, findVoice, defaultVoiceFor } from "../tts/voices";
 import { synthesizePreview } from "../tts/synth";
-import { generateAudiobook, isGenerating, clearAudio } from "../services/audiobook";
+import {
+  generateAudiobook,
+  isGenerating,
+  clearAudio,
+  clearAudioForChapter,
+} from "../services/audiobook";
 import { subscribe, getRecent } from "../services/events";
 import { tt } from "../lib/i18n";
 
@@ -29,7 +34,7 @@ audioRoutes.get("/preview", async (c) => {
     : "Welcome to PageMentor. This is how your audiobook will sound.";
 
   try {
-    const buf = await synthesizePreview({ voice: voiceId, locale: voice.locale, text: sample });
+    const buf = await synthesizePreview({ voice: voiceId, text: sample });
     // Use the underlying ArrayBuffer so Response accepts it cleanly under both Bun and Node types.
     const body = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) as unknown as BodyInit;
     return new Response(body, {
@@ -88,11 +93,21 @@ audioRoutes.post("/generate/:docId", async (c) => {
   return c.json({ status: "queued", voice: voiceId });
 });
 
-// Clear all audio for a document.
+// Clear all audio for a document. Deletes regardless of in-memory
+// generating state — the running worker (if any) will fail on the
+// next file write, which is the desired behaviour when the user wants
+// to abort + regenerate from scratch.
 audioRoutes.delete("/document/:docId", (c) => {
   const docId = c.req.param("docId");
-  if (isGenerating(docId)) return c.json({ error: tt(c, "err.stillGenerating") }, 409);
   clearAudio(docId);
+  return c.json({ status: "ok" });
+});
+
+// Clear a single chapter's audio (file + DB row). The combined M4B is
+// invalidated too — the user needs to regenerate to get a new book.
+audioRoutes.delete("/chapter/:audioId", (c) => {
+  const ok = clearAudioForChapter(c.req.param("audioId"));
+  if (!ok) return c.json({ error: tt(c, "err.notReady") }, 404);
   return c.json({ status: "ok" });
 });
 

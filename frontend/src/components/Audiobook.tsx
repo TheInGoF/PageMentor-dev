@@ -13,11 +13,6 @@ import { cn } from "../lib/cn";
 import { getSettings } from "../lib/settings";
 import { PodcastShareModal } from "./PodcastShareModal";
 import { t } from "../lib/i18n";
-import {
-  TtsNoticeModal,
-  hasAcceptedTtsNotice,
-  markTtsNoticeAccepted,
-} from "./TtsNoticeModal";
 
 interface Props {
   docId: string;
@@ -41,7 +36,6 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [chapterProgress, setChapterProgress] = useState<Map<string, ProgressEvent>>(new Map());
   const [busy, setBusy] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [noticeOpen, setNoticeOpen] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const toast = useToast();
 
@@ -92,7 +86,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     return unsubscribe;
   }, [docId]);
 
-  async function runGenerate() {
+  async function generate() {
     if (!voiceId) return;
     setBusy(true);
     try {
@@ -108,12 +102,16 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     }
   }
 
-  function generate() {
-    if (!hasAcceptedTtsNotice()) {
-      setNoticeOpen(true);
-      return;
+  async function clearChapter(audioId: string) {
+    if (!confirm(t("audiobook.clearChapterConfirm"))) return;
+    try {
+      await api.audio.clearChapter(audioId);
+      const refreshed = await api.audio.get(docId);
+      setState(refreshed);
+      toast.show(t("audiobook.cleared"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
-    runGenerate();
   }
 
   async function clearAll() {
@@ -149,14 +147,6 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     () => voices.filter((v) => v.language !== documentLanguage),
     [voices, documentLanguage]
   );
-  const langLocal = useMemo(
-    () => langVoices.filter((v) => v.engine === "piper"),
-    [langVoices]
-  );
-  const langCloud = useMemo(
-    () => langVoices.filter((v) => v.engine === "edge"),
-    [langVoices]
-  );
 
   const generating = state?.generating || progress?.phase.startsWith("audiobook.") === true;
   const phaseMessage = progress ? describePhase(progress) : null;
@@ -180,7 +170,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
                 {t("audiobook.apple")}
               </Button>
             )}
-            {(state?.audio.length ?? 0) > 0 && !generating && (
+            {(state?.audio.length ?? 0) > 0 && (
               <Button variant="danger" onClick={clearAll}>
                 {t("audiobook.clear")}
               </Button>
@@ -193,40 +183,21 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             <label className="text-xs font-medium text-neutral-400 block mb-2">
               {t("audiobook.voice")}
             </label>
-            {langLocal.length > 0 && (
-              <div className="mb-3">
-                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                  {t("audiobook.voice.group.local")}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {langLocal.map((v) => (
-                    <VoiceChip
-                      key={v.id}
-                      voice={v}
-                      active={voiceId === v.id}
-                      onSelect={() => setVoiceId(v.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            {langCloud.length > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                  {t("audiobook.voice.group.cloud")}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {langCloud.map((v) => (
-                    <VoiceChip
-                      key={v.id}
-                      voice={v}
-                      active={voiceId === v.id}
-                      onSelect={() => setVoiceId(v.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {langVoices.map((v) => (
+                <VoiceChip
+                  key={v.id}
+                  voice={v}
+                  active={voiceId === v.id}
+                  onSelect={() => setVoiceId(v.id)}
+                />
+              ))}
+              {langVoices.length === 0 && (
+                <p className="text-xs text-neutral-500">
+                  {t("audiobook.voice.emptyForLang", { lang: documentLanguage })}
+                </p>
+              )}
+            </div>
             {otherVoices.length > 0 && (
               <details className="mt-3">
                 <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-300">
@@ -287,22 +258,13 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         audio={state?.audio ?? []}
         chapterProgress={chapterProgress}
         generating={generating}
+        onClearChapter={clearChapter}
       />
 
       <PodcastShareModal
         open={shareOpen}
         docId={docId}
         onClose={() => setShareOpen(false)}
-      />
-
-      <TtsNoticeModal
-        open={noticeOpen}
-        onCancel={() => setNoticeOpen(false)}
-        onAccept={(remember) => {
-          if (remember) markTtsNoticeAccepted();
-          setNoticeOpen(false);
-          runGenerate();
-        }}
       />
     </div>
   );
@@ -345,10 +307,12 @@ function ChapterList({
   audio,
   chapterProgress,
   generating,
+  onClearChapter,
 }: {
   audio: AudioTrack[];
   chapterProgress: Map<string, ProgressEvent>;
   generating: boolean;
+  onClearChapter: (audioId: string) => void;
 }) {
   if (audio.length === 0 && !generating) {
     return (
@@ -365,13 +329,22 @@ function ChapterList({
           key={track.id}
           track={track}
           progress={chapterProgress.get(track.chapter_id) ?? null}
+          onClear={() => onClearChapter(track.id)}
         />
       ))}
     </ul>
   );
 }
 
-function ChapterAudio({ track, progress }: { track: AudioTrack; progress: ProgressEvent | null }) {
+function ChapterAudio({
+  track,
+  progress,
+  onClear,
+}: {
+  track: AudioTrack;
+  progress: ProgressEvent | null;
+  onClear: () => void;
+}) {
   const phase = progress?.phase;
   const isRunning =
     phase === "audiobook.chapter.start" || phase === "audiobook.chapter.progress";
@@ -402,15 +375,26 @@ function ChapterAudio({ track, progress }: { track: AudioTrack; progress: Progre
             {track.voice || t("common.none")}
           </p>
         </div>
-        {track.status === "done" && (
-          <a
-            href={api.audio.fileUrl(track.id)}
-            download
-            className="text-xs text-neutral-400 hover:text-accent"
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {track.status === "done" && (
+            <a
+              href={api.audio.fileUrl(track.id)}
+              download
+              className="text-xs text-neutral-400 hover:text-accent"
+            >
+              {t("audiobook.downloadMp3")}
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs text-neutral-500 hover:text-accent"
+            title={t("audiobook.clearChapter")}
+            aria-label={t("audiobook.clearChapter")}
           >
-            {t("audiobook.downloadMp3")}
-          </a>
-        )}
+            ✕
+          </button>
+        </div>
       </div>
 
       {track.status === "done" && (
