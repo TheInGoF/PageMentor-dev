@@ -108,6 +108,12 @@ export async function generateAudiobook(params: {
 
   const successfulChapterFiles: string[] = [];
   const chapterDurations: Array<{ title: string; durationMs: number }> = [];
+  // Circuit-Breaker: wenn Edge zwei Kapitel hintereinander mit Empty-
+  // Audio scheitert, ist Azure in der Quota-Bremse und weitere Kapitel
+  // werden genauso scheitern. Abbrechen spart Zeit und räumt klar auf.
+  let consecutiveEdgeEmpty = 0;
+  let tripped = false;
+  const EDGE_EMPTY_CIRCUIT_BREAKER = 2;
 
   try {
     for (let i = 0; i < chapters.length; i++) {
@@ -159,6 +165,7 @@ export async function generateAudiobook(params: {
           durationMs,
         });
 
+        consecutiveEdgeEmpty = 0;
         emit({
           phase: "audiobook.chapter.done",
           docId: doc.id,
@@ -174,6 +181,11 @@ export async function generateAudiobook(params: {
         // für dieses Kapitel hinterlassen hat, jetzt wegräumen, damit
         // das UI das Kapitel sauber als "noch kein Audio" anzeigt.
         deleteAudioForChapter(ch.id, outFile);
+        const message = err instanceof Error ? err.message : String(err);
+        const isEdgeEmpty = engineId === "edge" && /empty audio/i.test(message);
+        if (isEdgeEmpty) consecutiveEdgeEmpty++;
+        else consecutiveEdgeEmpty = 0;
+
         emit({
           phase: "audiobook.chapter.failed",
           docId: doc.id,
@@ -181,9 +193,24 @@ export async function generateAudiobook(params: {
           chapterNumber: ch.number,
           current: i + 1,
           total: chapters.length,
-          message: err instanceof Error ? err.message : String(err),
+          message,
         });
         console.error(`[tts] chapter ${ch.number} failed:`, err);
+
+        if (consecutiveEdgeEmpty >= EDGE_EMPTY_CIRCUIT_BREAKER) {
+          const reason =
+            `Edge TTS (Microsoft) antwortet mit leerem Audio — Azure-Quota erreicht. ` +
+            `Bereits fertige Kapitel bleiben erhalten. ` +
+            `Wechsle auf eine Piper-Stimme und generiere die fehlenden Kapitel neu.`;
+          emit({
+            phase: "audiobook.failed",
+            docId: doc.id,
+            message: reason,
+          });
+          console.error(`[tts] aborting book: ${reason}`);
+          tripped = true;
+          break;
+        }
       }
     }
 

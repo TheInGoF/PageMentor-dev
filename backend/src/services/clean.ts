@@ -53,6 +53,11 @@ export function normalizeUnicode(text: string): string {
   // eigene Bedeutung (Gedankenstrich, Bereich) und würden sonst die
   // Wort-Merge-Heuristik fälschlich triggern.
   t = t.replace(/[\u2010\u2011]/g, "-");
+  // XML-1.0-invalide Steuerzeichen rauswerfen. PDF-Extraktoren lassen
+  // gerne NUL (U+0000), Form-Feed (U+000C), DEL (U+007F) u. ä. liegen.
+  // Edge TTS parst solche SSML stumm als ungültig → 0 Bytes. Azure
+  // Speech Service sagt nirgends laut, dass das der Grund war.
+  t = t.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "");
   return t;
 }
 

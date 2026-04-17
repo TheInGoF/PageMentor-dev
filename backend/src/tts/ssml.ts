@@ -48,6 +48,10 @@ export function buildSsml(segment: Segment, opts: BuildOptions): string {
 
 export function escapeXml(s: string): string {
   return s
+    // XML-1.0-invalide Steuerzeichen safety-net — eigentlich schon in
+    // cleanForReading() entfernt, aber falls ein Editor-Pfad drumherum
+    // führt (Kapitel manuell gepatcht), fangen wir es hier nochmal.
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

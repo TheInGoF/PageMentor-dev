@@ -19,10 +19,12 @@ import type { Voice } from "./engines/base";
 
 /** Edge-spezifischer Backoff zwischen Chunks, um Microsofts
  *  Anti-Abuse-Gate nicht zu triggern. Piper hat kein Rate-Limit. */
-const EDGE_INTER_CHUNK_DELAY_MS = 500;
+const EDGE_INTER_CHUNK_DELAY_MS = 1500;
 /** Längerer Cooldown wenn Edge stumm 0 Bytes geliefert hat — das ist
- *  Microsofts Rate-Limit-Signatur, ein einfacher Retry bringt nichts. */
-const EDGE_EMPTY_AUDIO_COOLDOWN_MS = 5000;
+ *  Microsofts Rate-Limit-Signatur, ein einfacher Retry bringt nichts.
+ *  Stunden echtes Azure-Cooldown kann man nicht aussitzen, aber 30 s
+ *  helfen manchmal noch durchzurutschen. */
+const EDGE_EMPTY_AUDIO_COOLDOWN_MS = 30_000;
 const MAX_RETRIES = 2;
 
 export interface ChunkSynthesisParams {
