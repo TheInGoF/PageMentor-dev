@@ -21,7 +21,7 @@ const app = new Hono();
 app.use("/*", cors());
 
 // Public
-app.get("/api/health", (c) => c.json({ status: "ok", version: "1.05.000" }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: "1.05.001" }));
 app.route("/api/auth", authRoutes);
 // Podcast-Feed liegt öffentlich (Token-Auth im Pfad), damit Apple
 // Podcasts / Overcast ihn ohne Cookie ziehen können.
@@ -51,10 +51,11 @@ ensureSearchReady();
 export default {
   port: 3000,
   fetch: app.fetch,
-  // Long-lived streams (audio range fetches, LLM summary streaming, SSE
-  // progress) easily exceed Bun's 10 s default. 15 min covers the slowest
-  // LLM runs we realistically expect.
-  idleTimeout: 900,
+  // Bun's default idleTimeout of 10 s kills audio range fetches and LLM
+  // summary streams. 255 s is Bun's documented maximum — enough, because
+  // the idle timer resets on every chunk and LLM streaming emits tokens
+  // far more frequently than that.
+  idleTimeout: 255,
 };
 
 console.log("PageMentor API running on :3000");
