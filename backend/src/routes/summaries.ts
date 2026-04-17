@@ -84,7 +84,7 @@ summaryRoutes.get("/status", async (c) => {
 summaryRoutes.get("/chapter/:chapterId", (c) => {
   const rows = db()
     .prepare(
-      "SELECT id, chapter_id, level, content, model, created_at FROM summaries WHERE chapter_id = ? ORDER BY created_at DESC"
+      "SELECT id, chapter_id, level, content, model, generation_ms, created_at FROM summaries WHERE chapter_id = ? ORDER BY created_at DESC"
     )
     .all(c.req.param("chapterId"));
   return c.json(rows);
@@ -94,7 +94,7 @@ summaryRoutes.get("/chapter/:chapterId", (c) => {
 summaryRoutes.get("/document/:docId", (c) => {
   const rows = db()
     .prepare(
-      `SELECT s.id, s.chapter_id, s.level, s.content, s.model, s.created_at,
+      `SELECT s.id, s.chapter_id, s.level, s.content, s.model, s.generation_ms, s.created_at,
               c.number as chapter_number, c.title as chapter_title
        FROM summaries s
        JOIN chapters c ON c.id = s.chapter_id
@@ -134,10 +134,17 @@ summaryRoutes.post("/chapter/:chapterId", async (c) => {
     const id = randomUUID();
     db()
       .prepare(
-        "INSERT INTO summaries (id, chapter_id, level, content, model) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO summaries (id, chapter_id, level, content, model, generation_ms) VALUES (?, ?, ?, ?, ?, ?)"
       )
-      .run(id, chapterId, level, result.response, result.model);
-    return c.json({ id, level, content: result.response, model: result.model, totalMs: result.totalMs });
+      .run(id, chapterId, level, result.response, result.model, result.totalMs);
+    return c.json({
+      id,
+      level,
+      content: result.response,
+      model: result.model,
+      generation_ms: result.totalMs,
+      totalMs: result.totalMs,
+    });
   } catch (err) {
     return c.json(
       { error: err instanceof Error ? err.message : tt(c, "err.ollamaFailed") },
@@ -176,19 +183,21 @@ summaryRoutes.post("/chapter/:chapterId/stream", async (c) => {
       const write = (obj: unknown) =>
         controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
       try {
+        const startedAt = Date.now();
         const { full, model } = await generateStream({
           prompt: tpl.prompt(snippet),
           system: tpl.system,
           model: body.model,
           onToken: (chunk) => write({ type: "token", data: chunk }),
         });
+        const generationMs = Date.now() - startedAt;
         const id = randomUUID();
         db()
           .prepare(
-            "INSERT INTO summaries (id, chapter_id, level, content, model) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO summaries (id, chapter_id, level, content, model, generation_ms) VALUES (?, ?, ?, ?, ?, ?)"
           )
-          .run(id, chapterId, level, full, model);
-        write({ type: "done", id, model, content: full });
+          .run(id, chapterId, level, full, model, generationMs);
+        write({ type: "done", id, model, content: full, generation_ms: generationMs });
       } catch (err) {
         write({
           type: "error",

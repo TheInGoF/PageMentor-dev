@@ -33,6 +33,7 @@ export function initDb() {
       ocr_status TEXT NOT NULL DEFAULT 'pending',
       language TEXT NOT NULL DEFAULT 'de',
       type TEXT NOT NULL DEFAULT 'studienheft',
+      thumb_page INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -98,6 +99,18 @@ export function initDb() {
       level TEXT NOT NULL DEFAULT 'bullets',
       content TEXT NOT NULL DEFAULT '',
       model TEXT NOT NULL DEFAULT '',
+      generation_ms INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS modules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      semester TEXT,
+      description TEXT,
+      color TEXT NOT NULL DEFAULT '#ef4444',
+      icon TEXT NOT NULL DEFAULT '📘',
+      sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -116,6 +129,20 @@ export function initDb() {
       finished_at TEXT
     );
   `);
+
+  // Migrations (idempotent) — add module_id / thumb_page to documents if not there yet.
+  const cols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "module_id")) {
+    d.exec("ALTER TABLE documents ADD COLUMN module_id TEXT REFERENCES modules(id) ON DELETE SET NULL");
+  }
+  if (!cols.some((c) => c.name === "thumb_page")) {
+    d.exec("ALTER TABLE documents ADD COLUMN thumb_page INTEGER NOT NULL DEFAULT 1");
+  }
+
+  const summaryCols = d.prepare("PRAGMA table_info(summaries)").all() as Array<{ name: string }>;
+  if (!summaryCols.some((c) => c.name === "generation_ms")) {
+    d.exec("ALTER TABLE summaries ADD COLUMN generation_ms INTEGER NOT NULL DEFAULT 0");
+  }
 
   console.log("Database ready:", DB_PATH);
 }

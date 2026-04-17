@@ -12,6 +12,7 @@ import { summaryRoutes } from "./routes/summaries";
 import { feedApiRoutes, feedPublicRoutes } from "./routes/feed";
 import { dashboardRoutes } from "./routes/dashboard";
 import { llmConfigRoutes } from "./routes/llmConfig";
+import { moduleRoutes } from "./routes/modules";
 import { ensureReady as ensureSearchReady } from "./services/search";
 import { initDb } from "./db";
 
@@ -20,7 +21,7 @@ const app = new Hono();
 app.use("/*", cors());
 
 // Public
-app.get("/api/health", (c) => c.json({ status: "ok", version: "1.04.003" }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: "1.05.000" }));
 app.route("/api/auth", authRoutes);
 // Podcast-Feed liegt öffentlich (Token-Auth im Pfad), damit Apple
 // Podcasts / Overcast ihn ohne Cookie ziehen können.
@@ -38,6 +39,7 @@ app.route("/api/summary", summaryRoutes);
 app.route("/api/feed", feedApiRoutes);
 app.route("/api/dashboard", dashboardRoutes);
 app.route("/api/llm/config", llmConfigRoutes);
+app.route("/api/modules", moduleRoutes);
 
 // Static frontend (production)
 app.use("/*", serveStatic({ root: "./public" }));
@@ -49,6 +51,10 @@ ensureSearchReady();
 export default {
   port: 3000,
   fetch: app.fetch,
+  // Long-lived streams (audio range fetches, LLM summary streaming, SSE
+  // progress) easily exceed Bun's 10 s default. 15 min covers the slowest
+  // LLM runs we realistically expect.
+  idleTimeout: 900,
 };
 
 console.log("PageMentor API running on :3000");

@@ -81,8 +81,16 @@ export function cleanForReading(raw: string): string {
     ""
   );
 
-  // Silbentrennung am Zeilenende zusammenführen
-  t = t.replace(/([a-zäöüß])-\s*\n\s*([a-zäöüß])/g, "$1$2");
+  // Silbentrennung am Zeilenende zusammenführen. Der Trennstrich kann — je
+  // nach PDF-Layout — mit oder ohne Leerzeichen davor/dahinter auftreten
+  // ("Verän- derung", "Verän -derung", "Verän - derung"), gefolgt von
+  // einem Zeilenumbruch.
+  t = t.replace(/([a-zäöüß])\s*-\s*\n\s*([a-zäöüß])/g, "$1$2");
+  // Manche Extraktoren ersetzen den Zeilenumbruch bereits vorab durch ein
+  // Leerzeichen. Typische Trennmuster mit Kleinbuchstaben beidseitig sind
+  // fast immer echte Silbentrennungen (Bindestriche zwischen Vollwörtern
+  // stünden typografisch als „–", nicht als ASCII-„-").
+  t = t.replace(/([a-zäöüß]{2,})\s-\s([a-zäöüß]{2,})/g, "$1$2");
 
   // Whitespace & Leerzeilen einebnen
   t = t.replace(/[ \t]+/g, " ");

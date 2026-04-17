@@ -22,7 +22,15 @@ export function Summaries({ docId }: Props) {
   const [model, setModel] = useState<string>("");
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [streamBuf, setStreamBuf] = useState<Record<string, string>>({});
+  const [streamStart, setStreamStart] = useState<Record<string, number>>({});
+  const [elapsedTick, setElapsedTick] = useState(0);
   const toast = useToast();
+
+  useEffect(() => {
+    if (Object.keys(streamStart).length === 0) return;
+    const iv = setInterval(() => setElapsedTick((n) => n + 1), 250);
+    return () => clearInterval(iv);
+  }, [streamStart]);
 
   const load = useCallback(async () => {
     try {
@@ -61,6 +69,7 @@ export function Summaries({ docId }: Props) {
     const key = `${chapter.id}:${level}`;
     setBusy((b) => ({ ...b, [key]: true }));
     setStreamBuf((s) => ({ ...s, [key]: "" }));
+    setStreamStart((s) => ({ ...s, [key]: Date.now() }));
     try {
       await api.summary.generateStream(chapter.id, level, model, {
         onToken: (tok) =>
@@ -69,6 +78,11 @@ export function Summaries({ docId }: Props) {
           const sums = await api.summary.document(docId);
           setSummaries(sums);
           setStreamBuf((s) => {
+            const next = { ...s };
+            delete next[key];
+            return next;
+          });
+          setStreamStart((s) => {
             const next = { ...s };
             delete next[key];
             return next;
@@ -84,6 +98,11 @@ export function Summaries({ docId }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
       setBusy((b) => ({ ...b, [key]: false }));
+      setStreamStart((s) => {
+        const next = { ...s };
+        delete next[key];
+        return next;
+      });
     }
   }
 
@@ -155,6 +174,8 @@ export function Summaries({ docId }: Props) {
               summaries={byChapter.get(ch.id) ?? []}
               busy={busy}
               streamBuf={streamBuf}
+              streamStart={streamStart}
+              elapsedTick={elapsedTick}
               onGenerate={(lvl) => generate(ch, lvl)}
               onDelete={remove}
             />
@@ -170,6 +191,8 @@ function ChapterSummary({
   summaries,
   busy,
   streamBuf,
+  streamStart,
+  elapsedTick,
   onGenerate,
   onDelete,
 }: {
@@ -177,9 +200,13 @@ function ChapterSummary({
   summaries: Summary[];
   busy: Record<string, boolean>;
   streamBuf: Record<string, string>;
+  streamStart: Record<string, number>;
+  elapsedTick: number;
   onGenerate: (level: SummaryLevel) => void;
   onDelete: (id: string) => void;
 }) {
+  // consume elapsedTick so re-renders propagate while streaming
+  void elapsedTick;
   const latestByLevel = useMemo(() => {
     const map = new Map<SummaryLevel, Summary>();
     for (const s of summaries) {
@@ -242,8 +269,10 @@ function ChapterSummary({
       {(() => {
         const activeKey = `${chapter.id}:${activeLevel}`;
         const live = streamBuf[activeKey];
+        const startedAt = streamStart[activeKey];
         if (live !== undefined && live.length > 0) {
-          return <LiveSummary text={live} />;
+          const elapsedMs = startedAt ? Date.now() - startedAt : 0;
+          return <LiveSummary text={live} elapsedMs={elapsedMs} />;
         }
         if (latestByLevel.has(activeLevel)) {
           return <SummaryBody summary={latestByLevel.get(activeLevel)!} onDelete={onDelete} />;
@@ -254,7 +283,7 @@ function ChapterSummary({
   );
 }
 
-function LiveSummary({ text }: { text: string }) {
+function LiveSummary({ text, elapsedMs }: { text: string; elapsedMs: number }) {
   return (
     <article className="card p-4 bg-bg-elevated border-accent">
       <div className="flex items-center gap-2 mb-3">
@@ -262,6 +291,11 @@ function LiveSummary({ text }: { text: string }) {
         <span className="text-[11px] uppercase tracking-wide text-accent">
           {t("summary.generatingLive")}
         </span>
+        {elapsedMs > 0 && (
+          <span className="text-[11px] text-neutral-500 font-mono ml-auto">
+            {formatDuration(elapsedMs)}
+          </span>
+        )}
       </div>
       <div className="text-sm whitespace-pre-wrap leading-relaxed text-neutral-200">
         {text}
@@ -271,6 +305,15 @@ function LiveSummary({ text }: { text: string }) {
   );
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds - m * 60);
+  return `${m}m ${s}s`;
+}
+
 function SummaryBody({ summary, onDelete }: { summary: Summary; onDelete: (id: string) => void }) {
   return (
     <article className="card p-4 bg-bg-elevated border-accent-subtle">
@@ -278,12 +321,22 @@ function SummaryBody({ summary, onDelete }: { summary: Summary; onDelete: (id: s
         <span className="text-[11px] uppercase tracking-wide text-accent">
           {t(`summary.level.${summary.level}`)} · {summary.model}
         </span>
-        <button
-          onClick={() => onDelete(summary.id)}
-          className="text-xs text-neutral-500 hover:text-accent"
-        >
-          {t("summary.delete")}
-        </button>
+        <div className="flex items-center gap-3">
+          {summary.generation_ms != null && summary.generation_ms > 0 && (
+            <span
+              className="text-[11px] text-neutral-500 font-mono"
+              title={t("summary.generationTimeTitle")}
+            >
+              ⏱ {formatDuration(summary.generation_ms)}
+            </span>
+          )}
+          <button
+            onClick={() => onDelete(summary.id)}
+            className="text-xs text-neutral-500 hover:text-accent"
+          >
+            {t("summary.delete")}
+          </button>
+        </div>
       </div>
       <div className="prose prose-invert prose-sm max-w-none leading-relaxed whitespace-pre-wrap">
         {renderLight(summary.content)}

@@ -1,14 +1,26 @@
 import { useEffect, type ReactNode } from "react";
 
+type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
+
 interface Props {
   open: boolean;
   onClose: () => void;
   title?: string;
   children: ReactNode;
   footer?: ReactNode;
+  size?: ModalSize;
 }
 
-export function Modal({ open, onClose, title, children, footer }: Props) {
+const SIZE_CLASS: Record<ModalSize, string> = {
+  sm: "max-w-sm",
+  md: "max-w-md",
+  lg: "max-w-lg",
+  xl: "max-w-xl",
+  "2xl": "max-w-2xl",
+  "3xl": "max-w-3xl",
+};
+
+export function Modal({ open, onClose, title, children, footer, size = "lg" }: Props) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -23,7 +35,7 @@ export function Modal({ open, onClose, title, children, footer }: Props) {
       onClick={onClose}
     >
       <div
-        className="card w-full max-w-lg flex flex-col max-h-[90vh]"
+        className={`card w-full ${SIZE_CLASS[size]} flex flex-col max-h-[90vh]`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (

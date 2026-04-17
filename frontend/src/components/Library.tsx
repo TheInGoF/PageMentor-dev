@@ -11,6 +11,7 @@ import { DocumentEditModal } from "./DocumentEditModal";
 interface Props {
   onLogout: () => void;
   onOpen: (docId: string) => void;
+  onBack?: () => void;
 }
 
 const TYPE_FILTERS: Array<"all" | DocType> = [
@@ -22,7 +23,7 @@ const TYPE_FILTERS: Array<"all" | DocType> = [
   "sonstiges",
 ];
 
-export function Library({ onLogout, onOpen }: Props) {
+export function Library({ onLogout, onOpen, onBack }: Props) {
   const [docs, setDocs] = useState<Document[] | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | DocType>("all");
@@ -168,6 +169,7 @@ export function Library({ onLogout, onOpen }: Props) {
         onLogout={handleLogout}
         onUpload={() => setUploadOpen(true)}
         onOpenDocument={onOpen}
+        onBack={onBack}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6">

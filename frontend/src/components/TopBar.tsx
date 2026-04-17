@@ -12,15 +12,21 @@ interface Props {
   onLogout: () => void;
   onUpload: () => void;
   onOpenDocument: (docId: string) => void;
+  onBack?: () => void;
 }
 
-export function TopBar({ search, onSearch, onLogout, onUpload, onOpenDocument }: Props) {
+export function TopBar({ search, onSearch, onLogout, onUpload, onOpenDocument, onBack }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   return (
     <>
       <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
           <Logo size={22} />
+          {onBack && (
+            <Button variant="ghost" onClick={onBack} className="!px-2">
+              ← {t("dash.title")}
+            </Button>
+          )}
           <div className="flex-1 max-w-xl flex items-center gap-3">
             <SearchOverlay onOpenDocument={onOpenDocument} />
             <div className="hidden md:block w-40">

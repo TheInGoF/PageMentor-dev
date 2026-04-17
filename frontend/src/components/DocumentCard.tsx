@@ -1,8 +1,15 @@
+import { useState } from "react";
+import { Document as PdfDocument, Page as PdfPage, pdfjs } from "react-pdf";
 import { Button } from "./ui/Button";
 import { api, type Document, type ProgressEvent } from "../lib/api";
 import { t } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { useToast } from "./ui/Toast";
+
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
 
 interface Props {
   doc: Document;
@@ -106,13 +113,13 @@ function PipelineDots({ doc }: { doc: Document }) {
   ];
 
   return (
-    <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
+    <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap text-[10px] text-neutral-500 min-w-0">
       {steps.map((s, i) => (
-        <div key={s.key} className="flex items-center gap-1">
+        <div key={s.key} className="flex items-center gap-1 whitespace-nowrap">
           {i > 0 && <span className="text-neutral-700">›</span>}
           <span
             className={
-              "inline-block w-1.5 h-1.5 rounded-full " +
+              "inline-block w-1.5 h-1.5 rounded-full shrink-0 " +
               (s.state === "done"
                 ? "bg-emerald-500"
                 : s.state === "running"
@@ -171,9 +178,7 @@ export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit }: Props
             {(doc.size_bytes / 1024 / 1024).toFixed(1)} MB
           </p>
         </div>
-        <div className="text-4xl opacity-40 group-hover:opacity-70 transition-opacity">
-          📄
-        </div>
+        <DocumentThumbnail doc={doc} />
       </div>
 
       {doc.tags.length > 0 && (
@@ -227,6 +232,45 @@ export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit }: Props
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DocumentThumbnail({ doc }: { doc: Document }) {
+  const [failed, setFailed] = useState(false);
+  const page = doc.thumb_page && doc.thumb_page > 0 ? doc.thumb_page : 1;
+
+  if (failed || doc.ocr_status === "pending") {
+    return (
+      <div
+        className="flex-shrink-0 w-[72px] h-[96px] rounded border border-border bg-bg-elevated grid place-items-center text-2xl opacity-40 group-hover:opacity-70 transition-opacity"
+        aria-hidden
+      >
+        📄
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex-shrink-0 w-[72px] h-[96px] rounded border border-border bg-bg-elevated overflow-hidden shadow-card"
+      aria-hidden
+    >
+      <PdfDocument
+        file={`/api/documents/${doc.id}/pdf`}
+        loading={null}
+        error={null}
+        onLoadError={() => setFailed(true)}
+        onSourceError={() => setFailed(true)}
+      >
+        <PdfPage
+          pageNumber={page}
+          width={72}
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+          onRenderError={() => setFailed(true)}
+        />
+      </PdfDocument>
     </div>
   );
 }

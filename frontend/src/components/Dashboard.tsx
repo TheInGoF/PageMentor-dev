@@ -8,11 +8,12 @@ import { Logo } from "./Logo";
 
 interface Props {
   onOpenLibrary: () => void;
+  onOpenModules: () => void;
   onOpenDocument: (docId: string) => void;
   onLogout: () => void;
 }
 
-export function Dashboard({ onOpenLibrary, onOpenDocument, onLogout }: Props) {
+export function Dashboard({ onOpenLibrary, onOpenModules, onOpenDocument, onLogout }: Props) {
   useLocale();
   const [data, setData] = useState<DashboardData | null>(null);
   const toast = useToast();
@@ -37,6 +38,9 @@ export function Dashboard({ onOpenLibrary, onOpenDocument, onLogout }: Props) {
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
           <Logo size={22} />
           <div className="flex-1" />
+          <Button variant="outline" onClick={onOpenModules}>
+            {t("modules.title")}
+          </Button>
           <Button onClick={onOpenLibrary}>{t("dash.openLibrary")}</Button>
           <Button variant="ghost" onClick={onLogout}>
             {t("library.logout")}

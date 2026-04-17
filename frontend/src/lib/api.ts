@@ -13,6 +13,8 @@ export interface Document {
   type: DocType;
   created_at: string;
   tags: string[];
+  module_id?: string | null;
+  thumb_page?: number;
   chapter_count?: number;
   card_count?: number;
   audio_done?: number;
@@ -167,6 +169,91 @@ export interface DashboardRecent {
   created_at: string;
 }
 
+export interface Module {
+  id: string;
+  name: string;
+  semester: string | null;
+  description: string | null;
+  color: string;
+  icon: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface ModuleListItem extends Module {
+  doc_count: number;
+  script_count: number;
+  exam_doc_count: number;
+  exercise_doc_count: number;
+  card_count: number;
+  card_due: number;
+  audio_done: number;
+  exam_count: number;
+  exam_avg_score: number | null;
+}
+
+export interface ModuleDocument {
+  id: string;
+  title: string;
+  filename: string;
+  type: DocType;
+  language: string;
+  page_count: number;
+  ocr_status: string;
+  created_at: string;
+  chapter_count: number;
+  audio_done: number;
+  card_count: number;
+}
+
+export interface ModuleAudioChapter {
+  id: string;
+  duration_ms: number;
+  voice: string;
+  status: string;
+  chapter_title: string;
+  chapter_number: number;
+  sort_order: number;
+  document_id: string;
+  document_title: string;
+  document_type: DocType;
+}
+
+export interface ModuleSummary {
+  id: string;
+  chapter_id: string;
+  level: SummaryLevel;
+  content: string;
+  model: string;
+  generation_ms?: number;
+  created_at: string;
+  chapter_title: string;
+  chapter_number: number;
+  document_id: string;
+  document_title: string;
+}
+
+export interface ModuleExam {
+  id: string;
+  title: string;
+  score: number | null;
+  total: number;
+  taken_ms: number | null;
+  status: "open" | "closed";
+  created_at: string;
+  finished_at: string | null;
+  document_title: string;
+}
+
+export interface ModuleDetail {
+  module: Module;
+  documents: ModuleDocument[];
+  cardStats: { total: number; due: number; learned: number };
+  exams: ModuleExam[];
+  audioChapters: ModuleAudioChapter[];
+  summaries: ModuleSummary[];
+}
+
 export interface DashboardData {
   totals: {
     documents: number;
@@ -191,6 +278,7 @@ export interface Summary {
   level: SummaryLevel;
   content: string;
   model: string;
+  generation_ms?: number;
   created_at: string;
   chapter_number?: number;
   chapter_title?: string;
@@ -293,7 +381,13 @@ export const api = {
       ),
     remove: (id: string) =>
       request<{ status: string }>(`/api/documents/${id}`, { method: "DELETE" }),
-    patch: (id: string, body: Partial<Pick<Document, "title" | "type" | "tags">>) =>
+    patch: (
+      id: string,
+      body: Partial<Pick<Document, "title" | "type" | "tags">> & {
+        module_id?: string | null;
+        thumb_page?: number;
+      }
+    ) =>
       request<Document>(`/api/documents/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),
@@ -428,17 +522,29 @@ export const api = {
     document: (docId: string) => request<Summary[]>(`/api/summary/document/${docId}`),
     chapter: (chapterId: string) => request<Summary[]>(`/api/summary/chapter/${chapterId}`),
     generate: (chapterId: string, level: SummaryLevel, model?: string) =>
-      request<{ id: string; level: SummaryLevel; content: string; model: string }>(
-        `/api/summary/chapter/${chapterId}`,
-        { method: "POST", body: JSON.stringify({ level, model }) }
-      ),
+      request<{
+        id: string;
+        level: SummaryLevel;
+        content: string;
+        model: string;
+        generation_ms: number;
+        totalMs: number;
+      }>(`/api/summary/chapter/${chapterId}`, {
+        method: "POST",
+        body: JSON.stringify({ level, model }),
+      }),
     generateStream: async (
       chapterId: string,
       level: SummaryLevel,
       model: string | undefined,
       handlers: {
         onToken: (text: string) => void;
-        onDone: (payload: { id: string; model: string; content: string }) => void;
+        onDone: (payload: {
+          id: string;
+          model: string;
+          content: string;
+          generation_ms?: number;
+        }) => void;
         onError?: (message: string) => void;
       }
     ): Promise<void> => {
@@ -529,6 +635,22 @@ export const api = {
   },
   dashboard: {
     get: () => request<DashboardData>("/api/dashboard"),
+  },
+  modules: {
+    list: () => request<ModuleListItem[]>("/api/modules"),
+    get: (id: string) => request<ModuleDetail>(`/api/modules/${id}`),
+    create: (body: Partial<Module>) =>
+      request<{ id: string }>("/api/modules", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    patch: (id: string, body: Partial<Module>) =>
+      request<{ status: string }>(`/api/modules/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    remove: (id: string) =>
+      request<{ status: string }>(`/api/modules/${id}`, { method: "DELETE" }),
   },
 };
 

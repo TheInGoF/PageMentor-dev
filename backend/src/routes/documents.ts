@@ -14,6 +14,19 @@ export const documentRoutes = new Hono();
 
 // List all documents with aggregate pipeline counts.
 documentRoutes.get("/", (c) => {
+  const moduleId = c.req.query("module");
+  const unassigned = c.req.query("unassigned") === "1";
+
+  const where: string[] = [];
+  const params: any[] = [];
+  if (moduleId) {
+    where.push("d.module_id = ?");
+    params.push(moduleId);
+  } else if (unassigned) {
+    where.push("d.module_id IS NULL");
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
   const rows = db()
     .prepare(
       `SELECT d.*,
@@ -29,10 +42,11 @@ documentRoutes.get("/", (c) => {
        FROM documents d
        LEFT JOIN document_tags dt ON dt.document_id = d.id
        LEFT JOIN tags t ON t.id = dt.tag_id
+       ${whereSql}
        GROUP BY d.id
        ORDER BY d.created_at DESC`
     )
-    .all();
+    .all(...params);
 
   return c.json(
     rows.map((r: any) => ({
@@ -183,12 +197,20 @@ documentRoutes.delete("/:id", (c) => {
   return c.json({ status: "ok" });
 });
 
-// Update (title, tags, type)
+// Update (title, tags, type, module_id)
 documentRoutes.patch("/:id", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json<{ title?: string; type?: string; tags?: string[] }>();
+  const body = await c.req.json<{
+    title?: string;
+    type?: string;
+    tags?: string[];
+    module_id?: string | null;
+    thumb_page?: number;
+  }>();
 
-  const doc = db().prepare("SELECT id FROM documents WHERE id = ?").get(id);
+  const doc = db().prepare("SELECT id, page_count FROM documents WHERE id = ?").get(id) as
+    | { id: string; page_count: number }
+    | undefined;
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
 
   if (body.title !== undefined) {
@@ -196,6 +218,14 @@ documentRoutes.patch("/:id", async (c) => {
   }
   if (body.type !== undefined) {
     db().prepare("UPDATE documents SET type = ? WHERE id = ?").run(body.type, id);
+  }
+  if (body.module_id !== undefined) {
+    db().prepare("UPDATE documents SET module_id = ? WHERE id = ?").run(body.module_id, id);
+  }
+  if (body.thumb_page !== undefined) {
+    const max = doc.page_count > 0 ? doc.page_count : Number.MAX_SAFE_INTEGER;
+    const clamped = Math.max(1, Math.min(max, Math.floor(body.thumb_page)));
+    db().prepare("UPDATE documents SET thumb_page = ? WHERE id = ?").run(clamped, id);
   }
   if (body.tags !== undefined) {
     const d = db();
