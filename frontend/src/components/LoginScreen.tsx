@@ -3,6 +3,7 @@ import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { api, ApiError } from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
+import { Logo } from "./Logo";
 
 interface Props {
   onSuccess: () => void;
@@ -32,8 +33,8 @@ export function LoginScreen({ onSuccess }: Props) {
     <div className="min-h-full grid place-items-center px-4">
       <div className="card w-full max-w-sm p-8">
         <div className="mb-6 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent/10 border border-accent-subtle mb-3">
-            <span className="text-2xl">📚</span>
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-accent/10 border border-accent-subtle mb-3">
+            <Logo size={32} withLabel={false} />
           </div>
           <h1 className="text-xl font-semibold tracking-tight">{t("login.title")}</h1>
           <p className="text-xs text-neutral-500 mt-1">{t("login.subtitle")}</p>

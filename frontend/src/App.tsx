@@ -23,6 +23,12 @@ export function App() {
   }, [locale]);
 
   useEffect(() => {
+    // Dev-only UI review mode: skip auth so the shell is reachable
+    // without a backend running. Production builds hit the real API.
+    if (import.meta.env.DEV) {
+      setAuth("in");
+      return;
+    }
     api.auth
       .check()
       .then((r) => setAuth(r.authenticated ? "in" : "out"))

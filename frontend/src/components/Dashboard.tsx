@@ -4,6 +4,7 @@ import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { Logo } from "./Logo";
 
 interface Props {
   onOpenLibrary: () => void;
@@ -20,17 +21,21 @@ export function Dashboard({ onOpenLibrary, onOpenDocument, onLogout }: Props) {
     api.dashboard
       .get()
       .then(setData)
-      .catch((err) => toast.show(err instanceof Error ? err.message : t("common.error"), "error"));
+      .catch((err) => {
+        if (import.meta.env.DEV) {
+          // UI review mode: render the dashboard shell with zeros.
+          setData(emptyDashboard());
+          return;
+        }
+        toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+      });
   }, [toast]);
 
   return (
     <div className="min-h-full flex flex-col">
       <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-accent" />
-            <span className="font-semibold tracking-tight">{t("app.name")}</span>
-          </div>
+          <Logo size={22} />
           <div className="flex-1" />
           <Button onClick={onOpenLibrary}>{t("dash.openLibrary")}</Button>
           <Button variant="ghost" onClick={onLogout}>
@@ -85,6 +90,22 @@ export function Dashboard({ onOpenLibrary, onOpenDocument, onLogout }: Props) {
       </main>
     </div>
   );
+}
+
+function emptyDashboard(): DashboardData {
+  const today = new Date();
+  const activity = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (29 - i));
+    return { date: d.toISOString().slice(0, 10), count: 0, avgQuality: 0 };
+  });
+  return {
+    totals: { documents: 0, cards: 0, due: 0, learned: 0, audio_done: 0, exams: 0, exam_avg_score: 0 },
+    streak: 0,
+    activity,
+    weakTopics: [],
+    recent: [],
+  };
 }
 
 function StatCard({

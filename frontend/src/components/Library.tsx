@@ -38,6 +38,11 @@ export function Library({ onLogout, onOpen }: Props) {
     try {
       setDocs(await api.documents.list());
     } catch (err) {
+      if (import.meta.env.DEV) {
+        // UI review mode: render empty library shell without backend.
+        setDocs([]);
+        return;
+      }
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
   }

@@ -1,10 +1,42 @@
 <!doctype html>
-<html lang="de" class="dark">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#000000" />
+
+    <!-- Tab / browser favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" type="image/png" href="/icon-192.png" />
+
+    <!-- Safari "Add to Home Screen" — needs a real PNG, not SVG,
+         otherwise iOS renders a text initial ("P").
+         Media queries swap the icon based on the user's Home Screen
+         appearance (iOS 18 light / dark). iOS's "Tinted" mode does not
+         yet expose a media query for web apps, so the monochrome
+         variant is served via the `apple-touch-icon-precomposed`
+         fallback — iOS picks this up on devices that honour it. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link
+      rel="apple-touch-icon"
+      media="(prefers-color-scheme: light)"
+      href="/icon-light-180.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      media="(prefers-color-scheme: dark)"
+      href="/icon-dark-180.png"
+    />
+    <link rel="apple-touch-icon-precomposed" href="/icon-tinted-180.png" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PageMentor" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Android / PWA (light + dark variants advertised via manifest) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
     <title>PageMentor</title>
   </head>
   <body class="bg-black text-neutral-100">

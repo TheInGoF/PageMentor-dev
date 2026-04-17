@@ -14,6 +14,22 @@
     font-feature-settings: "ss01", "cv01";
   }
 
+  /* Nudge all "muted text" a notch brighter so labels/subtitles stay
+     readable on the near-black background. Tailwind's neutral-500 is
+     #737373 by default; we lift it to ~#909090. */
+  .text-neutral-500 {
+    color: #909090;
+  }
+  .text-neutral-600 {
+    color: #707070;
+  }
+  .placeholder\:text-neutral-500::placeholder {
+    color: #909090;
+  }
+  .placeholder\:text-neutral-400::placeholder {
+    color: #a8a8a8;
+  }
+
   *::selection {
     @apply bg-accent/60 text-white;
   }
@@ -59,8 +75,8 @@
     @apply btn bg-transparent text-accent hover:bg-accent/10;
   }
   .input {
-    @apply w-full rounded-md bg-bg-elevated border border-border
-           px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-500
+    @apply w-full rounded-md bg-bg-card border border-border-strong
+           px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-400
            focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40;
   }
   .tag {
