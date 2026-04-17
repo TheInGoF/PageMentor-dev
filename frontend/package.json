@@ -1,6 +1,6 @@
 {
   "name": "pagementor-frontend",
-  "version": "1.04.002",
+  "version": "1.04.003",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "pdfjs-dist": "^4.10.38",
+    "pdfjs-dist": "4.8.69",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-pdf": "^9.2.1"
