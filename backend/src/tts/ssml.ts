@@ -22,28 +22,28 @@ export interface BuildOptions {
 }
 
 export function buildSsml(segment: Segment, opts: BuildOptions): string {
-  const rate = opts.rate ?? "+0%";
-  const pitch = opts.pitch ?? "+0Hz";
+  // Minimal-SSML für Edge: nur <speak>+<voice>+Text.
+  //
+  // Frühere Versionen hatten <prosody rate/pitch>, <break>-Tags und
+  // <emphasis> im Template — Azure rejectet das dann für die
+  // Multilingual-Voices silent mit 0 Bytes, während Preview (kurzer
+  // Plain-Text) durchging. Das hier ist die Form, die msedge-tts
+  // intern auch für `toStream()` baut. Der Server akzeptiert sie
+  // zuverlässig.
+  //
+  // Nebenwirkung: Rate-/Pitch-Kontrolle fällt weg (müsste als
+  // msedge-tts-Option übergeben werden, nicht per SSML). Pausen
+  // zwischen Absätzen ergeben sich aus Satzzeichen + Leerzeilen.
+  void opts.rate;
+  void opts.pitch;
 
-  const inner: string[] = [];
+  const parts: string[] = [];
   if (opts.announce) {
-    // Kapitelansage als normaler Satz — <emphasis> wird von Multilingual-
-    // Stimmen (Seraphina/Florian) inkonsistent unterstützt und triggert
-    // gerne silent-reject (Server liefert 0 Bytes statt Fehler).
-    inner.push(`${escapeXml(opts.announce)}.<break time="1200ms"/>`);
+    parts.push(escapeXml(opts.announce) + ".");
   }
-  for (let i = 0; i < segment.paragraphs.length; i++) {
-    if (i > 0) inner.push(`<break time="600ms"/>`);
-    inner.push(escapeXml(segment.paragraphs[i]));
-  }
+  parts.push(segment.paragraphs.map(escapeXml).join("\n\n"));
 
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${opts.locale}">
-    <voice name="${opts.voice}">
-      <prosody rate="${rate}" pitch="${pitch}">
-        ${inner.join("")}
-      </prosody>
-    </voice>
-  </speak>`;
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${opts.locale}"><voice name="${opts.voice}">${parts.join("\n\n")}</voice></speak>`;
 }
 
 export function escapeXml(s: string): string {
