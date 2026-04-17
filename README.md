@@ -69,6 +69,73 @@ docker compose --profile ai up -d   # adds Ollama
 open http://localhost:3100
 ```
 
+## Deployment on Synology / Portainer
+
+The repo ships with a **second compose file** that uses bind mounts
+under `/volume1/docker/pagementor/…` instead of Docker-managed named
+volumes. That way your uploads, SQLite database and generated audio
+survive container rebuilds and are visible through File Station.
+
+### 1 — Prepare the folders (one-off)
+
+SSH into the NAS or use File Station and create:
+
+```bash
+mkdir -p /volume1/docker/pagementor/data
+mkdir -p /volume1/docker/pagementor/meili
+mkdir -p /volume1/docker/pagementor/ollama    # optional, only if you enable the AI profile
+```
+
+### 2 — Portainer Stack
+
+1. **Stacks → Add stack → Web editor**
+2. **Name:** `pagementor`
+3. Paste the contents of [`docker-compose.synology.yml`](docker-compose.synology.yml) — this file is self-contained, don't mix it with the default `docker-compose.yml`.
+4. **Environment variables → Advanced mode** — paste and tweak:
+
+   ```env
+   PM_PORT=3100
+   PM_PASSWORD=change-me-to-something-long
+   MEILI_MASTER_KEY=change-me-to-a-long-random-key
+   PM_OLLAMA_URL=http://ollama:11434
+   PM_OLLAMA_MODEL=llama3.1:8b
+   ```
+
+5. **Deploy the stack.**
+
+The image is pulled from `ghcr.io/lordvonbaum/pagementor:latest`. Since
+the repo is private, you'll need a Personal Access Token with
+`read:packages` on your GitHub account:
+
+- Go to GitHub → **Settings → Developer settings → Personal access tokens (classic)**
+- Generate a token with scope `read:packages`
+- In Portainer: **Registries → Add registry → Custom → `ghcr.io`**,
+  username = your GitHub handle, password = the token
+
+After the first successful deploy, open <http://NAS-IP:3100>, log in
+with the `PM_PASSWORD` you set, and upload a PDF.
+
+### 3 — Updating
+
+When a new tag or push lands on `main`, GitHub Actions builds a new
+image. In Portainer, open the stack and click **Update** (with "Pull
+the latest images" enabled). All your data lives on the bind-mounted
+folders and stays intact.
+
+### 4 — Enabling Ollama on the NAS
+
+Ollama needs some horsepower; a Synology is borderline for small models
+(`llama3.2:3b` or `qwen2.5:3b` are realistic). To enable it, keep the
+`ollama` service in the stack (it's already defined but tied to the
+`ai` profile). In Portainer, the profile gate is ignored — the service
+will start as long as it's in the YAML. Pull a model once it's up:
+
+```bash
+docker exec -it pm-ollama ollama pull llama3.2:3b
+```
+
+Then set `PM_OLLAMA_MODEL=llama3.2:3b` in the stack env and redeploy.
+
 ## Local development
 
 ```bash

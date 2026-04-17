@@ -2,7 +2,9 @@ name: pagementor
 
 services:
   app:
-    build: .
+    image: ghcr.io/lordvonbaum/pagementor:latest
+    # Uncomment to build locally instead of pulling from ghcr.io:
+    # build: .
     container_name: pm-app
     restart: unless-stopped
     ports:
@@ -35,8 +37,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # Optional: lokaler Ollama-Server für Zusammenfassungen und KI-Karten.
-  # Aktivieren mit:  docker compose --profile ai up -d
+  # Optional: local Ollama for summaries and AI flashcards.
+  # Enable with:  docker compose --profile ai up -d
   ollama:
     image: ollama/ollama:latest
     container_name: pm-ollama
@@ -44,7 +46,7 @@ services:
     restart: unless-stopped
     volumes:
       - pm-ollama:/root/.ollama
-    # Wenn du eine NVIDIA-GPU hast, uncomment den deploy-Block:
+    # NVIDIA GPU support — uncomment if available:
     # deploy:
     #   resources:
     #     reservations:
