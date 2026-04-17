@@ -311,7 +311,8 @@ export type ProgressPhase =
   | "audiobook.chapter.failed"
   | "audiobook.book.building"
   | "audiobook.done"
-  | "audiobook.failed";
+  | "audiobook.failed"
+  | "audiobook.canceled";
 
 export interface ProgressEvent {
   phase: ProgressPhase;
