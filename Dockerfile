@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Backend deps (Bun)
 # ---------------------------------------------------------------------------
-FROM oven/bun:1-debian-slim AS backend-deps
+FROM oven/bun:1-slim AS backend-deps
 WORKDIR /app/backend
 COPY backend/package.json backend/bun.lock* ./
 RUN bun install --frozen-lockfile || bun install
@@ -51,7 +51,7 @@ RUN chmod +x /usr/local/bin/download-piper-voices.sh \
 # ---------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------
-FROM oven/bun:1-debian-slim
+FROM oven/bun:1-slim
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
