@@ -1,24 +1,74 @@
 /**
  * Kapitel-Cleanup für TTS-taugliche Texte.
  *
- * Zwei Stufen:
- *   1. stripBoilerplate(pages) — entfernt pro PDF wiederkehrende
- *      Header/Footer/Watermarks per Frequenzanalyse über alle Seiten.
- *   2. cleanForReading(text)  — Regex-Filter für Seitenzahlen, Abbildungs-/
- *      Tabellen-Captions, Inline-Verweise, Silbentrennung, Whitespace.
+ * Drei Stufen, alle deterministisch (keine LLM-Inferenz):
+ *   1. normalizeUnicode(text) — NFC-Normalisierung, Ligatur-Entfaltung,
+ *      Soft-Hyphen/Zero-Width-Zeichen raus, Non-Breaking-Space flach.
+ *   2. stripBoilerplate(pages) — Frequenzanalyse über Top-/Bottom-Zeilen
+ *      jeder Seite für wiederkehrende Header/Footer/Watermarks.
+ *   3. cleanForReading(text) — Regex-Filter für Seitenzahlen, Captions,
+ *      Inline-Verweise, Silbentrennung, ISBN/DOI/URL-Zeilen,
+ *      Kurscode-Header, Whitespace.
  *
- * Der Pipeline-Aufruf kombiniert beide: stripBoilerplate zuerst, danach
- * detectChapters, und der pro-Kapitel-Text geht durch cleanForReading.
+ * Die Pipeline ruft stripBoilerplate (der intern cleanForReading
+ * anstößt) nach der PDF-Extraktion auf. Beide oberen Stufen sind
+ * idempotent — mehrfach angewandt ändert das Ergebnis nicht weiter.
  */
 
+// ---------------------------------------------------------------------------
+// Unicode-Normalisierung
+// ---------------------------------------------------------------------------
+
+const LIGATURES: Record<string, string> = {
+  "\uFB00": "ff",
+  "\uFB01": "fi",
+  "\uFB02": "fl",
+  "\uFB03": "ffi",
+  "\uFB04": "ffl",
+  "\uFB05": "st",
+  "\uFB06": "st",
+  // Latin small "ct" is rare but shows up in old scans.
+  "\u0107\u0323": "ct",
+};
+
+/** Entfernt/normalisiert Zeichen, die PDF-Extraktoren gerne hinterlassen:
+ *  - Ligatur-Codepoints (ﬁ/ﬀ/ﬃ…) zu ASCII-Buchstaben entfaltet
+ *  - Soft-Hyphen (U+00AD) komplett raus
+ *  - Zero-Width-Chars (U+200B/200C/200D/FEFF) raus
+ *  - Non-Breaking-Space (U+00A0) + schmale NBSP (U+202F/2009) → normales Space
+ *  - NFC-Normalisierung: Umlaute als einzelner Codepoint statt Basis+Combining
+ */
+export function normalizeUnicode(text: string): string {
+  let t = text.normalize("NFC");
+  for (const [from, to] of Object.entries(LIGATURES)) {
+    t = t.split(from).join(to);
+  }
+  t = t.replace(/\u00AD/g, "");              // soft hyphen
+  t = t.replace(/[\u200B\u200C\u200D\uFEFF]/g, ""); // zero-width chars
+  t = t.replace(/[\u00A0\u202F\u2009]/g, " "); // non-breaking / thin spaces
+  // Nur echte Hyphen-Codepoints (U+2010 HYPHEN, U+2011 NON-BREAKING HYPHEN)
+  // zu ASCII-Bindestrich folden — damit Silbentrennungs-Regex greifen.
+  // Em-dash (U+2014) / En-dash (U+2013) / Figure-dash (U+2012) werden
+  // bewusst *nicht* normalisiert: die haben in deutschem Fließtext eine
+  // eigene Bedeutung (Gedankenstrich, Bereich) und würden sonst die
+  // Wort-Merge-Heuristik fälschlich triggern.
+  t = t.replace(/[\u2010\u2011]/g, "-");
+  return t;
+}
+
+// ---------------------------------------------------------------------------
+// Boilerplate-Stripping
+// ---------------------------------------------------------------------------
+
 export function stripBoilerplate(pages: string[]): string[] {
-  if (pages.length === 0) return pages;
-  if (pages.length < 3) return pages.map(cleanForReading);
+  const normalized = pages.map(normalizeUnicode);
+  if (normalized.length === 0) return normalized;
+  if (normalized.length < 3) return normalized.map(cleanForReading);
 
   const freq = new Map<string, number>();
   const candidatesPerPage: Array<Set<string>> = [];
 
-  for (const page of pages) {
+  for (const page of normalized) {
     const lines = page
       .split(/\r?\n/)
       .map((l) => l.trim())
@@ -35,12 +85,12 @@ export function stripBoilerplate(pages: string[]): string[] {
     for (const line of set) freq.set(line, (freq.get(line) ?? 0) + 1);
   }
 
-  const threshold = Math.max(3, Math.ceil(pages.length * 0.3));
+  const threshold = Math.max(3, Math.ceil(normalized.length * 0.3));
   const boilerplate = new Set(
     [...freq.entries()].filter(([, c]) => c >= threshold).map(([l]) => l)
   );
 
-  return pages.map((page) => {
+  return normalized.map((page) => {
     let text = page;
     if (boilerplate.size > 0) {
       const lines = text.split(/\r?\n/);
@@ -50,12 +100,35 @@ export function stripBoilerplate(pages: string[]): string[] {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Regex-Cleanup pro Text
+// ---------------------------------------------------------------------------
+
 export function cleanForReading(raw: string): string {
-  let t = raw;
+  let t = normalizeUnicode(raw);
 
   // Seitenzahlen als eigene Zeile
   t = t.replace(/^\s*(?:Seite|Page|S\.)\s*\d{1,4}(?:\s*[\/-]\s*\d{1,4})?\s*$/gim, "");
   t = t.replace(/^\s*\d{1,4}\s*$/gm, "");
+
+  // Kurscode-Kopfzeilen: "SS2025 · BWL · S. 42" oder "WS 2024/25 — Modul XYZ"
+  // Nur kurze Zeilen (bis ~80 Zeichen), die mit (WS|SS)\d+ anfangen.
+  t = t.replace(
+    /^\s*(?:WS|SS|WiSe|SoSe)\s?\d{2,4}(?:\s*\/\s*\d{2,4})?\s*(?:[–—\-·•|]\s*.{0,60})?\s*$/gim,
+    ""
+  );
+
+  // ISBN-Zeilen: "ISBN: 978-3-..." oder nur "978-3-12345-678-9"
+  t = t.replace(/^\s*ISBN(?:-1[03])?\s*:?\s*[\d\-Xx ]+\s*$/gim, "");
+  t = t.replace(/^\s*97[89][\- ]?\d[\- ]?\d{2,5}[\- ]?\d{2,7}[\- ]?[\dXx]\s*$/gm, "");
+
+  // DOI-Zeilen und -Inline
+  t = t.replace(/^\s*DOI\s*:?\s*10\.\d{4,9}\/[^\s]+\s*$/gim, "");
+
+  // URL-Only-Zeilen (Standalone-URL auf eigener Zeile → droppen,
+  // Inline-URLs im Fließtext nicht anfassen).
+  t = t.replace(/^\s*https?:\/\/\S+\s*$/gim, "");
+  t = t.replace(/^\s*www\.\S+\s*$/gim, "");
 
   // Ganze Caption-Zeilen: "Abbildung 3.1: …", "Tabelle 2 – …", "Fig. 4: …"
   t = t.replace(
@@ -89,8 +162,15 @@ export function cleanForReading(raw: string): string {
   // Manche Extraktoren ersetzen den Zeilenumbruch bereits vorab durch ein
   // Leerzeichen. Typische Trennmuster mit Kleinbuchstaben beidseitig sind
   // fast immer echte Silbentrennungen (Bindestriche zwischen Vollwörtern
-  // stünden typografisch als „–", nicht als ASCII-„-").
+  // stünden typografisch als „–", die normalizeUnicode bereits zu ASCII
+  // zusammenfasst — deshalb reichen die beiden Lookarounds nicht ohne
+  // Filter auf ausreichend lange Wortbestandteile).
   t = t.replace(/([a-zäöüß]{2,})\s-\s([a-zäöüß]{2,})/g, "$1$2");
+
+  // Paragraph-Reparatur: Wenn eine Zeile auf Kleinbuchstaben/Komma endet
+  // und die nächste mit Kleinbuchstaben startet, ist das fast sicher
+  // ein harter Zeilenumbruch mitten im Satz → Leerzeichen statt \n.
+  t = t.replace(/([a-zäöüß,])\n([a-zäöüß])/g, "$1 $2");
 
   // Whitespace & Leerzeilen einebnen
   t = t.replace(/[ \t]+/g, " ");
