@@ -17,6 +17,15 @@ name: pagementor
 services:
   app:
     image: ghcr.io/lordvonbaum/pagementor:latest
+    # Only used when you run `docker compose build` locally. Running
+    # `docker compose up` still pulls the pre-built image from ghcr.io;
+    # which Piper voices it contains was fixed at GHA build time (see
+    # PIPER_LANGS in .github/workflows/docker.yml and the repo variable
+    # of the same name).
+    build:
+      context: .
+      args:
+        PIPER_LANGS: ${PIPER_LANGS:-de,en}
     container_name: pm-app
     restart: unless-stopped
     ports:

@@ -5,6 +5,11 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      piper_langs:
+        description: "Piper voice languages to bake in (comma-separated, e.g. de,en,fr)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -46,5 +51,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # PIPER_LANGS resolution order:
+          #   1. workflow_dispatch input (one-off build with custom langs)
+          #   2. repository variable PIPER_LANGS (persistent override,
+          #      set under Settings → Secrets and variables → Actions → Variables)
+          #   3. Dockerfile ARG default (de,en)
+          build-args: |
+            PIPER_LANGS=${{ inputs.piper_langs != '' && inputs.piper_langs || vars.PIPER_LANGS || 'de,en' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
