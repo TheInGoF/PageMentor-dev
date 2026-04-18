@@ -25,6 +25,7 @@
 
 import { db } from "../db";
 import { generate, isAvailable as llmAvailable } from "./llm";
+import { expandAbbreviations } from "./germanAbbreviations";
 
 interface ChapterRow {
   id: string;
@@ -35,6 +36,20 @@ interface ChapterRow {
 }
 
 const SYSTEM_DE = `Du bist ein Lektor, der wissenschaftliche Studientexte für die Vertonung als Hörbuch aufbereitet. Deine Aufgabe: forme den vorgelegten Text so um, dass er von einer TTS-Engine flüssig und natürlich vorgelesen werden kann — ohne den fachlichen Inhalt zu verändern, ohne Auslassungen, ohne Vereinfachungen.
+
+WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchlaufen. Folgende Transformationen wurden schon gemacht — mache sie NICHT rückgängig:
+- Standard-Abkürzungen sind ausgeschrieben: „zum Beispiel" (statt „z. B."), „das heißt" (statt „d. h."), „unter anderem" (statt „u. a."), „in der Regel" (statt „i. d. R."), „beziehungsweise", „circa", „beispielsweise", „gegebenenfalls", „inklusive", „und so weiter", „und andere" etc.
+- Titel vor Namen: „Doktor" / „Professor" / „Sankt" (statt „Dr." / „Prof." / „St.")
+- Abbildungs-/Tabellen-/Kapitel-Verweise mit Zahl: „Abbildung 3" (statt „Abb. 3"), „Tabelle 2", „Kapitel 5", „Seite 42", „Paragraph 12" (statt „§ 12")
+- Einheiten nach Zahlen: „5 Kilogramm" (statt „5 kg"), „10 Meter", „3 Quadratmeter", „100 Kilowattstunden" usw.
+- Zeichen: „%" → „Prozent", „°C" → „Grad Celsius", „€" → „Euro", „≈" → „ungefähr", „≥" → „größer gleich", „∑" → „Summe", „∫" → „Integral" usw.
+- Uhrzeiten: „14 Uhr 30" (statt „14:30")
+- Datum: „12. März 2024" (statt „12.03.2024")
+- Bullet-Marker (-, *, •) am Zeilenanfang sind entfernt.
+
+→ Schreibe NICHT „z. B." zurück wenn du „zum Beispiel" siehst. Lasse diese Transformationen unverändert.
+
+Konzentriere dich stattdessen auf: Formeln, Zitate, Aufzählungs-Nummerierung (1./2. am Zeilenanfang), Eigennamen, Anglizismen, Prosodie und Pausen-Rhythmus — das bekommt der deterministische Pre-Pass nicht hin, weil es Kontext braucht.
 
 ZIEL DER UMFORMUNG
 - Hörer beim Autofahren oder beim Joggen sollen dem Stoff folgen können, ohne dass die Stimme über Symbole, Abkürzungen, Formeln oder Verzeichnis-Notation stolpert.
@@ -226,6 +241,18 @@ Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Wo
 - Doppelte Zeilenumbrüche zwischen Absätzen, einfacher Zeilenumbruch innerhalb eines Absatzes nicht — alles im selben Absatz auf eine Zeile.`;
 
 const SYSTEM_EN = `You are a copy editor preparing scientific study material for audiobook narration. Your task: rewrite the provided text so a TTS engine reads it fluently and naturally — without changing the technical content, without omissions, without simplifications.
+
+IMPORTANT NOTE: The text has already gone through a deterministic pre-pass. The following transformations are DONE — do not undo them:
+- Standard abbreviations are expanded: "for example" (not "e.g."), "that is" (not "i.e."), "and so on" (not "etc."), "approximately" (not "approx."), "versus", "compare", "and others" etc.
+- Titles before names: "Doctor" / "Professor" / "Saint" (not "Dr." / "Prof." / "St.")
+- Figure/Table/Chapter refs with number: "Figure 3" (not "Fig. 3"), "Table 2", "Chapter 5", "page 42", "Section 12" (not "§ 12")
+- Units after numbers: "5 kilograms" (not "5 kg"), "10 meters", "3 square meters", "100 kilowatt-hours" etc.
+- Symbols: "%" → "percent", "°C" → "degrees Celsius", "$" → "dollars", "≈" → "approximately", "≥" → "greater than or equal to", "∑" → "sum", "∫" → "integral" etc.
+- Bullet markers (-, *, •) at line start are already stripped.
+
+→ Do NOT revert to "e.g." if you see "for example". Leave these transformations untouched.
+
+Focus instead on: formulas, citations, numbered list items (1./2. at line start — context decides whether that's an enumeration or a chapter number), proper nouns, English loanwords, prosody, and pause rhythm — the deterministic pre-pass can't handle these because they need context.
 
 GOAL OF THE TRANSFORMATION
 - A listener while driving or jogging should follow the material without the voice tripping over symbols, abbreviations, formulas, or index-style notation.
@@ -437,9 +464,17 @@ export async function preprocessChapterForAudio(params: {
     throw new Error("Chapter text too short to preprocess");
   }
 
+  // Deterministische Pre-Pass: Standard-Abkürzungen, Einheiten,
+  // Symbole, Datum/Uhrzeit. Spart dem LLM ~150 Regex-Regeln die er
+  // sonst selbst anwenden müsste. Der Prompt wurde angepasst — er
+  // weiß jetzt dass diese Transformationen schon durch sind und soll
+  // sie nicht rückgängig machen (z. B. „zum Beispiel" NICHT wieder
+  // zu „z. B." verkürzen).
+  const pretreated = expandAbbreviations(row.text, params.language);
+
   const system = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
   const result = await generate({
-    prompt: row.text,
+    prompt: pretreated,
     system,
     model: params.model,
     options: { temperature: 0.1, top_p: 0.9 },

@@ -43,6 +43,21 @@ External services (called over network at runtime, not linked)
 - Docling-Serve         (MIT)       https://github.com/docling-project/docling-serve
 - Kokoro-FastAPI        (Apache 2.0) https://github.com/remsky/Kokoro-FastAPI
   serves the Kokoro-82M TTS model (Apache 2.0, hexgrad/Kokoro-82M).
+
+================================================================================
+Data / rule lists
+================================================================================
+
+- backend/src/services/germanAbbreviations.ts contains German + English
+  abbreviation, unit, and symbol expansion rules inspired by
+  repodiac/german_transliterate (CC-BY 4.0,
+  https://github.com/repodiac/german_transliterate). Rules were
+  reimplemented in TypeScript and extended with PageMentor-specific
+  entries (Studienheft conventions, §§, Abb./Tab. formatting).
+
+  Per CC-BY 4.0: copyright 2020 repodiac, licensed under Creative
+  Commons Attribution 4.0 International. See
+  https://creativecommons.org/licenses/by/4.0/ for terms.
 - Kokoro-FastAPI-German (Apache 2.0) https://github.com/r1di/kokoro-fastapi-german
   optional second TTS sidecar exposing the German community voices
   df_eva + dm_bernd. Built on Tundragoon/Kokoro-German v1.1
