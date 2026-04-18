@@ -80,7 +80,7 @@ export function DocumentOverview({
                   {module.icon} {module.name}
                 </span>
               )}
-              {doc.tags.map((tg) => (
+              {(doc.tags ?? []).map((tg) => (
                 <span key={tg} className="tag text-[10px]">
                   #{tg}
                 </span>

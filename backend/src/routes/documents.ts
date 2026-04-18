@@ -76,11 +76,25 @@ documentRoutes.get("/tags/all", (c) => {
   return c.json(rows);
 });
 
-// Get single document
+// Get single document (mit Tags, damit die Shape zur List-Query passt).
 documentRoutes.get("/:id", (c) => {
-  const row = db().prepare("SELECT * FROM documents WHERE id = ?").get(c.req.param("id"));
+  const id = c.req.param("id");
+  const row = db()
+    .prepare(
+      `SELECT d.*, GROUP_CONCAT(DISTINCT t.label) as tag_labels
+       FROM documents d
+       LEFT JOIN document_tags dt ON dt.document_id = d.id
+       LEFT JOIN tags t ON t.id = dt.tag_id
+       WHERE d.id = ?
+       GROUP BY d.id`
+    )
+    .get(id) as any;
   if (!row) return c.json({ error: tt(c, "err.docNotFound") }, 404);
-  return c.json(row);
+  return c.json({
+    ...row,
+    tags: row.tag_labels ? String(row.tag_labels).split(",") : [],
+    tag_labels: undefined,
+  });
 });
 
 // Stream the original PDF file with HTTP Range support (for the in-browser viewer).
