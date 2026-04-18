@@ -20,7 +20,13 @@ interface Chapter {
   start_page: number;
   end_page: number;
   sort_order: number;
+  kind?: string;
 }
+
+/** Welche Kapitel-Arten ins Hörbuch gehören. Übungen, Verzeichnisse,
+ *  Lösungen und Front-Matter werden übersprungen — niemand will sich
+ *  ein Glossar vorlesen lassen. */
+const AUDIO_KINDS = new Set(["content", "summary"]);
 
 interface Document {
   id: string;
@@ -69,16 +75,23 @@ export async function generateAudiobook(params: {
     throw new Error("Document not found");
   }
 
-  const chapters = d
+  const allChapters = d
     .prepare(
-      "SELECT id, document_id, number, title, text, start_page, end_page, sort_order FROM chapters WHERE document_id = ? ORDER BY sort_order ASC, number ASC"
+      "SELECT id, document_id, number, title, text, start_page, end_page, sort_order, kind FROM chapters WHERE document_id = ? ORDER BY sort_order ASC, number ASC"
     )
     .all(doc.id) as Chapter[];
 
-  if (chapters.length === 0) {
+  if (allChapters.length === 0) {
     running.delete(params.docId);
     throw new Error("No chapters - run chapter detection first.");
   }
+
+  // Vorfilter: Übungen, Verzeichnisse, Lösungen, Front-Matter raus.
+  // Falls ein Dokument ausschließlich aus nicht-content-Kapiteln
+  // besteht (sollte nicht passieren), fallen wir auf alle Kapitel
+  // zurück damit überhaupt was generiert wird.
+  const filtered = allChapters.filter((ch) => AUDIO_KINDS.has(ch.kind ?? "content"));
+  const chapters = filtered.length > 0 ? filtered : allChapters;
 
   const voiceId = params.voiceId || defaultVoiceFor(doc.language);
   if (!voiceId) {

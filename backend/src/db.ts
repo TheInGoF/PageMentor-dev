@@ -151,6 +151,14 @@ export function initDb() {
     d.exec("ALTER TABLE summaries ADD COLUMN generation_ms INTEGER NOT NULL DEFAULT 0");
   }
 
+  const chapterCols = d.prepare("PRAGMA table_info(chapters)").all() as Array<{ name: string }>;
+  if (!chapterCols.some((c) => c.name === "kind")) {
+    // Art des Abschnitts — steuert welche Features ihn nutzen. Default
+    // "content" für alte Rows; neu extrahierte Docs kriegen die
+    // Klassifikation direkt aus dem Docling-Parser.
+    d.exec("ALTER TABLE chapters ADD COLUMN kind TEXT NOT NULL DEFAULT 'content'");
+  }
+
   // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
   // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
   // während einer Docling-Extraktion — Task-ID war nur in-memory, ist

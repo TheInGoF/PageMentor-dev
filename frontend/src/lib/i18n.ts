@@ -202,6 +202,16 @@ const en: Record<string, string> = {
 
   // Chapters
   "chapters.title": "Chapters",
+  "chapters.kind.content": "content",
+  "chapters.kind.example": "example",
+  "chapters.kind.exercise": "exercise",
+  "chapters.kind.summary": "summary",
+  "chapters.kind.self_check": "self-check",
+  "chapters.kind.solutions": "solutions",
+  "chapters.kind.index": "index",
+  "chapters.kind.references": "references",
+  "chapters.kind.meta": "meta",
+  "chapters.kind.other": "other",
   "chapters.empty": "No chapters detected yet.",
   "chapters.detect": "Re-detect chapters",
   "chapters.detectConfirm": "Re-detecting chapters will overwrite the current chapter structure. Continue?",
@@ -743,6 +753,16 @@ const de: Record<string, string> = {
 
   // Chapters
   "chapters.title": "Kapitel",
+  "chapters.kind.content": "Inhalt",
+  "chapters.kind.example": "Beispiel",
+  "chapters.kind.exercise": "Übung",
+  "chapters.kind.summary": "Zusammenfassung",
+  "chapters.kind.self_check": "Selbsttest",
+  "chapters.kind.solutions": "Lösungen",
+  "chapters.kind.index": "Verzeichnis",
+  "chapters.kind.references": "Quellen",
+  "chapters.kind.meta": "Front-Matter",
+  "chapters.kind.other": "sonstiges",
   "chapters.empty": "Noch keine Kapitel erkannt.",
   "chapters.detect": "Kapitel neu erkennen",
   "chapters.detectConfirm":

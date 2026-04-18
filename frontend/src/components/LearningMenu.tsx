@@ -430,16 +430,23 @@ function ChaptersTab({
                       </Button>
                     </form>
                   ) : (
-                    <h3
-                      className="font-medium text-neutral-100 truncate cursor-text hover:text-accent"
-                      onClick={() => {
-                        setEditing(ch.id);
-                        setEditTitle(ch.title || "");
-                      }}
-                      title={t("library.editHint")}
-                    >
-                      {ch.title || `${t("learn.tab.chapters")} ${ch.number}`}
-                    </h3>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <h3
+                        className="font-medium text-neutral-100 truncate cursor-text hover:text-accent"
+                        onClick={() => {
+                          setEditing(ch.id);
+                          setEditTitle(ch.title || "");
+                        }}
+                        title={t("library.editHint")}
+                      >
+                        {ch.title || `${t("learn.tab.chapters")} ${ch.number}`}
+                      </h3>
+                      {ch.kind && ch.kind !== "content" && (
+                        <span className="tag text-[10px] uppercase shrink-0 opacity-70">
+                          {t(`chapters.kind.${ch.kind}`)}
+                        </span>
+                      )}
+                    </div>
                   )}
                   <p className="text-xs text-neutral-500 mt-0.5">
                     {t("chapters.pages")} {ch.start_page}

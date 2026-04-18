@@ -97,7 +97,7 @@ export async function processDocument(docId: string): Promise<void> {
     const tx = d.transaction(() => {
       d.prepare("DELETE FROM chapters WHERE document_id = ?").run(docId);
       const insert = d.prepare(
-        "INSERT INTO chapters (id, document_id, number, title, start_page, end_page, text, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO chapters (id, document_id, number, title, start_page, end_page, text, sort_order, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       cleanedSections.forEach((ch, idx) => {
         insert.run(
@@ -108,7 +108,8 @@ export async function processDocument(docId: string): Promise<void> {
           ch.startPage,
           ch.endPage,
           ch.text,
-          idx
+          idx,
+          ch.kind
         );
       });
     });

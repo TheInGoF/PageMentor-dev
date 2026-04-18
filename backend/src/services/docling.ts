@@ -24,12 +24,38 @@ const DOCLING_URL = process.env.PM_DOCLING_URL || "http://docling:5001";
 const DOCLING_API_KEY = process.env.PM_DOCLING_API_KEY || "";
 const POLL_INTERVAL_MS = 4000;
 
+/** Klassifikation eines erkannten Abschnitts. Steuert welche Features
+ *  den Abschnitt verwenden:
+ *    - content:       echter Lerntext — geht ins Hörbuch, Karten, Zsf.
+ *    - example:       Beispiele — gehen in Karten, NICHT ins Hörbuch
+ *    - exercise:      Übungen/Aufgaben — Klausur-Pool, nicht ins Hörbuch
+ *    - summary:       Zusammenfassung am Kapitelende — gutes Hörbuch-Material
+ *    - self_check:    Aufgaben zur Selbstüberprüfung
+ *    - solutions:     Lösungen der Übungen / der Selbstüberprüfung
+ *    - index:         TOC, Glossar, Sachwortverzeichnis, Abb./Tab.-Verz.
+ *    - references:    Literaturverzeichnis, Internet-Links
+ *    - meta:          Vorwort, Impressum, Einsendeaufgabe, Front Matter
+ *    - other:         unklare Klassifizierung — Default
+ */
+export type ChapterKind =
+  | "content"
+  | "example"
+  | "exercise"
+  | "summary"
+  | "self_check"
+  | "solutions"
+  | "index"
+  | "references"
+  | "meta"
+  | "other";
+
 export interface DoclingSection {
   number: number;        // 1-basiert
   title: string;
   startPage: number;
   endPage: number;
   text: string;          // Markdown-Absätze dieses Abschnitts
+  kind: ChapterKind;
 }
 
 export interface DoclingExtraction {
@@ -330,20 +356,82 @@ export async function extractPdfViaDocling(params: {
   return { markdown, pageCount, sections };
 }
 
-/** Wählt den Heading-Level, auf dem die Kapitel-Grenzen gesetzt werden.
- *  Nimmt den kleinsten Level, der mindestens 3× im Dokument auftaucht. */
-function pickChapterLevel(items: DoclingTextItem[]): number {
-  const counts = new Map<number, number>();
-  for (const it of items) {
-    if (it.label === "section_header" || it.label === "title") {
-      const lvl = typeof it.level === "number" && it.level > 0 ? it.level : 1;
-      counts.set(lvl, (counts.get(lvl) ?? 0) + 1);
-    }
+/** Erkennt eine nummerierte Kapitel-Überschrift ("1 Einleitung",
+ *  "1.1 Grundlagen", "2.3.4 Detail"). Liefert die Tiefe (Anzahl der
+ *  Komponenten), damit wir nur Top-Level-Kapitel als Grenzen nehmen. */
+function numberedHeadingDepth(title: string): number | null {
+  const m = /^\s*(\d+(?:\.\d+)*)\s+\S/.exec(title);
+  if (!m) return null;
+  return m[1].split(".").length;
+}
+
+/** Titel, die ein Studienheft auch ohne Nummerierung als eigenes
+ *  Kapitel zählen — und gleich ihre Klassifikation mitbringen. */
+const KNOWN_SECTION_TITLES: Array<{ pattern: RegExp; kind: ChapterKind }> = [
+  { pattern: /^vorwort$/i, kind: "meta" },
+  { pattern: /^einleitung$/i, kind: "meta" },
+  { pattern: /^inhaltsverzeichnis$/i, kind: "index" },
+  { pattern: /^(abbildungs|tabellen|sachwort|stichwort)verzeichnis$/i, kind: "index" },
+  { pattern: /^glossar$/i, kind: "index" },
+  { pattern: /^(literaturverzeichnis|literatur|bibliografie|quellen)$/i, kind: "references" },
+  { pattern: /^(verwendete|empfohlene)\s+literatur$/i, kind: "references" },
+  { pattern: /^internet[\s-]?links$/i, kind: "references" },
+  { pattern: /^zusammenfassung$/i, kind: "summary" },
+  { pattern: /^aufgaben\s+zur\s+selbst(überprüfung|kontrolle)$/i, kind: "self_check" },
+  { pattern: /^lösungen\s+der\s+übungen/i, kind: "solutions" },
+  { pattern: /^lösungen\s+der\s+aufgaben/i, kind: "solutions" },
+  { pattern: /^einsendeaufgabe/i, kind: "self_check" },
+  // Generische Verzeichnisse — kurze Titel mit "Verzeichnis" am Ende.
+  { pattern: /\bverzeichnis$/i, kind: "index" },
+];
+
+/** Mustertest, ob ein Heading INLINE-Kram ist (Beispiel, Übung, Tab.,
+ *  Abb.) — also in den aktuellen Abschnitt eingehen soll, nicht ein
+ *  eigener Abschnitt sein. */
+function isInlineMarker(title: string): boolean {
+  return /^(beispiel|übung|aufgabe|tab\.|tabelle|abb\.|abbildung|fig\.|figure|tab|merksatz|hinweis|tipp)\s*\d/i.test(
+    title.trim()
+  );
+}
+
+/** Klassifiziert einen Abschnitt anhand seines Titels. */
+function classifyKind(title: string, numberedDepth: number | null): ChapterKind {
+  const t = title.trim();
+  for (const { pattern, kind } of KNOWN_SECTION_TITLES) {
+    if (pattern.test(t)) return kind;
   }
-  const candidates = [...counts.entries()]
-    .filter(([, n]) => n >= 3)
-    .sort(([a], [b]) => a - b);
-  return candidates[0]?.[0] ?? 1;
+  // Nummerierte Kapitel sind standardmäßig Lerninhalte.
+  if (numberedDepth != null) return "content";
+  return "other";
+}
+
+/** Wählt den Chapter-Boundary-Heuristik-Modus anhand der vorhandenen
+ *  Heading-Struktur. Bevorzugt: nummerierte Top-Level-Überschriften
+ *  (depth=1), weil das in Studienheften die echten Kapitel sind.
+ *  Fallback: Heading-Level aus Docling.
+ */
+function analyzeHeadings(items: DoclingTextItem[]): {
+  useNumbered: boolean;
+  numberedDepthCutoff: number;   // nur relevant wenn useNumbered
+  fallbackLevel: number;
+} {
+  let numberedDepth1 = 0;
+  const levelCounts = new Map<number, number>();
+  for (const it of items) {
+    if (it.label !== "section_header" && it.label !== "title") continue;
+    const title = (it.text ?? "").trim();
+    if (!title || isInlineMarker(title)) continue;
+    const depth = numberedHeadingDepth(title);
+    if (depth === 1) numberedDepth1++;
+    const lvl = typeof it.level === "number" && it.level > 0 ? it.level : 1;
+    levelCounts.set(lvl, (levelCounts.get(lvl) ?? 0) + 1);
+  }
+  const useNumbered = numberedDepth1 >= 3;
+  const fallbackLevel =
+    [...levelCounts.entries()]
+      .filter(([, n]) => n >= 3)
+      .sort(([a], [b]) => a - b)[0]?.[0] ?? 1;
+  return { useNumbered, numberedDepthCutoff: 1, fallbackLevel };
 }
 
 function buildSections(
@@ -360,47 +448,83 @@ function buildSections(
         startPage: 1,
         endPage: Math.max(1, pageCount),
         text: fullMarkdown,
+        kind: "content",
       },
     ];
   }
 
-  const chapterLevel = pickChapterLevel(items);
+  const heur = analyzeHeadings(items);
   const sections: Array<{
     title: string;
     startPage: number;
     endPage: number;
     parts: string[];
+    kind: ChapterKind;
   }> = [];
   let cur: (typeof sections)[number] | null = null;
 
+  /** Entscheidet, ob ein Item einen neuen Kapitel-Start triggert. */
+  const isChapterBoundary = (item: DoclingTextItem): boolean => {
+    if (item.label !== "section_header" && item.label !== "title") return false;
+    const title = (item.text ?? "").trim();
+    if (!title) return false;
+    // Inline-Marker (Beispiel/Übung/Tab.) niemals als eigenes Kapitel.
+    if (isInlineMarker(title)) return false;
+
+    // Bekannte Sonder-Titel (Glossar, Literatur, Zusammenfassung…)
+    // zählen immer als Kapitel-Grenze.
+    if (KNOWN_SECTION_TITLES.some((k) => k.pattern.test(title))) return true;
+
+    if (heur.useNumbered) {
+      // Nur nummerierte Top-Level-Überschriften ("1 ", "2 ", …).
+      const depth = numberedHeadingDepth(title);
+      return depth !== null && depth <= heur.numberedDepthCutoff;
+    }
+
+    // Fallback: Docling-Level ≤ gewähltem Cutoff.
+    const lvl = typeof item.level === "number" && item.level > 0 ? item.level : 1;
+    return lvl <= heur.fallbackLevel;
+  };
+
   for (const item of items) {
     const page = item.prov?.[0]?.page_no;
-    const isHeader =
-      (item.label === "section_header" || item.label === "title") &&
-      (typeof item.level === "number" ? item.level : 1) <= chapterLevel;
 
-    if (isHeader) {
+    if (isChapterBoundary(item)) {
       if (cur) sections.push(cur);
+      const title = (item.text ?? "").trim();
+      const numberedDepth = numberedHeadingDepth(title);
       cur = {
-        title: (item.text ?? "").trim(),
+        title,
         startPage: page ?? (sections.at(-1)?.endPage ?? 1),
         endPage: page ?? (sections.at(-1)?.endPage ?? 1),
         parts: [],
+        kind: classifyKind(title, numberedDepth),
       };
       continue;
     }
 
-    if (!cur) continue; // vor dem ersten Header → verworfen (Titelseite, TOC)
+    if (!cur) continue; // vor dem ersten Kapitel-Start → Titelseite, droppen
 
-    // Absätze / Sections / Listenpunkte / Captions werden von Docling
-    // bereits mit Rollen versehen — Captions, Footer, Header, Page-
-    // Numbers droppen wir, alles andere geht in den Kapiteltext.
     const label = item.label ?? "text";
     if (["page_footer", "page_header", "page_number", "caption", "furniture"].includes(label)) {
       continue;
     }
     const text = (item.text ?? "").trim();
-    if (text) cur.parts.push(text);
+    if (!text) continue;
+
+    // Inline-Marker (Beispiel 1.2:, Übung 3.4:) als kursiven Markdown-
+    // Block in den Kapiteltext einbetten — verloren geht nichts, aber
+    // die werden keine eigene Zeile im Kapitel-Panel.
+    if (item.label === "section_header" || item.label === "title") {
+      if (isInlineMarker(text)) {
+        cur.parts.push(`**${text}**`);
+      } else {
+        // Sub-Überschrift innerhalb eines Kapitels — als ## drunter.
+        cur.parts.push(`\n## ${text}\n`);
+      }
+    } else {
+      cur.parts.push(text);
+    }
     if (page && page > cur.endPage) cur.endPage = page;
   }
   if (cur) sections.push(cur);
@@ -413,6 +537,7 @@ function buildSections(
         startPage: 1,
         endPage: Math.max(1, pageCount),
         text: fullMarkdown,
+        kind: "content",
       },
     ];
   }
@@ -423,5 +548,6 @@ function buildSections(
     startPage: s.startPage,
     endPage: Math.max(s.startPage, s.endPage),
     text: s.parts.join("\n\n"),
+    kind: s.kind,
   }));
 }

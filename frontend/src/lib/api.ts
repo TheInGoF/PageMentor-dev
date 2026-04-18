@@ -23,6 +23,18 @@ export interface Document {
   summary_count?: number;
 }
 
+export type ChapterKind =
+  | "content"
+  | "example"
+  | "exercise"
+  | "summary"
+  | "self_check"
+  | "solutions"
+  | "index"
+  | "references"
+  | "meta"
+  | "other";
+
 export interface Chapter {
   id: string;
   document_id: string;
@@ -33,6 +45,7 @@ export interface Chapter {
   text: string;
   sort_order: number;
   has_audio?: number;
+  kind?: ChapterKind;
 }
 
 export type TtsEngine = "edge";
