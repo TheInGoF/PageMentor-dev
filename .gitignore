@@ -5,6 +5,8 @@ data/
 *.db
 *.tsbuildinfo
 eigene_*
+.DS_Store
+**/.DS_Store
 
 # Tooling-only, not shipped
 CLAUDE.md

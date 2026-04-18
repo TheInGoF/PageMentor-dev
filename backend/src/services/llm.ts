@@ -133,11 +133,25 @@ async function ollamaTags(url: string): Promise<string[]> {
   }
 }
 
+/** Embedding-only-Modelle dürfen wir NICHT als Generation-Default
+ *  ziehen — Ollama wirft dann 400 "does not support generate". Match
+ *  ist string-basiert, weil Ollama-Tags keine task-Capability melden. */
+const EMBEDDING_MODEL_PATTERNS = [
+  /(^|[\/_-])embed/i,        // nomic-embed-text, mxbai-embed-large, …
+  /(^|[\/_-])minilm/i,       // all-minilm
+  /^bge[-_]/i,               // bge-* family
+];
+
+function isEmbeddingModel(name: string): boolean {
+  return EMBEDDING_MODEL_PATTERNS.some((re) => re.test(name));
+}
+
 /**
  * Resolve the model name for an Ollama call:
  *  - if a specific name is requested and the server has it, use it
- *  - else pick the first available model on that server
- *  - else fall back to the requested name and let Ollama surface the error
+ *  - else pick the first available NON-EMBEDDING model on that server
+ *  - else fall back to a sensible generation default and let Ollama
+ *    surface the error if it isn't pulled
  */
 async function resolveOllamaModel(
   url: string,
@@ -145,7 +159,8 @@ async function resolveOllamaModel(
 ): Promise<string> {
   const available = await ollamaTags(url);
   if (requested && available.includes(requested)) return requested;
-  if (available.length > 0) return available[0];
+  const generative = available.filter((n) => !isEmbeddingModel(n));
+  if (generative.length > 0) return generative[0];
   return requested || "llama3.2:3b";
 }
 
@@ -207,7 +222,12 @@ export async function listModels(): Promise<string[]> {
       });
       if (!res.ok) return [];
       const data = (await res.json()) as { models?: Array<{ name: string }> };
-      return (data.models ?? []).map((m) => m.name);
+      // Embedding-Modelle ausfiltern — die kann der User in der LLM-
+      // Modell-Auswahl (Summaries, Cards, Audio-Preprocess) nicht
+      // sinnvoll nutzen, sonst kommt 400 "does not support generate".
+      return (data.models ?? [])
+        .map((m) => m.name)
+        .filter((n) => !isEmbeddingModel(n));
     } catch {
       return [];
     }
