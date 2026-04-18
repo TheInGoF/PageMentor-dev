@@ -168,6 +168,7 @@ const en: Record<string, string> = {
   "overview.summaries.count": "summaries",
   "overview.exam.sessions": "exam sessions",
   "overview.exam.best": "best score {score}%",
+  "overview.extraction.elapsed": "elapsed {time}",
 
   // Pipeline steps (dashboard dots)
   "pipe.text": "Text",
@@ -708,6 +709,7 @@ const de: Record<string, string> = {
   "overview.summaries.count": "Zusammenfassungen",
   "overview.exam.sessions": "Klausur-Sessions",
   "overview.exam.best": "bestes Ergebnis {score}%",
+  "overview.extraction.elapsed": "Laufzeit {time}",
 
   // Pipeline steps
   "pipe.text": "Text",

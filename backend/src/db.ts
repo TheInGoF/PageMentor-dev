@@ -144,5 +144,21 @@ export function initDb() {
     d.exec("ALTER TABLE summaries ADD COLUMN generation_ms INTEGER NOT NULL DEFAULT 0");
   }
 
+  // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
+  // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
+  // während einer Docling-Extraktion — Task-ID war nur in-memory, ist
+  // verloren). Auf `failed` setzen, damit der User per Retry neu
+  // starten kann.
+  const stuck = d
+    .prepare(
+      "UPDATE documents SET ocr_status = 'failed' WHERE ocr_status IN ('running', 'pending')"
+    )
+    .run();
+  if (stuck.changes > 0) {
+    console.log(
+      `[db] reset ${stuck.changes} stuck extraction(s) to 'failed' on startup`
+    );
+  }
+
   console.log("Database ready:", DB_PATH);
 }
