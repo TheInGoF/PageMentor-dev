@@ -4,7 +4,6 @@
 #   /volume1/docker/pagementor/data
 #   /volume1/docker/pagementor/meili
 #   /volume1/docker/pagementor/docling-cache
-#   /volume1/docker/pagementor/kokoro-cache
 #
 # (Der Docling-Container läuft als root — Red Hat UBI startet sonst als
 # UID 1001, was mit Synology-Bind-Mounts Permission-Probleme macht. Die
@@ -102,11 +101,16 @@ services:
   # (~82 M Parameter), läuft auf CPU mit ~3-5x Realtime auf modernen
   # x86-Cores; auf GPU (siehe docker-compose.gpu.yml) ~30-50x.
   #
-  # Default-Image enthält das Basis-Modell aber KEINE zusätzlichen
-  # Voice-Packs. Beim ersten Start lädt der Sidecar die benötigten
-  # Voice-Embeddings (~1 MB pro Stimme) bei der ersten Synthese-
-  # Anfrage von HuggingFace nach und legt sie im Volume ab — danach
-  # offline-tauglich.
+  # Image bringt das Modell + alle Standard-Voice-Packs (~500 MB) mit
+  # — wird einmal beim `docker compose pull` gezogen, danach offline-
+  # tauglich. KEIN Bind-Mount auf /app/api/src/voices: das würde die
+  # vom Image gelieferten Voices mit einem leeren Host-Verzeichnis
+  # überdecken, der Sidecar startet dann nicht (af_heart.pt fehlt).
+  #
+  # Wer eigene Community-Voices nachladen will: separaten Mount auf
+  # ein zweites Verzeichnis legen und in der Kokoro-Settings-API
+  # ergänzen — die Standard-Voices bleiben im Image-Layer wo sie
+  # hingehören.
   #
   # API: OpenAI-kompatibel unter /v1/audio/speech, Voice-Discovery
   # unter /v1/audio/voices.
@@ -114,9 +118,3 @@ services:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
     container_name: pm-kokoro
     restart: unless-stopped
-    environment:
-      # Voice-Cache-Verzeichnis (passend zum Volume-Mount unten).
-      MODELS_DIR: /app/api/src/models
-      VOICES_DIR: /app/api/src/voices
-    volumes:
-      - /volume1/docker/pagementor/kokoro-cache:/app/api/src/voices
