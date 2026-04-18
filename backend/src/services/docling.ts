@@ -286,18 +286,35 @@ export async function extractPdfViaDocling(params: {
   // Bevorzugt WebSocket (Push-basiert, keine Poll-Log-Flut). Fällt
   // automatisch auf Polling zurück falls die WS-Verbindung nicht
   // zustande kommt (älteres docling-serve, Proxy blockt, o. ä.).
+  //
+  // docling-serve sendet während der Verarbeitung praktisch keine
+  // Status-Updates — der State bleibt minutenlang "started". Damit
+  // der User im App-Log sieht dass die Pipeline noch lebt, geben
+  // wir alle 30 s einen Heartbeat raus, auch wenn der State sich
+  // nicht ändert.
+  const HEARTBEAT_MS = 30_000;
+  const startedAt = Date.now();
   let lastLoggedState = "";
+  let lastHeartbeatAt = Date.now();
   const reportStatus = (status: PollResponse) => {
     const state = status.task_status?.toLowerCase() ?? "unknown";
-    if (state !== lastLoggedState) {
+    const now = Date.now();
+    const stateChanged = state !== lastLoggedState;
+    const heartbeatDue =
+      !stateChanged && now - lastHeartbeatAt >= HEARTBEAT_MS;
+
+    if (stateChanged || heartbeatDue) {
       const extras: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(status)) {
         if (k !== "task_status") extras[k] = v;
       }
+      const elapsedSec = Math.round((now - startedAt) / 1000);
+      const tag = heartbeatDue ? "alive" : state;
       console.log(
-        `[docling] task=${task_id.slice(0, 8)} state=${state} ${JSON.stringify(extras)}`
+        `[docling] task=${task_id.slice(0, 8)} state=${state} ${tag === "alive" ? `(${elapsedSec}s elapsed) ` : ""}${JSON.stringify(extras)}`
       );
       lastLoggedState = state;
+      lastHeartbeatAt = now;
     }
 
     const meta = (status.task_meta ?? {}) as Record<string, unknown>;
