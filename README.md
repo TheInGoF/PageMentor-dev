@@ -193,8 +193,10 @@ configured" hint and the rest of the app keeps working.
   [Kokoro-FastAPI-German](https://github.com/r1di/kokoro-fastapi-german)
   exposing `df_eva` + `dm_bernd` from
   [Tundragoon/Kokoro-German](https://huggingface.co/Tundragoon/Kokoro-German).
-  Enable with `--profile de` or run as external sidecar on a stronger
-  host (Mac, Windows + GPU).
+  The Tundragoon model repo is HuggingFace-gated, so the image needs
+  to be built locally with a HF token — see [scripts/build-kokoro-de.sh](scripts/build-kokoro-de.sh).
+  Once built, enable with `--profile de` or run as external sidecar on
+  a stronger host (Mac, Windows + GPU).
 - **TTS (fallback):** Microsoft Azure Neural voices via
   [msedge-tts](https://www.npmjs.com/package/msedge-tts)
 - **Text extraction:** [Docling-Serve](https://github.com/docling-project/docling-serve) sidecar
