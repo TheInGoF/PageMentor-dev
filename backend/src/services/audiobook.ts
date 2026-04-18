@@ -214,27 +214,32 @@ export async function generateAudiobook(params: {
       }
     }
 
-    if (successfulChapterFiles.length > 0) {
-      emit({
-        phase: "audiobook.book.building",
-        docId: doc.id,
-        message: "Baue M4B mit Kapitelmarken …",
-      });
-      const bookPath = join(audioDir, "book.m4b");
-      try {
-        await buildM4B({
-          inputs: successfulChapterFiles,
-          chapters: chapterDurations,
-          output: bookPath,
-          title: doc.title,
-          coverPath: coverPathFor(doc.id),
+    // Wenn der Circuit-Breaker ausgelöst hat, überspringen wir M4B-Build
+    // und das Done-Event — der Failed-Event ist bereits raus, und ein
+    // Done-Event würde den Client-State ins Inkonsistente kippen.
+    if (!tripped) {
+      if (successfulChapterFiles.length > 0) {
+        emit({
+          phase: "audiobook.book.building",
+          docId: doc.id,
+          message: "Baue M4B mit Kapitelmarken …",
         });
-      } catch (err) {
-        console.error(`[tts] M4B build failed:`, err);
+        const bookPath = join(audioDir, "book.m4b");
+        try {
+          await buildM4B({
+            inputs: successfulChapterFiles,
+            chapters: chapterDurations,
+            output: bookPath,
+            title: doc.title,
+            coverPath: coverPathFor(doc.id),
+          });
+        } catch (err) {
+          console.error(`[tts] M4B build failed:`, err);
+        }
       }
-    }
 
-    emit({ phase: "audiobook.done", docId: doc.id, total: chapters.length });
+      emit({ phase: "audiobook.done", docId: doc.id, total: chapters.length });
+    }
   } catch (err) {
     if (err instanceof AudiobookCanceled) {
       emit({
@@ -296,6 +301,7 @@ async function synthesizeChapter(params: {
         rate,
         announce: announcement,
         outPath: chunkPath,
+        signal,
       });
       chunkFiles.push(chunkPath);
       params.onChunk(i + 1, segments.length);

@@ -35,6 +35,9 @@ export interface ChunkSynthesisParams {
   rate: string;
   announce?: string;
   outPath: string;
+  /** Optional AbortSignal — wenn der User mittendrin Cancel drückt,
+   *  bricht der Backoff-Sleep sofort ab statt 30 s abzuwarten. */
+  signal?: AbortSignal;
 }
 
 export class ChunkSynthesisFailure extends Error {
@@ -57,6 +60,9 @@ export async function synthesizeChunk(
 
   let lastErr: unknown = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (params.signal?.aborted) {
+      throw new ChunkSynthesisFailure(params.voice.id, new Error("canceled"));
+    }
     try {
       const result = await engine.synthesize({
         segment: params.segment,
@@ -79,7 +85,12 @@ export async function synthesizeChunk(
         const backoff = isEdgeEmpty
           ? EDGE_EMPTY_AUDIO_COOLDOWN_MS
           : 400 * Math.pow(2, attempt);
-        await sleep(backoff);
+        try {
+          await sleep(backoff, undefined, { signal: params.signal });
+        } catch {
+          // AbortError — Cancel während Backoff → raus ohne weitere Retries
+          throw new ChunkSynthesisFailure(params.voice.id, new Error("canceled"));
+        }
       }
     }
   }

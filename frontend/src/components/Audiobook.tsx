@@ -221,7 +221,15 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     [langVoices]
   );
 
-  const generating = state?.generating || progress?.phase.startsWith("audiobook.") === true;
+  // Terminal-Phasen dürfen `generating` NICHT mehr true halten — sonst
+  // bleibt der Generate-Button nach einem Fehlschlag disabled.
+  const progressIsTerminal =
+    progress?.phase === "audiobook.done" ||
+    progress?.phase === "audiobook.failed" ||
+    progress?.phase === "audiobook.canceled";
+  const progressIsInFlight =
+    progress?.phase.startsWith("audiobook.") === true && !progressIsTerminal;
+  const generating = (state?.generating ?? false) || progressIsInFlight;
   const phaseMessage = progress ? describePhase(progress) : null;
 
   // Tick 1× pro Sekunde, damit Laufzeit + Restzeit sichtbar weiterzählen
