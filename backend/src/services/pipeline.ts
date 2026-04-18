@@ -1,11 +1,18 @@
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { mkdirSync, writeFileSync } from "fs";
 import { db } from "../db";
 import { extractPdfViaDocling, doclingAlive } from "./docling";
 import { cleanForReading } from "./clean";
 import { emit } from "./events";
 import { indexDocument, indexChapters } from "./search";
 import { renderCover } from "./ocr";
+import { chunkChapters, type Chunk } from "./chunker";
+import {
+  resolveEmbedder,
+  embedText,
+  embeddingToBuffer,
+} from "./embeddings";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
@@ -119,6 +126,24 @@ export async function processDocument(docId: string): Promise<void> {
       "UPDATE documents SET ocr_status = 'done', extraction_started_at = NULL WHERE id = ?"
     ).run(docId);
 
+    // Artefakt-Dump: komplettes Markdown + DoclingDocument-JSON auf Disk,
+    // damit man bei Bedarf reinschauen kann und spätere RAG-/Layout-
+    // Features direkt darauf arbeiten können.
+    try {
+      writeDoclingArtifacts(docId, extraction.markdown, extraction.docJson);
+    } catch (err) {
+      console.warn("[pipeline] artifact dump failed:", err);
+    }
+
+    // Chunking + DB-Insert + Embedding. Embedding-Fehler blockieren den
+    // Extraktions-Abschluss nicht — Chunks stehen dann ohne Vektoren da
+    // und können später nachembedded werden wenn Ollama wieder online ist.
+    try {
+      await buildChunksForDocument(docId);
+    } catch (err) {
+      console.warn("[pipeline] chunking failed:", err);
+    }
+
     // Fire-and-forget: Meilisearch-Indexierung.
     try {
       const fullDoc = d
@@ -188,4 +213,132 @@ export async function processDocument(docId: string): Promise<void> {
   } finally {
     running.delete(docId);
   }
+}
+
+/** Schreibt das rohe Markdown + die DoclingDocument-JSON in das
+ *  Upload-Verzeichnis des Dokuments. Nur für Debug/Inspection +
+ *  zukünftige Re-Processing-Szenarien — wird nicht weiterverwendet. */
+function writeDoclingArtifacts(
+  docId: string,
+  markdown: string,
+  docJson: unknown | null
+): void {
+  const uploadDir = join(DATA_DIR, "uploads", docId);
+  const dir = join(uploadDir, "docling");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "full.md"), markdown);
+  if (docJson) {
+    writeFileSync(join(dir, "document.json"), JSON.stringify(docJson, null, 2));
+  }
+}
+
+/** Chunked die aktuellen Kapitel eines Dokuments, schreibt sie als
+ *  JSON-Files auf Disk, persistiert sie in der chunks-Tabelle und
+ *  generiert (best-effort) Embeddings via Ollama. */
+async function buildChunksForDocument(docId: string): Promise<void> {
+  const d = db();
+  const chapters = d
+    .prepare(
+      "SELECT id, number, title, text, start_page, end_page, kind FROM chapters WHERE document_id = ? ORDER BY sort_order ASC, number ASC"
+    )
+    .all(docId) as Array<{
+      id: string;
+      number: number;
+      title: string;
+      text: string;
+      start_page: number;
+      end_page: number;
+      kind: string;
+    }>;
+
+  if (chapters.length === 0) return;
+
+  const chunks = chunkChapters(
+    chapters.map((c) => ({
+      id: c.id,
+      number: c.number,
+      title: c.title,
+      text: c.text,
+      start_page: c.start_page,
+      end_page: c.end_page,
+      kind: c.kind,
+    })),
+    { targetTokens: 800, overlapTokens: 100 }
+  );
+
+  const chunksDir = join(DATA_DIR, "uploads", docId, "docling", "chunks");
+  mkdirSync(chunksDir, { recursive: true });
+
+  // DB: vorhandene Chunks für das Dokument wegräumen, dann neu einfügen.
+  const insertChunk = d.prepare(
+    `INSERT INTO chunks (id, document_id, chapter_id, chunk_index, text, start_page, end_page, embedding, embedding_model)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+  );
+  const tx = d.transaction((rows: Array<{ chunk: Chunk; id: string }>) => {
+    d.prepare("DELETE FROM chunks WHERE document_id = ?").run(docId);
+    for (const { chunk, id } of rows) {
+      insertChunk.run(
+        id,
+        docId,
+        chunk.chapter_id,
+        chunk.chunk_index,
+        chunk.text,
+        chunk.start_page,
+        chunk.end_page
+      );
+    }
+  });
+
+  const withIds = chunks.map((chunk) => ({ chunk, id: randomUUID() }));
+  tx(withIds);
+
+  // Chunks auf Disk — ein File pro Chunk, numerisch sortiert.
+  for (const { chunk, id } of withIds) {
+    const name = String(chunk.chunk_index).padStart(4, "0") + ".json";
+    const payload = {
+      id,
+      doc_id: docId,
+      ...chunk,
+    };
+    writeFileSync(join(chunksDir, name), JSON.stringify(payload, null, 2));
+  }
+
+  console.log(
+    `[pipeline] ${docId}: ${chunks.length} chunks written to disk + DB`
+  );
+
+  // Embeddings — best-effort. Ollama kann offline sein, Modell nicht
+  // installiert, etc. In beiden Fällen bleiben die Chunks als Text in
+  // der DB stehen, nur ohne Vektoren; der RAG-Query fällt dann zurück
+  // auf Text-only.
+  const embedder = await resolveEmbedder();
+  if (!embedder) {
+    console.log(
+      `[pipeline] ${docId}: kein Ollama für Embeddings erreichbar — Chunks ohne Vektoren.`
+    );
+    return;
+  }
+
+  let okCount = 0;
+  let failCount = 0;
+  const updateEmbedding = d.prepare(
+    "UPDATE chunks SET embedding = ?, embedding_model = ? WHERE id = ?"
+  );
+  for (const { chunk, id } of withIds) {
+    try {
+      const emb = await embedText(chunk.text, embedder);
+      updateEmbedding.run(embeddingToBuffer(emb), embedder.model, id);
+      okCount++;
+    } catch (err) {
+      failCount++;
+      if (failCount === 1) {
+        console.warn(
+          `[pipeline] ${docId}: erstes Embedding fehlgeschlagen — ${(err as Error).message}`
+        );
+      }
+    }
+  }
+  console.log(
+    `[pipeline] ${docId}: ${okCount}/${withIds.length} Chunks embedded (${embedder.model})`
+  );
 }

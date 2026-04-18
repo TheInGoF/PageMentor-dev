@@ -159,6 +159,27 @@ export function initDb() {
     d.exec("ALTER TABLE chapters ADD COLUMN kind TEXT NOT NULL DEFAULT 'content'");
   }
 
+  // chunks-Tabelle für RAG. Pro Chunk ca. 800 Tokens Text + ein 768-
+  // float32-Embedding (3 KB) von nomic-embed-text. Brute-Force-Cosine
+  // über alle Chunks eines Dokuments ist in < 100 ms machbar bis in
+  // die Zehntausender — wir brauchen keine Vector-DB solange.
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS chunks (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
+      chunk_index INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      start_page INTEGER NOT NULL DEFAULT 0,
+      end_page INTEGER NOT NULL DEFAULT 0,
+      embedding BLOB,
+      embedding_model TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);
+    CREATE INDEX IF NOT EXISTS idx_chunks_chapter ON chunks(chapter_id);
+  `);
+
   // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
   // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
   // während einer Docling-Extraktion — Task-ID war nur in-memory, ist

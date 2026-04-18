@@ -162,6 +162,8 @@ const en: Record<string, string> = {
   "overview.extraction.done":
     "Docling finished parsing the PDF. Chapters, audiobook, flashcards and summaries are ready.",
   "overview.extraction.rerun": "Re-run Docling",
+  "overview.extraction.rerunConfirm":
+    "Really re-run Docling? This will overwrite the existing extraction and may invalidate chapters, audio, flashcards and summaries that depend on it.",
   "overview.chapters.count": "detected chapters",
   "overview.audio.doneLabel": "chapters narrated",
   "overview.cards.count": "flashcards",
@@ -713,6 +715,8 @@ const de: Record<string, string> = {
   "overview.extraction.done":
     "Docling hat die PDF analysiert. Kapitel, Hörbuch, Karten und Zusammenfassungen sind verfügbar.",
   "overview.extraction.rerun": "Docling erneut laufen lassen",
+  "overview.extraction.rerunConfirm":
+    "Docling wirklich erneut laufen lassen? Die bestehende Extraktion wird überschrieben – Kapitel, Hörbuch, Karten und Zusammenfassungen können dadurch ungültig werden.",
   "overview.chapters.count": "erkannte Kapitel",
   "overview.audio.doneLabel": "Kapitel vertont",
   "overview.cards.count": "Lernkarten",

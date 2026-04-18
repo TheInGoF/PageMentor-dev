@@ -309,17 +309,24 @@ function ExtractionCard({
           <Button variant="danger" onClick={onCancel} className="!py-1 !px-3 text-xs">
             {t("extract.cancel")}
           </Button>
+        ) : ready ? (
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm(t("overview.extraction.rerunConfirm"))) onStart();
+            }}
+            disabled={busy}
+            className="text-[11px] text-neutral-500 hover:text-neutral-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {t("overview.extraction.rerun")}
+          </button>
         ) : (
           <Button
             onClick={onStart}
             disabled={busy}
             className="!py-1 !px-3 text-xs"
           >
-            {ready
-              ? t("overview.extraction.rerun")
-              : status === "failed"
-              ? t("extract.retry")
-              : t("extract.start")}
+            {status === "failed" ? t("extract.retry") : t("extract.start")}
           </Button>
         )}
       </div>

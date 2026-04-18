@@ -62,6 +62,10 @@ export interface DoclingExtraction {
   markdown: string;
   pageCount: number;
   sections: DoclingSection[];
+  /** Rohe DoclingDocument-JSON — für Artefakt-Dump auf Disk und
+   *  spätere Weiterverarbeitung (Tabellen-Struktur, Bild-Bounding-
+   *  Boxes, …). Kann null sein wenn docling nichts geliefert hat. */
+  docJson: unknown | null;
 }
 
 interface DoclingTextItem {
@@ -353,7 +357,7 @@ export async function extractPdfViaDocling(params: {
   const pageCount = Object.keys(json.pages ?? {}).length || 0;
   const sections = buildSections(json, pageCount, markdown);
 
-  return { markdown, pageCount, sections };
+  return { markdown, pageCount, sections, docJson: result.document?.json_content ?? null };
 }
 
 /** Erkennt eine nummerierte Kapitel-Überschrift ("1 Einleitung",
