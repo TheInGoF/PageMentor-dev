@@ -3,11 +3,12 @@
 # Before first start, create the folders on the NAS (File Station or SSH):
 #   /volume1/docker/pagementor/data
 #   /volume1/docker/pagementor/meili
+#   /volume1/docker/pagementor/docling-cache
 #
-# (Docling model cache läuft in einem Docker-managed Named Volume, weil
-# das Container-Image als UID 1001 läuft und Synology-Bind-Mounts
-# Permission-Probleme machen. Das Volume landet bei Synology unter
-# /volume1/@docker/volumes/pagementor_docling-cache.)
+# (Der Docling-Container läuft als root — Red Hat UBI startet sonst als
+# UID 1001, was mit Synology-Bind-Mounts Permission-Probleme macht. Die
+# Modelle im docling-cache sind dadurch auf dem Host root-owned. Zum
+# Löschen via SSH: `sudo rm -rf /volume1/docker/pagementor/docling-cache`.)
 #
 # Then either:
 #   A) CLI:       docker compose up -d
@@ -61,9 +62,12 @@ services:
 
   # Docling als einzige Text-Extraktion. CPU-Image (keine GPU auf dem
   # DS920+). Erste Runs laden ~1-2 GB Modelle nach ~/.cache in den
-  # Container — das liegt auf einem Named Volume, damit sie nach
-  # Restart nicht neu gezogen werden. Docker verwaltet Permissions
-  # korrekt (UID 1001 der UBI-Base gehört Docker).
+  # Container — sichtbar auf der NAS unter docling-cache/, damit man
+  # den Plattenverbrauch sieht und bei Bedarf löschen kann.
+  #
+  # user: "0:0" damit der Container auch auf Synology-Bind-Mounts
+  # schreiben darf (UBI-Base läuft sonst als UID 1001, was mit NAS-
+  # Ownership kollidiert).
   #
   # CPU-Timing für ~100 Seiten auf J4125: 25-70 min. Darum ruft das
   # Backend ausschließlich den /v1/convert/file/async-Endpoint auf und
@@ -72,6 +76,7 @@ services:
     image: quay.io/docling-project/docling-serve-cpu:latest
     container_name: pm-docling
     restart: unless-stopped
+    user: "0:0"
     environment:
       UVICORN_PORT: "5001"
       DOCLING_SERVE_API_KEY: ${DOCLING_API_KEY:-pm-docling-internal}
@@ -84,7 +89,4 @@ services:
       DOCLING_DEVICE: cpu
       DOCLING_PERF_PAGE_BATCH_SIZE: "2"
     volumes:
-      - docling-cache:/opt/app-root/src/.cache
-
-volumes:
-  docling-cache:
+      - /volume1/docker/pagementor/docling-cache:/opt/app-root/src/.cache
