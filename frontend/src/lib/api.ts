@@ -401,6 +401,8 @@ export const api = {
       request<{ status: string }>(`/api/documents/${id}/reprocess`, { method: "POST" }),
     cancelExtract: (id: string) =>
       request<{ status: string }>(`/api/documents/${id}/extract/cancel`, { method: "POST" }),
+    doclingStatus: () =>
+      request<{ alive: boolean }>("/api/documents/docling/status"),
     tags: () => request<Array<{ label: string; usage: number }>>("/api/documents/tags/all"),
   },
   chapters: {

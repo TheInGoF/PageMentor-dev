@@ -39,6 +39,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [ollama, setOllama] = useState<OllamaStatus | null>(null);
   const [meiliEnabled, setMeiliEnabled] = useState<boolean | null>(null);
+  const [doclingAlive, setDoclingAlive] = useState<boolean | null>(null);
   const [llmConfig, setLlmConfig] = useState<LlmConfig>({});
   const [anthropicKeyInput, setAnthropicKeyInput] = useState("");
   const [openaiKeyInput, setOpenaiKeyInput] = useState("");
@@ -51,6 +52,7 @@ export function SettingsModal({ open, onClose }: Props) {
     setS(getSettings());
     api.audio.voices().then((r) => setVoices(r.voices)).catch(() => setVoices([]));
     api.search.status().then((r) => setMeiliEnabled(r.enabled)).catch(() => setMeiliEnabled(false));
+    api.documents.doclingStatus().then((r) => setDoclingAlive(r.alive)).catch(() => setDoclingAlive(false));
     api.llmConfig
       .get()
       .then((r) => {
@@ -382,6 +384,11 @@ export function SettingsModal({ open, onClose }: Props) {
               label="Ollama"
               ok={ollama?.available === true}
               waiting={ollama === null}
+            />
+            <StatusRow
+              label="Docling"
+              ok={doclingAlive === true}
+              waiting={doclingAlive === null}
             />
           </div>
         </section>

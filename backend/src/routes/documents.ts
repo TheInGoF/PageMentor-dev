@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { join } from "path";
 import { mkdirSync, writeFileSync, unlinkSync, existsSync, rmSync } from "fs";
 import { processDocument, cancelProcessing } from "../services/pipeline";
+import { doclingAlive } from "../services/docling";
 import { removeDocument as removeFromIndex } from "../services/search";
 import { tt } from "../lib/i18n";
 
@@ -60,6 +61,12 @@ documentRoutes.get("/", (c) => {
       summary_count: r.summary_count ?? 0,
     }))
   );
+});
+
+// Docling-Serve Health — für den Status-Panel in den Settings.
+documentRoutes.get("/docling/status", async (c) => {
+  const alive = await doclingAlive();
+  return c.json({ alive });
 });
 
 // List all known tag labels with usage-count — used for autocomplete.
