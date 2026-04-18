@@ -73,7 +73,7 @@ services:
   # Backend ausschließlich den /v1/convert/file/async-Endpoint auf und
   # polled den Status über die interne SSE-Bus-Progress-Pipeline.
   docling:
-    image: quay.io/docling-project/docling-serve-cpu:latest
+    image: quay.io/docling-project/docling-serve-cpu:v1.16.1
     container_name: pm-docling
     restart: unless-stopped
     user: "0:0"

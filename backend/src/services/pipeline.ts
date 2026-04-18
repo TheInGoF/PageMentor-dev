@@ -44,7 +44,9 @@ export async function processDocument(docId: string): Promise<void> {
     return;
   }
 
-  d.prepare("UPDATE documents SET ocr_status = 'running' WHERE id = ?").run(docId);
+  d.prepare(
+    "UPDATE documents SET ocr_status = 'running', extraction_started_at = ? WHERE id = ?"
+  ).run(Date.now(), docId);
   emit({ phase: "pipeline.start", docId });
 
   try {
@@ -112,7 +114,9 @@ export async function processDocument(docId: string): Promise<void> {
     });
     tx();
 
-    d.prepare("UPDATE documents SET ocr_status = 'done' WHERE id = ?").run(docId);
+    d.prepare(
+      "UPDATE documents SET ocr_status = 'done', extraction_started_at = NULL WHERE id = ?"
+    ).run(docId);
 
     // Fire-and-forget: Meilisearch-Indexierung.
     try {
@@ -172,7 +176,9 @@ export async function processDocument(docId: string): Promise<void> {
     );
   } catch (err) {
     console.error(`[pipeline] ${docId} failed:`, err);
-    d.prepare("UPDATE documents SET ocr_status = 'failed' WHERE id = ?").run(docId);
+    d.prepare(
+      "UPDATE documents SET ocr_status = 'failed', extraction_started_at = NULL WHERE id = ?"
+    ).run(docId);
     emit({
       phase: "pipeline.failed",
       docId,

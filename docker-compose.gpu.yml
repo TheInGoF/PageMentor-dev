@@ -1,0 +1,39 @@
+# GPU-Override für NVIDIA-Systeme.
+#
+# Voraussetzung auf dem Host:
+#   - NVIDIA-GPU (RTX 20xx / 30xx / 40xx)
+#   - NVIDIA-Treiber (>= 535)
+#   - nvidia-container-toolkit:
+#       https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+#     Kurz: `sudo apt install nvidia-container-toolkit` + daemon reload
+#
+# Deploy:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Das hier tauscht nur das docling-Image gegen die GPU-Variante und
+# hängt `deploy.resources.reservations.devices: nvidia` dran. Alle
+# anderen Services (app, meilisearch) bleiben unverändert.
+#
+# Erwartete Beschleunigung je nach GPU:
+#   - RTX 3060 12 GB:   ~10-20x (1 s pro Seite statt 15-30)
+#   - RTX 3090 24 GB:   ~15-30x (eine 100-Seiten-PDF in ~30 s)
+#   - RTX 4070 12 GB:   ~15-25x
+
+services:
+  docling:
+    image: quay.io/docling-project/docling-serve:v1.16.1
+    environment:
+      DOCLING_DEVICE: cuda
+      # Mehr Parallelität macht mit GPU Sinn — RAM ist jetzt VRAM-
+      # begrenzt, nicht mehr Host-RAM.
+      DOCLING_SERVE_ENG_LOC_NUM_WORKERS: "2"
+      DOCLING_PERF_PAGE_BATCH_SIZE: "4"
+      # NNPACK ist CPU-only, auf GPU-Systemen irrelevant — Variable
+      # bewusst unset lassen (Default bleibt aktiv aber harmlos).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

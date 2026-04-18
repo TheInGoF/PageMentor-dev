@@ -73,6 +73,118 @@ interface PollResponse {
   [key: string]: unknown;
 }
 
+/** Fallback-Polling wenn WS nicht geht. */
+async function pollUntilDone(
+  taskId: string,
+  signal: AbortSignal | undefined,
+  report: (s: PollResponse) => string
+): Promise<void> {
+  while (true) {
+    if (signal?.aborted) throw new Error("canceled");
+    try {
+      await sleep(POLL_INTERVAL_MS, undefined, { signal });
+    } catch {
+      throw new Error("canceled");
+    }
+    const res = await doclingFetch(`/v1/status/poll/${taskId}`);
+    if (!res.ok) throw new Error(`docling poll failed ${res.status}`);
+    const status = (await res.json()) as PollResponse;
+    const state = report(status);
+    if (state === "success") return;
+    if (state === "failure" || state === "error") {
+      throw new Error(`docling task ${taskId} failed: ${JSON.stringify(status)}`);
+    }
+  }
+}
+
+/** WS-Subscription. Docling pusht Status-Updates ohne 4s-Poll-Lag,
+ *  und wir füllen das Log nicht mit identischen „noch am laufen"-
+ *  Zeilen zu. Bei Verbindungsfehler wirft die Promise und der
+ *  Caller fällt auf Polling zurück. */
+async function subscribeViaWs(
+  taskId: string,
+  signal: AbortSignal | undefined,
+  report: (s: PollResponse) => string
+): Promise<void> {
+  const wsBase = DOCLING_URL.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://");
+  const authQuery = DOCLING_API_KEY ? `?api_key=${encodeURIComponent(DOCLING_API_KEY)}` : "";
+  const url = `${wsBase}/v1/status/ws/${taskId}${authQuery}`;
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
+    } catch (err) {
+      reject(err);
+      return;
+    }
+
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      try {
+        ws.close();
+      } catch {
+        /* best effort */
+      }
+      fn();
+    };
+
+    // Wenn die Verbindung nicht binnen 5 s steht, werfen wir.
+    const connectTimeout = setTimeout(() => {
+      finish(() => reject(new Error("WS connect timeout")));
+    }, 5000);
+
+    ws.addEventListener("open", () => {
+      clearTimeout(connectTimeout);
+    });
+
+    ws.addEventListener("message", (ev: MessageEvent) => {
+      let payload: { message?: string; task?: PollResponse; error?: string };
+      try {
+        payload = JSON.parse(typeof ev.data === "string" ? ev.data : String(ev.data));
+      } catch {
+        return;
+      }
+      if (payload.message === "error") {
+        finish(() =>
+          reject(new Error(`docling WS error: ${payload.error ?? "(no detail)"}`))
+        );
+        return;
+      }
+      const task = payload.task;
+      if (!task) return;
+      const state = report(task);
+      if (state === "success") {
+        finish(() => resolve());
+      } else if (state === "failure" || state === "error") {
+        finish(() =>
+          reject(new Error(`docling task ${taskId} failed: ${JSON.stringify(task)}`))
+        );
+      }
+    });
+
+    ws.addEventListener("error", (ev: Event) => {
+      clearTimeout(connectTimeout);
+      finish(() =>
+        reject(new Error(`WS error: ${(ev as unknown as { message?: string }).message ?? "unknown"}`))
+      );
+    });
+
+    ws.addEventListener("close", () => {
+      clearTimeout(connectTimeout);
+      // Wenn WS zu schließt ohne dass wir ein "success" gesehen haben,
+      // liefern wir das als Fehler — der Caller poll dann fallback.
+      finish(() => reject(new Error("WS closed before task completion")));
+    });
+
+    signal?.addEventListener("abort", () => {
+      finish(() => reject(new Error("canceled")));
+    });
+  });
+}
+
 function numOr(v: unknown): number | undefined {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string") {
@@ -140,69 +252,61 @@ export async function extractPdfViaDocling(params: {
   const { task_id } = (await uploadRes.json()) as AsyncTaskHandle;
   if (!task_id) throw new Error("docling upload missing task_id");
 
-  // ---- 2. Poll bis fertig -------------------------------------------
-  let lastMessage = "";
-  while (true) {
-    if (signal?.aborted) throw new Error("canceled");
-    try {
-      await sleep(POLL_INTERVAL_MS, undefined, { signal });
-    } catch {
-      throw new Error("canceled");
-    }
-
-    const pollRes = await doclingFetch(`/v1/status/poll/${task_id}`);
-    if (!pollRes.ok) {
-      throw new Error(`docling poll failed ${pollRes.status}`);
-    }
-    const status = (await pollRes.json()) as PollResponse;
+  // ---- 2. Auf Fertigstellung warten ---------------------------------
+  // Bevorzugt WebSocket (Push-basiert, keine Poll-Log-Flut). Fällt
+  // automatisch auf Polling zurück falls die WS-Verbindung nicht
+  // zustande kommt (älteres docling-serve, Proxy blockt, o. ä.).
+  let lastLoggedState = "";
+  const reportStatus = (status: PollResponse) => {
     const state = status.task_status?.toLowerCase() ?? "unknown";
-
-    // Diagnose: welche Felder liefert docling-serve eigentlich? Wenn
-    // processed_pages / total_pages / current_stage etc. im Response
-    // auftauchen, können wir die für einen echten Fortschritt nutzen.
-    const extras: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(status)) {
-      if (k !== "task_status") extras[k] = v;
-    }
-    console.log(
-      `[docling-poll] task=${task_id.slice(0, 8)} state=${state} ${JSON.stringify(extras)}`
-    );
-
-    if (state === "success") break;
-    if (state === "failure" || state === "error") {
-      throw new Error(`docling task ${task_id} failed: ${JSON.stringify(status)}`);
+    if (state !== lastLoggedState) {
+      const extras: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(status)) {
+        if (k !== "task_status") extras[k] = v;
+      }
+      console.log(
+        `[docling] task=${task_id.slice(0, 8)} state=${state} ${JSON.stringify(extras)}`
+      );
+      lastLoggedState = state;
     }
 
-    // Seite-basierten Fortschritt ableiten wenn docling liefert,
-    // sonst task_progress, sonst nichts.
     const meta = (status.task_meta ?? {}) as Record<string, unknown>;
-    const processedPages =
-      numOr(status.processed_pages) ??
+    const processed =
+      numOr((status as Record<string, unknown>).num_processed) ??
+      numOr(meta.num_processed) ??
       numOr(meta.processed_pages) ??
       numOr(meta.current_page);
-    const totalPages =
-      numOr(status.total_pages) ??
+    const total =
+      numOr((status as Record<string, unknown>).num_docs) ??
+      numOr(meta.num_docs) ??
       numOr(meta.total_pages) ??
       numOr(meta.page_count);
+
     let fraction: number | undefined;
-    if (processedPages != null && totalPages && totalPages > 0) {
-      fraction = Math.max(0, Math.min(1, processedPages / totalPages));
+    if (processed != null && total && total > 0) {
+      fraction = Math.max(0, Math.min(1, processed / total));
     } else if (typeof status.task_progress === "number") {
       fraction = status.task_progress;
     }
 
-    const msgBase = `Docling: ${state}`;
     const progressSuffix =
-      processedPages != null && totalPages
-        ? ` · Seite ${processedPages} / ${totalPages}`
+      processed != null && total
+        ? ` · ${processed} / ${total}`
         : fraction != null
         ? ` · ${Math.round(fraction * 100)}%`
         : "";
-    const msg = msgBase + progressSuffix;
-    if (msg !== lastMessage) {
-      onProgress?.(msg, fraction);
-      lastMessage = msg;
-    }
+    onProgress?.(`Docling: ${state}${progressSuffix}`, fraction);
+    return state;
+  };
+
+  try {
+    await subscribeViaWs(task_id, signal, reportStatus);
+  } catch (wsErr) {
+    // WS nicht verfügbar → Fallback aufs klassische Polling.
+    console.log(
+      `[docling] WS-Subscription nicht möglich (${(wsErr as Error).message}), falle auf Polling zurück`
+    );
+    await pollUntilDone(task_id, signal, reportStatus);
   }
 
   // ---- 3. Result abholen --------------------------------------------

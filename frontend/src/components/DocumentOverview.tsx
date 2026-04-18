@@ -256,7 +256,10 @@ function ExtractionCard({
       ? phase.current
       : null;
   const pct = fraction != null ? Math.round(fraction * 100) : null;
-  const elapsed = startedAt != null ? Date.now() - startedAt : 0;
+  // Für die Laufzeit zählt der DB-Wert (persistent über Seiten-Reloads),
+  // der SSE-gesetzte startedAt ist nur Fallback für den ersten Event.
+  const effectiveStart = doc.extraction_started_at ?? startedAt ?? null;
+  const elapsed = effectiveStart != null ? Date.now() - effectiveStart : 0;
 
   return (
     <div className="card p-5 flex flex-col gap-3 border-accent-subtle">

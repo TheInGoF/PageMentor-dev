@@ -138,6 +138,13 @@ export function initDb() {
   if (!cols.some((c) => c.name === "thumb_page")) {
     d.exec("ALTER TABLE documents ADD COLUMN thumb_page INTEGER NOT NULL DEFAULT 1");
   }
+  if (!cols.some((c) => c.name === "extraction_started_at")) {
+    // Epoch-ms. Wird beim Extraktionsstart gesetzt und beim Ende
+    // (done / failed) wieder auf NULL. Erlaubt es dem Frontend, nach
+    // einem Reload weiterhin die richtige Laufzeit anzuzeigen statt
+    // den Timer bei 0 neu zu starten.
+    d.exec("ALTER TABLE documents ADD COLUMN extraction_started_at INTEGER");
+  }
 
   const summaryCols = d.prepare("PRAGMA table_info(summaries)").all() as Array<{ name: string }>;
   if (!summaryCols.some((c) => c.name === "generation_ms")) {
@@ -147,11 +154,10 @@ export function initDb() {
   // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
   // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
   // während einer Docling-Extraktion — Task-ID war nur in-memory, ist
-  // verloren). Auf `failed` setzen, damit der User per Retry neu
-  // starten kann.
+  // verloren). Auf `failed` setzen + Start-Zeit-Spalte clearen.
   const stuck = d
     .prepare(
-      "UPDATE documents SET ocr_status = 'failed' WHERE ocr_status IN ('running', 'pending')"
+      "UPDATE documents SET ocr_status = 'failed', extraction_started_at = NULL WHERE ocr_status IN ('running', 'pending')"
     )
     .run();
   if (stuck.changes > 0) {

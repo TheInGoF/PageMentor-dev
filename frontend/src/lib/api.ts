@@ -9,6 +9,7 @@ export interface Document {
   size_bytes: number;
   page_count: number;
   ocr_status: "awaiting-extraction" | "pending" | "running" | "done" | "failed";
+  extraction_started_at?: number | null;
   language: string;
   type: DocType;
   created_at: string;
