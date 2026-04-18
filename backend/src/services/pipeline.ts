@@ -91,9 +91,27 @@ export async function processDocument(docId: string): Promise<void> {
 
     const fullText = cleanedSections.map((s) => s.text).join("\n\n");
 
-    d.prepare(
-      "UPDATE documents SET page_count = ?, ocr_text = ? WHERE id = ?"
-    ).run(extraction.pageCount, fullText.slice(0, 5_000_000), docId);
+    // Titel + Autor aus Docling-Metadaten persistieren. `title` (UI-
+    // sichtbar) überschreiben wir nur wenn der aktuelle Wert noch der
+    // automatisch-aus-Filename-abgeleitete ist — sobald der User in
+    // der UI editiert hat, lassen wir's stehen.
+    const docMetaTitle = extraction.metadata.title;
+    const docMetaAuthor = extraction.metadata.author;
+    if (docMetaTitle || docMetaAuthor) {
+      d.prepare(
+        "UPDATE documents SET page_count = ?, ocr_text = ?, doc_title = COALESCE(?, doc_title), author = COALESCE(?, author) WHERE id = ?"
+      ).run(
+        extraction.pageCount,
+        fullText.slice(0, 5_000_000),
+        docMetaTitle,
+        docMetaAuthor,
+        docId
+      );
+    } else {
+      d.prepare(
+        "UPDATE documents SET page_count = ?, ocr_text = ? WHERE id = ?"
+      ).run(extraction.pageCount, fullText.slice(0, 5_000_000), docId);
+    }
 
     emit({
       phase: "pipeline.chapters",
@@ -104,7 +122,7 @@ export async function processDocument(docId: string): Promise<void> {
     const tx = d.transaction(() => {
       d.prepare("DELETE FROM chapters WHERE document_id = ?").run(docId);
       const insert = d.prepare(
-        "INSERT INTO chapters (id, document_id, number, title, start_page, end_page, text, sort_order, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO chapters (id, document_id, number, title, start_page, end_page, text, sort_order, kind, include_in_audio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       cleanedSections.forEach((ch, idx) => {
         insert.run(
@@ -116,7 +134,11 @@ export async function processDocument(docId: string): Promise<void> {
           ch.endPage,
           ch.text,
           idx,
-          ch.kind
+          ch.kind,
+          // Default: content + summary kommen ins Hörbuch, alles andere
+          // (Beispiele, Übungen, Verzeichnisse, Lösungen, …) erstmal
+          // raus. User kann pro Kapitel einzeln umschalten.
+          ch.kind === "content" || ch.kind === "summary" ? 1 : 0
         );
       });
     });

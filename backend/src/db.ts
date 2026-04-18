@@ -167,6 +167,29 @@ export function initDb() {
     d.exec("ALTER TABLE chapters ADD COLUMN audio_text TEXT");
     d.exec("ALTER TABLE chapters ADD COLUMN audio_text_model TEXT");
   }
+  if (!chapterCols.some((c) => c.name === "include_in_audio")) {
+    // Pro-Kapitel-Toggle ob es ins Hörbuch geht. Default an für
+    // content/summary, aus für alle anderen kinds — wird beim
+    // Insert in pipeline.ts gesetzt. Bei alten Rows ohne Wert
+    // bekommt das die kind-basierte Default-Logik beim Lesen.
+    // 1 = include, 0 = exclude, NULL = use kind-default.
+    d.exec("ALTER TABLE chapters ADD COLUMN include_in_audio INTEGER");
+  }
+
+  const docCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!docCols.some((c) => c.name === "author")) {
+    // Aus Docling-Metadaten extrahiert (PDF-Metadata-Feld). Wenn
+    // die PDF keine Autor-Info hat, bleibt NULL — wir füllen das
+    // nicht heuristisch (Fehlerquelle für ID3-Tags).
+    d.exec("ALTER TABLE documents ADD COLUMN author TEXT");
+  }
+  if (!docCols.some((c) => c.name === "doc_title")) {
+    // Echter Doc-Titel aus Docling (vs. `title` der vom Filename
+    // kommt und vom User editiert sein kann). Wenn beide gesetzt,
+    // gewinnt `title` für die UI; `doc_title` ist für ID3-Tags
+    // und exakte Bibliografie.
+    d.exec("ALTER TABLE documents ADD COLUMN doc_title TEXT");
+  }
 
   // chunks-Tabelle für RAG. Pro Chunk ca. 800 Tokens Text + ein 768-
   // float32-Embedding (3 KB) von nomic-embed-text. Brute-Force-Cosine

@@ -71,6 +71,7 @@ audioRoutes.get("/chapter-status/:docId", (c) => {
     .prepare(
       `SELECT c.id as chapter_id, c.number, c.title, c.kind,
               c.start_page, c.end_page, c.sort_order,
+              c.include_in_audio,
               length(c.text) as text_length,
               length(c.audio_text) as audio_text_length,
               c.audio_text_model,
@@ -82,6 +83,26 @@ audioRoutes.get("/chapter-status/:docId", (c) => {
     )
     .all(c.req.param("docId"));
   return c.json({ chapters: rows });
+});
+
+// Toggle ob ein Kapitel ins Hörbuch geht. NULL als Wert = "Default
+// für diesen kind nutzen" (entspricht initial-State vor v1.14.001).
+audioRoutes.patch("/chapter-include/:chapterId", async (c) => {
+  const chapterId = c.req.param("chapterId");
+  const body = await c.req
+    .json<{ include?: boolean | null }>()
+    .catch(() => ({} as { include?: boolean | null }));
+  const exists = db()
+    .prepare("SELECT id FROM chapters WHERE id = ?")
+    .get(chapterId);
+  if (!exists) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
+
+  const value =
+    body.include === true ? 1 : body.include === false ? 0 : null;
+  db()
+    .prepare("UPDATE chapters SET include_in_audio = ? WHERE id = ?")
+    .run(value, chapterId);
+  return c.json({ chapterId, include: body.include ?? null });
 });
 
 // Cleanup eines einzelnen Kapitels via Ollama. `force=true` ignoriert

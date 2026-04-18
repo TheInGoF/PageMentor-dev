@@ -26,12 +26,20 @@ interface Chapter {
   end_page: number;
   sort_order: number;
   kind?: string;
+  include_in_audio?: number | null;
 }
 
-/** Welche Kapitel-Arten ins Hörbuch gehören. Übungen, Verzeichnisse,
- *  Lösungen und Front-Matter werden übersprungen — niemand will sich
- *  ein Glossar vorlesen lassen. */
-const AUDIO_KINDS = new Set(["content", "summary"]);
+/** Default-Auswahl wenn `include_in_audio` für ein Kapitel noch nicht
+ *  gesetzt ist (alte Rows vor v1.14.001). Pflegerelease-Kapitel
+ *  (Übungen, Verzeichnisse) bleiben aus, content + summary an. */
+function defaultIncludeForKind(kind: string | undefined): boolean {
+  return kind === "content" || kind === "summary";
+}
+
+function isIncluded(ch: Pick<Chapter, "kind" | "include_in_audio">): boolean {
+  if (ch.include_in_audio == null) return defaultIncludeForKind(ch.kind);
+  return ch.include_in_audio === 1;
+}
 
 interface Document {
   id: string;
@@ -82,7 +90,7 @@ export async function generateAudiobook(params: {
 
   const allChapters = d
     .prepare(
-      "SELECT id, document_id, number, title, text, start_page, end_page, sort_order, kind FROM chapters WHERE document_id = ? ORDER BY sort_order ASC, number ASC"
+      "SELECT id, document_id, number, title, text, start_page, end_page, sort_order, kind, include_in_audio FROM chapters WHERE document_id = ? ORDER BY sort_order ASC, number ASC"
     )
     .all(doc.id) as Chapter[];
 
@@ -91,11 +99,11 @@ export async function generateAudiobook(params: {
     throw new Error("No chapters - run chapter detection first.");
   }
 
-  // Vorfilter: Übungen, Verzeichnisse, Lösungen, Front-Matter raus.
-  // Falls ein Dokument ausschließlich aus nicht-content-Kapiteln
-  // besteht (sollte nicht passieren), fallen wir auf alle Kapitel
-  // zurück damit überhaupt was generiert wird.
-  const filtered = allChapters.filter((ch) => AUDIO_KINDS.has(ch.kind ?? "content"));
+  // User-Auswahl pro Kapitel respektieren. Falls keiner aktiv ist
+  // (User hat alles ausgeknipst oder ein Edge-Case-Doc), fallen wir
+  // auf die kind-basierte Default-Logik zurück damit überhaupt was
+  // generiert wird.
+  const filtered = allChapters.filter(isIncluded);
   const chapters = filtered.length > 0 ? filtered : allChapters;
 
   const voiceId = params.voiceId || defaultVoiceFor(doc.language);

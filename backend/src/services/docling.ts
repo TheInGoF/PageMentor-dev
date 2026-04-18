@@ -62,6 +62,13 @@ export interface DoclingExtraction {
   markdown: string;
   pageCount: number;
   sections: DoclingSection[];
+  /** Aus dem Docling-Document-JSON extrahierte Metadaten. Beide Felder
+   *  können null sein wenn die PDF keine Metadata-Felder hat (typisch
+   *  für gescannte oder Selfpublish-Skripte). */
+  metadata: {
+    title: string | null;
+    author: string | null;
+  };
   /** Rohe DoclingDocument-JSON — für Artefakt-Dump auf Disk und
    *  spätere Weiterverarbeitung (Tabellen-Struktur, Bild-Bounding-
    *  Boxes, …). Kann null sein wenn docling nichts geliefert hat. */
@@ -78,6 +85,51 @@ interface DoclingTextItem {
 interface DoclingDocumentJson {
   pages?: Record<string, unknown>;
   texts?: DoclingTextItem[];
+  /** PDF-Metadaten via PyMuPDF / pypdfium. Felder sind alle optional;
+   *  je nach PDF-Quelle ist mal das eine, mal das andere ausgefüllt.
+   *  Manche Studienhefte tragen den Titel im subject, andere im title. */
+  meta?: {
+    title?: string;
+    author?: string;
+    subject?: string;
+    creator?: string;
+    [key: string]: unknown;
+  };
+}
+
+/** Holt Titel + Autor aus den Docling-Metadaten. Falls die PDF keine
+ *  oder schrottige Metadaten hat (Default „Microsoft Word — …" als
+ *  Title o. ä.), gibt's null zurück; der Caller behält dann den
+ *  Filename-Title und author bleibt leer. */
+function extractDocMetadata(
+  doc: DoclingDocumentJson
+): { title: string | null; author: string | null } {
+  const meta = doc.meta ?? {};
+  const cleanTitle = (s: unknown): string | null => {
+    if (typeof s !== "string") return null;
+    const t = s.trim();
+    if (!t) return null;
+    // Boilerplate-Titel die PDF-Tools default reinschreiben aussortieren.
+    if (/^(microsoft\s+word|untitled|document\d*|new document|adobe.*photoshop)/i.test(t))
+      return null;
+    if (t.length > 200) return null; // wahrscheinlich kein Titel
+    return t;
+  };
+  const cleanAuthor = (s: unknown): string | null => {
+    if (typeof s !== "string") return null;
+    const a = s.trim();
+    if (!a) return null;
+    // Default-Werte aus Office-Suites die niemand interessieren.
+    if (/^(unknown|admin|user|administrator|standard)$/i.test(a)) return null;
+    if (a.length > 150) return null;
+    return a;
+  };
+  // Titel-Fallback-Kette: title → subject → null. Subject hält bei
+  // PDFs aus Acrobat/InDesign oft den echten Buch-Titel wenn das
+  // title-Feld nur den Dateinamen wiederholt.
+  const title = cleanTitle(meta.title) ?? cleanTitle(meta.subject) ?? null;
+  const author = cleanAuthor(meta.author);
+  return { title, author };
 }
 
 interface DoclingResponse {
@@ -373,8 +425,15 @@ export async function extractPdfViaDocling(params: {
   const json = result.document?.json_content ?? {};
   const pageCount = Object.keys(json.pages ?? {}).length || 0;
   const sections = buildSections(json, pageCount, markdown);
+  const metadata = extractDocMetadata(json);
 
-  return { markdown, pageCount, sections, docJson: result.document?.json_content ?? null };
+  return {
+    markdown,
+    pageCount,
+    sections,
+    metadata,
+    docJson: result.document?.json_content ?? null,
+  };
 }
 
 /** Erkennt eine nummerierte Kapitel-Überschrift ("1 Einleitung",

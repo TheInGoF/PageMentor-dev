@@ -16,6 +16,12 @@ export interface Document {
   tags: string[];
   module_id?: string | null;
   thumb_page?: number;
+  /** Echter Doc-Titel aus Docling-Metadata (PDF-Metadata-Feld). Kann
+   *  null sein wenn die PDF keine Metadaten hat — dann nutzt die UI
+   *  weiterhin `title` (filename-derived). */
+  doc_title?: string | null;
+  /** Autor aus Docling-Metadata. Wird in ID3-Tags + M4B-Header genutzt. */
+  author?: string | null;
   chapter_count?: number;
   card_count?: number;
   audio_done?: number;
@@ -87,6 +93,8 @@ export interface ChapterAudioStatus {
   start_page: number;
   end_page: number;
   sort_order: number;
+  /** 1 = include, 0 = exclude, null = use kind-default */
+  include_in_audio: number | null;
   text_length: number;
   audio_text_length: number | null;
   audio_text_model: string | null;
@@ -719,6 +727,11 @@ export const api = {
       request<{ status: string; chapterId: string; voice: string }>(
         `/api/audio/generate-chapter/${chapterId}`,
         { method: "POST", body: JSON.stringify({ voice, rate }) }
+      ),
+    setInclude: (chapterId: string, include: boolean | null) =>
+      request<{ chapterId: string; include: boolean | null }>(
+        `/api/audio/chapter-include/${chapterId}`,
+        { method: "PATCH", body: JSON.stringify({ include }) }
       ),
   },
   feed: {

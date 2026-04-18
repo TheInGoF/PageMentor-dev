@@ -223,6 +223,23 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     }
   }
 
+  async function toggleInclude(chapterId: string, next: boolean) {
+    // Optimistic update — instant UI feedback, rollback on error.
+    setChapterStatus((prev) =>
+      prev.map((c) =>
+        c.chapter_id === chapterId
+          ? { ...c, include_in_audio: next ? 1 : 0 }
+          : c
+      )
+    );
+    try {
+      await api.audio.setInclude(chapterId, next);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+      await loadChapterStatus();
+    }
+  }
+
   async function generateChapter(chapterId: string) {
     if (!voiceId) {
       toast.show(t("audiobook.voice.emptyForLang", { lang: documentLanguage }), "error");
@@ -423,6 +440,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         onEdit={(id) => setEditChapterId(id)}
         onGenerate={generateChapter}
         onClearChapter={clearChapter}
+        onToggleInclude={toggleInclude}
       />
 
       {editChapterId && (
@@ -499,9 +517,15 @@ function compareVoices(a: Voice, b: Voice): number {
   return a.label.localeCompare(b.label);
 }
 
-/** Nur Kapitel die überhaupt ins Hörbuch gehören (content/summary)
- *  anzeigen — Glossar, Literatur, Übungen sind für TTS eh gefiltert. */
-const AUDIO_KINDS = new Set(["content", "summary"]);
+/** Default-include pro kind — muss mit der Backend-Logik in
+ *  `defaultIncludeForKind()` synchron bleiben. */
+function defaultIncludeFor(kind: string): boolean {
+  return kind === "content" || kind === "summary";
+}
+function isChapterIncluded(c: ChapterAudioStatus): boolean {
+  if (c.include_in_audio == null) return defaultIncludeFor(c.kind);
+  return c.include_in_audio === 1;
+}
 
 function ChapterWorkbench({
   chapters,
@@ -512,6 +536,7 @@ function ChapterWorkbench({
   onEdit,
   onGenerate,
   onClearChapter,
+  onToggleInclude,
 }: {
   chapters: ChapterAudioStatus[];
   chapterProgress: Map<string, ProgressEvent>;
@@ -521,37 +546,74 @@ function ChapterWorkbench({
   onEdit: (chapterId: string) => void;
   onGenerate: (chapterId: string) => void;
   onClearChapter: (audioId: string) => void;
+  onToggleInclude: (chapterId: string, next: boolean) => void;
 }) {
-  const audioChapters = chapters.filter((c) => AUDIO_KINDS.has(c.kind));
-  if (audioChapters.length === 0) {
+  const [showAll, setShowAll] = useState(false);
+  if (chapters.length === 0) {
     return (
       <div className="card p-8 text-center text-sm text-neutral-500">
         {t("audiobook.chaptersEmpty")}
       </div>
     );
   }
+  const visible = showAll
+    ? chapters
+    : chapters.filter((c) => isChapterIncluded(c));
+  const hiddenCount = chapters.length - visible.length;
+  const includedCount = chapters.filter(isChapterIncluded).length;
+
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold">{t("audiobook.chapters.title")}</h2>
-        <span className="text-xs text-neutral-500">
-          {t("audiobook.chapters.hint")}
-        </span>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold">{t("audiobook.chapters.title")}</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            {t("audiobook.chapters.hint")}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-neutral-500">
+            {t("audiobook.chapters.includedCount", {
+              n: includedCount,
+              total: chapters.length,
+            })}
+          </span>
+          {hiddenCount > 0 && !showAll && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="text-accent hover:underline"
+            >
+              {t("audiobook.chapters.showAll", { n: hiddenCount })}
+            </button>
+          )}
+          {showAll && (
+            <button
+              type="button"
+              onClick={() => setShowAll(false)}
+              className="text-neutral-400 hover:text-accent"
+            >
+              {t("audiobook.chapters.hideExcluded")}
+            </button>
+          )}
+        </div>
       </div>
       <ul className="flex flex-col gap-2">
-        {audioChapters.map((ch) => (
+        {visible.map((ch) => (
           <ChapterRow
             key={ch.chapter_id}
             chapter={ch}
             progress={chapterProgress.get(ch.chapter_id) ?? null}
             busy={busyChapter[ch.chapter_id]}
             disabled={disabled}
+            included={isChapterIncluded(ch)}
             onPreprocess={(force) => onPreprocess(ch.chapter_id, force)}
             onEdit={() => onEdit(ch.chapter_id)}
             onGenerate={() => onGenerate(ch.chapter_id)}
             onClear={() =>
               ch.audio_id ? onClearChapter(ch.audio_id) : undefined
             }
+            onToggleInclude={(next) => onToggleInclude(ch.chapter_id, next)}
           />
         ))}
       </ul>
@@ -564,19 +626,23 @@ function ChapterRow({
   progress,
   busy,
   disabled,
+  included,
   onPreprocess,
   onEdit,
   onGenerate,
   onClear,
+  onToggleInclude,
 }: {
   chapter: ChapterAudioStatus;
   progress: ProgressEvent | null;
   busy: "preprocess" | "generate" | undefined;
   disabled: boolean;
+  included: boolean;
   onPreprocess: (force: boolean) => void;
   onEdit: () => void;
   onGenerate: () => void;
   onClear: () => void;
+  onToggleInclude: (next: boolean) => void;
 }) {
   const phase = progress?.phase;
   const ttsRunning =
@@ -590,8 +656,28 @@ function ChapterRow({
   const manualEdit = chapter.audio_text_model === "manual-edit";
 
   return (
-    <li className="card p-4 flex flex-col gap-3">
+    <li
+      className={cn(
+        "card p-4 flex flex-col gap-3 transition-opacity",
+        !included && "opacity-50"
+      )}
+    >
       <div className="flex items-start gap-4">
+        <label
+          className="flex items-center pt-1 cursor-pointer"
+          title={
+            included
+              ? t("audiobook.chapter.include.on")
+              : t("audiobook.chapter.include.off")
+          }
+        >
+          <input
+            type="checkbox"
+            checked={included}
+            onChange={(e) => onToggleInclude(e.target.checked)}
+            className="w-4 h-4 accent-accent cursor-pointer"
+          />
+        </label>
         <div className="font-mono text-sm text-accent min-w-[2ch] text-right pt-1">
           {String(chapter.number).padStart(2, "0")}
         </div>
@@ -600,6 +686,24 @@ function ChapterRow({
             {chapter.title || `${t("audiobook.chapters.fallback")} ${chapter.number}`}
           </h3>
           <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-1 flex-wrap">
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide",
+                chapter.kind === "content"
+                  ? "bg-neutral-700 text-neutral-300"
+                  : chapter.kind === "summary"
+                  ? "bg-emerald-700/40 text-emerald-200"
+                  : chapter.kind === "example"
+                  ? "bg-blue-700/40 text-blue-200"
+                  : chapter.kind === "exercise" || chapter.kind === "self_check"
+                  ? "bg-amber-700/40 text-amber-200"
+                  : chapter.kind === "solutions"
+                  ? "bg-purple-700/40 text-purple-200"
+                  : "bg-neutral-800 text-neutral-500"
+              )}
+            >
+              {t(`chapters.kind.${chapter.kind}`)}
+            </span>
             <span>{t("chapters.chars", { n: chapter.text_length })}</span>
             <span>·</span>
             <span>
