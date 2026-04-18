@@ -10,7 +10,7 @@
 
 import type { Segment } from "../segment";
 
-export type EngineId = "piper" | "edge";
+export type EngineId = "edge";
 
 export interface Voice {
   id: string;

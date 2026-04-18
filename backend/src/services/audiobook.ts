@@ -377,7 +377,7 @@ function upsertAudio(params: {
   storedRelPath: string;
   durationMs: number;
   voice: string;
-  engine: "piper" | "edge";
+  engine: "edge";
   status: "done" | "failed" | "running" | "pending";
 }): void {
   const d = db();

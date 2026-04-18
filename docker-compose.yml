@@ -18,17 +18,10 @@ name: pagementor
 services:
   app:
     image: ghcr.io/lordvonbaum/pagementor:latest
-    # Only used when you run `docker compose build` locally. `compose up`
-    # pulls the pre-built image from ghcr.io. Which Piper voices it
-    # carries is decided at build time by PIPER_VOICES_IMAGE, a
-    # standalone image published by .github/workflows/piper-voices.yml.
-    # Default tag is "latest"; for a specific language set use
-    # ghcr.io/lordvonbaum/pagementor-piper-voices:de-en (codes sorted,
-    # comma→dash).
+    # Only used when you run `docker compose build` locally.
+    # `compose up` pulls the pre-built image from ghcr.io.
     build:
       context: .
-      args:
-        PIPER_VOICES_IMAGE: ${PIPER_VOICES_IMAGE:-ghcr.io/lordvonbaum/pagementor-piper-voices:latest}
     container_name: pm-app
     restart: unless-stopped
     ports:

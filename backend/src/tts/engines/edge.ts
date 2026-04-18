@@ -27,7 +27,7 @@ import type {
 const VOICES: Voice[] = [
   {
     id: "de-DE-SeraphinaMultilingualNeural",
-    label: "Seraphina (DE, Edge)",
+    label: "Seraphina (DE)",
     language: "de",
     locale: "de-DE",
     gender: "female",
@@ -37,7 +37,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "de-DE-FlorianMultilingualNeural",
-    label: "Florian (DE, Edge)",
+    label: "Florian (DE)",
     language: "de",
     locale: "de-DE",
     gender: "male",
@@ -47,7 +47,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "de-DE-KatjaNeural",
-    label: "Katja (DE, Edge)",
+    label: "Katja (DE)",
     language: "de",
     locale: "de-DE",
     gender: "female",
@@ -55,7 +55,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "de-DE-ConradNeural",
-    label: "Conrad (DE, Edge)",
+    label: "Conrad (DE)",
     language: "de",
     locale: "de-DE",
     gender: "male",
@@ -63,7 +63,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "de-AT-IngridNeural",
-    label: "Ingrid (AT, Edge)",
+    label: "Ingrid (AT)",
     language: "de",
     locale: "de-AT",
     gender: "female",
@@ -71,7 +71,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "de-CH-LeniNeural",
-    label: "Leni (CH, Edge)",
+    label: "Leni (CH)",
     language: "de",
     locale: "de-CH",
     gender: "female",
@@ -79,7 +79,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "en-US-AvaMultilingualNeural",
-    label: "Ava (US, Edge)",
+    label: "Ava (US)",
     language: "en",
     locale: "en-US",
     gender: "female",
@@ -89,7 +89,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "en-US-AndrewMultilingualNeural",
-    label: "Andrew (US, Edge)",
+    label: "Andrew (US)",
     language: "en",
     locale: "en-US",
     gender: "male",
@@ -98,7 +98,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "en-US-EmmaMultilingualNeural",
-    label: "Emma (US, Edge)",
+    label: "Emma (US)",
     language: "en",
     locale: "en-US",
     gender: "female",
@@ -106,7 +106,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "en-US-BrianMultilingualNeural",
-    label: "Brian (US, Edge)",
+    label: "Brian (US)",
     language: "en",
     locale: "en-US",
     gender: "male",
@@ -114,7 +114,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "en-GB-SoniaNeural",
-    label: "Sonia (UK, Edge)",
+    label: "Sonia (UK)",
     language: "en",
     locale: "en-GB",
     gender: "female",
@@ -122,7 +122,7 @@ const VOICES: Voice[] = [
   },
   {
     id: "en-GB-RyanNeural",
-    label: "Ryan (UK, Edge)",
+    label: "Ryan (UK)",
     language: "en",
     locale: "en-GB",
     gender: "male",

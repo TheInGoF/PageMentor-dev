@@ -5,11 +5,6 @@ on:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      piper_langs:
-        description: "Piper voice languages (comma-separated, e.g. de,en,fr). Must match an existing pagementor-piper-voices tag — otherwise run that workflow first."
-        required: false
-        default: ""
 
 jobs:
   build:
@@ -32,18 +27,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve piper-voices tag
-        id: voices
-        run: |
-          raw="${{ inputs.piper_langs != '' && inputs.piper_langs || vars.PIPER_LANGS || 'de,en' }}"
-          tag="$(echo "$raw" \
-            | tr '[:upper:]' '[:lower:]' \
-            | tr -d ' ' \
-            | tr ',' '\n' \
-            | sort -u \
-            | paste -sd- -)"
-          echo "image=ghcr.io/lordvonbaum/pagementor-piper-voices:${tag}" >> "$GITHUB_OUTPUT"
-
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -62,9 +45,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Main app never downloads voices itself — it COPYs from the
-          # pre-built piper-voices image resolved above.
-          build-args: |
-            PIPER_VOICES_IMAGE=${{ steps.voices.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

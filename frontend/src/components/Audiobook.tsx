@@ -212,14 +212,6 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     () => voices.filter((v) => v.language !== documentLanguage),
     [voices, documentLanguage]
   );
-  const langEdge = useMemo(
-    () => langVoices.filter((v) => v.engine === "edge"),
-    [langVoices]
-  );
-  const langPiper = useMemo(
-    () => langVoices.filter((v) => v.engine === "piper"),
-    [langVoices]
-  );
 
   // Terminal-Phasen dürfen `generating` NICHT mehr true halten — sonst
   // bleibt der Generate-Button nach einem Fehlschlag disabled.
@@ -275,41 +267,18 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             <label className="text-xs font-medium text-neutral-400 block mb-2">
               {t("audiobook.voice")}
             </label>
-            {langEdge.length > 0 && (
-              <div className="mb-3">
-                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                  {t("audiobook.voice.group.edge")}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {langEdge.map((v) => (
-                    <VoiceChip
-                      key={v.id}
-                      voice={v}
-                      active={voiceId === v.id}
-                      onSelect={() => setVoiceId(v.id)}
-                    />
-                  ))}
-                </div>
+            {langVoices.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {langVoices.map((v) => (
+                  <VoiceChip
+                    key={v.id}
+                    voice={v}
+                    active={voiceId === v.id}
+                    onSelect={() => setVoiceId(v.id)}
+                  />
+                ))}
               </div>
-            )}
-            {langPiper.length > 0 && (
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
-                  {t("audiobook.voice.group.piper")}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {langPiper.map((v) => (
-                    <VoiceChip
-                      key={v.id}
-                      voice={v}
-                      active={voiceId === v.id}
-                      onSelect={() => setVoiceId(v.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            {langVoices.length === 0 && (
+            ) : (
               <p className="text-xs text-neutral-500">
                 {t("audiobook.voice.emptyForLang", { lang: documentLanguage })}
               </p>

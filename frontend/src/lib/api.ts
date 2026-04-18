@@ -34,7 +34,7 @@ export interface Chapter {
   has_audio?: number;
 }
 
-export type TtsEngine = "piper" | "edge";
+export type TtsEngine = "edge";
 
 export interface Voice {
   id: string;

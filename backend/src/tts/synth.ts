@@ -1,14 +1,15 @@
 /**
- * Engine-Dispatcher. Routet jeden Chunk zur passenden Engine und
- * führt Retries mit Backoff aus — bewusst *ohne* stummen Fallback auf
- * eine andere Engine. Wenn Edge wegen Rate-Limit dauerhaft 0 Bytes
- * liefert, soll der User das Kapitel rot blinken sehen und selbst
- * entscheiden, ob er eine andere Stimme wählt.
+ * Engine-Dispatcher. Edge ist seit v1.11.001 die einzige Engine;
+ * Piper wurde entfernt. Der Dispatcher bleibt als dünne Schicht
+ * bestehen, damit wir zukünftige Engines (Kokoro, XTTS, …) ohne
+ * größere Umbauten dazu-stecken können.
  *
  * Strategie:
  *   - Pro Chunk bis zu 2 Retries mit 400 ms / 800 ms Backoff.
- *   - Edge-Chunks kriegen zusätzlich 150 ms Inter-Chunk-Pause, damit
+ *   - Edge-Chunks kriegen zusätzlich 1500 ms Inter-Chunk-Pause, damit
  *     Microsofts Anti-Abuse-Gate nicht bei Schlag 20 kippt.
+ *   - Empty-Audio-Spezialfall: 30 s Cooldown vor dem Retry, weil kurze
+ *     Backoffs gegen Azure-Rate-Limiting nichts bringen.
  *   - Bei endgültigem Fail: `ChunkSynthesisFailure` nach oben.
  */
 
@@ -17,13 +18,7 @@ import { findVoice, engineFor } from "./voices";
 import type { Segment } from "./segment";
 import type { Voice } from "./engines/base";
 
-/** Edge-spezifischer Backoff zwischen Chunks, um Microsofts
- *  Anti-Abuse-Gate nicht zu triggern. Piper hat kein Rate-Limit. */
 const EDGE_INTER_CHUNK_DELAY_MS = 1500;
-/** Längerer Cooldown wenn Edge stumm 0 Bytes geliefert hat — das ist
- *  Microsofts Rate-Limit-Signatur, ein einfacher Retry bringt nichts.
- *  Stunden echtes Azure-Cooldown kann man nicht aussitzen, aber 30 s
- *  helfen manchmal noch durchzurutschen. */
 const EDGE_EMPTY_AUDIO_COOLDOWN_MS = 30_000;
 const MAX_RETRIES = 2;
 
@@ -54,7 +49,7 @@ export class ChunkSynthesisFailure extends Error {
  */
 export async function synthesizeChunk(
   params: ChunkSynthesisParams
-): Promise<{ path: string; bytes: number; engineId: "piper" | "edge" }> {
+): Promise<{ path: string; bytes: number; engineId: "edge" }> {
   const engine = engineFor(params.voice.engine);
   if (!engine) throw new Error(`Unknown TTS engine: ${params.voice.engine}`);
 
@@ -97,8 +92,8 @@ export async function synthesizeChunk(
   throw new ChunkSynthesisFailure(params.voice.id, lastErr);
 }
 
-/** Engine-aware Inter-Chunk-Pause. Nur Edge braucht sie. */
-export async function interChunkPause(engineId: "piper" | "edge"): Promise<void> {
+/** Inter-Chunk-Pause zur Rate-Limit-Vermeidung. Derzeit nur Edge. */
+export async function interChunkPause(engineId: "edge"): Promise<void> {
   if (engineId === "edge") await sleep(EDGE_INTER_CHUNK_DELAY_MS);
 }
 
