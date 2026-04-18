@@ -47,11 +47,23 @@ Baumstrukturen, Tags statt Zweige. Lokal, Portainer-Stack.
 - **Suche**: Meilisearch (gleicher Container wie doc_storage oder eigener)
 - **Text-Extraktion**: Docling-Serve (CPU-Image, Layout-Modell mit Section-
   Header-Erkennung). Manuell gestartet pro Upload, 15–30 s/Seite auf CPU.
-- **TTS**: Edge-TTS (msedge-tts, Microsoft Neural Voices). Piper wurde in
-  v1.11.001 entfernt — Qualität für DE-Studienmaterial nicht ausreichend.
+- **TTS**:
+  - **Default: Kokoro** als Sidecar-Container (Apache 2.0, lokal,
+    OpenAI-kompatible API via remsky/Kokoro-FastAPI). Hörbuch-tauglich
+    auch für lange wissenschaftliche Texte, für Hochschulen und Firmen
+    empfehlbar. CPU-Default (~3-5x Realtime), GPU-Override via
+    `docker-compose.gpu.yml` (~30-50x auf 3090).
+  - **Fallback: Edge** (msedge-tts, Microsoft Neural Voices) als
+    Cloud-Option ohne Setup. Bleibt im Voice-Picker auswählbar.
+  - **Audio-Preprocessor**: Vor jedem Kapitel läuft der LLM einmal
+    über den Text und macht ihn TTS-tauglich (Abkürzungen ausschreiben,
+    Formeln verbalisieren, Zitate strippen, Aufzählungs-Marker
+    entfernen). Cached in `chapters.audio_text` — beim zweiten Run
+    kein LLM-Call mehr.
 - **LLM**: Ollama + Provider-Chain (Claude / OpenAI / Gemini als Fallback,
   alle Endpoints zur Laufzeit in Settings konfigurierbar)
-- **Deploy**: Docker Compose → Portainer-Stack (app + meilisearch + docling)
+- **Deploy**: Docker Compose → Portainer-Stack (app + meilisearch +
+  docling + kokoro)
 
 **Theme**: Night-Default — `#000` Backgrounds, `#111` Elevated, **rote Akzente** (`#ef4444`)
 
@@ -177,7 +189,16 @@ pdf-parse wurde rausgeflogen.
 - [x] Dependabot-PR daily für msedge-tts (Microsoft tightent alle 6–12
   Monate, wir ziehen binnen 1–14 Tagen nach)
 - [x] Settings: Stimme, Geschwindigkeit (persistent via localStorage)
-- [x] Piper entfernt (v1.11.001) — DE-Qualität nicht Studienheft-tauglich
+- [x] Piper endgültig entfernt (v1.11.001) — DE-Qualität nicht
+  Studienheft-tauglich. **Kein Re-Add geplant**.
+- [x] **Kokoro-Sidecar als Default-TTS** — lokales Apache-2.0-Modell
+  via remsky/Kokoro-FastAPI. CPU-Default, GPU-Override über zweites
+  Compose-File (analog Docling). Edge bleibt als Zweit-Provider im
+  Picker.
+- [x] **LLM-Audio-Preprocessor** — Ollama bereinigt Kapiteltext für
+  TTS (Abkürzungen, Formeln, Zitate, Bullet-Listen). Cached in
+  `chapters.audio_text`. Bei manuellen Kapitel-Edits oder Merge wird
+  der Cache automatisch invalidiert.
 
 ### 4.2 Generierung
 
@@ -304,42 +325,42 @@ pdf-parse wurde rausgeflogen.
 
 ---
 
-## Noch offen (priorisiert, Stand v1.11.008)
+## Noch offen (priorisiert, Stand v1.11.010)
 
-### Nächste Runde — v1.11.009
+### Abgeschlossen — v1.11.010 (RAG-Backend)
 
-- **Docling-Artefakte pro Dokument auf Disk dumpen**
-  Nach Extraktion schreiben wir `uploads/<doc-id>/docling/full.md`
-  (komplettes Markdown zum Inspizieren) + `document.json`
-  (DoclingDocument-Struktur für spätere RAG/Layout-Analyse).
-  Kosten ~2 MB pro 100-Seiten-PDF.
+- [x] **Docling-Artefakte pro Dokument auf Disk dumpen**
+  `uploads/<doc-id>/docling/full.md` + `document.json`.
+- [x] **Chunking + Embeddings**: paragraph-aware Chunker, 800 Tok
+  Target / 100 Tok Overlap. Chunks als JSON + SQLite `chunks`-Tabelle
+  mit Embedding-BLOB (768 float32). `nomic-embed-text` via Ollama
+  (~137 MB, CPU-tauglich), Fallback ohne Embeddings möglich.
+- [x] **RAG-Query-Endpoint** `POST /api/rag/query` mit Brute-force
+  Cosine-Similarity, `{query, docId?, topK?}`.
 
-- **Chunking + Embeddings (RAG-Basis)**
-  TypeScript-Chunker, paragraph-aware, 800 Tokens Target + 100 Tokens
-  Overlap. Chunks landen als einzelne JSON-Files unter
-  `uploads/<doc-id>/docling/chunks/NNNN.json` (Metadata + Text) und in
-  einer neuen SQLite-Tabelle `chunks` mit Embedding-BLOB (768 float32).
-  Embeddings via Ollama `/api/embeddings` mit `nomic-embed-text` als
-  Default. Wenn Ollama fehlt → Chunks stored ohne Embeddings,
-  Nachzucht möglich.
+### Nächste Runde — v1.11.011
 
-- **RAG-Query-Endpoint** `POST /api/rag/query`
-  Brute-force Cosine-Similarity in JS (reicht für < 10 k Chunks in
-  < 100 ms). `{query, docId?, topK?}` → Top-N Chunks mit Score.
-  Noch keine UI in v1.11.009 — erst Backend + curl-Testbarkeit.
-
-### v1.11.010
-
-- **RAG-UI**: Frage-an-Dokument-Overlay, Ergebnis-Snippets mit
-  Chapter-Verlinkung, „Frage an gesamte Bibliothek"-Modus.
-
-### Mittelfristig
+- **RAG-UI**
+  Frage-an-Dokument-Overlay mit Ergebnis-Snippets und Chapter-
+  Verlinkung, optional „Frage an gesamte Bibliothek"-Modus. Nutzt den
+  bestehenden `/api/rag/query`-Endpoint.
 
 - **Prosodie-Polisher für Audiobook**
-  Optionaler Ollama-Pass *nach* Docling, *vor* Edge-TTS: LLM liest
-  sauberen Text und rewrites ihn für besseres Hörerlebnis —
-  Akronyme auflösen, Schachtelsätze kürzen, Gedankenstrich-Einschübe
-  umbrechen. Original bleibt unverändert (fürs Lernen im Text-View).
+  Optionaler Ollama-Pass *nach* Docling, *vor* Edge-TTS: LLM rewrites
+  Kapiteltext für besseres Hörerlebnis — Akronyme auflösen,
+  Schachtelsätze kürzen, Gedankenstrich-Einschübe umbrechen,
+  Markdown/Formatierung raus. Original bleibt unverändert (Text-View
+  und Cards nutzen weiterhin die saubere Docling-Fassung).
+
+- **Tabellen & Bilder in Kapiteltext einschließen**
+  Aktuell filtern wir `label: "table"` und `label: "picture"`
+  komplett raus. Für Card-Generierung sollten sie aber enthalten
+  sein — Tabellen als Markdown-Tabelle (Docling liefert das bereits),
+  Bilder als Caption-Text. TTS-Pfad darf sie weiterhin droppen
+  (Prosodie-Polisher kann das übernehmen), Chunker + Card-Extractor
+  brauchen sie.
+
+### Mittelfristig
 
 - **Cover (erste PDF-Seite) im MP3/M4B einbetten**
   Wir rendern's schon via poppler, nur das ffmpeg-Embed fehlt.

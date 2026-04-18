@@ -48,7 +48,7 @@ export interface Chapter {
   kind?: ChapterKind;
 }
 
-export type TtsEngine = "edge";
+export type TtsEngine = "edge" | "kokoro";
 
 export interface Voice {
   id: string;
@@ -287,6 +287,20 @@ export interface DashboardData {
   recent: DashboardRecent[];
 }
 
+export interface RagSource {
+  id: string;
+  score: number;
+  document_id: string;
+  document_title: string;
+  chapter_id: string;
+  chapter_number: number;
+  chapter_title: string;
+  chapter_kind: string;
+  start_page: number;
+  end_page: number;
+  text: string;
+}
+
 export type SummaryLevel = "bullets" | "paragraph" | "detailed";
 
 export interface Summary {
@@ -320,6 +334,7 @@ export type ProgressPhase =
   | "pipeline.done"
   | "pipeline.failed"
   | "audiobook.start"
+  | "audiobook.chapter.preprocess"
   | "audiobook.chapter.start"
   | "audiobook.chapter.progress"
   | "audiobook.chapter.done"
@@ -658,6 +673,57 @@ export const api = {
     urls: (docId: string) =>
       request<{ title: string; feedUrl: string; m4bUrl: string }>(
         `/api/feed/urls/${docId}`
+      ),
+  },
+  rag: {
+    answerStream: async (
+      params: { docId: string; query: string; topK?: number; model?: string },
+      handlers: {
+        onSources: (sources: RagSource[]) => void;
+        onToken: (text: string) => void;
+        onDone: (payload: { model: string; content: string }) => void;
+        onError?: (message: string) => void;
+      }
+    ): Promise<void> => {
+      const res = await fetch("/api/rag/answer/stream", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(params),
+      });
+      if (!res.ok || !res.body) throw new Error(`Stream ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const ev = JSON.parse(line);
+            if (ev.type === "sources") handlers.onSources(ev.sources);
+            else if (ev.type === "token") handlers.onToken(ev.data);
+            else if (ev.type === "done") handlers.onDone(ev);
+            else if (ev.type === "error")
+              handlers.onError?.(ev.message || "RAG stream error");
+          } catch {
+            // ignore malformed line
+          }
+        }
+      }
+    },
+    status: () =>
+      request<{ total: number; embedded: number; documents: number }>(
+        "/api/rag/status"
+      ),
+    reembed: () =>
+      request<{ status: string; embedded: number; failed?: number; total: number }>(
+        "/api/rag/reembed",
+        { method: "POST" }
       ),
   },
   dashboard: {

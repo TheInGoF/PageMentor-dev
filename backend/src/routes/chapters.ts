@@ -51,6 +51,11 @@ chapterRoutes.patch("/:id", async (c) => {
       vals.push(v);
     }
   }
+  // Wenn der User den Kapiteltext editiert, ist die LLM-vorbereitete
+  // Audio-Variante stale — sonst läge das Hörbuch hinter dem Lese-Text.
+  if (body.text !== undefined) {
+    sets.push("audio_text = NULL", "audio_text_model = NULL");
+  }
   if (sets.length > 0) {
     vals.push(id);
     db().prepare(`UPDATE chapters SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
@@ -87,7 +92,11 @@ chapterRoutes.post("/merge", async (c) => {
   const last = chapters[chapters.length - 1];
   const mergedText = chapters.map((ch) => ch.text).join("\n\n");
 
-  d.prepare("UPDATE chapters SET title = ?, text = ?, start_page = ?, end_page = ? WHERE id = ?").run(
+  // Audio-Cache invalidieren — der zusammengeführte Text muss neu
+  // präprozessiert werden (Übergänge zwischen Original-Kapiteln).
+  d.prepare(
+    "UPDATE chapters SET title = ?, text = ?, start_page = ?, end_page = ?, audio_text = NULL, audio_text_model = NULL WHERE id = ?"
+  ).run(
     first.title,
     mergedText,
     first.start_page,

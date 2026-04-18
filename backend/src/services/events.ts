@@ -17,6 +17,7 @@ export type ProgressPhase =
   | "pipeline.done"
   | "pipeline.failed"
   | "audiobook.start"
+  | "audiobook.chapter.preprocess"
   | "audiobook.chapter.start"
   | "audiobook.chapter.progress"
   | "audiobook.chapter.done"

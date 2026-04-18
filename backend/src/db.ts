@@ -158,6 +158,15 @@ export function initDb() {
     // Klassifikation direkt aus dem Docling-Parser.
     d.exec("ALTER TABLE chapters ADD COLUMN kind TEXT NOT NULL DEFAULT 'content'");
   }
+  if (!chapterCols.some((c) => c.name === "audio_text")) {
+    // LLM-vorverarbeiteter Kapiteltext, optimiert für TTS:
+    // Abkürzungen ausgeschrieben, Formeln verbalisiert, Zitate
+    // entfernt etc. NULL = noch nicht generiert; bei Re-Extraktion
+    // werden Kapitel-Rows komplett ersetzt (DELETE/INSERT in
+    // pipeline.ts), wodurch der Cache automatisch invalidiert.
+    d.exec("ALTER TABLE chapters ADD COLUMN audio_text TEXT");
+    d.exec("ALTER TABLE chapters ADD COLUMN audio_text_model TEXT");
+  }
 
   // chunks-Tabelle für RAG. Pro Chunk ca. 800 Tokens Text + ein 768-
   // float32-Embedding (3 KB) von nomic-embed-text. Brute-Force-Cosine

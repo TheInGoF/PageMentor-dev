@@ -4,6 +4,7 @@
 #   /volume1/docker/pagementor/data
 #   /volume1/docker/pagementor/meili
 #   /volume1/docker/pagementor/docling-cache
+#   /volume1/docker/pagementor/kokoro-cache
 #
 # (Der Docling-Container läuft als root — Red Hat UBI startet sonst als
 # UID 1001, was mit Synology-Bind-Mounts Permission-Probleme macht. Die
@@ -38,11 +39,13 @@ services:
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-pm-dev-key}
       PM_DOCLING_URL: http://docling:5001
       PM_DOCLING_API_KEY: ${DOCLING_API_KEY:-pm-docling-internal}
+      PM_KOKORO_URL: http://kokoro:8880
     volumes:
       - /volume1/docker/pagementor/data:/data
     depends_on:
       meilisearch: { condition: service_healthy }
       docling: { condition: service_started }
+      kokoro: { condition: service_started }
 
   meilisearch:
     image: getmeili/meilisearch:v1.12
@@ -94,3 +97,26 @@ services:
       PYTORCH_NNPACK_DISABLE: "1"
     volumes:
       - /volume1/docker/pagementor/docling-cache:/opt/app-root/src/.cache
+
+  # Kokoro-FastAPI als TTS-Sidecar. Apache-2.0-lizenziertes Modell
+  # (~82 M Parameter), läuft auf CPU mit ~3-5x Realtime auf modernen
+  # x86-Cores; auf GPU (siehe docker-compose.gpu.yml) ~30-50x.
+  #
+  # Default-Image enthält das Basis-Modell aber KEINE zusätzlichen
+  # Voice-Packs. Beim ersten Start lädt der Sidecar die benötigten
+  # Voice-Embeddings (~1 MB pro Stimme) bei der ersten Synthese-
+  # Anfrage von HuggingFace nach und legt sie im Volume ab — danach
+  # offline-tauglich.
+  #
+  # API: OpenAI-kompatibel unter /v1/audio/speech, Voice-Discovery
+  # unter /v1/audio/voices.
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: pm-kokoro
+    restart: unless-stopped
+    environment:
+      # Voice-Cache-Verzeichnis (passend zum Volume-Mount unten).
+      MODELS_DIR: /app/api/src/models
+      VOICES_DIR: /app/api/src/voices
+    volumes:
+      - /volume1/docker/pagementor/kokoro-cache:/app/api/src/voices

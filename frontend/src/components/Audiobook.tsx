@@ -205,11 +205,17 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   }
 
   const langVoices = useMemo(
-    () => voices.filter((v) => v.language === documentLanguage),
+    () =>
+      voices
+        .filter((v) => v.language === documentLanguage)
+        .sort(compareVoices),
     [voices, documentLanguage]
   );
   const otherVoices = useMemo(
-    () => voices.filter((v) => v.language !== documentLanguage),
+    () =>
+      voices
+        .filter((v) => v.language !== documentLanguage)
+        .sort(compareVoices),
     [voices, documentLanguage]
   );
 
@@ -379,18 +385,39 @@ function VoiceChip({
           ? "border-accent bg-accent/10"
           : "border-border hover:border-border-strong hover:bg-bg-hover"
       )}
+      title={voice.note ?? undefined}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium text-neutral-100">{voice.label}</span>
         {voice.flagship && (
           <span className="tag-accent text-[10px]">{t("audiobook.voice.top")}</span>
         )}
+        <span
+          className={cn(
+            "text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded",
+            voice.engine === "kokoro"
+              ? "bg-emerald-500/15 text-emerald-300"
+              : "bg-sky-500/15 text-sky-300"
+          )}
+        >
+          {voice.engine === "kokoro"
+            ? t("audiobook.engine.kokoro")
+            : t("audiobook.engine.edge")}
+        </span>
       </div>
       <span className="text-[11px] text-neutral-500">
         {voice.gender === "female" ? "♀" : "♂"} · {voice.locale}
       </span>
     </button>
   );
+}
+
+/** Stimmen sortieren: Kokoro vor Edge (lokal first), Flagship vor
+ *  non-Flagship, dann alphabetisch. */
+function compareVoices(a: Voice, b: Voice): number {
+  if (a.engine !== b.engine) return a.engine === "kokoro" ? -1 : 1;
+  if (!!a.flagship !== !!b.flagship) return a.flagship ? -1 : 1;
+  return a.label.localeCompare(b.label);
 }
 
 function ChapterList({
@@ -519,6 +546,11 @@ function describePhase(ev: ProgressEvent): string {
       return t("phase.pipeline.failed", { msg: ev.message ?? "" });
     case "audiobook.start":
       return ev.message ?? t("phase.audiobook.start", { total: ev.total ?? 0 });
+    case "audiobook.chapter.preprocess":
+      return t("phase.audiobook.chapter.preprocess", {
+        current: ev.current ?? 0,
+        total: ev.total ?? 0,
+      });
     case "audiobook.chapter.start":
       return t("phase.audiobook.chapter.start", {
         current: ev.current ?? 0,

@@ -1,26 +1,35 @@
 /**
- * Engine-Dispatcher. Edge ist seit v1.11.001 die einzige Engine;
- * Piper wurde entfernt. Der Dispatcher bleibt als dünne Schicht
- * bestehen, damit wir zukünftige Engines (Kokoro, XTTS, …) ohne
- * größere Umbauten dazu-stecken können.
+ * Engine-Dispatcher mit pro-Engine Retry- und Pace-Strategie.
  *
- * Strategie:
- *   - Pro Chunk bis zu 2 Retries mit 400 ms / 800 ms Backoff.
- *   - Edge-Chunks kriegen zusätzlich 1500 ms Inter-Chunk-Pause, damit
- *     Microsofts Anti-Abuse-Gate nicht bei Schlag 20 kippt.
- *   - Empty-Audio-Spezialfall: 30 s Cooldown vor dem Retry, weil kurze
- *     Backoffs gegen Azure-Rate-Limiting nichts bringen.
- *   - Bei endgültigem Fail: `ChunkSynthesisFailure` nach oben.
+ * Kokoro (lokaler Sidecar) hat keine Rate-Limits — kurzer Backoff
+ * reicht, keine Inter-Chunk-Pause. Edge (Microsoft Cloud) braucht
+ * 1.5 s Pause zwischen Chunks und einen 30 s Cooldown nach Empty-
+ * Audio (Azure-Quota), weil kurze Backoffs nichts bringen.
+ *
+ * Bei endgültigem Fail: `ChunkSynthesisFailure` nach oben — der
+ * Caller kann das als Signal interpretieren, das Buch abzubrechen
+ * oder auf einen anderen Provider auszuweichen.
  */
 
 import { setTimeout as sleep } from "timers/promises";
 import { findVoice, engineFor } from "./voices";
 import type { Segment } from "./segment";
-import type { Voice } from "./engines/base";
+import type { EngineId, Voice } from "./engines/base";
 
-const EDGE_INTER_CHUNK_DELAY_MS = 1500;
-const EDGE_EMPTY_AUDIO_COOLDOWN_MS = 30_000;
 const MAX_RETRIES = 2;
+
+interface EnginePolicy {
+  /** Pause zwischen aufeinanderfolgenden Chunks. */
+  interChunkDelayMs: number;
+  /** Cooldown nach Empty-Audio-Fehler — 0 deaktiviert die Spezialregel
+   *  (nur Edge braucht das). */
+  emptyAudioCooldownMs: number;
+}
+
+const POLICIES: Record<EngineId, EnginePolicy> = {
+  edge: { interChunkDelayMs: 1500, emptyAudioCooldownMs: 30_000 },
+  kokoro: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0 },
+};
 
 export interface ChunkSynthesisParams {
   segment: Segment;
@@ -37,21 +46,25 @@ export interface ChunkSynthesisParams {
 
 export class ChunkSynthesisFailure extends Error {
   constructor(public voiceId: string, public cause: unknown) {
-    super(`Chunk synthesis failed for voice=${voiceId}: ${String((cause as Error)?.message ?? cause)}`);
+    super(
+      `Chunk synthesis failed for voice=${voiceId}: ${String(
+        (cause as Error)?.message ?? cause
+      )}`
+    );
   }
 }
 
 /**
  * Synthesisiert einen Chunk über die für die Voice passende Engine.
  * Führt Retries mit Backoff aus. Wirft `ChunkSynthesisFailure` wenn
- * alle Versuche scheitern — der Caller darf das als Signal zum
- * Engine-Switch interpretieren.
+ * alle Versuche scheitern.
  */
 export async function synthesizeChunk(
   params: ChunkSynthesisParams
-): Promise<{ path: string; bytes: number; engineId: "edge" }> {
+): Promise<{ path: string; bytes: number; engineId: EngineId }> {
   const engine = engineFor(params.voice.engine);
   if (!engine) throw new Error(`Unknown TTS engine: ${params.voice.engine}`);
+  const policy = POLICIES[engine.id];
 
   let lastErr: unknown = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -72,19 +85,19 @@ export async function synthesizeChunk(
     } catch (err) {
       lastErr = err;
       if (attempt < MAX_RETRIES) {
-        // Edge-Empty-Audio ist Rate-Limit — kurzer Backoff bringt nichts.
-        const isEdgeEmpty =
-          engine.id === "edge" &&
-          err instanceof Error &&
-          /empty audio/i.test(err.message);
-        const backoff = isEdgeEmpty
-          ? EDGE_EMPTY_AUDIO_COOLDOWN_MS
-          : 400 * Math.pow(2, attempt);
+        const isEmptyAudio =
+          err instanceof Error && /empty audio/i.test(err.message);
+        const backoff =
+          isEmptyAudio && policy.emptyAudioCooldownMs > 0
+            ? policy.emptyAudioCooldownMs
+            : 400 * Math.pow(2, attempt);
         try {
           await sleep(backoff, undefined, { signal: params.signal });
         } catch {
-          // AbortError — Cancel während Backoff → raus ohne weitere Retries
-          throw new ChunkSynthesisFailure(params.voice.id, new Error("canceled"));
+          throw new ChunkSynthesisFailure(
+            params.voice.id,
+            new Error("canceled")
+          );
         }
       }
     }
@@ -92,9 +105,11 @@ export async function synthesizeChunk(
   throw new ChunkSynthesisFailure(params.voice.id, lastErr);
 }
 
-/** Inter-Chunk-Pause zur Rate-Limit-Vermeidung. Derzeit nur Edge. */
-export async function interChunkPause(engineId: "edge"): Promise<void> {
-  if (engineId === "edge") await sleep(EDGE_INTER_CHUNK_DELAY_MS);
+/** Inter-Chunk-Pause zur Rate-Limit-Vermeidung. Pro Engine konfiguriert
+ *  — Kokoro = 0 ms, Edge = 1500 ms. */
+export async function interChunkPause(engineId: EngineId): Promise<void> {
+  const ms = POLICIES[engineId]?.interChunkDelayMs ?? 0;
+  if (ms > 0) await sleep(ms);
 }
 
 /** Preview → Buffer. Keine Retries/Fallbacks — wenn die Engine nicht
@@ -110,4 +125,3 @@ export async function synthesizePreview(params: {
   if (!engine) throw new Error(`Unknown TTS engine: ${voice.engine}`);
   return engine.preview({ voice, locale: params.locale, text: params.text });
 }
-

@@ -40,6 +40,9 @@ External services (called over network at runtime, not linked)
 - Ollama (optional)     (MIT)       https://github.com/ollama/ollama
 - FFmpeg                (LGPL 2.1+) https://ffmpeg.org
   (invoked as a subprocess; no linking, AGPLv3-compatible usage)
+- Docling-Serve         (MIT)       https://github.com/docling-project/docling-serve
+- Kokoro-FastAPI        (Apache 2.0) https://github.com/remsky/Kokoro-FastAPI
+  serves the Kokoro-82M TTS model (Apache 2.0, hexgrad/Kokoro-82M).
 
 ================================================================================
 Third-party service: Microsoft Edge Read-Aloud API (Azure Neural TTS)
@@ -54,8 +57,9 @@ themselves are proprietary and remain the property of Microsoft / Azure.
   use of the kind a browser user would generate with Microsoft Edge.
 - Large-scale automated use may violate Microsoft's terms of service.
 
-If you need guaranteed-compliant TTS, point PageMentor at a local Piper
-instance instead (planned, see PLAN.md).
+If you need guaranteed-compliant TTS, use the bundled Kokoro sidecar
+instead (Apache 2.0, runs locally — see docker-compose.yml). Edge stays
+available as a no-setup fallback.
 
 ================================================================================
 Apache License 2.0 components

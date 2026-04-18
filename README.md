@@ -16,10 +16,12 @@ PDF upload                                              Browser (React 19 + Vite
    ▼                                                        │ /api
 SQLite ◀───── Bun + Hono backend ────────────────────────── ┘
    │             │
-   │             ├─── pdf-parse  → boilerplate stripping → chapter detection
+   │             ├─── Docling-Serve (sidecar) → markdown + chapter sections
    │             │
-   │             ├─── Microsoft Neural TTS (Edge Read-Aloud, via msedge-tts)
-   │             │      └── SSML → ffmpeg loudnorm → MP3 per chapter → M4B
+   │             ├─── Ollama → audio-text preprocessor (cached per chapter)
+   │             │      └── Kokoro-FastAPI (sidecar, Apache 2.0, default)
+   │             │             or Microsoft Edge Neural TTS (cloud fallback)
+   │             │             └── ffmpeg loudnorm → MP3 per chapter → M4B
    │             │
    │             ├─── Meilisearch  (full-text over titles, chapters, OCR text)
    │             │
@@ -38,12 +40,17 @@ SQLite ◀───── Bun + Hono backend ───────────�
 - **PDF viewer** — continuous scroll, zoom, page jump, text-selection → card
 - **Chapter detection** — heading heuristic + fallback page slicing, with
   in-line editor (rename, merge, delete)
-- **Audio cleanup** — watermarks, running heads, figure and table captions
-  and inline references are stripped before TTS so the audiobook does not
-  read out nonsense
-- **Audiobook** — Microsoft Neural voices (Seraphina, Florian, Ava, Andrew,
-  …) with SSML pauses, EBU R128 loudness normalisation, MP3 per chapter
-  and a complete M4B with chapter markers
+- **Audio cleanup** — runs in two stages. First, the extractor strips
+  watermarks, running heads, figure/table captions and inline references.
+  Then a local LLM (Ollama) rewrites the chapter for narration:
+  expanding abbreviations, verbalising formulas and Greek letters,
+  stripping citations, removing bullet markers. Result is cached per
+  chapter so re-generation is free.
+- **Audiobook** — defaults to **Kokoro** (Apache 2.0, runs in a local
+  sidecar — recommendable for universities and companies, no cloud
+  dependency). **Edge** stays available as a no-setup cloud fallback.
+  EBU R128 loudness normalisation, MP3 per chapter and a complete M4B
+  with chapter markers.
 - **Send to Apple** — M4B download for Apple Books, private RSS feed for
   Apple Podcasts / Overcast / Pocket Casts (token derived from password)
 - **Flashcards** — task extraction from chapter text, AI generator via
@@ -180,10 +187,14 @@ configured" hint and the rest of the app keeps working.
 
 - **Backend:** Bun + Hono + better-sqlite3
 - **Frontend:** Vite + React 19 + Tailwind (night theme, red accents)
-- **TTS:** Microsoft Azure Neural voices via
+- **TTS (default):** Kokoro 82 M (Apache 2.0) via
+  [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) sidecar
+- **TTS (fallback):** Microsoft Azure Neural voices via
   [msedge-tts](https://www.npmjs.com/package/msedge-tts)
+- **Text extraction:** [Docling-Serve](https://github.com/docling-project/docling-serve) sidecar
 - **Search:** Meilisearch v1.12
-- **LLM:** Ollama (optional, self-hosted)
+- **LLM:** Ollama (optional, self-hosted) — also drives the audio
+  text preprocessor before TTS
 - **Audio:** FFmpeg (loudnorm + M4B chapters, invoked as subprocess)
 
 ## Project structure

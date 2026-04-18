@@ -16,9 +16,126 @@ import {
   embeddingFromBuffer,
   cosineSim,
 } from "../services/embeddings";
+import { generateStream } from "../services/llm";
 import { tt } from "../lib/i18n";
 
 export const ragRoutes = new Hono();
+
+interface RetrievalHit {
+  id: string;
+  score: number;
+  document_id: string;
+  document_title: string;
+  chapter_id: string;
+  chapter_number: number;
+  chapter_title: string;
+  chapter_kind: string;
+  start_page: number;
+  end_page: number;
+  text: string;
+}
+
+/** Embedded die Query, holt Top-K Chunks via Cosine über alle Chunks
+ *  des Dokuments. Wirft, wenn kein Embedder erreichbar oder das Doc
+ *  keine embedded Chunks hat. */
+async function retrieveTopK(params: {
+  docId?: string;
+  query: string;
+  topK: number;
+}): Promise<{ hits: RetrievalHit[]; embedderModel: string }> {
+  const embedder = await resolveEmbedder();
+  if (!embedder) {
+    throw new Error("ollama_unreachable");
+  }
+  const queryEmb = await embedText(params.query, embedder);
+
+  const sql = `
+    SELECT ch.id, ch.document_id, ch.chapter_id, ch.chunk_index, ch.text,
+           ch.start_page, ch.end_page, ch.embedding,
+           c.number as chapter_number, c.title as chapter_title, c.kind as chapter_kind,
+           d.title as document_title
+    FROM chunks ch
+    JOIN chapters c ON c.id = ch.chapter_id
+    JOIN documents d ON d.id = ch.document_id
+    WHERE ch.embedding IS NOT NULL
+    ${params.docId ? "AND ch.document_id = ?" : ""}
+  `;
+  const rows = (params.docId
+    ? db().prepare(sql).all(params.docId)
+    : db().prepare(sql).all()) as Array<RagHitRow>;
+
+  const scored: Array<RetrievalHit & { score: number }> = [];
+  for (const r of rows) {
+    if (!r.embedding) continue;
+    const emb = embeddingFromBuffer(r.embedding);
+    if (emb.length !== queryEmb.length) continue;
+    const score = cosineSim(queryEmb, emb);
+    scored.push({
+      id: r.id,
+      score,
+      document_id: r.document_id,
+      document_title: r.document_title,
+      chapter_id: r.chapter_id,
+      chapter_number: r.chapter_number,
+      chapter_title: r.chapter_title,
+      chapter_kind: r.chapter_kind,
+      start_page: r.start_page,
+      end_page: r.end_page,
+      text: r.text,
+    });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return { hits: scored.slice(0, params.topK), embedderModel: embedder.model };
+}
+
+const ANSWER_SYSTEM_DE = `Du bist ein Lerncoach, der Fragen ausschließlich anhand der vorgelegten Quellen-Snippets aus einem Studienmaterial beantwortet.
+
+Regeln:
+- Stütze JEDE inhaltliche Aussage auf die Snippets. Erfinde nichts dazu.
+- Belege jede Aussage mit der Snippet-Nummer in eckigen Klammern direkt nach dem Satz: "Die Definition lautet … [1]." Mehrere Belege als "[1][3]".
+- Wenn die Snippets die Frage NICHT beantworten oder zu schwach belegen, sag das offen ("Die vorliegenden Quellen reichen für eine vollständige Antwort nicht aus, ich kann aber Folgendes sagen: …" oder "Dazu finde ich in den Quellen nichts.").
+- Schreibe in klarem Deutsch, in einem strukturierten Antworttext (kurze Absätze, ggf. Bulletpoints für Aufzählungen).
+- Keine Einleitung wie "Gerne erkläre ich dir …", direkt zur Sache.
+- Keine Wiederholung der Frage.
+
+Antwortformat: reines Markdown. Verwende ## für Zwischenüberschriften wenn sinnvoll, sonst Fließtext mit kurzen Absätzen. Zitiere am Satzende mit [n].`;
+
+const ANSWER_SYSTEM_EN = `You are a study coach who answers questions strictly from the provided source snippets of study material.
+
+Rules:
+- Ground EVERY substantive statement in the snippets. Do not invent.
+- Cite every statement with the snippet number in square brackets at the end of the sentence: "The definition is … [1]." Multiple sources as "[1][3]".
+- If the snippets do NOT answer the question or are too weak, say so openly ("The provided sources don't fully answer this, but here is what I can say: …" or "I don't find this in the sources.").
+- Write in clear English, structured (short paragraphs, bullets for enumerations).
+- No preface like "I'd be happy to explain …", get straight to it.
+- Don't repeat the question.
+
+Response format: plain Markdown. Use ## for sub-headings if useful, otherwise short paragraphs. Cite at sentence end with [n].`;
+
+function buildAnswerPrompt(
+  query: string,
+  hits: RetrievalHit[],
+  language: string
+): { system: string; prompt: string } {
+  const isDe = language === "de";
+  const system = isDe ? ANSWER_SYSTEM_DE : ANSWER_SYSTEM_EN;
+  const sourceBlocks = hits
+    .map((h, i) => {
+      const pageRange =
+        h.start_page === h.end_page
+          ? `${isDe ? "S." : "p."} ${h.start_page}`
+          : `${isDe ? "S." : "pp."} ${h.start_page}–${h.end_page}`;
+      const header = isDe
+        ? `[${i + 1}] Kapitel ${h.chapter_number} — ${h.chapter_title} (${pageRange})`
+        : `[${i + 1}] Chapter ${h.chapter_number} — ${h.chapter_title} (${pageRange})`;
+      return `${header}\n${h.text.trim()}`;
+    })
+    .join("\n\n---\n\n");
+  const prompt = isDe
+    ? `Frage des Studenten:\n${query}\n\n=== Quellen-Snippets ===\n${sourceBlocks}\n=== Ende der Quellen ===\n\nBeantworte die Frage anhand der Snippets, mit [n]-Zitaten am Satzende.`
+    : `Student's question:\n${query}\n\n=== Source snippets ===\n${sourceBlocks}\n=== End of sources ===\n\nAnswer the question based on the snippets, with [n] citations at sentence end.`;
+  return { system, prompt };
+}
 
 interface QueryBody {
   query: string;
@@ -52,35 +169,20 @@ ragRoutes.post("/query", async (c) => {
   if (!query) return c.json({ error: tt(c, "err.missingFields") }, 400);
   const topK = Math.max(1, Math.min(20, body.topK ?? 5));
 
-  const embedder = await resolveEmbedder();
-  if (!embedder) {
-    return c.json(
-      { error: "No Ollama reachable for embedding the query. Configure it in Settings." },
-      503
-    );
+  let result: Awaited<ReturnType<typeof retrieveTopK>>;
+  try {
+    result = await retrieveTopK({ docId: body.docId, query, topK });
+  } catch (err) {
+    if ((err as Error).message === "ollama_unreachable") {
+      return c.json(
+        { error: "No Ollama reachable for embedding the query. Configure it in Settings." },
+        503
+      );
+    }
+    return c.json({ error: (err as Error).message }, 500);
   }
 
-  const queryEmb = await embedText(query, embedder).catch((err) => {
-    throw new Error(`embed query failed: ${(err as Error).message}`);
-  });
-
-  // Candidate rows + chapter + doc metadata.
-  const sql = `
-    SELECT ch.id, ch.document_id, ch.chapter_id, ch.chunk_index, ch.text,
-           ch.start_page, ch.end_page, ch.embedding,
-           c.number as chapter_number, c.title as chapter_title, c.kind as chapter_kind,
-           d.title as document_title
-    FROM chunks ch
-    JOIN chapters c ON c.id = ch.chapter_id
-    JOIN documents d ON d.id = ch.document_id
-    WHERE ch.embedding IS NOT NULL
-    ${body.docId ? "AND ch.document_id = ?" : ""}
-  `;
-  const rows = (body.docId
-    ? db().prepare(sql).all(body.docId)
-    : db().prepare(sql).all()) as RagHitRow[];
-
-  if (rows.length === 0) {
+  if (result.hits.length === 0) {
     return c.json({
       hits: [],
       message:
@@ -88,31 +190,106 @@ ragRoutes.post("/query", async (c) => {
     });
   }
 
-  type Scored = RagHitRow & { score: number };
-  const scored: Scored[] = [];
-  for (const r of rows) {
-    if (!r.embedding) continue;
-    const emb = embeddingFromBuffer(r.embedding);
-    if (emb.length !== queryEmb.length) continue;
-    const score = cosineSim(queryEmb, emb);
-    scored.push({ ...r, score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  const hits = scored.slice(0, topK).map((h) => ({
-    id: h.id,
-    score: h.score,
-    document_id: h.document_id,
-    document_title: h.document_title,
-    chapter_id: h.chapter_id,
-    chapter_number: h.chapter_number,
-    chapter_title: h.chapter_title,
-    chapter_kind: h.chapter_kind,
-    start_page: h.start_page,
-    end_page: h.end_page,
-    text: h.text,
-  }));
+  return c.json({ hits: result.hits, query, topK, embedder: result.embedderModel });
+});
 
-  return c.json({ hits, query, topK, embedder: embedder.model });
+interface AnswerBody {
+  docId?: string;
+  query: string;
+  topK?: number;
+  model?: string;
+}
+
+/** Streaming RAG-Antwort. NDJSON-Events:
+ *    { "type": "sources", "sources": [...] }
+ *    { "type": "token",   "data": "..." }
+ *    { "type": "done",    "model": "...", "content": "..." }
+ *    { "type": "error",   "message": "..." }
+ *  Sources werden zuerst gestreamt, dann beginnt der LLM zu tokenisieren. */
+ragRoutes.post("/answer/stream", async (c) => {
+  let body: AnswerBody;
+  try {
+    body = await c.req.json<AnswerBody>();
+  } catch {
+    return c.json({ error: tt(c, "err.missingFields") }, 400);
+  }
+  const query = (body.query ?? "").trim();
+  if (!query) return c.json({ error: tt(c, "err.missingFields") }, 400);
+  const topK = Math.max(1, Math.min(10, body.topK ?? 6));
+
+  // Sprache am Dokument festmachen — wenn docId fehlt, default DE
+  // (Sidekick wird sowieso meistens pro Dokument gefragt).
+  let language = "de";
+  if (body.docId) {
+    const doc = db()
+      .prepare("SELECT language FROM documents WHERE id = ?")
+      .get(body.docId) as { language: string } | undefined;
+    if (doc) language = doc.language;
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const write = (obj: unknown) =>
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      try {
+        const retrieved = await retrieveTopK({
+          docId: body.docId,
+          query,
+          topK,
+        });
+
+        if (retrieved.hits.length === 0) {
+          write({
+            type: "error",
+            message:
+              language === "de"
+                ? "Für dieses Dokument sind noch keine Embeddings vorhanden. Lass die Extraktion erneut laufen, sobald Ollama mit nomic-embed-text online ist."
+                : "No embedded chunks for this document yet. Re-run extraction once Ollama with nomic-embed-text is online.",
+          });
+          return;
+        }
+
+        write({ type: "sources", sources: retrieved.hits });
+
+        const { system, prompt } = buildAnswerPrompt(
+          query,
+          retrieved.hits,
+          language
+        );
+
+        const { full, model } = await generateStream({
+          prompt,
+          system,
+          model: body.model,
+          options: { temperature: 0.2, top_p: 0.9 },
+          onToken: (chunk) => write({ type: "token", data: chunk }),
+        });
+
+        write({ type: "done", model, content: full });
+      } catch (err) {
+        const msg =
+          (err as Error).message === "ollama_unreachable"
+            ? language === "de"
+              ? "Ollama ist nicht erreichbar — keine RAG-Antwort möglich. Konfiguriere die LLM-Kette in den Einstellungen."
+              : "Ollama is unreachable — no RAG answer possible. Configure the LLM chain in Settings."
+            : err instanceof Error
+              ? err.message
+              : "RAG stream failed";
+        write({ type: "error", message: msg });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+    },
+  });
 });
 
 /** Re-embed-all: holt alle Chunks ohne Embedding (oder mit falscher

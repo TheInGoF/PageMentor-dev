@@ -7,6 +7,11 @@ import { segmentText } from "../tts/segment";
 import { synthesizeChunk, interChunkPause } from "../tts/synth";
 import { concatMp3, normalizeAndTag, buildM4B } from "../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../tts/voices";
+import type { EngineId } from "../tts/engines/base";
+import {
+  preprocessChapterForAudio,
+  preprocessAvailable,
+} from "./audioPreprocess";
 import { emit } from "./events";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
@@ -119,6 +124,15 @@ export async function generateAudiobook(params: {
     message: `Generiere ${chapters.length} Kapitel mit ${voice?.label ?? voiceId}`,
   });
 
+  // Preprocessor-Verfügbarkeit einmal vor der Loop checken — vermeidet
+  // N Ollama-Pings, der `pickProvider()`-Cache hält 30 s.
+  const llmReady = await preprocessAvailable();
+  if (!llmReady) {
+    console.warn(
+      `[audiobook] LLM-Preprocessor nicht verfügbar — verwende Original-Text. Hörbuch klingt evtl. holprig (Abkürzungen, Zitate, Formeln).`
+    );
+  }
+
   const successfulChapterFiles: string[] = [];
   const chapterDurations: Array<{ title: string; durationMs: number }> = [];
   // Circuit-Breaker: wenn Edge zwei Kapitel hintereinander mit Empty-
@@ -133,6 +147,36 @@ export async function generateAudiobook(params: {
       if (signal.aborted) throw new AudiobookCanceled();
       const ch = chapters[i];
       const outFile = chapterFile(audioDir, ch);
+
+      // Preprocessing: LLM bereinigt den Text für TTS (Abkürzungen
+      // ausschreiben, Formeln verbalisieren, Zitate raus). Cached in
+      // `chapters.audio_text` — beim zweiten Run kein LLM-Call mehr.
+      // Fehlschlag oder LLM offline → Fallback auf Original-Text, weil
+      // ein holpriges Hörbuch immer noch besser ist als gar keins.
+      let chapterText = ch.text;
+      if (llmReady) {
+        try {
+          emit({
+            phase: "audiobook.chapter.preprocess",
+            docId: doc.id,
+            chapterId: ch.id,
+            chapterNumber: ch.number,
+            current: i + 1,
+            total: chapters.length,
+          });
+          const pp = await preprocessChapterForAudio({
+            chapterId: ch.id,
+            language: doc.language,
+          });
+          chapterText = pp.text;
+        } catch (err) {
+          console.warn(
+            `[audiobook] preprocess failed for chapter ${ch.number}, falling back to raw text:`,
+            err
+          );
+        }
+      }
+
       emit({
         phase: "audiobook.chapter.start",
         docId: doc.id,
@@ -145,7 +189,7 @@ export async function generateAudiobook(params: {
 
       try {
         const { durationMs } = await synthesizeChapter({
-          chapter: ch,
+          chapter: { ...ch, text: chapterText },
           audioDir,
           voice,
           locale,
@@ -214,7 +258,7 @@ export async function generateAudiobook(params: {
           const reason =
             `Edge TTS (Microsoft) antwortet mit leerem Audio — Azure-Quota erreicht. ` +
             `Bereits fertige Kapitel bleiben erhalten. ` +
-            `Wechsle auf eine Piper-Stimme und generiere die fehlenden Kapitel neu.`;
+            `Wechsle auf eine Kokoro-Stimme (lokal, ohne Quota) und generiere die fehlenden Kapitel neu.`;
           emit({
             phase: "audiobook.failed",
             docId: doc.id,
@@ -390,7 +434,7 @@ function upsertAudio(params: {
   storedRelPath: string;
   durationMs: number;
   voice: string;
-  engine: "edge";
+  engine: EngineId;
   status: "done" | "failed" | "running" | "pending";
 }): void {
   const d = db();

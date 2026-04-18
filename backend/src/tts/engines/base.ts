@@ -1,16 +1,16 @@
 /**
  * Gemeinsames Interface für alle TTS-Engines.
  *
- * Jede Engine meldet zur Laufzeit, ob sie verfügbar ist (Piper hat
- * z. B. Voice-Dateien gefunden, Edge kann den Websocket erreichen —
- * Letzteres prüfen wir nicht proaktiv, nur reaktiv via Fallback),
- * liefert ihren Teil des Voice-Katalogs und kann ein Segment oder ein
- * kurzes Preview synthetisieren.
+ * Jede Engine meldet zur Laufzeit, ob sie verfügbar ist. Kokoro pingt
+ * den Sidecar, Edge antwortet immer `true` und fällt erst reaktiv um
+ * (Microsofts Anti-Abuse-Gate kippt 0-Bytes statt eines klaren 4xx).
+ * `listVoices()` darf bei Async-Engines synchronen Cache liefern, der
+ * im Hintergrund aktualisiert wird (siehe kokoro.ts).
  */
 
 import type { Segment } from "../segment";
 
-export type EngineId = "edge";
+export type EngineId = "edge" | "kokoro";
 
 export interface Voice {
   id: string;
@@ -46,9 +46,10 @@ export interface PreviewParams {
 
 export interface TtsEngine {
   id: EngineId;
-  /** Engines, die Assets im Dateisystem brauchen (Piper), melden hier
-   *  `false`, wenn nichts gefunden wurde. Netz-basierte Engines (Edge)
-   *  melden immer `true` und fallen zur Laufzeit um. */
+  /** Engines mit Sidecar (Kokoro) melden hier `false`, wenn der
+   *  Sidecar beim letzten Discovery-Refresh nicht antwortete.
+   *  Netz-basierte Engines (Edge) melden immer `true` und fallen erst
+   *  reaktiv um, wenn der Server stumm Empty-Audio liefert. */
   isAvailable(): boolean;
   listVoices(): Voice[];
   synthesize(params: SynthesizeParams): Promise<SynthesizeResult>;

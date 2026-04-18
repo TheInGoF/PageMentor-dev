@@ -7,7 +7,8 @@
  * Tagen mit; ein Dependabot-PR im Repo reagiert automatisch.
  *
  * Wenn Azure throttelt oder ein stale Client stumm 0 Bytes liefert,
- * springt der Dispatcher (siehe synth.ts) automatisch auf Piper um.
+ * meldet der Dispatcher das nach oben — der User kann dann auf eine
+ * Kokoro-Stimme (lokaler Sidecar, ohne Quota) umschalten.
  */
 
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
