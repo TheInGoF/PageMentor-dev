@@ -109,7 +109,7 @@ export function AudioTextEditModal({ chapterId, onClose, onSaved }: Props) {
               <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wide">
                 {t("audiobook.edit.original")}
               </label>
-              <div className="card p-3 bg-bg-elevated overflow-y-auto max-h-[60vh] text-sm text-neutral-300 whitespace-pre-wrap font-mono text-[12px] leading-relaxed">
+              <div className="bg-bg-elevated border border-border rounded-lg p-3 overflow-y-auto max-h-[60vh] min-h-[40vh] font-mono text-[12px] leading-relaxed text-neutral-300 whitespace-pre-wrap">
                 {data.originalText}
               </div>
               <div className="text-[10px] text-neutral-600 text-right">
@@ -127,7 +127,7 @@ export function AudioTextEditModal({ chapterId, onClose, onSaved }: Props) {
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                className="input font-mono text-[12px] leading-relaxed resize-none max-h-[60vh] min-h-[40vh]"
+                className="w-full bg-bg-card border border-border-strong rounded-lg p-3 max-h-[60vh] min-h-[40vh] font-mono text-[12px] leading-relaxed text-neutral-100 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
                 spellCheck={false}
               />
               <div className="text-[10px] text-neutral-600 text-right">
