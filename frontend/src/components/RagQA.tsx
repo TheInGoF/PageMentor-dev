@@ -310,7 +310,7 @@ function RenderAnswer({
 }) {
   const lines = useMemo(() => text.split(/\r?\n/), [text]);
   const nodes: React.ReactNode[] = [];
-  let bulletBuffer: React.ReactNode[][] = [];
+  let bulletBuffer: React.ReactNode[] = [];
 
   function flushBullets() {
     if (bulletBuffer.length === 0) return;
