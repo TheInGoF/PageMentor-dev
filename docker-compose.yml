@@ -39,6 +39,11 @@ services:
       PM_DOCLING_URL: http://docling:5001
       PM_DOCLING_API_KEY: ${DOCLING_API_KEY:-pm-docling-internal}
       PM_KOKORO_URL: http://kokoro:8880
+      # Optional: Deutscher Kokoro-Sidecar (df_eva, dm_bernd) — leer
+      # lassen wenn der `kokoro-de`-Service unten nicht aktiviert ist.
+      # Standardmäßig wird er nur mit `--profile de` mitgestartet, damit
+      # ein leerer Wert kein Connection-Error im Log produziert.
+      PM_KOKORO_DE_URL: ${PM_KOKORO_DE_URL:-}
     volumes:
       - /volume1/docker/pagementor/data:/data
     depends_on:
@@ -118,3 +123,26 @@ services:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
     container_name: pm-kokoro
     restart: unless-stopped
+
+  # Deutscher Kokoro-Sidecar — opt-in via Profile, weil:
+  #   1. Kein vorgebautes Image existiert (Build aus dem r1di-Repo
+  #      dauert ~5-10 min beim ersten Up).
+  #   2. Auf der NAS-CPU würde dieser Sidecar besonders zäh laufen,
+  #      idealerweise auf einem stärkeren Host (Mac, Windows-PC mit
+  #      GPU) als externer Sidecar betreiben (siehe
+  #      eigene_mac-sidecars-compose.yaml / eigene_windows-…).
+  #
+  # Aktivieren mit:
+  #   PM_KOKORO_DE_URL=http://kokoro-de:8880 docker compose --profile de up -d
+  #
+  # Voices die er liefert: df_eva (weiblich), dm_bernd (männlich).
+  # Basis: Tundragoon/Kokoro-German v1.1, Phonemizer espeak-ng.
+  # Apache 2.0.
+  kokoro-de:
+    image: pagementor/kokoro-fastapi-german:latest
+    build:
+      context: https://github.com/r1di/kokoro-fastapi-german.git
+      dockerfile: docker/cpu/Dockerfile
+    container_name: pm-kokoro-de
+    restart: unless-stopped
+    profiles: ["de"]

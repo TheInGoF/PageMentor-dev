@@ -50,3 +50,19 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+
+  # Deutscher Kokoro-Sidecar auf GPU. Nur aktiv mit `--profile de`.
+  # GPU-Build aus dem r1di-Repo dauert ~10-15 min beim ersten Mal
+  # (PyTorch CUDA-Layer ~5 GB), danach gecached.
+  kokoro-de:
+    image: pagementor/kokoro-fastapi-german-gpu:latest
+    build:
+      context: https://github.com/r1di/kokoro-fastapi-german.git
+      dockerfile: docker/gpu/Dockerfile
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

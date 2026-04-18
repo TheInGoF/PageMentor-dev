@@ -53,6 +53,12 @@ Baumstrukturen, Tags statt Zweige. Lokal, Portainer-Stack.
     auch für lange wissenschaftliche Texte, für Hochschulen und Firmen
     empfehlbar. CPU-Default (~3-5x Realtime), GPU-Override via
     `docker-compose.gpu.yml` (~30-50x auf 3090).
+  - **Deutsche Voices** über zweiten optionalen Sidecar `kokoro-de`
+    (r1di/kokoro-fastapi-german, Tundragoon/Kokoro-German v1.1):
+    `df_eva` (weiblich) und `dm_bernd` (männlich). Aktivieren mit
+    `--profile de` oder als externer Sidecar auf einem stärkeren Host.
+    Backend mergt die Voice-Listen beider Sidecars und routet
+    Synthese-Calls anhand der Voice-ID.
   - **Fallback: Edge** (msedge-tts, Microsoft Neural Voices) als
     Cloud-Option ohne Setup. Bleibt im Voice-Picker auswählbar.
   - **Audio-Preprocessor**: Vor jedem Kapitel läuft der LLM einmal

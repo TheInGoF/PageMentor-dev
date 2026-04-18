@@ -189,6 +189,12 @@ configured" hint and the rest of the app keeps working.
 - **Frontend:** Vite + React 19 + Tailwind (night theme, red accents)
 - **TTS (default):** Kokoro 82 M (Apache 2.0) via
   [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) sidecar
+- **TTS (German voices):** optional second sidecar
+  [Kokoro-FastAPI-German](https://github.com/r1di/kokoro-fastapi-german)
+  exposing `df_eva` + `dm_bernd` from
+  [Tundragoon/Kokoro-German](https://huggingface.co/Tundragoon/Kokoro-German).
+  Enable with `--profile de` or run as external sidecar on a stronger
+  host (Mac, Windows + GPU).
 - **TTS (fallback):** Microsoft Azure Neural voices via
   [msedge-tts](https://www.npmjs.com/package/msedge-tts)
 - **Text extraction:** [Docling-Serve](https://github.com/docling-project/docling-serve) sidecar

@@ -1,21 +1,33 @@
 /**
- * Kokoro-Engine — lokales TTS via Kokoro-FastAPI-Sidecar.
+ * Kokoro-Engine — lokales TTS via Kokoro-FastAPI-Sidecar(s).
  *
  * Apache-2.0-Modell (~82 M Parameter). API ist OpenAI-kompatibel:
  *   POST /v1/audio/speech     → MP3-Bytes
- *   GET  /v1/audio/voices     → ["af_alloy", "df_alpha", …]
+ *   GET  /v1/audio/voices     → ["af_alloy", "df_eva", …]
  *
- * Voice-Discovery läuft asynchron im Hintergrund. `listVoices()` gibt
- * den letzten Cache-Snapshot synchron zurück, damit der HTTP-Handler
- * nicht blockiert. Bei abgelaufenem TTL wird im Hintergrund neu
- * gerefresht — der nächste Call sieht dann frische Voices.
+ * Multi-Sidecar-Support:
+ *   - PM_KOKORO_URL    → Standard-Sidecar (remsky/Kokoro-FastAPI),
+ *                        bringt EN/Multilingual-Voices mit. Default
+ *                        http://kokoro:8880 im Compose-Stack.
+ *   - PM_KOKORO_DE_URL → optionaler DE-Sidecar
+ *                        (r1di/kokoro-fastapi-german), liefert die
+ *                        deutschen Community-Voices df_eva + dm_bernd
+ *                        die im Standard-Image fehlen.
+ *
+ * Voice-Discovery fragt beide Sidecars ab und merged die Listen.
+ * Pro Voice merken wir uns intern, welcher Sidecar sie liefert —
+ * Synthese-Calls routen zur richtigen URL anhand der Voice-ID.
+ *
+ * `listVoices()` ist synchron (Cache-Snapshot), Refresh läuft im
+ * Hintergrund. Bei abgelaufenem TTL wird re-discovered, der nächste
+ * Call sieht dann frische Voices.
  *
  * Voice-IDs folgen der Konvention `<lang_letter><gender>_<name>`:
  *   d = Deutsch · a = American English · b = British English · …
  *   f = female  · m = male
  * Aus dem Prefix leiten wir Sprache/Locale/Gender ab — dadurch nehmen
  * wir Community-Voices (z. B. neue DE-Finetunes) ohne Code-Änderung
- * mit, sobald sie im Sidecar-Voice-Verzeichnis liegen.
+ * mit, sobald sie in irgendeinem konfigurierten Sidecar liegen.
  */
 
 import { writeFile } from "fs/promises";
@@ -27,7 +39,25 @@ import type {
   PreviewParams,
 } from "./base";
 
-const KOKORO_URL = process.env.PM_KOKORO_URL || "http://kokoro:8880";
+interface SidecarSource {
+  url: string;
+  /** Kurzer Bezeichner für Logs ("main", "de"). */
+  label: string;
+}
+
+const SOURCES: SidecarSource[] = [
+  {
+    url: process.env.PM_KOKORO_URL || "http://kokoro:8880",
+    label: "main",
+  },
+];
+{
+  const deUrl = process.env.PM_KOKORO_DE_URL;
+  if (deUrl && deUrl.trim().length > 0) {
+    SOURCES.push({ url: deUrl.trim(), label: "de" });
+  }
+}
+
 const REFRESH_TTL_MS = 5 * 60_000;
 /** Wenn der Sidecar beim letzten Versuch nicht antwortete, warten wir
  *  nur kurz bis zum nächsten Probe — der Container braucht nach dem
@@ -41,8 +71,16 @@ interface KokoroVoicesResponse {
   voices?: string[];
 }
 
-let cache: { voices: Voice[]; refreshedAt: number; alive: boolean } = {
+let cache: {
+  voices: Voice[];
+  /** voiceId → sidecar URL — wir routen Synthese-Calls anhand dieser
+   *  Map zur Quelle, von der wir die Voice gediscovert haben. */
+  voiceUrl: Map<string, string>;
+  refreshedAt: number;
+  alive: boolean;
+} = {
   voices: [],
+  voiceUrl: new Map(),
   refreshedAt: 0,
   alive: false,
 };
@@ -94,31 +132,65 @@ function markFlagships(voices: Voice[]): void {
   }
 }
 
-async function doRefresh(): Promise<void> {
+/** Eine einzelne Sidecar-URL nach ihrem Voice-Katalog fragen. */
+async function discoverFromSource(
+  source: SidecarSource
+): Promise<{ voices: Voice[]; ok: boolean }> {
   try {
-    const res = await fetch(`${KOKORO_URL}/v1/audio/voices`, {
+    const res = await fetch(`${source.url}/v1/audio/voices`, {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) {
-      cache = { voices: [], refreshedAt: Date.now(), alive: false };
-      return;
+      console.warn(
+        `[kokoro:${source.label}] HTTP ${res.status} from ${source.url}`
+      );
+      return { voices: [], ok: false };
     }
     const data = (await res.json()) as KokoroVoicesResponse;
     const voices = (data.voices ?? [])
       .map(toVoice)
       .filter((v): v is Voice => v !== null);
-    markFlagships(voices);
-    cache = { voices, refreshedAt: Date.now(), alive: voices.length > 0 };
-    console.log(
-      `[kokoro] discovered ${voices.length} voices at ${KOKORO_URL}` +
-        (voices.length > 0
-          ? ` (DE: ${voices.filter((v) => v.language === "de").length})`
-          : "")
-    );
+    return { voices, ok: true };
   } catch (err) {
-    cache = { voices: [], refreshedAt: Date.now(), alive: false };
     console.warn(
-      `[kokoro] sidecar nicht erreichbar (${KOKORO_URL}): ${(err as Error).message}`
+      `[kokoro:${source.label}] sidecar nicht erreichbar (${source.url}): ${(err as Error).message}`
+    );
+    return { voices: [], ok: false };
+  }
+}
+
+async function doRefresh(): Promise<void> {
+  const allVoices: Voice[] = [];
+  const voiceUrl = new Map<string, string>();
+  let anyAlive = false;
+  let totalDe = 0;
+
+  for (const source of SOURCES) {
+    const { voices, ok } = await discoverFromSource(source);
+    if (ok) anyAlive = true;
+    for (const v of voices) {
+      if (voiceUrl.has(v.id)) continue; // erste Quelle gewinnt bei ID-Konflikt
+      allVoices.push(v);
+      voiceUrl.set(v.id, source.url);
+      if (v.language === "de") totalDe++;
+    }
+    if (ok) {
+      console.log(
+        `[kokoro:${source.label}] discovered ${voices.length} voices at ${source.url}`
+      );
+    }
+  }
+
+  markFlagships(allVoices);
+  cache = {
+    voices: allVoices,
+    voiceUrl,
+    refreshedAt: Date.now(),
+    alive: anyAlive,
+  };
+  if (anyAlive) {
+    console.log(
+      `[kokoro] ready: ${allVoices.length} voices total, DE: ${totalDe}`
     );
   }
 }
@@ -155,13 +227,21 @@ function parseRate(rate: string): number {
   return Math.max(0.5, Math.min(2.0, 1 + (sign * pct) / 100));
 }
 
+/** URL des Sidecars der die Voice liefert. Fallback auf den ersten
+ *  konfigurierten Sidecar wenn die ID nicht im Cache ist (z. B. weil
+ *  die Voice neu hinzugekommen ist und der Cache stale). */
+function urlForVoice(voiceId: string): string {
+  return cache.voiceUrl.get(voiceId) ?? SOURCES[0].url;
+}
+
 async function callSpeech(params: {
   text: string;
   voice: string;
   speed: number;
   timeoutMs: number;
 }): Promise<Buffer> {
-  const res = await fetch(`${KOKORO_URL}/v1/audio/speech`, {
+  const url = urlForVoice(params.voice);
+  const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -175,7 +255,7 @@ async function callSpeech(params: {
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`Kokoro ${res.status}: ${detail.slice(0, 200)}`);
+    throw new Error(`Kokoro ${res.status} (${url}): ${detail.slice(0, 200)}`);
   }
   return Buffer.from(await res.arrayBuffer());
 }

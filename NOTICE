@@ -43,6 +43,12 @@ External services (called over network at runtime, not linked)
 - Docling-Serve         (MIT)       https://github.com/docling-project/docling-serve
 - Kokoro-FastAPI        (Apache 2.0) https://github.com/remsky/Kokoro-FastAPI
   serves the Kokoro-82M TTS model (Apache 2.0, hexgrad/Kokoro-82M).
+- Kokoro-FastAPI-German (Apache 2.0) https://github.com/r1di/kokoro-fastapi-german
+  optional second TTS sidecar exposing the German community voices
+  df_eva + dm_bernd. Built on Tundragoon/Kokoro-German v1.1
+  (Apache 2.0, https://huggingface.co/Tundragoon/Kokoro-German),
+  fine-tuned on the HUI-Audio-Corpus-German dataset, with espeak-ng
+  as the phonemizer backend.
 
 ================================================================================
 Third-party service: Microsoft Edge Read-Aloud API (Azure Neural TTS)
