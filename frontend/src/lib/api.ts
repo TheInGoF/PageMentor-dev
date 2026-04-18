@@ -79,6 +79,31 @@ export interface AudioDocument {
   generating: boolean;
 }
 
+export interface ChapterAudioStatus {
+  chapter_id: string;
+  number: number;
+  title: string;
+  kind: string;
+  start_page: number;
+  end_page: number;
+  sort_order: number;
+  text_length: number;
+  audio_text_length: number | null;
+  audio_text_model: string | null;
+  audio_id: string | null;
+  duration_ms: number | null;
+  voice: string | null;
+  audio_status: "pending" | "running" | "done" | "failed" | null;
+}
+
+export interface PreprocessedChapter {
+  chapterId: string;
+  originalText: string;
+  audioText: string | null;
+  model: string | null;
+  cleaned: boolean;
+}
+
 export interface Card {
   id: string;
   document_id: string;
@@ -668,6 +693,33 @@ export const api = {
     fileUrl: (audioId: string) => `/api/audio/file/${audioId}`,
     bookUrl: (docId: string) => `/api/audio/book/${docId}`,
     streamUrl: (docId: string) => `/api/audio/stream/${docId}`,
+    // Per-Chapter workflow (manual Ollama-clean + per-chapter TTS).
+    chapterStatus: (docId: string) =>
+      request<{ chapters: ChapterAudioStatus[] }>(
+        `/api/audio/chapter-status/${docId}`
+      ),
+    preprocessChapter: (chapterId: string, body?: { model?: string; force?: boolean }) =>
+      request<{
+        chapterId: string;
+        text: string;
+        model: string;
+        cached: boolean;
+      }>(`/api/audio/preprocess/${chapterId}`, {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      }),
+    getPreprocessed: (chapterId: string) =>
+      request<PreprocessedChapter>(`/api/audio/preprocessed/${chapterId}`),
+    savePreprocessed: (chapterId: string, text: string | null) =>
+      request<{ chapterId: string; saved?: boolean; cleared?: boolean; length?: number }>(
+        `/api/audio/preprocessed/${chapterId}`,
+        { method: "PATCH", body: JSON.stringify({ text }) }
+      ),
+    generateChapter: (chapterId: string, voice: string, rate: string) =>
+      request<{ status: string; chapterId: string; voice: string }>(
+        `/api/audio/generate-chapter/${chapterId}`,
+        { method: "POST", body: JSON.stringify({ voice, rate }) }
+      ),
   },
   feed: {
     urls: (docId: string) =>

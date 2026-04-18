@@ -7,11 +7,16 @@ import { allVoices, findVoice, defaultVoiceFor } from "../tts/voices";
 import { synthesizePreview } from "../tts/synth";
 import {
   generateAudiobook,
+  generateSingleChapterAudio,
   isGenerating,
   clearAudio,
   clearAudioForChapter,
   cancelAudiobook,
 } from "../services/audiobook";
+import {
+  preprocessChapterForAudio,
+  clearAudioTextCache,
+} from "../services/audioPreprocess";
 import { subscribe, getRecent } from "../services/events";
 import { tt } from "../lib/i18n";
 
@@ -47,6 +52,147 @@ audioRoutes.get("/preview", async (c) => {
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : tt(c, "err.ttsFailed") }, 500);
   }
+});
+
+// --- Per-Chapter Workflow ---------------------------------------------
+//
+// Granulare Kontrolle damit der User pro Kapitel steuern kann, ob/wie
+// Ollama cleant und wann TTS läuft. Flow im UI:
+//   1. GET /chapter-status/:docId   → aktueller Stand aller Kapitel
+//   2. POST /preprocess/:chapterId  → Ollama clean (nur dieses Kapitel)
+//   3. GET /preprocessed/:chapterId → gereinigten Text anzeigen
+//   4. PATCH /preprocessed/:chapterId → manueller Edit
+//   5. POST /generate-chapter/:chapterId → TTS für das eine Kapitel
+
+// Vereinheitlichter Status pro Kapitel — kombiniert chapters + audio +
+// audio_text damit das UI alles aus einem Call bekommt.
+audioRoutes.get("/chapter-status/:docId", (c) => {
+  const rows = db()
+    .prepare(
+      `SELECT c.id as chapter_id, c.number, c.title, c.kind,
+              c.start_page, c.end_page, c.sort_order,
+              length(c.text) as text_length,
+              length(c.audio_text) as audio_text_length,
+              c.audio_text_model,
+              a.id as audio_id, a.duration_ms, a.voice, a.status as audio_status
+       FROM chapters c
+       LEFT JOIN audio a ON a.chapter_id = c.id
+       WHERE c.document_id = ?
+       ORDER BY c.sort_order ASC, c.number ASC`
+    )
+    .all(c.req.param("docId"));
+  return c.json({ chapters: rows });
+});
+
+// Cleanup eines einzelnen Kapitels via Ollama. `force=true` ignoriert
+// den Cache und generiert neu (z. B. nach Modell-Wechsel).
+audioRoutes.post("/preprocess/:chapterId", async (c) => {
+  const chapterId = c.req.param("chapterId");
+  const body = await c.req
+    .json<{ model?: string; force?: boolean }>()
+    .catch(() => ({} as { model?: string; force?: boolean }));
+
+  const chapter = db()
+    .prepare("SELECT id, document_id, language FROM chapters c JOIN documents d ON d.id = c.document_id WHERE c.id = ?")
+    .get(chapterId) as { id: string; document_id: string; language: string } | undefined;
+  if (!chapter) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
+
+  try {
+    const result = await preprocessChapterForAudio({
+      chapterId,
+      language: chapter.language,
+      model: body.model,
+      force: body.force ?? false,
+    });
+    return c.json({
+      chapterId,
+      text: result.text,
+      model: result.model,
+      cached: result.cached,
+    });
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : tt(c, "err.ttsFailed") },
+      500
+    );
+  }
+});
+
+// Den gecleanten Text lesen — falls noch keiner da ist, kommt der
+// Original-Text mit `cleaned: false`.
+audioRoutes.get("/preprocessed/:chapterId", (c) => {
+  const row = db()
+    .prepare(
+      "SELECT id, text, audio_text, audio_text_model FROM chapters WHERE id = ?"
+    )
+    .get(c.req.param("chapterId")) as
+    | { id: string; text: string; audio_text: string | null; audio_text_model: string | null }
+    | undefined;
+  if (!row) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
+  return c.json({
+    chapterId: row.id,
+    originalText: row.text,
+    audioText: row.audio_text,
+    model: row.audio_text_model,
+    cleaned: !!row.audio_text,
+  });
+});
+
+// Manueller Edit des gecleanten Texts. Leerstring oder null → Cache
+// leeren (beim nächsten Preprocess wird wieder Ollama angestoßen).
+audioRoutes.patch("/preprocessed/:chapterId", async (c) => {
+  const chapterId = c.req.param("chapterId");
+  const body = await c.req
+    .json<{ text?: string | null }>()
+    .catch(() => ({} as { text?: string | null }));
+
+  const exists = db()
+    .prepare("SELECT id FROM chapters WHERE id = ?")
+    .get(chapterId);
+  if (!exists) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
+
+  if (body.text == null || body.text.trim().length === 0) {
+    clearAudioTextCache(chapterId);
+    return c.json({ chapterId, cleared: true });
+  }
+
+  db()
+    .prepare(
+      // Manuelle Edits markieren wir mit einem eigenen Model-String,
+      // damit das UI den "human-curated"-Status anzeigen kann.
+      "UPDATE chapters SET audio_text = ?, audio_text_model = ? WHERE id = ?"
+    )
+    .run(body.text.trim(), "manual-edit", chapterId);
+  return c.json({ chapterId, saved: true, length: body.text.trim().length });
+});
+
+// TTS für ein einzelnes Kapitel. Nutzt audio_text wenn da, sonst text.
+// KEIN Preprocess hier — der User soll bewusst entscheiden wann Ollama
+// läuft (damit er den Text erst reviewen kann).
+audioRoutes.post("/generate-chapter/:chapterId", async (c) => {
+  const chapterId = c.req.param("chapterId");
+  const body = await c.req
+    .json<{ voice?: string; rate?: string }>()
+    .catch(() => ({} as { voice?: string; rate?: string }));
+
+  const chapter = db()
+    .prepare(
+      "SELECT c.id, c.document_id, d.language FROM chapters c JOIN documents d ON d.id = c.document_id WHERE c.id = ?"
+    )
+    .get(chapterId) as { id: string; document_id: string; language: string } | undefined;
+  if (!chapter) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
+
+  const voiceId = body.voice || defaultVoiceFor(chapter.language);
+  if (!voiceId) return c.json({ error: "No voice available." }, 400);
+
+  // Fire-and-forget, UI beobachtet SSE wie gehabt.
+  generateSingleChapterAudio({
+    chapterId,
+    voiceId,
+    rate: body.rate,
+  }).catch((err) => console.error(`[tts] single-chapter failed:`, err));
+
+  return c.json({ status: "queued", chapterId, voice: voiceId });
 });
 
 // List audio files for a document's chapters

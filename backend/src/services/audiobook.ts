@@ -317,6 +317,140 @@ export async function generateAudiobook(params: {
   }
 }
 
+/**
+ * Erzeugt Audio für EIN Kapitel. Im Gegensatz zu `generateAudiobook`
+ * läuft hier kein Preprocessor, es wird kein M4B gebaut und es gibt
+ * keinen Circuit-Breaker — der Caller weiß was er tut (UI-Flow: User
+ * hat das Kapitel explizit ausgewählt und ggf. den audio_text bereits
+ * kuratiert).
+ *
+ * Nutzt `audio_text` wenn gesetzt, fällt sonst auf `text` zurück.
+ * Das Ergebnis wird wie bei der Full-Pipeline in der `audio`-Tabelle
+ * persistiert + ffmpeg-normalisiert.
+ */
+export async function generateSingleChapterAudio(params: {
+  chapterId: string;
+  voiceId: string;
+  rate?: string;
+}): Promise<{ audioId: string; durationMs: number }> {
+  const d = db();
+  const row = d
+    .prepare(
+      `SELECT c.id, c.document_id, c.number, c.title, c.text, c.audio_text,
+              c.start_page, c.end_page, c.sort_order, c.kind,
+              doc.title as doc_title, doc.language
+       FROM chapters c
+       JOIN documents doc ON doc.id = c.document_id
+       WHERE c.id = ?`
+    )
+    .get(params.chapterId) as
+    | (Chapter & { audio_text: string | null; doc_title: string; language: string })
+    | undefined;
+  if (!row) throw new Error("Chapter not found");
+
+  const voice = findVoice(params.voiceId);
+  if (!voice) throw new Error(`Unknown voice: ${params.voiceId}`);
+  const rate = params.rate || "+0%";
+
+  // audio_text bevorzugt — der User hat ihn ggf. manuell kuratiert.
+  const effectiveText = (row.audio_text && row.audio_text.trim().length > 0)
+    ? row.audio_text
+    : row.text;
+
+  const audioDir = join(DATA_DIR, "audio", row.document_id);
+  mkdirSync(audioDir, { recursive: true });
+  const outFile = chapterFile(audioDir, row as Chapter);
+
+  // Abort-Signal akzeptieren wir hier nicht von außen — Single-Chapter-
+  // Runs sollen kurz genug sein dass Cancel via UI unnötig ist. Im
+  // Fehlerfall propagiert der Exception nach oben.
+  const abortController = new AbortController();
+
+  const chapterForSynth: Chapter = {
+    ...row,
+    text: effectiveText,
+    kind: row.kind,
+  };
+
+  emit({
+    phase: "audiobook.chapter.start",
+    docId: row.document_id,
+    chapterId: row.id,
+    chapterNumber: row.number,
+    current: 1,
+    total: 1,
+    message: row.title || `Kapitel ${row.number}`,
+  });
+
+  try {
+    const { durationMs } = await synthesizeChapter({
+      chapter: chapterForSynth,
+      audioDir,
+      voice,
+      locale: voice.locale,
+      rate,
+      outFile,
+      signal: abortController.signal,
+      onChunk: (current, total) =>
+        emit({
+          phase: "audiobook.chapter.progress",
+          docId: row.document_id,
+          chapterId: row.id,
+          chapterNumber: row.number,
+          current,
+          total,
+        }),
+    });
+
+    upsertAudio({
+      chapterId: row.id,
+      storedRelPath: relPath(outFile),
+      durationMs,
+      voice: params.voiceId,
+      engine: voice.engine,
+      status: "done",
+    });
+
+    // Book-M4B ist jetzt veraltet (beinhaltet dieses Kapitel evtl.
+    // nicht oder noch die alte Version). Löschen damit der Download-
+    // Button offline geht bis ein neuer Full-Run läuft.
+    const bookPath = join(audioDir, "book.m4b");
+    if (existsSync(bookPath)) {
+      try {
+        rmSync(bookPath, { force: true });
+      } catch {
+        // best effort
+      }
+    }
+
+    emit({
+      phase: "audiobook.chapter.done",
+      docId: row.document_id,
+      chapterId: row.id,
+      chapterNumber: row.number,
+      current: 1,
+      total: 1,
+    });
+
+    const audioIdRow = d
+      .prepare("SELECT id FROM audio WHERE chapter_id = ?")
+      .get(row.id) as { id: string } | undefined;
+
+    return { audioId: audioIdRow?.id ?? "", durationMs };
+  } catch (err) {
+    emit({
+      phase: "audiobook.chapter.failed",
+      docId: row.document_id,
+      chapterId: row.id,
+      chapterNumber: row.number,
+      current: 1,
+      total: 1,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
 async function synthesizeChapter(params: {
   chapter: Chapter;
   audioDir: string;

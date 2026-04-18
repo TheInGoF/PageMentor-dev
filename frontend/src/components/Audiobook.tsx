@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   subscribeProgress,
   type AudioDocument,
-  type AudioTrack,
+  type ChapterAudioStatus,
   type ProgressEvent,
   type Voice,
 } from "../lib/api";
@@ -12,6 +12,7 @@ import { useToast } from "./ui/Toast";
 import { cn } from "../lib/cn";
 import { getSettings } from "../lib/settings";
 import { PodcastShareModal } from "./PodcastShareModal";
+import { AudioTextEditModal } from "./AudioTextEditModal";
 import { t } from "../lib/i18n";
 
 interface Props {
@@ -44,10 +45,28 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [elapsedTick, setElapsedTick] = useState(0);
   const [busy, setBusy] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [chapterStatus, setChapterStatus] = useState<ChapterAudioStatus[]>([]);
+  const [busyChapter, setBusyChapter] = useState<
+    Record<string, "preprocess" | "generate" | undefined>
+  >({});
+  const [editChapterId, setEditChapterId] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const toast = useToast();
 
-  // Initial load: voices + current audio state
+  const loadChapterStatus = useCallback(async () => {
+    try {
+      const res = await api.audio.chapterStatus(docId);
+      setChapterStatus(res.chapters);
+    } catch {
+      // Silent — wenn der Endpoint mal kurz nicht geht (Pipeline-Reload),
+      // nicht mit Toast spammen.
+    }
+  }, [docId]);
+
+  // Initial load: voices + current audio state + per-chapter status
+  useEffect(() => {
+    loadChapterStatus();
+  }, [loadChapterStatus]);
   useEffect(() => {
     Promise.all([api.audio.voices(), api.audio.get(docId)])
       .then(([v, a]) => {
@@ -130,14 +149,17 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         ev.phase === "audiobook.failed" ||
         ev.phase === "audiobook.canceled" ||
         ev.phase === "audiobook.chapter.done" ||
+        ev.phase === "audiobook.chapter.failed" ||
         ev.phase === "audiobook.book.building"
       ) {
-        // Refresh audio list
+        // Refresh audio list + chapter status so the per-chapter row
+        // switches from "running" → "done" without page reload.
         api.audio.get(docId).then(setState).catch(() => {});
+        loadChapterStatus();
       }
     });
     return unsubscribe;
-  }, [docId]);
+  }, [docId, loadChapterStatus]);
 
   async function generate() {
     if (!voiceId) return;
@@ -176,6 +198,48 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       setBookProgress(null);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  // --- Per-chapter actions ---------------------------------------
+  async function preprocessChapter(chapterId: string, force: boolean) {
+    setBusyChapter((b) => ({ ...b, [chapterId]: "preprocess" }));
+    try {
+      const res = await api.audio.preprocessChapter(chapterId, { force });
+      toast.show(
+        res.cached
+          ? t("audiobook.chapter.preprocess.cached")
+          : t("audiobook.chapter.preprocess.done", { model: res.model }),
+        "success"
+      );
+      await loadChapterStatus();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setBusyChapter((b) => {
+        const { [chapterId]: _, ...rest } = b;
+        return rest;
+      });
+    }
+  }
+
+  async function generateChapter(chapterId: string) {
+    if (!voiceId) {
+      toast.show(t("audiobook.voice.emptyForLang", { lang: documentLanguage }), "error");
+      return;
+    }
+    setBusyChapter((b) => ({ ...b, [chapterId]: "generate" }));
+    try {
+      await api.audio.generateChapter(chapterId, voiceId, rate);
+      toast.show(t("audiobook.chapter.generate.queued"), "success");
+      await loadChapterStatus();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setBusyChapter((b) => {
+        const { [chapterId]: _, ...rest } = b;
+        return rest;
+      });
     }
   }
 
@@ -350,12 +414,27 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         </div>
       </section>
 
-      <ChapterList
-        audio={state?.audio ?? []}
+      <ChapterWorkbench
+        chapters={chapterStatus}
         chapterProgress={chapterProgress}
-        generating={generating}
+        busyChapter={busyChapter}
+        disabled={!voiceId}
+        onPreprocess={preprocessChapter}
+        onEdit={(id) => setEditChapterId(id)}
+        onGenerate={generateChapter}
         onClearChapter={clearChapter}
       />
+
+      {editChapterId && (
+        <AudioTextEditModal
+          chapterId={editChapterId}
+          onClose={() => setEditChapterId(null)}
+          onSaved={() => {
+            setEditChapterId(null);
+            loadChapterStatus();
+          }}
+        />
+      )}
 
       <PodcastShareModal
         open={shareOpen}
@@ -420,109 +499,214 @@ function compareVoices(a: Voice, b: Voice): number {
   return a.label.localeCompare(b.label);
 }
 
-function ChapterList({
-  audio,
+/** Nur Kapitel die überhaupt ins Hörbuch gehören (content/summary)
+ *  anzeigen — Glossar, Literatur, Übungen sind für TTS eh gefiltert. */
+const AUDIO_KINDS = new Set(["content", "summary"]);
+
+function ChapterWorkbench({
+  chapters,
   chapterProgress,
-  generating,
+  busyChapter,
+  disabled,
+  onPreprocess,
+  onEdit,
+  onGenerate,
   onClearChapter,
 }: {
-  audio: AudioTrack[];
+  chapters: ChapterAudioStatus[];
   chapterProgress: Map<string, ProgressEvent>;
-  generating: boolean;
+  busyChapter: Record<string, "preprocess" | "generate" | undefined>;
+  disabled: boolean;
+  onPreprocess: (chapterId: string, force: boolean) => void;
+  onEdit: (chapterId: string) => void;
+  onGenerate: (chapterId: string) => void;
   onClearChapter: (audioId: string) => void;
 }) {
-  if (audio.length === 0 && !generating) {
+  const audioChapters = chapters.filter((c) => AUDIO_KINDS.has(c.kind));
+  if (audioChapters.length === 0) {
     return (
       <div className="card p-8 text-center text-sm text-neutral-500">
-        {t("audiobook.empty")}
+        {t("audiobook.chaptersEmpty")}
       </div>
     );
   }
-
   return (
-    <ul className="flex flex-col gap-2">
-      {audio.map((track) => (
-        <ChapterAudio
-          key={track.id}
-          track={track}
-          progress={chapterProgress.get(track.chapter_id) ?? null}
-          onClear={() => onClearChapter(track.id)}
-        />
-      ))}
-    </ul>
+    <section className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">{t("audiobook.chapters.title")}</h2>
+        <span className="text-xs text-neutral-500">
+          {t("audiobook.chapters.hint")}
+        </span>
+      </div>
+      <ul className="flex flex-col gap-2">
+        {audioChapters.map((ch) => (
+          <ChapterRow
+            key={ch.chapter_id}
+            chapter={ch}
+            progress={chapterProgress.get(ch.chapter_id) ?? null}
+            busy={busyChapter[ch.chapter_id]}
+            disabled={disabled}
+            onPreprocess={(force) => onPreprocess(ch.chapter_id, force)}
+            onEdit={() => onEdit(ch.chapter_id)}
+            onGenerate={() => onGenerate(ch.chapter_id)}
+            onClear={() =>
+              ch.audio_id ? onClearChapter(ch.audio_id) : undefined
+            }
+          />
+        ))}
+      </ul>
+    </section>
   );
 }
 
-function ChapterAudio({
-  track,
+function ChapterRow({
+  chapter,
   progress,
+  busy,
+  disabled,
+  onPreprocess,
+  onEdit,
+  onGenerate,
   onClear,
 }: {
-  track: AudioTrack;
+  chapter: ChapterAudioStatus;
   progress: ProgressEvent | null;
+  busy: "preprocess" | "generate" | undefined;
+  disabled: boolean;
+  onPreprocess: (force: boolean) => void;
+  onEdit: () => void;
+  onGenerate: () => void;
   onClear: () => void;
 }) {
   const phase = progress?.phase;
-  const isRunning =
-    phase === "audiobook.chapter.start" || phase === "audiobook.chapter.progress";
-  const failed = track.status === "failed" || phase === "audiobook.chapter.failed";
+  const ttsRunning =
+    phase === "audiobook.chapter.start" ||
+    phase === "audiobook.chapter.progress";
+  const ttsFailed =
+    chapter.audio_status === "failed" || phase === "audiobook.chapter.failed";
+  const audioDone =
+    chapter.audio_id != null && chapter.audio_status === "done";
+  const cleaned = chapter.audio_text_length != null && chapter.audio_text_length > 0;
+  const manualEdit = chapter.audio_text_model === "manual-edit";
 
   return (
-    <li className="card p-4 flex flex-col gap-2">
+    <li className="card p-4 flex flex-col gap-3">
       <div className="flex items-start gap-4">
         <div className="font-mono text-sm text-accent min-w-[2ch] text-right pt-1">
-          {String(track.chapter_number).padStart(2, "0")}
+          {String(chapter.number).padStart(2, "0")}
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-medium text-neutral-100 truncate">
-            {track.chapter_title || `Kapitel ${track.chapter_number}`}
+            {chapter.title || `${t("audiobook.chapters.fallback")} ${chapter.number}`}
           </h3>
-          <p className="text-xs text-neutral-500 mt-0.5">
-            {track.status === "done" && track.duration_ms > 0
-              ? formatDuration(track.duration_ms)
-              : isRunning
-              ? t("audiobook.chapterPartsRunning", {
+          <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-1 flex-wrap">
+            <span>{t("chapters.chars", { n: chapter.text_length })}</span>
+            <span>·</span>
+            <span>
+              {t("chapters.pages")} {chapter.start_page}
+              {chapter.end_page !== chapter.start_page && `–${chapter.end_page}`}
+            </span>
+            {cleaned && (
+              <span
+                className={cn(
+                  "px-1.5 py-0.5 rounded text-[10px]",
+                  manualEdit
+                    ? "bg-amber-500/15 text-amber-300"
+                    : "bg-emerald-500/15 text-emerald-300"
+                )}
+                title={
+                  manualEdit
+                    ? t("audiobook.chapter.badge.manualTitle")
+                    : t("audiobook.chapter.badge.cleanedTitle", {
+                        model: chapter.audio_text_model ?? "?",
+                      })
+                }
+              >
+                {manualEdit
+                  ? t("audiobook.chapter.badge.manual")
+                  : t("audiobook.chapter.badge.cleaned")}
+              </span>
+            )}
+            {audioDone && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent/15 text-accent">
+                {formatDuration(chapter.duration_ms ?? 0)} · {chapter.voice}
+              </span>
+            )}
+            {ttsFailed && !ttsRunning && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300">
+                {t("audiobook.chapterFailed")}
+              </span>
+            )}
+            {ttsRunning && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent/15 text-accent animate-pulse">
+                {t("audiobook.chapterPartsRunning", {
                   current: progress?.current ?? 1,
                   total: progress?.total ?? "?",
-                })
-              : failed
-              ? t("audiobook.chapterFailed")
-              : t("audiobook.chapterPartsWaiting")}
-            {" · "}
-            {track.voice || t("common.none")}
-          </p>
+                })}
+              </span>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          {track.status === "done" && (
-            <a
-              href={api.audio.fileUrl(track.id)}
-              download
-              className="text-xs text-neutral-400 hover:text-accent"
-            >
-              {t("audiobook.downloadMp3")}
-            </a>
-          )}
+        {audioDone && chapter.audio_id && (
           <button
             type="button"
             onClick={onClear}
-            className="text-xs text-neutral-500 hover:text-accent"
+            className="text-xs text-neutral-500 hover:text-accent flex-shrink-0"
             title={t("audiobook.clearChapter")}
             aria-label={t("audiobook.clearChapter")}
           >
             ✕
           </button>
-        </div>
+        )}
       </div>
 
-      {track.status === "done" && (
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          onClick={() => onPreprocess(cleaned)}
+          disabled={busy != null}
+        >
+          {busy === "preprocess"
+            ? t("audiobook.chapter.actions.preprocessBusy")
+            : cleaned
+            ? t("audiobook.chapter.actions.preprocessAgain")
+            : t("audiobook.chapter.actions.preprocess")}
+        </Button>
+        <Button variant="outline" onClick={onEdit} disabled={busy != null}>
+          {cleaned
+            ? t("audiobook.chapter.actions.viewEdit")
+            : t("audiobook.chapter.actions.viewOriginal")}
+        </Button>
+        <Button
+          onClick={onGenerate}
+          disabled={busy != null || disabled || ttsRunning}
+        >
+          {busy === "generate"
+            ? t("audiobook.chapter.actions.generateBusy")
+            : audioDone
+            ? t("audiobook.chapter.actions.regenerate")
+            : t("audiobook.chapter.actions.generate")}
+        </Button>
+        {audioDone && chapter.audio_id && (
+          <a
+            href={api.audio.fileUrl(chapter.audio_id)}
+            download
+            className="text-xs text-neutral-400 hover:text-accent"
+          >
+            {t("audiobook.downloadMp3")}
+          </a>
+        )}
+      </div>
+
+      {audioDone && chapter.audio_id && (
         <audio
           controls
           preload="none"
-          src={api.audio.fileUrl(track.id)}
+          src={api.audio.fileUrl(chapter.audio_id)}
           className="w-full accent-accent [color-scheme:dark]"
         />
       )}
-      {isRunning && progress?.current && progress?.total && (
+      {ttsRunning && progress?.current && progress?.total && (
         <div className="h-1 bg-bg-elevated rounded overflow-hidden">
           <div
             className="h-full bg-accent transition-all"
