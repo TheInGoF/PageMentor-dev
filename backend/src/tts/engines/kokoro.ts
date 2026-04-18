@@ -29,6 +29,11 @@ import type {
 
 const KOKORO_URL = process.env.PM_KOKORO_URL || "http://kokoro:8880";
 const REFRESH_TTL_MS = 5 * 60_000;
+/** Wenn der Sidecar beim letzten Versuch nicht antwortete, warten wir
+ *  nur kurz bis zum nächsten Probe — der Container braucht nach dem
+ *  Cold-Start ~10-30 s zum Modell-Load, da wollen wir nicht 5 min in
+ *  „nicht verfügbar" hängen wenn der nächste UI-Aufruf gleich kommt. */
+const REFRESH_RETRY_MS = 15_000;
 const SYNTH_TIMEOUT_MS = 120_000;
 const PREVIEW_TIMEOUT_MS = 20_000;
 
@@ -130,6 +135,17 @@ function refreshVoices(): Promise<void> {
 // liefert dann eine leere Liste und der Picker zeigt nur Edge.
 refreshVoices().catch(() => {});
 
+/** Stößt einen Background-Refresh an, wenn der Cache älter als das
+ *  passende TTL ist. Synchron — keine Awaits, der nächste Call sieht
+ *  dann den frischen Stand. Doppelaufrufe werden durch `refreshing`
+ *  serialisiert. */
+function maybeRefresh(): void {
+  const ttl = cache.alive ? REFRESH_TTL_MS : REFRESH_RETRY_MS;
+  if (Date.now() - cache.refreshedAt > ttl) {
+    refreshVoices().catch(() => {});
+  }
+}
+
 /** Edge-Rate-Format ("+10%", "-5%") → Kokoro-Speed (0.5..2.0). */
 function parseRate(rate: string): number {
   const m = /^([+-])(\d+)%$/.exec(rate);
@@ -167,12 +183,16 @@ async function callSpeech(params: {
 export const kokoroEngine: TtsEngine = {
   id: "kokoro",
 
-  isAvailable: () => cache.alive,
+  isAvailable: () => {
+    // Auch wenn der Sidecar gerade nicht alive ist, periodisch
+    // re-checken — sonst bleibt der Bool 5 min auf false hängen wenn
+    // der Sidecar nach App-Start ein paar Sekunden später ready wird.
+    maybeRefresh();
+    return cache.alive;
+  },
 
   listVoices: () => {
-    if (Date.now() - cache.refreshedAt > REFRESH_TTL_MS) {
-      refreshVoices().catch(() => {});
-    }
+    maybeRefresh();
     return cache.voices;
   },
 
