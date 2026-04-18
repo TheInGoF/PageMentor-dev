@@ -114,7 +114,9 @@ audioRoutes.post("/preprocess/:chapterId", async (c) => {
     .catch(() => ({} as { model?: string; force?: boolean }));
 
   const chapter = db()
-    .prepare("SELECT id, document_id, language FROM chapters c JOIN documents d ON d.id = c.document_id WHERE c.id = ?")
+    .prepare(
+      "SELECT c.id, c.document_id, d.language FROM chapters c JOIN documents d ON d.id = c.document_id WHERE c.id = ?"
+    )
     .get(chapterId) as { id: string; document_id: string; language: string } | undefined;
   if (!chapter) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
 
