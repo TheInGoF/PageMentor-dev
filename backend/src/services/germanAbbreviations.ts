@@ -23,33 +23,46 @@ interface Rule {
   replacement: string | ((match: string, ...groups: string[]) => string);
 }
 
-/** Sprach-agnostisch: Markdown-Syntax entfernen BEVOR TTS drüber geht.
- *  Docling liefert Sub-Headings als `## 1.1 Titel` inline, plus
- *  typische Inline-Formatierung (**bold**, *italic*, `code`, Links).
- *  Ohne diese Stripping-Stufe liest Edge „Raute Raute eins Komma eins
- *  Titel" vor, was niemand hören will. */
+/** Sprach-agnostisch: Markdown-Syntax TTS-tauglich umformen.
+ *  Nicht nur stumm strippen — die strukturelle Bedeutung in
+ *  Satzzeichen übersetzen, damit TTS-Prosodie (Pausen!) erhalten
+ *  bleibt:
+ *    - Headings → Text mit Punkt am Ende (Satz-Pause)
+ *    - Bold     → von Kommas umschlossen (kurze Atempause)
+ *    - Italic   → nur Text (keine Pause — Italic ist emphasis,
+ *                 das kann die Voice-Prosodie nicht nachbilden)
+ */
 const MARKDOWN_STRIP: Rule[] = [
-  // Heading marker am Zeilenanfang: "## 1.1 Titel" → "1.1 Titel"
-  { pattern: /^#{1,6}\s+/gm, replacement: "" },
-  // Horizontal rule
-  { pattern: /^---+\s*$/gm, replacement: "" },
-  // Blockquote-Marker
+  // Heading: "## 1.1 Titel" → "1.1 Titel." — Docling liefert Headings
+  // mit \n\n drumherum, der Punkt gibt TTS eine saubere Satz-Pause.
+  { pattern: /^#{1,6}\s+(.+?)\s*$/gm, replacement: "$1." },
+  // Horizontal rule → Absatz-Trenner (zwei Newlines die die
+  // paragraph-splitter in tts/segment.ts als Absatz-Grenze liest)
+  { pattern: /^---+\s*$/gm, replacement: "\n\n" },
+  // Blockquote-Marker weg, Text bleibt
   { pattern: /^>\s+/gm, replacement: "" },
-  // Code-Blöcke (mehrzeilig) — kurze Ansage als Ersatz
-  { pattern: /```[\s\S]*?```/g, replacement: " (Codeblock) " },
-  // Inline-Code `foo` → nur foo
+  // Code-Blöcke (mehrzeilig) — kurze Ansage mit Punkten für Pause
+  { pattern: /```[\s\S]*?```/g, replacement: " Codeblock. " },
+  // Inline-Code `foo` → nur foo, kein Sonderzeichen
   { pattern: /`([^`\n]+)`/g, replacement: "$1" },
-  // Bold **text** / __text__
-  { pattern: /\*\*([^*\n]+)\*\*/g, replacement: "$1" },
-  { pattern: /__([^_\n]+)__/g, replacement: "$1" },
+  // Bold mit Kommas: ",text," gibt TTS eine kurze Pause vor und
+  // nach dem hervorgehobenen Abschnitt — egal ob standalone
+  // "** Beispiel 1 **" oder inline "Der **Satz** beginnt".
+  // Whitespace im match schluckt führende/trailing Spaces.
+  { pattern: /\*\*\s*([^*\n]+?)\s*\*\*/g, replacement: ", $1," },
+  { pattern: /__\s*([^_\n]+?)\s*__/g, replacement: ", $1," },
   // Image ![alt](url) → nur Alt-Text
   { pattern: /!\[([^\]]*)\]\([^)]+\)/g, replacement: "$1" },
   // Link [text](url) → nur text
   { pattern: /\[([^\]]+)\]\([^)]+\)/g, replacement: "$1" },
-  // Italic *text* / _text_ — mit Lookbehind damit wir nicht in
-  // Wortmitten reinfahren (snake_case, 3*x*5).
+  // Italic *text* / _text_ — emphasis ohne Pause. Lookbehind damit
+  // wir nicht in snake_case oder "3*x*5" reinfahren.
   { pattern: /(?<![\w*])\*([^*\n]+)\*(?![\w*])/g, replacement: "$1" },
   { pattern: /(?<![\w_])_([^_\n]+)_(?![\w_])/g, replacement: "$1" },
+  // Doppelte Satzzeichen nach unseren Einschüben aufräumen:
+  // ",, Text ,," → ", Text,"  |  ".." → "."
+  { pattern: /,\s*,/g, replacement: "," },
+  { pattern: /\.\s*\./g, replacement: "." },
 ];
 
 /** Multi-Token-Abkürzungen mit Punkten: z. B., d. h., i. d. R., …
