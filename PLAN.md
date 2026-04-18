@@ -45,10 +45,13 @@ Baumstrukturen, Tags statt Zweige. Lokal, Portainer-Stack.
 - **Backend**: Bun + Hono (TypeScript durchgängig)
 - **DB**: SQLite (kein Postgres für lokales Tool)
 - **Suche**: Meilisearch (gleicher Container wie doc_storage oder eigener)
-- **TTS**: Edge-TTS (beste Qualität) + Piper (Offline-Fallback)
-- **OCR**: tesseract.js + pdf-parse
-- **LLM**: Ollama (optional, für AI-Übungen + Zusammenfassungen)
-- **Deploy**: Docker Compose → Portainer-Stack
+- **Text-Extraktion**: Docling-Serve (CPU-Image, Layout-Modell mit Section-
+  Header-Erkennung). Manuell gestartet pro Upload, 15–30 s/Seite auf CPU.
+- **TTS**: Edge-TTS (msedge-tts, Microsoft Neural Voices). Piper wurde in
+  v1.11.001 entfernt — Qualität für DE-Studienmaterial nicht ausreichend.
+- **LLM**: Ollama + Provider-Chain (Claude / OpenAI / Gemini als Fallback,
+  alle Endpoints zur Laufzeit in Settings konfigurierbar)
+- **Deploy**: Docker Compose → Portainer-Stack (app + meilisearch + docling)
 
 **Theme**: Night-Default — `#000` Backgrounds, `#111` Elevated, **rote Akzente** (`#ef4444`)
 
@@ -99,13 +102,16 @@ einen Cookie, fertig. Damit erreichbar von überall ohne dass jeder rein kann.
 
 - [x] Upload-Endpoint (Multipart, Drag-Drop, Batch mit mehreren Files)
 - [x] Dokumenttyp wählbar: Studienheft / Script / Klausur / Übung / Sonstiges
-- [x] Sprache wählbar (steuert OCR + TTS)
+- [x] Sprache wählbar (steuert TTS + OCR-Sprache für Docling)
 - [x] Tags vergeben (komma-separiert, mit Autocomplete aus bekannten Tags)
-- [x] PDF-Text-Extraktion (pdf-parse mit pagerender)
-- [ ] OCR für Scans (tesseract.js) — aktuell nur Text-Layer via pdf-parse;
-  Bild-PDFs liefern leeren Text
+- [x] PDF-Text-Extraktion via Docling-Serve (layout-aware, Section-Header-
+  Erkennung, Header/Footer/Caption/TOC-Labeling)
+- [x] Upload triggert **nicht** automatisch — User startet Docling manuell
+  pro Dokument (Status `awaiting-extraction`)
+- [x] OCR automatisch durch Docling für Bild-PDFs (RapidOCR / Tesseract)
 - [x] Meilisearch-Index: title, tags, ocr_text, type, chapter titles
 - [x] Background-Task mit SSE-Fortschritt (Progress-Bus)
+- [x] Docling-Status als Live-Indikator im Settings-Panel
 
 ### 2.2 Bibliotheks-Ansicht
 
@@ -132,23 +138,26 @@ einen Cookie, fertig. Damit erreichbar von überall ohne dass jeder rein kann.
 
 ## Phase 3 — Kapitel-Erkennung
 
-- [x] Automatische Detection:
-  - [ ] PDF-Bookmarks (nicht implementiert; pdf-parse gibt keine)
-  - [x] Heading-Heuristik (Kapitel/Chapter/Teil/Modul-Regex + römische Zahlen)
-  - [x] Fallback: N Seiten pro Kapitel (dynamisch 10 Slices)
-- [x] Text-Cleanup pro Kapitel:
-  - [x] Seitenzahlen, Kopf-/Fußzeilen raus (Frequenzanalyse)
-  - [x] Silbentrennung zusammenführen
-  - [x] Abbildungs-/Tabellen-Captions + Inline-Verweise entfernt
-  - [ ] Formeln markieren — noch nicht
+Seit v1.11.000: Docling macht die gesamte Layout-Analyse. Unsere eigene
+Heading-Heuristik (ChapterDetection in `chapters.ts`) ist obsolet,
+pdf-parse wurde rausgeflogen.
+
+- [x] Docling liefert section-header-Items mit level-Zahl aus dem
+  Layout-Modell — wir picken das kleinste level mit ≥ 3 Vorkommen als
+  Kapitel-Grenze (adaptiert automatisch H1-first vs. H2-first).
+- [x] Role-Filtering: Items mit label=page_footer/page_header/page_number/
+  caption/furniture werden gedroppt → keine Studien-Kürzel, TOC-Zeilen,
+  Watermarks mehr im Kapiteltext.
+- [x] Text-Cleanup als Paranoid-Post-Pass: Unicode-Normalisierung +
+  Ligaturen + Soft-Hyphen-Strip + XML-invalide Control-Chars killen.
 - [x] Kapitel-Editor im UI:
   - [x] Erkannte Kapitel als editierbare Liste
   - [x] Titel anpassen (Inline-Edit)
-  - [ ] Grenzen verschieben (Start/End-Page) — Edit-UI fehlt
   - [x] Merge (Multi-Select)
   - [x] Delete
-  - [ ] Split — nicht implementiert
   - [x] Text-Preview (Zeichen-Zähler)
+  - [ ] Grenzen verschieben (Start/End-Page) — Edit-UI fehlt
+  - [ ] Split — nicht implementiert
 
 ---
 
@@ -156,12 +165,19 @@ einen Cookie, fertig. Damit erreichbar von überall ohne dass jeder rein kann.
 
 ### 4.1 TTS
 
-- [x] Engine-Abstraktion (SSML → MP3-Buffer)
-- [x] **Edge-TTS** (msedge-tts): 50+ Sprachen, Neural, Studio-Qualität
+- [x] Engine-Abstraktion (Dispatcher in `tts/synth.ts`, Engine-Interface in
+  `tts/engines/base.ts`) — bereit für spätere Engines (Kokoro / XTTS), falls
+  Edge mal dauerhaft bricht
+- [x] **Edge-TTS** (msedge-tts ^2.0.5, minimal-SSML-Template seit v1.10.006
+  damit Azure keine silent-rejects mehr macht)
   - [x] Stimmen-Auswahl pro Sprache, 3-Sekunden-Preview
-  - [x] Multilingual-Voices als Flagships markiert (Seraphina, Florian, Ava, Andrew)
-- [ ] **Piper** (Offline): CPU-only, kein Internet — Fallback fehlt
+  - [x] Multilingual-Voices als Flagships (Seraphina, Florian, Ava, Andrew)
+- [x] Edge-Rate-Limit-Handling: 1500 ms Inter-Chunk-Pause + 30 s Cooldown
+  nach Empty-Audio + Circuit-Breaker nach 2 konsekutiven Empty-Chapters
+- [x] Dependabot-PR daily für msedge-tts (Microsoft tightent alle 6–12
+  Monate, wir ziehen binnen 1–14 Tagen nach)
 - [x] Settings: Stimme, Geschwindigkeit (persistent via localStorage)
+- [x] Piper entfernt (v1.11.001) — DE-Qualität nicht Studienheft-tauglich
 
 ### 4.2 Generierung
 
@@ -288,16 +304,85 @@ einen Cookie, fertig. Damit erreichbar von überall ohne dass jeder rein kann.
 
 ---
 
-## Noch offen (priorisierbar)
+## Noch offen (priorisiert, Stand v1.11.008)
 
-1. Piper-Fallback für TTS (offline, ohne Internet)
-2. OCR via tesseract.js für Bild-PDFs
-3. Cover (erste PDF-Seite) im MP3/M4B einbetten
-4. Multiple-Choice-Karten-Generator mit Distraktoren
-5. Gesamt-Zusammenfassung + Export (Markdown/PDF)
-6. Lern-Dashboard mit Lernkurve und Themen-Schwächen
-7. Kapitel-Grenzen im UI verschieben + Split-Operation
-8. PDF-Viewer: Thumbnail-Sidebar + interne Text-Suche
+### Nächste Runde — v1.11.009
+
+- **Docling-Artefakte pro Dokument auf Disk dumpen**
+  Nach Extraktion schreiben wir `uploads/<doc-id>/docling/full.md`
+  (komplettes Markdown zum Inspizieren) + `document.json`
+  (DoclingDocument-Struktur für spätere RAG/Layout-Analyse).
+  Kosten ~2 MB pro 100-Seiten-PDF.
+
+- **Chunking + Embeddings (RAG-Basis)**
+  TypeScript-Chunker, paragraph-aware, 800 Tokens Target + 100 Tokens
+  Overlap. Chunks landen als einzelne JSON-Files unter
+  `uploads/<doc-id>/docling/chunks/NNNN.json` (Metadata + Text) und in
+  einer neuen SQLite-Tabelle `chunks` mit Embedding-BLOB (768 float32).
+  Embeddings via Ollama `/api/embeddings` mit `nomic-embed-text` als
+  Default. Wenn Ollama fehlt → Chunks stored ohne Embeddings,
+  Nachzucht möglich.
+
+- **RAG-Query-Endpoint** `POST /api/rag/query`
+  Brute-force Cosine-Similarity in JS (reicht für < 10 k Chunks in
+  < 100 ms). `{query, docId?, topK?}` → Top-N Chunks mit Score.
+  Noch keine UI in v1.11.009 — erst Backend + curl-Testbarkeit.
+
+### v1.11.010
+
+- **RAG-UI**: Frage-an-Dokument-Overlay, Ergebnis-Snippets mit
+  Chapter-Verlinkung, „Frage an gesamte Bibliothek"-Modus.
+
+### Mittelfristig
+
+- **Prosodie-Polisher für Audiobook**
+  Optionaler Ollama-Pass *nach* Docling, *vor* Edge-TTS: LLM liest
+  sauberen Text und rewrites ihn für besseres Hörerlebnis —
+  Akronyme auflösen, Schachtelsätze kürzen, Gedankenstrich-Einschübe
+  umbrechen. Original bleibt unverändert (fürs Lernen im Text-View).
+
+- **Cover (erste PDF-Seite) im MP3/M4B einbetten**
+  Wir rendern's schon via poppler, nur das ffmpeg-Embed fehlt.
+
+- **Multiple-Choice-Karten mit plausiblen Distraktoren**
+  Aktuell freie Antwort; MC-Generator via Ollama + Quality-Prompt.
+
+- **Gesamt-Zusammenfassung + Export**
+  Alle Kapitel-Zsf zu einer Dokument-Zsf verknüpfen, dann
+  Markdown- / PDF-Export.
+
+- **Lern-Dashboard als Landing**
+  Streak, Lernkurve über Zeit, Themen-Schwächen aus Card-Quality-
+  Historie.
+
+- **Kapitel-Grenzen verschieben + Split**
+  Edit-UI fehlt; aktuell nur Merge + Delete + Rename.
+
+- **PDF-Viewer-Thumbnails + interne Text-Suche**
+  Seiten-Jumper vorhanden, aber keine Sidebar-Thumbs, kein
+  Volltextsuche innerhalb des Viewers.
+
+### Hardware / Deployment
+
+- **GPU-Server-Pfad vorbereitet**: `docker-compose.gpu.yml` tauscht das
+  Docling-Image gegen die CUDA-Variante (v1.11.008). Empfehlung für
+  den nächsten Hardware-Schritt: Desktop-Tower + RTX 3090 gebraucht
+  → Docling-Extraktion 20–60 s statt 25–70 min pro 100-Seiten-PDF,
+  Ollama flüssig bis 13B-Modelle.
+
+- **Persistenter Docling-Task-State**: aktuell verlieren wir bei
+  pm-app-Restart das `running`-Map → orphaned docling-Task in der
+  Queue. Startup-Reset cleart die DB-Row, aber die Lösung wäre die
+  docling-task-id in der DB zu persistieren + auf Start wieder zu
+  abonnieren (oder alle offenen docling-Tasks zu canceln). Niedrige
+  Prio, workaround via „pm-docling restart" reicht.
+
+### Log-Cosmetics
+
+- **WebSocket-Fallback-Polling nur bei State-Change loggen** — aktuell
+  macht die WS-Path ein clean Event-Log, aber wenn WS wegbricht und
+  Polling übernimmt, könnte das wieder spammig werden. Wert abwarten
+  und notfalls nachziehen.
 
 ---
 
