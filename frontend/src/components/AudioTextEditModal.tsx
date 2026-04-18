@@ -32,6 +32,10 @@ export function AudioTextEditModal({ chapterId, onClose, onSaved }: Props) {
   const toast = useToast();
 
   useEffect(() => {
+    // Nur bei chapter-Wechsel neu laden. `toast` und `onClose` sind
+    // im Parent Inline-Lambdas — ihre Referenz-Identity wechselt bei
+    // jedem Parent-Rerender, was sonst jeden Tick ein Re-Fetch
+    // triggert (→ UI-Flackern während SSE-Events reinkommen).
     setLoading(true);
     api.audio
       .getPreprocessed(chapterId)
@@ -44,7 +48,8 @@ export function AudioTextEditModal({ chapterId, onClose, onSaved }: Props) {
         onClose();
       })
       .finally(() => setLoading(false));
-  }, [chapterId, onClose, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterId]);
 
   async function save() {
     if (!draft.trim()) return;

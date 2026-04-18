@@ -23,6 +23,35 @@ interface Rule {
   replacement: string | ((match: string, ...groups: string[]) => string);
 }
 
+/** Sprach-agnostisch: Markdown-Syntax entfernen BEVOR TTS drüber geht.
+ *  Docling liefert Sub-Headings als `## 1.1 Titel` inline, plus
+ *  typische Inline-Formatierung (**bold**, *italic*, `code`, Links).
+ *  Ohne diese Stripping-Stufe liest Edge „Raute Raute eins Komma eins
+ *  Titel" vor, was niemand hören will. */
+const MARKDOWN_STRIP: Rule[] = [
+  // Heading marker am Zeilenanfang: "## 1.1 Titel" → "1.1 Titel"
+  { pattern: /^#{1,6}\s+/gm, replacement: "" },
+  // Horizontal rule
+  { pattern: /^---+\s*$/gm, replacement: "" },
+  // Blockquote-Marker
+  { pattern: /^>\s+/gm, replacement: "" },
+  // Code-Blöcke (mehrzeilig) — kurze Ansage als Ersatz
+  { pattern: /```[\s\S]*?```/g, replacement: " (Codeblock) " },
+  // Inline-Code `foo` → nur foo
+  { pattern: /`([^`\n]+)`/g, replacement: "$1" },
+  // Bold **text** / __text__
+  { pattern: /\*\*([^*\n]+)\*\*/g, replacement: "$1" },
+  { pattern: /__([^_\n]+)__/g, replacement: "$1" },
+  // Image ![alt](url) → nur Alt-Text
+  { pattern: /!\[([^\]]*)\]\([^)]+\)/g, replacement: "$1" },
+  // Link [text](url) → nur text
+  { pattern: /\[([^\]]+)\]\([^)]+\)/g, replacement: "$1" },
+  // Italic *text* / _text_ — mit Lookbehind damit wir nicht in
+  // Wortmitten reinfahren (snake_case, 3*x*5).
+  { pattern: /(?<![\w*])\*([^*\n]+)\*(?![\w*])/g, replacement: "$1" },
+  { pattern: /(?<![\w_])_([^_\n]+)_(?![\w_])/g, replacement: "$1" },
+];
+
 /** Multi-Token-Abkürzungen mit Punkten: z. B., d. h., i. d. R., …
  *  Matchen auch Varianten ohne Space ("z.B.") und ohne Trailing-Dot. */
 const DE_COMPOUND: Rule[] = [
@@ -219,6 +248,7 @@ const DE_LIST_MARKERS: Rule[] = [
 ];
 
 const DE_ALL: Rule[] = [
+  ...MARKDOWN_STRIP,
   ...DE_COMPOUND,
   ...DE_TITLES,
   ...DE_WITH_NUMBER,
@@ -341,6 +371,7 @@ const EN_LIST_MARKERS: Rule[] = [
 ];
 
 const EN_ALL: Rule[] = [
+  ...MARKDOWN_STRIP,
   ...EN_COMPOUND,
   ...EN_TITLES,
   ...EN_WITH_NUMBER,
