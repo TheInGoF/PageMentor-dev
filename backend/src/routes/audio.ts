@@ -320,6 +320,8 @@ audioRoutes.get("/stream/:docId", (c) => {
 
     const queue: string[] = [];
     let resolver: (() => void) | null = null;
+    let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
     const unsubscribe = subscribe(docId, (ev) => {
       queue.push(JSON.stringify(ev));
       if (resolver) {
@@ -328,6 +330,22 @@ audioRoutes.get("/stream/:docId", (c) => {
         r();
       }
     });
+
+    // Keep-Alive alle 20 s. Ohne das schließt jeder Proxy (nginx
+    // default 60 s, cloudflare 100 s) und manche Browser die Idle-
+    // HTTP/2-Verbindung — EventSource reconnected dann ständig und
+    // der Client sieht ERR_HTTP2_PROTOCOL_ERROR in der Konsole.
+    // SSE-Kommentar (`:`-Prefix) wird vom EventSource-Client still
+    // verworfen, hält die TCP-Verbindung aber warm.
+    keepAliveTimer = setInterval(() => {
+      if (stream.aborted) return;
+      // writeSSE mit `event: "ping"` wäre auch eine Option, aber
+      // EventSource-Clients die nur auf `progress` hören würden das
+      // als stillen Trigger bekommen. SSE-Comment ist sauberer.
+      stream.write(": keepalive\n\n").catch(() => {
+        // client gone — nächste Iteration der Main-Loop räumt auf
+      });
+    }, 20_000);
 
     try {
       while (!stream.aborted) {
@@ -338,6 +356,7 @@ audioRoutes.get("/stream/:docId", (c) => {
         if (payload) await stream.writeSSE({ event: "progress", data: payload });
       }
     } finally {
+      if (keepAliveTimer) clearInterval(keepAliveTimer);
       unsubscribe();
     }
   });
