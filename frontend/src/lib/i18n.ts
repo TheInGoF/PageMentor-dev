@@ -152,6 +152,23 @@ const en: Record<string, string> = {
   "extract.started": "Extraction queued",
   "extract.canceled": "Extraction cancel requested",
 
+  // Document overview
+  "overview.metric.pages": "Pages",
+  "overview.metric.size": "Size",
+  "overview.metric.language": "Language",
+  "overview.metric.created": "Uploaded",
+  "overview.open": "Open",
+  "overview.extraction.title": "Text extraction",
+  "overview.extraction.done":
+    "Docling finished parsing the PDF. Chapters, audiobook, flashcards and summaries are ready.",
+  "overview.extraction.rerun": "Re-run Docling",
+  "overview.chapters.count": "detected chapters",
+  "overview.audio.doneLabel": "chapters narrated",
+  "overview.cards.count": "flashcards",
+  "overview.summaries.count": "summaries",
+  "overview.exam.sessions": "exam sessions",
+  "overview.exam.best": "best score {score}%",
+
   // Pipeline steps (dashboard dots)
   "pipe.text": "Text",
   "pipe.chapters": "Chapters",
@@ -174,6 +191,7 @@ const en: Record<string, string> = {
 
   // Learn tabs
   "learn.back": "Library",
+  "learn.tab.overview": "Overview",
   "learn.tab.reader": "Read",
   "learn.tab.chapters": "Chapters",
   "learn.tab.audiobook": "Audiobook",
@@ -674,6 +692,23 @@ const de: Record<string, string> = {
   "extract.started": "Extraktion gestartet",
   "extract.canceled": "Abbruch angefordert",
 
+  // Document overview
+  "overview.metric.pages": "Seiten",
+  "overview.metric.size": "Größe",
+  "overview.metric.language": "Sprache",
+  "overview.metric.created": "Hochgeladen",
+  "overview.open": "Öffnen",
+  "overview.extraction.title": "Text-Extraktion",
+  "overview.extraction.done":
+    "Docling hat die PDF analysiert. Kapitel, Hörbuch, Karten und Zusammenfassungen sind verfügbar.",
+  "overview.extraction.rerun": "Docling erneut laufen lassen",
+  "overview.chapters.count": "erkannte Kapitel",
+  "overview.audio.doneLabel": "Kapitel vertont",
+  "overview.cards.count": "Lernkarten",
+  "overview.summaries.count": "Zusammenfassungen",
+  "overview.exam.sessions": "Klausur-Sessions",
+  "overview.exam.best": "bestes Ergebnis {score}%",
+
   // Pipeline steps
   "pipe.text": "Text",
   "pipe.chapters": "Kapitel",
@@ -696,6 +731,7 @@ const de: Record<string, string> = {
 
   // Learn tabs
   "learn.back": "Bibliothek",
+  "learn.tab.overview": "Übersicht",
   "learn.tab.reader": "Lesen",
   "learn.tab.chapters": "Kapitel",
   "learn.tab.audiobook": "Hörbuch",

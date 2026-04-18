@@ -14,11 +14,13 @@ import { PdfViewer } from "./PdfViewer";
 import { Cards } from "./Cards";
 import { ExamTrainer } from "./ExamTrainer";
 import { Summaries } from "./Summaries";
+import { DocumentOverview } from "./DocumentOverview";
 import { cn } from "../lib/cn";
 
-type Tab = "reader" | "chapters" | "audiobook" | "exercises" | "exam" | "summary";
+export type Tab = "overview" | "reader" | "chapters" | "audiobook" | "exercises" | "exam" | "summary";
 
 const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = [
+  { id: "overview", labelKey: "learn.tab.overview", requiresExtraction: false },
   { id: "reader", labelKey: "learn.tab.reader", requiresExtraction: false },
   { id: "chapters", labelKey: "learn.tab.chapters", requiresExtraction: true },
   { id: "audiobook", labelKey: "learn.tab.audiobook", requiresExtraction: true },
@@ -34,7 +36,7 @@ interface Props {
 
 export function LearningMenu({ docId, onBack }: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
-  const [tab, setTab] = useState<Tab>("reader");
+  const [tab, setTab] = useState<Tab>("overview");
   const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
   const [busyExtract, setBusyExtract] = useState(false);
   const toast = useToast();
@@ -137,7 +139,7 @@ export function LearningMenu({ docId, onBack }: Props) {
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-4">
-        {doc && !extractionDone && (
+        {doc && !extractionDone && tab !== "overview" && (
           <ExtractionGate
             doc={doc}
             phase={extractionPhase}
@@ -148,6 +150,17 @@ export function LearningMenu({ docId, onBack }: Props) {
           />
         )}
 
+        {tab === "overview" && doc && (
+          <DocumentOverview
+            doc={doc}
+            extractionPhase={extractionPhase}
+            extractionRunning={!!extractionRunning}
+            extractionBusy={busyExtract}
+            onStartExtraction={startExtraction}
+            onCancelExtraction={cancelExtraction}
+            onGoTo={setTab}
+          />
+        )}
         {tab === "reader" && <PdfViewer docId={docId} />}
         {tab === "chapters" && extractionDone && (
           <ChaptersTab docId={docId} docStatus={doc?.ocr_status} />
