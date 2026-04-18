@@ -38,6 +38,7 @@ export function LearningMenu({ docId, onBack }: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
+  const [extractionStartedAt, setExtractionStartedAt] = useState<number | null>(null);
   const [busyExtract, setBusyExtract] = useState(false);
   const toast = useToast();
   useLocale();
@@ -60,7 +61,11 @@ export function LearningMenu({ docId, onBack }: Props) {
     const unsub = subscribeProgress(docId, (ev) => {
       if (ev.phase.startsWith("pipeline.")) {
         setExtractionPhase(ev);
+        if (ev.phase === "pipeline.start") {
+          setExtractionStartedAt(Date.now());
+        }
         if (ev.phase === "pipeline.done" || ev.phase === "pipeline.failed") {
+          setExtractionStartedAt(null);
           load();
         }
       }
@@ -68,6 +73,24 @@ export function LearningMenu({ docId, onBack }: Props) {
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);
+
+  // Wenn das Dokument bei Seitenöffnung bereits extrahiert, aber noch
+  // nicht fertig ist (Reload nach Browser-Tab-Wechsel), den Timer
+  // plausibel starten — wir wissen nicht wann's wirklich losging, aber
+  // ab jetzt zu zählen ist besser als gar kein Timer.
+  useEffect(() => {
+    if (
+      doc?.ocr_status === "running" &&
+      extractionStartedAt === null
+    ) {
+      setExtractionStartedAt(Date.now());
+    }
+    if (doc?.ocr_status !== "running" && doc?.ocr_status !== "pending") {
+      setExtractionStartedAt((prev) =>
+        doc?.ocr_status === "done" || doc?.ocr_status === "failed" ? null : prev
+      );
+    }
+  }, [doc?.ocr_status, extractionStartedAt]);
 
   const extractionDone = doc?.ocr_status === "done";
   const extractionRunning = doc?.ocr_status === "running" || doc?.ocr_status === "pending";
@@ -156,6 +179,7 @@ export function LearningMenu({ docId, onBack }: Props) {
             extractionPhase={extractionPhase}
             extractionRunning={!!extractionRunning}
             extractionBusy={busyExtract}
+            extractionStartedAt={extractionStartedAt}
             onStartExtraction={startExtraction}
             onCancelExtraction={cancelExtraction}
             onGoTo={setTab}

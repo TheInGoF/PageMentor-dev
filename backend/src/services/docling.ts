@@ -67,6 +67,19 @@ interface PollResponse {
   task_status?: string;
   task_progress?: number;
   task_meta?: Record<string, unknown>;
+  /** Manche docling-serve-Versionen packen zusätzliche Felder rein
+   *  (z. B. processed_pages, total_pages). Wir nehmen alles was wir
+   *  kriegen und loggen's für die Debug-Sicht. */
+  [key: string]: unknown;
+}
+
+function numOr(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
 }
 
 async function doclingFetch(
@@ -143,13 +156,49 @@ export async function extractPdfViaDocling(params: {
     }
     const status = (await pollRes.json()) as PollResponse;
     const state = status.task_status?.toLowerCase() ?? "unknown";
+
+    // Diagnose: welche Felder liefert docling-serve eigentlich? Wenn
+    // processed_pages / total_pages / current_stage etc. im Response
+    // auftauchen, können wir die für einen echten Fortschritt nutzen.
+    const extras: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(status)) {
+      if (k !== "task_status") extras[k] = v;
+    }
+    console.log(
+      `[docling-poll] task=${task_id.slice(0, 8)} state=${state} ${JSON.stringify(extras)}`
+    );
+
     if (state === "success") break;
     if (state === "failure" || state === "error") {
       throw new Error(`docling task ${task_id} failed: ${JSON.stringify(status)}`);
     }
-    const fraction =
-      typeof status.task_progress === "number" ? status.task_progress : undefined;
-    const msg = `Docling: ${state}${fraction != null ? ` · ${Math.round(fraction * 100)}%` : ""}`;
+
+    // Seite-basierten Fortschritt ableiten wenn docling liefert,
+    // sonst task_progress, sonst nichts.
+    const meta = (status.task_meta ?? {}) as Record<string, unknown>;
+    const processedPages =
+      numOr(status.processed_pages) ??
+      numOr(meta.processed_pages) ??
+      numOr(meta.current_page);
+    const totalPages =
+      numOr(status.total_pages) ??
+      numOr(meta.total_pages) ??
+      numOr(meta.page_count);
+    let fraction: number | undefined;
+    if (processedPages != null && totalPages && totalPages > 0) {
+      fraction = Math.max(0, Math.min(1, processedPages / totalPages));
+    } else if (typeof status.task_progress === "number") {
+      fraction = status.task_progress;
+    }
+
+    const msgBase = `Docling: ${state}`;
+    const progressSuffix =
+      processedPages != null && totalPages
+        ? ` · Seite ${processedPages} / ${totalPages}`
+        : fraction != null
+        ? ` · ${Math.round(fraction * 100)}%`
+        : "";
+    const msg = msgBase + progressSuffix;
     if (msg !== lastMessage) {
       onProgress?.(msg, fraction);
       lastMessage = msg;

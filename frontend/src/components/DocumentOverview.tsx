@@ -16,6 +16,7 @@ interface Props {
   extractionPhase: ProgressEvent | null;
   extractionRunning: boolean;
   extractionBusy: boolean;
+  extractionStartedAt: number | null;
   onStartExtraction: () => void;
   onCancelExtraction: () => void;
   onGoTo: (tab: Tab) => void;
@@ -26,6 +27,7 @@ export function DocumentOverview({
   extractionPhase,
   extractionRunning,
   extractionBusy,
+  extractionStartedAt,
   onStartExtraction,
   onCancelExtraction,
   onGoTo,
@@ -107,6 +109,7 @@ export function DocumentOverview({
           phase={extractionPhase}
           running={extractionRunning}
           busy={extractionBusy}
+          startedAt={extractionStartedAt}
           onStart={onStartExtraction}
           onCancel={onCancelExtraction}
         />
@@ -223,6 +226,7 @@ function ExtractionCard({
   phase,
   running,
   busy,
+  startedAt,
   onStart,
   onCancel,
 }: {
@@ -230,11 +234,29 @@ function ExtractionCard({
   phase: ProgressEvent | null;
   running: boolean;
   busy: boolean;
+  startedAt: number | null;
   onStart: () => void;
   onCancel: () => void;
 }) {
   const status = doc.ocr_status;
   const ready = status === "done";
+
+  // Tick 1× pro Sekunde während Running — Laufzeit-Anzeige.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const iv = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(iv);
+  }, [running]);
+
+  // Docling liefert task_progress als 0.0-1.0 manchmal mit, manchmal nicht.
+  // Wenn vorhanden → echter Balken. Sonst: Indeterminate-Pulse.
+  const fraction =
+    typeof phase?.current === "number" && phase.current > 0 && phase.current <= 1
+      ? phase.current
+      : null;
+  const pct = fraction != null ? Math.round(fraction * 100) : null;
+  const elapsed = startedAt != null ? Date.now() - startedAt : 0;
 
   return (
     <div className="card p-5 flex flex-col gap-3 border-accent-subtle">
@@ -253,8 +275,30 @@ function ExtractionCard({
         {status === "done" && t("overview.extraction.done")}
       </p>
 
-      {running && phase?.message && (
-        <p className="text-[11px] text-accent font-mono truncate">{phase.message}</p>
+      {running && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[11px] text-accent font-mono truncate">
+              {phase?.message ?? t("extract.gate.running")}
+            </span>
+            <span className="text-[11px] text-neutral-500 font-mono shrink-0">
+              {pct != null && `${pct}% · `}
+              {t("overview.extraction.elapsed", {
+                time: formatElapsed(elapsed),
+              })}
+            </span>
+          </div>
+          <div className="h-1.5 bg-black/40 rounded overflow-hidden">
+            {pct != null ? (
+              <div
+                className="h-full bg-accent transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            ) : (
+              <div className="h-full bg-accent/60 animate-pulse w-1/3" />
+            )}
+          </div>
+        </div>
       )}
 
       <div className="pt-2 border-t border-border flex gap-2">
@@ -278,6 +322,15 @@ function ExtractionCard({
       </div>
     </div>
   );
+}
+
+function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${m % 60}m`;
+  if (m > 0) return `${m}m ${s % 60}s`;
+  return `${s}s`;
 }
 
 function StatusBadge({ status }: { status: Document["ocr_status"] }) {
