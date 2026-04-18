@@ -16,13 +16,31 @@ import { moduleRoutes } from "./routes/modules";
 import { ragRoutes } from "./routes/rag";
 import { ensureReady as ensureSearchReady } from "./services/search";
 import { initDb } from "./db";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+// Version aus package.json beim Modul-Load lesen — vermeidet, dass
+// /api/health nach jedem Bump händisch nach-editiert werden muss
+// (das vergessen wir verlässlich, siehe v1.11.010 → v1.12.x).
+const PKG_VERSION = ((): string => {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const pkg = JSON.parse(
+      readFileSync(join(here, "..", "package.json"), "utf-8")
+    ) as { version?: string };
+    return pkg.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 const app = new Hono();
 
 app.use("/*", cors());
 
 // Public
-app.get("/api/health", (c) => c.json({ status: "ok", version: "1.11.010" }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: PKG_VERSION }));
 app.route("/api/auth", authRoutes);
 // Podcast-Feed liegt öffentlich (Token-Auth im Pfad), damit Apple
 // Podcasts / Overcast ihn ohne Cookie ziehen können.
