@@ -88,5 +88,9 @@ services:
       DOCLING_NUM_THREADS: "4"
       DOCLING_DEVICE: cpu
       DOCLING_PERF_PAGE_BATCH_SIZE: "2"
+      # Schaltet die "Could not initialize NNPACK! Reason: Unsupported
+      # hardware."-Flut ab. NNPACK braucht AVX-512, das hat der Celeron
+      # nicht — PyTorch nimmt still den BLAS-Pfad, Ergebnis identisch.
+      PYTORCH_NNPACK_DISABLE: "1"
     volumes:
       - /volume1/docker/pagementor/docling-cache:/opt/app-root/src/.cache
