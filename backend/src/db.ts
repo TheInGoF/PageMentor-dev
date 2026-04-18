@@ -30,7 +30,7 @@ export function initDb() {
       size_bytes INTEGER NOT NULL DEFAULT 0,
       page_count INTEGER NOT NULL DEFAULT 0,
       ocr_text TEXT,
-      ocr_status TEXT NOT NULL DEFAULT 'pending',
+      ocr_status TEXT NOT NULL DEFAULT 'awaiting-extraction',
       language TEXT NOT NULL DEFAULT 'de',
       type TEXT NOT NULL DEFAULT 'studienheft',
       thumb_page INTEGER NOT NULL DEFAULT 1,

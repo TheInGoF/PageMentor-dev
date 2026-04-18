@@ -131,10 +131,26 @@ const en: Record<string, string> = {
   "type.sonstiges": "Other",
 
   // OCR status
+  "ocr.awaiting-extraction": "Awaiting extraction",
   "ocr.pending": "Queued",
   "ocr.running": "Processing",
   "ocr.done": "Ready",
   "ocr.failed": "Failed",
+
+  // Extraction gate
+  "extract.gate.title": "Text extraction required",
+  "extract.gate.awaiting":
+    "The PDF is uploaded but its text hasn't been extracted yet. Docling runs on CPU and can take 20–60 min for a 100-page PDF — you decide when to kick it off.",
+  "extract.gate.running":
+    "Docling is parsing the PDF. Chapters, audiobook, flashcards and summaries unlock as soon as it finishes.",
+  "extract.gate.failed":
+    "The last extraction run failed. Check docling logs and retry.",
+  "extract.gate.tabTitle": "Available after text extraction.",
+  "extract.start": "Start extraction",
+  "extract.retry": "Retry extraction",
+  "extract.cancel": "Cancel extraction",
+  "extract.started": "Extraction queued",
+  "extract.canceled": "Extraction cancel requested",
 
   // Pipeline steps (dashboard dots)
   "pipe.text": "Text",
@@ -639,10 +655,26 @@ const de: Record<string, string> = {
   "type.sonstiges": "Sonstiges",
 
   // OCR status
+  "ocr.awaiting-extraction": "Wartet auf Extraktion",
   "ocr.pending": "Wartet",
   "ocr.running": "Verarbeite",
   "ocr.done": "Bereit",
   "ocr.failed": "Fehler",
+
+  // Extraction gate
+  "extract.gate.title": "Text-Extraktion erforderlich",
+  "extract.gate.awaiting":
+    "Die PDF ist hochgeladen, der Text aber noch nicht extrahiert. Docling läuft auf CPU und braucht für ein 100-Seiten-Heft ca. 20–60 Minuten — du entscheidest, wann's losgeht.",
+  "extract.gate.running":
+    "Docling analysiert die PDF. Kapitel, Hörbuch, Karten und Zusammenfassungen werden freigeschaltet sobald sie durch ist.",
+  "extract.gate.failed":
+    "Der letzte Extraktionslauf ist fehlgeschlagen. Docling-Logs prüfen und erneut versuchen.",
+  "extract.gate.tabTitle": "Verfügbar nach Text-Extraktion.",
+  "extract.start": "Extraktion starten",
+  "extract.retry": "Extraktion erneut starten",
+  "extract.cancel": "Extraktion abbrechen",
+  "extract.started": "Extraktion gestartet",
+  "extract.canceled": "Abbruch angefordert",
 
   // Pipeline steps
   "pipe.text": "Text",

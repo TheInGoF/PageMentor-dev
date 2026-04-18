@@ -1,24 +1,39 @@
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { db } from "../db";
-import { extractPdf } from "./pdf";
-import { stripBoilerplate } from "./clean";
-import { detectChapters } from "./chapters";
+import { extractPdfViaDocling, doclingAlive } from "./docling";
+import { cleanForReading } from "./clean";
 import { emit } from "./events";
 import { indexDocument, indexChapters } from "./search";
-import { needsOcr, ocrPdfPages, renderCover } from "./ocr";
+import { renderCover } from "./ocr";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
-const running = new Set<string>();
+const running = new Map<string, AbortController>();
 
 export function isProcessing(docId: string): boolean {
   return running.has(docId);
 }
 
+export function cancelProcessing(docId: string): boolean {
+  const ctrl = running.get(docId);
+  if (!ctrl) return false;
+  ctrl.abort();
+  return true;
+}
+
+/**
+ * Extrahiert die PDF via docling-serve, schreibt Kapitel in die DB und
+ * stößt die Meilisearch-Indexierung an. Wird manuell vom User über
+ * /api/documents/:id/reprocess ausgelöst — der Upload legt das Dokument
+ * nur mit Status `awaiting-extraction` an, ohne Pipeline zu starten.
+ */
 export async function processDocument(docId: string): Promise<void> {
   if (running.has(docId)) return;
-  running.add(docId);
+  const abortController = new AbortController();
+  running.set(docId, abortController);
+  const signal = abortController.signal;
+
   const d = db();
   const doc = d.prepare("SELECT * FROM documents WHERE id = ?").get(docId) as
     | { stored_path: string; language: string }
@@ -34,60 +49,72 @@ export async function processDocument(docId: string): Promise<void> {
 
   try {
     const fullPath = join(DATA_DIR, doc.stored_path);
-    emit({ phase: "pipeline.extract", docId, message: "Extrahiere PDF-Text" });
-    const extracted = await extractPdf(fullPath);
 
-    // OCR-Fallback: Bild-PDFs liefern pdf-parse leeren Text.
-    let pages = extracted.pages;
-    if (needsOcr(pages)) {
-      emit({
-        phase: "pipeline.extract",
-        docId,
-        message: "OCR: scannte PDF via tesseract",
-      });
-      pages = await ocrPdfPages({
-        pdfPath: fullPath,
-        language: doc.language || "en",
-        pageCount: extracted.totalPages,
-        fallback: pages,
-      });
+    emit({ phase: "pipeline.extraction", docId, message: "Docling-Verbindung prüfen …" });
+    if (!(await doclingAlive())) {
+      throw new Error(
+        "docling-serve nicht erreichbar. Läuft der docling-Container?"
+      );
     }
 
-    // Cover (erste PDF-Seite als JPG) im Hintergrund rendern.
+    emit({ phase: "pipeline.extraction", docId, message: "Docling: PDF hochladen …" });
+    const extraction = await extractPdfViaDocling({
+      pdfPath: fullPath,
+      language: doc.language,
+      signal,
+      onProgress: (message, fraction) =>
+        emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
+    });
+
+    // Cover-Thumb (erste Seite als JPG) im Hintergrund rendern —
+    // nutzt poppler, nicht docling, weil docling kein Bild liefert.
     renderCover(fullPath, join(DATA_DIR, "covers"), docId).catch((err) =>
       console.warn("[pipeline] cover render failed:", err)
     );
 
-    const cleanedPages = stripBoilerplate(pages);
-    const fullText = cleanedPages.join("\n\n");
+    // Paranoid-Post-Pass: Docling macht das meiste schon, aber ein
+    // Edge-Case-XML-Steuerzeichen oder Ligatur durch die Hintertür
+    // lassen wir nicht im Kapiteltext landen.
+    const cleanedSections = extraction.sections.map((s) => ({
+      ...s,
+      text: cleanForReading(s.text),
+    }));
 
-    d.prepare("UPDATE documents SET page_count = ?, ocr_text = ? WHERE id = ?").run(
-      extracted.totalPages,
-      fullText.slice(0, 5_000_000),
-      docId
-    );
+    const fullText = cleanedSections.map((s) => s.text).join("\n\n");
+
+    d.prepare(
+      "UPDATE documents SET page_count = ?, ocr_text = ? WHERE id = ?"
+    ).run(extraction.pageCount, fullText.slice(0, 5_000_000), docId);
 
     emit({
       phase: "pipeline.chapters",
       docId,
-      message: `Erkenne Kapitel aus ${extracted.totalPages} Seiten`,
+      message: `${cleanedSections.length} Kapitel`,
     });
-    const chapters = detectChapters(cleanedPages);
 
     const tx = d.transaction(() => {
       d.prepare("DELETE FROM chapters WHERE document_id = ?").run(docId);
       const insert = d.prepare(
         "INSERT INTO chapters (id, document_id, number, title, start_page, end_page, text, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       );
-      chapters.forEach((ch, idx) => {
-        insert.run(randomUUID(), docId, ch.number, ch.title, ch.startPage, ch.endPage, ch.text, idx);
+      cleanedSections.forEach((ch, idx) => {
+        insert.run(
+          randomUUID(),
+          docId,
+          ch.number,
+          ch.title,
+          ch.startPage,
+          ch.endPage,
+          ch.text,
+          idx
+        );
       });
     });
     tx();
 
     d.prepare("UPDATE documents SET ocr_status = 'done' WHERE id = ?").run(docId);
 
-    // Fire-and-forget: Meilisearch-Indexierung. Fehler werden intern geloggt.
+    // Fire-and-forget: Meilisearch-Indexierung.
     try {
       const fullDoc = d
         .prepare(
@@ -137,11 +164,11 @@ export async function processDocument(docId: string): Promise<void> {
     emit({
       phase: "pipeline.done",
       docId,
-      total: chapters.length,
-      message: `${extracted.totalPages} Seiten, ${chapters.length} Kapitel`,
+      total: cleanedSections.length,
+      message: `${extraction.pageCount} Seiten, ${cleanedSections.length} Kapitel`,
     });
     console.log(
-      `[pipeline] ${docId}: ${extracted.totalPages} pages → ${chapters.length} chapters`
+      `[pipeline] ${docId}: docling → ${extraction.pageCount} pages, ${cleanedSections.length} chapters`
     );
   } catch (err) {
     console.error(`[pipeline] ${docId} failed:`, err);

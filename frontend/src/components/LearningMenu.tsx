@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, type Chapter, type Document } from "../lib/api";
+import {
+  api,
+  subscribeProgress,
+  type Chapter,
+  type Document,
+  type ProgressEvent,
+} from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
 import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
@@ -8,16 +14,17 @@ import { PdfViewer } from "./PdfViewer";
 import { Cards } from "./Cards";
 import { ExamTrainer } from "./ExamTrainer";
 import { Summaries } from "./Summaries";
+import { cn } from "../lib/cn";
 
 type Tab = "reader" | "chapters" | "audiobook" | "exercises" | "exam" | "summary";
 
-const TABS: Array<{ id: Tab; labelKey: string }> = [
-  { id: "reader", labelKey: "learn.tab.reader" },
-  { id: "chapters", labelKey: "learn.tab.chapters" },
-  { id: "audiobook", labelKey: "learn.tab.audiobook" },
-  { id: "exercises", labelKey: "learn.tab.exercises" },
-  { id: "exam", labelKey: "learn.tab.exam" },
-  { id: "summary", labelKey: "learn.tab.summary" },
+const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = [
+  { id: "reader", labelKey: "learn.tab.reader", requiresExtraction: false },
+  { id: "chapters", labelKey: "learn.tab.chapters", requiresExtraction: true },
+  { id: "audiobook", labelKey: "learn.tab.audiobook", requiresExtraction: true },
+  { id: "exercises", labelKey: "learn.tab.exercises", requiresExtraction: true },
+  { id: "exam", labelKey: "learn.tab.exam", requiresExtraction: true },
+  { id: "summary", labelKey: "learn.tab.summary", requiresExtraction: true },
 ];
 
 interface Props {
@@ -28,17 +35,63 @@ interface Props {
 export function LearningMenu({ docId, onBack }: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
   const [tab, setTab] = useState<Tab>("reader");
+  const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
+  const [busyExtract, setBusyExtract] = useState(false);
   const toast = useToast();
   useLocale();
 
-  useEffect(() => {
+  const load = () =>
     api.documents
       .get(docId)
       .then(setDoc)
       .catch((err) =>
         toast.show(err instanceof Error ? err.message : t("common.error"), "error")
       );
-  }, [docId, toast]);
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docId]);
+
+  // SSE-Abo für Pipeline-Phasen (Extraktion, Kapitel, done/failed).
+  useEffect(() => {
+    const unsub = subscribeProgress(docId, (ev) => {
+      if (ev.phase.startsWith("pipeline.")) {
+        setExtractionPhase(ev);
+        if (ev.phase === "pipeline.done" || ev.phase === "pipeline.failed") {
+          load();
+        }
+      }
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docId]);
+
+  const extractionDone = doc?.ocr_status === "done";
+  const extractionRunning = doc?.ocr_status === "running" || doc?.ocr_status === "pending";
+
+  async function startExtraction() {
+    setBusyExtract(true);
+    try {
+      await api.documents.reprocess(docId);
+      toast.show(t("extract.started"), "success");
+      await load();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setBusyExtract(false);
+    }
+  }
+
+  async function cancelExtraction() {
+    try {
+      await api.documents.cancelExtract(docId);
+      toast.show(t("extract.canceled"), "success");
+      await load();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
 
   return (
     <div className="min-h-full flex flex-col">
@@ -59,37 +112,106 @@ export function LearningMenu({ docId, onBack }: Props) {
           </div>
         </div>
         <nav className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto">
-          {TABS.map((tb) => (
-            <button
-              key={tb.id}
-              onClick={() => setTab(tb.id)}
-              className={
-                "px-4 py-2 text-sm border-b-2 transition-colors whitespace-nowrap " +
-                (tab === tb.id
-                  ? "border-accent text-neutral-100"
-                  : "border-transparent text-neutral-500 hover:text-neutral-200")
-              }
-            >
-              {t(tb.labelKey)}
-            </button>
-          ))}
+          {TABS.map((tb) => {
+            const locked = tb.requiresExtraction && !extractionDone;
+            return (
+              <button
+                key={tb.id}
+                onClick={() => !locked && setTab(tb.id)}
+                disabled={locked}
+                title={locked ? t("extract.gate.tabTitle") : undefined}
+                className={cn(
+                  "px-4 py-2 text-sm border-b-2 transition-colors whitespace-nowrap",
+                  tab === tb.id
+                    ? "border-accent text-neutral-100"
+                    : "border-transparent text-neutral-500 hover:text-neutral-200",
+                  locked && "opacity-40 cursor-not-allowed hover:text-neutral-500"
+                )}
+              >
+                {t(tb.labelKey)}
+                {locked && <span className="ml-1 text-[10px]">🔒</span>}
+              </button>
+            );
+          })}
         </nav>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-4">
+        {doc && !extractionDone && (
+          <ExtractionGate
+            doc={doc}
+            phase={extractionPhase}
+            busy={busyExtract}
+            onStart={startExtraction}
+            onCancel={cancelExtraction}
+            running={!!extractionRunning}
+          />
+        )}
+
         {tab === "reader" && <PdfViewer docId={docId} />}
-        {tab === "chapters" && <ChaptersTab docId={docId} docStatus={doc?.ocr_status} />}
-        {tab === "audiobook" &&
+        {tab === "chapters" && extractionDone && (
+          <ChaptersTab docId={docId} docStatus={doc?.ocr_status} />
+        )}
+        {tab === "audiobook" && extractionDone &&
           (doc ? (
             <Audiobook docId={docId} documentLanguage={doc.language} />
           ) : (
             <div className="card p-6 text-sm text-neutral-500">{t("common.loading")}</div>
           ))}
-        {tab === "exercises" && <Cards docId={docId} />}
-        {tab === "exam" && <ExamTrainer docId={docId} />}
-        {tab === "summary" && <Summaries docId={docId} />}
+        {tab === "exercises" && extractionDone && <Cards docId={docId} />}
+        {tab === "exam" && extractionDone && <ExamTrainer docId={docId} />}
+        {tab === "summary" && extractionDone && <Summaries docId={docId} />}
       </main>
     </div>
+  );
+}
+
+function ExtractionGate({
+  doc,
+  phase,
+  busy,
+  onStart,
+  onCancel,
+  running,
+}: {
+  doc: Document;
+  phase: ProgressEvent | null;
+  busy: boolean;
+  onStart: () => void;
+  onCancel: () => void;
+  running: boolean;
+}) {
+  const status = doc.ocr_status;
+  const phaseMsg = phase?.message ?? null;
+
+  return (
+    <section className="card p-6 flex flex-col gap-3 border-accent-subtle bg-accent/5">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold">{t("extract.gate.title")}</h2>
+          <p className="text-sm text-neutral-400 mt-1 max-w-xl">
+            {status === "awaiting-extraction" && t("extract.gate.awaiting")}
+            {status === "pending" && t("extract.gate.awaiting")}
+            {status === "running" && t("extract.gate.running")}
+            {status === "failed" && t("extract.gate.failed")}
+          </p>
+          {phaseMsg && running && (
+            <p className="text-xs text-accent mt-2 font-mono">{phaseMsg}</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {running ? (
+            <Button variant="danger" onClick={onCancel}>
+              {t("extract.cancel")}
+            </Button>
+          ) : (
+            <Button onClick={onStart} disabled={busy}>
+              {status === "failed" ? t("extract.retry") : t("extract.start")}
+            </Button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

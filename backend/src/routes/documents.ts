@@ -3,7 +3,7 @@ import { db } from "../db";
 import { randomUUID } from "crypto";
 import { join } from "path";
 import { mkdirSync, writeFileSync, unlinkSync, existsSync, rmSync } from "fs";
-import { processDocument } from "../services/pipeline";
+import { processDocument, cancelProcessing } from "../services/pipeline";
 import { removeDocument as removeFromIndex } from "../services/search";
 import { tt } from "../lib/i18n";
 
@@ -147,8 +147,8 @@ documentRoutes.post("/upload", async (c) => {
 
   db()
     .prepare(
-      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type, ocr_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'awaiting-extraction')`
     )
     .run(id, title, file.name, relPath, file.type || "application/pdf", buf.length, language, type);
 
@@ -162,19 +162,28 @@ documentRoutes.post("/upload", async (c) => {
     }
   }
 
-  // Kick off PDF extraction + chapter detection in the background.
-  processDocument(id).catch((err) => console.error("[upload] pipeline error:", err));
+  // Extraktion startet NICHT automatisch — der User triggert sie
+  // explizit per POST /:id/reprocess, wenn er bereit ist (docling-
+  // Läufe brauchen auf dem NAS durchaus eine halbe Stunde).
 
   return c.json({ id, title, filename: file.name }, 201);
 });
 
-// Re-run extraction + chapter detection
+// Start (or re-run) Docling extraction. Auch beim ersten Mal manuell
+// ausgelöst — Uploads setzen nur Status "awaiting-extraction".
 documentRoutes.post("/:id/reprocess", async (c) => {
   const id = c.req.param("id");
   const doc = db().prepare("SELECT id FROM documents WHERE id = ?").get(id);
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
   processDocument(id).catch((err) => console.error("[reprocess] pipeline error:", err));
   return c.json({ status: "queued" });
+});
+
+// Laufende Extraktion abbrechen.
+documentRoutes.post("/:id/extract/cancel", (c) => {
+  const id = c.req.param("id");
+  const ok = cancelProcessing(id);
+  return c.json({ status: ok ? "canceling" : "not-running" });
 });
 
 // Delete

@@ -12,6 +12,7 @@
 export type ProgressPhase =
   | "pipeline.start"
   | "pipeline.extract"
+  | "pipeline.extraction"
   | "pipeline.chapters"
   | "pipeline.done"
   | "pipeline.failed"

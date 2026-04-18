@@ -20,6 +20,7 @@ interface Props {
 }
 
 const statusColor: Record<Document["ocr_status"], string> = {
+  "awaiting-extraction": "text-neutral-400 border-border",
   pending: "text-neutral-500 border-border",
   running: "text-amber-400 border-amber-500/40",
   done: "text-emerald-400 border-emerald-500/40",

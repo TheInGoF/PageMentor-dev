@@ -8,7 +8,7 @@ export interface Document {
   mime_type: string;
   size_bytes: number;
   page_count: number;
-  ocr_status: "pending" | "running" | "done" | "failed";
+  ocr_status: "awaiting-extraction" | "pending" | "running" | "done" | "failed";
   language: string;
   type: DocType;
   created_at: string;
@@ -301,6 +301,7 @@ export interface OllamaStatus {
 export type ProgressPhase =
   | "pipeline.start"
   | "pipeline.extract"
+  | "pipeline.extraction"
   | "pipeline.chapters"
   | "pipeline.done"
   | "pipeline.failed"
@@ -398,6 +399,8 @@ export const api = {
       }),
     reprocess: (id: string) =>
       request<{ status: string }>(`/api/documents/${id}/reprocess`, { method: "POST" }),
+    cancelExtract: (id: string) =>
+      request<{ status: string }>(`/api/documents/${id}/extract/cancel`, { method: "POST" }),
     tags: () => request<Array<{ label: string; usage: number }>>("/api/documents/tags/all"),
   },
   chapters: {
