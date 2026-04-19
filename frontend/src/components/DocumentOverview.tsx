@@ -115,11 +115,13 @@ export function DocumentOverview({
         />
 
         <StatusCard
-          title={t("learn.tab.chapters")}
+          title={t("overview.chapters.title")}
           disabled={!extractionReady}
           primary={doc.chapter_count ?? 0}
           primaryLabel={t("overview.chapters.count")}
-          onOpen={() => onGoTo("chapters")}
+          // Kapitel-Tab gibt's nicht mehr — die Kapitel-Sidebar ist im
+          // Reader (PdfViewer) eingebaut, also da hin springen.
+          onOpen={() => onGoTo("reader")}
         />
 
         <StatusCard
