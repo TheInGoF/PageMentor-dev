@@ -1354,16 +1354,14 @@ function IntroEditor({
                 {t("audiobook.intro.deleteAudio")}
               </Button>
             )}
-            {hasIntro && (
+            {hasIntro && !intro.audioUrl && (
               <Button
                 variant="outline"
                 onClick={onGenerate}
                 disabled={busy || !canGenerate}
                 title={!canGenerate ? t("audiobook.voice.empty") : undefined}
               >
-                {intro.audioUrl
-                  ? t("audiobook.intro.regenerateAudio")
-                  : t("audiobook.intro.generateAudio")}
+                {t("audiobook.intro.generateAudio")}
               </Button>
             )}
             <Button

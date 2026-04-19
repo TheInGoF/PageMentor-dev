@@ -1,21 +1,18 @@
 /**
- * Qwen3-TTS-Engine — self-hosted TTS über einen vLLM-OpenAI-Server,
- * der `Qwen/Qwen3-TTS-Flash` mit `--task audio_speech` serviert.
+ * Qwen3-TTS-Engine — spricht den pm-qwen-tts-Sidecar an (FastAPI-Wrapper
+ * um `Qwen/Qwen3-TTS-Flash`) über den pm-gpu-arbiter.
  *
- * Wir sprechen vLLM ausschließlich über den pm-gpu-arbiter an
- * (`http://pm-gpu-arbiter:8790`), der serialisiert den GPU-Zugriff
- * gegen Ollama — siehe /pm-gpu-arbiter/ im Repo-Root.
+ * Der Sidecar exponiert eine OpenAI-kompatible API (dieselbe Shape wie
+ * Kokoro-FastAPI und OpenAI selbst):
+ *   GET  /v1/audio/voices                   → Voice-Katalog
+ *   POST /v1/audio/speech                   → Audio-Bytes
+ *   GET  /v1/audio/voices/{id}/preview?text → Kurz-Preview
  *
- * API: identisch zu OpenAIs `/v1/audio/speech`.
- *
- * Voice-Mapping: das Frontend sieht vier kuratierte DE-Labels
- * (Anna/Emma/Klaus/Max). Jedes Label mappt intern auf einen
- * Qwen-Built-in-Speaker-Namen, den vLLM direkt versteht — plus einen
- * festen Integer-Seed, damit dieselbe Voice run-to-run identisch
- * klingt (bei vLLM akzeptiert das OpenAI-Endpoint `seed` als
- * zusätzliches Feld im Request-Body; unbekannte Felder werden
- * ignoriert, also schadet es nichts falls eine Revision das Feature
- * mal nicht mehr mitbringt).
+ * Voice-ID-Mapping + Seed-Fixing macht der Sidecar — wir schicken
+ * einfach unsere ID (`de_f_anna` etc.) und bekommen MP3 zurück. Dieselbe
+ * Voice klingt zweimal hintereinander identisch, weil der Sidecar vor
+ * jeder Generation `torch.manual_seed` mit einem pro-Voice fixen Wert
+ * setzt.
  */
 
 import { writeFile } from "fs/promises";
@@ -32,10 +29,8 @@ import type {
  * Auflösung der Upstream-URL:
  *   1. Settings-UI-Eintrag (qwenTtsUrl in llm-config.json)
  *   2. ENV `PM_QWEN_TTS_URL`
- *   3. Fallback `http://pm-gpu-arbiter:8790` — funktioniert nur wenn
- *      PageMentor im selben Compose-Netz wie der Arbiter läuft. Für
- *      den typischen NAS-Setup (PM auf NAS, Arbiter auf 3090-PC)
- *      trägt der User die IP im Settings-Modal ein.
+ *   3. Fallback `http://pm-gpu-arbiter:8790` — nur im gleichen Compose-
+ *      Netz. Bei NAS-Setup trägt der User die 3090-IP in Settings ein.
  */
 function baseUrl(): string {
   const u =
@@ -52,49 +47,20 @@ function apiKey(): string {
 const MODEL = process.env.PM_QWEN_TTS_MODEL || "Qwen/Qwen3-TTS-Flash";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
-/** vLLM startet ggf. kalt (Arbiter triggert Start) — großzügig
- *  bemessen, weil Modell-Load + Synthese eines langen Chunks locker
- *  2-3 min dauern können. */
+/** Sidecar-Cold-Start (Arbiter triggert Container-Start, Modell lädt aus
+ *  HF-Cache) plus lange Synthese → 5 min Puffer. */
 const SYNTH_TIMEOUT_MS = 5 * 60_000;
 const PREVIEW_TIMEOUT_MS = 60_000;
 
 const REFRESH_TTL_MS = 5 * 60_000;
 const REFRESH_RETRY_MS = 15_000;
 
-interface VoiceBinding {
-  /** Name des Qwen-Built-in-Speakers, den vLLM kennt. Falls ein
-   *  Preset-Name in der aktuellen Qwen-Revision nicht mehr existiert,
-   *  hier per ENV überschreibbar (siehe unten). */
-  qwenSpeaker: string;
-  /** Fester torch-Seed. Dieselbe Voice + derselbe Text = identisches
-   *  Audio. vLLM reicht das Feld als Generation-Seed durch. */
-  seed: number;
-}
-
 /**
- * Voice-Katalog + Mapping. Preset-Namen können via ENV überschrieben
- * werden, falls Qwen eine Revision rausbringt bei der die Namen
- * abweichen (`Cherry` → `cherry_v2` o. ä.).
+ * Voice-Katalog — rein deklarativ. Das tatsächliche Qwen-Speaker-
+ * Mapping + der Seed sitzen im Sidecar (pm-qwen-tts/main.py:
+ * VOICES_CONFIG), damit Backend und Sidecar eine klare
+ * Verantwortungs-Trennung haben.
  */
-const BINDINGS: Record<string, VoiceBinding> = {
-  de_f_anna: {
-    qwenSpeaker: process.env.PM_QWEN_SPEAKER_F1 || "Cherry",
-    seed: 101,
-  },
-  de_f_emma: {
-    qwenSpeaker: process.env.PM_QWEN_SPEAKER_F2 || "Jada",
-    seed: 102,
-  },
-  de_m_klaus: {
-    qwenSpeaker: process.env.PM_QWEN_SPEAKER_M1 || "Ethan",
-    seed: 201,
-  },
-  de_m_max: {
-    qwenSpeaker: process.env.PM_QWEN_SPEAKER_M2 || "Nofish",
-    seed: 202,
-  },
-};
-
 const VOICES: Voice[] = [
   {
     id: "de_f_anna",
@@ -104,7 +70,7 @@ const VOICES: Voice[] = [
     gender: "female",
     engine: "qwen",
     flagship: true,
-    note: `Qwen3-TTS via vLLM · Speaker ${BINDINGS.de_f_anna.qwenSpeaker} · Seed ${BINDINGS.de_f_anna.seed}`,
+    note: "Qwen3-TTS-Flash · deterministischer Seed",
   },
   {
     id: "de_f_emma",
@@ -113,7 +79,7 @@ const VOICES: Voice[] = [
     locale: "de-DE",
     gender: "female",
     engine: "qwen",
-    note: `Qwen3-TTS via vLLM · Speaker ${BINDINGS.de_f_emma.qwenSpeaker} · Seed ${BINDINGS.de_f_emma.seed}`,
+    note: "Qwen3-TTS-Flash · deterministischer Seed",
   },
   {
     id: "de_m_klaus",
@@ -122,7 +88,7 @@ const VOICES: Voice[] = [
     locale: "de-DE",
     gender: "male",
     engine: "qwen",
-    note: `Qwen3-TTS via vLLM · Speaker ${BINDINGS.de_m_klaus.qwenSpeaker} · Seed ${BINDINGS.de_m_klaus.seed}`,
+    note: "Qwen3-TTS-Flash · deterministischer Seed",
   },
   {
     id: "de_m_max",
@@ -131,7 +97,7 @@ const VOICES: Voice[] = [
     locale: "de-DE",
     gender: "male",
     engine: "qwen",
-    note: `Qwen3-TTS via vLLM · Speaker ${BINDINGS.de_m_max.qwenSpeaker} · Seed ${BINDINGS.de_m_max.seed}`,
+    note: "Qwen3-TTS-Flash · deterministischer Seed",
   },
 ];
 
@@ -145,12 +111,14 @@ let refreshing: Promise<void> | null = null;
 
 function authHeaders(): Record<string, string> {
   const k = apiKey();
-  return k ? { "Authorization": `Bearer ${k}` } : {};
+  return k ? { Authorization: `Bearer ${k}` } : {};
 }
 
 async function discover(): Promise<void> {
   const url = baseUrl();
   try {
+    // Arbiter antwortet auf /status ohne Lock zu akquirieren — billiger
+    // Liveness-Check ohne Container-Wecker.
     const statusRes = await fetch(`${url}/status`, {
       signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
     });
@@ -195,27 +163,12 @@ function parseRate(rate: string): number {
   return Math.max(0.5, Math.min(2.0, 1 + (sign * pct) / 100));
 }
 
-function bindingFor(voiceId: string): VoiceBinding {
-  const b = BINDINGS[voiceId];
-  if (!b) {
-    // Unbekannte Voice (z. B. manuelles Testen mit einem Qwen-Namen
-    // direkt) — Voice-ID als Speaker nehmen, Seed aus dem String-Hash.
-    let h = 0;
-    for (let i = 0; i < voiceId.length; i++) {
-      h = (h * 31 + voiceId.charCodeAt(i)) | 0;
-    }
-    return { qwenSpeaker: voiceId, seed: Math.abs(h) };
-  }
-  return b;
-}
-
 async function callSpeech(params: {
   text: string;
   voice: string;
   speed: number;
   timeoutMs: number;
 }): Promise<Buffer> {
-  const binding = bindingFor(params.voice);
   const url = baseUrl();
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
@@ -226,21 +179,16 @@ async function callSpeech(params: {
     body: JSON.stringify({
       model: MODEL,
       input: params.text,
-      voice: binding.qwenSpeaker,
+      voice: params.voice,
       response_format: "mp3",
       speed: params.speed,
-      // OpenAI-TTS kennt kein offizielles `seed`, vLLM akzeptiert es
-      // aber als Generation-Parameter. Server, die das Feld nicht
-      // kennen, ignorieren es — dann klingt die Stimme jede Generation
-      // minimal anders, aber nichts bricht.
-      seed: binding.seed,
     }),
     signal: AbortSignal.timeout(params.timeoutMs),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
     throw new Error(
-      `Qwen-TTS ${res.status} (${url}/v1/audio/speech, voice=${binding.qwenSpeaker}): ${detail.slice(0, 200)}`
+      `Qwen-TTS ${res.status} (${url}/v1/audio/speech, voice=${params.voice}): ${detail.slice(0, 200)}`
     );
   }
   return Buffer.from(await res.arrayBuffer());
