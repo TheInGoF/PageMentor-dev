@@ -1201,6 +1201,9 @@ function BookProgressPanel({
 // Intro-Editor
 // ---------------------------------------------------------------------
 
+/** Default-Intro-Vorschlag. Jede Zeile endet mit Satzzeichen (. oder
+ *  Komma), sonst rattert Edge alles ohne Pausen runter — Newlines
+ *  alleine reichen der TTS-Engine nicht für Atempausen. */
 function buildIntroDefault(
   meta: { title: string; author: string | null; language: string } | null,
   voice: Voice | null,
@@ -1212,31 +1215,33 @@ function buildIntroDefault(
 
   if (isDe) {
     lines.push(`Hörbuch: ${meta.title}.`);
+    lines.push("");
     if (meta.author) {
-      lines.push("");
-      lines.push(`von ${meta.author}`);
+      lines.push(`Von ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Aufbereitet durch ${model}`);
+      lines.push(`Aufbereitet durch ${model}.`);
     }
     if (voice) {
       const engine =
         voice.engine === "edge" ? "Sprachsynthese Azure Edge" : "Kokoro";
-      lines.push(`Gesprochen durch ${engine} mit der Stimme ${voice.label}`);
+      // Komma vor "mit der Stimme" gibt eine kurze Pause, dann
+      // Schlusspunkt.
+      lines.push(`Gesprochen durch ${engine}, mit der Stimme ${voice.label}.`);
     }
   } else {
     lines.push(`Audiobook: ${meta.title}.`);
+    lines.push("");
     if (meta.author) {
-      lines.push("");
-      lines.push(`by ${meta.author}`);
+      lines.push(`By ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Prepared by ${model}`);
+      lines.push(`Prepared with ${model}.`);
     }
     if (voice) {
       const engine =
         voice.engine === "edge" ? "Azure Edge speech synthesis" : "Kokoro";
-      lines.push(`Narrated by ${engine} with voice ${voice.label}`);
+      lines.push(`Narrated by ${engine}, with the voice ${voice.label}.`);
     }
   }
   return lines.join("\n");
