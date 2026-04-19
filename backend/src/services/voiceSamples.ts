@@ -41,6 +41,13 @@ export interface VoiceSample {
   bytes: number;
   durationMs: number;
   createdAt: string;
+  /** Gleitender Durchschnitt der TTS-Synthese-Geschwindigkeit für
+   *  diese Voice — Millisekunden pro Eingabe-Zeichen. Wird nach jedem
+   *  erfolgreichen Chunk via EMA (alpha=0.2) aktualisiert. `null`
+   *  wenn noch nie erfolgreich synthetisiert wurde. Frontend nutzt
+   *  das für die initiale ETA eines Hörbuch-Runs. */
+  msPerChar: number | null;
+  samplesCount: number;
 }
 
 interface Row {
@@ -54,6 +61,8 @@ interface Row {
   bytes: number;
   duration_ms: number;
   created_at: string;
+  ms_per_char: number | null;
+  samples_count: number;
 }
 
 function rowToSample(r: Row): VoiceSample {
@@ -68,6 +77,8 @@ function rowToSample(r: Row): VoiceSample {
     bytes: r.bytes,
     durationMs: r.duration_ms,
     createdAt: r.created_at,
+    msPerChar: r.ms_per_char ?? null,
+    samplesCount: r.samples_count ?? 0,
   };
 }
 
@@ -179,4 +190,35 @@ export function readVoiceRefBytes(sample: VoiceSample): Buffer {
     );
   }
   return readFileSync(sample.refPath);
+}
+
+/** EMA-Update für die Synthese-Geschwindigkeit einer Voice.
+ *
+ *  Formel: ms_per_char_new = alpha * (elapsed / chars) + (1 - alpha) * old
+ *  alpha = 0.2 → ein neuer Datenpunkt wiegt 20 %, die Historie 80 %.
+ *  Das glättet Ausreißer (gelegentlich hängender Chunk) ohne dass
+ *  Messpunkte jahrelang nachhallen.
+ *
+ *  Erster Datenpunkt: ms_per_char wird direkt gesetzt, ohne EMA-Mix. */
+export function recordChunkTiming(
+  voiceId: string,
+  chars: number,
+  elapsedMs: number
+): void {
+  if (chars < 50 || elapsedMs < 100) return; // zu kleine Samples sind rauschig
+  const sample = getVoiceSample(voiceId);
+  if (!sample) return;
+
+  const newRate = elapsedMs / chars;
+  const alpha = 0.2;
+  const next =
+    sample.msPerChar === null
+      ? newRate
+      : alpha * newRate + (1 - alpha) * sample.msPerChar;
+
+  db()
+    .prepare(
+      "UPDATE voice_samples SET ms_per_char = ?, samples_count = samples_count + 1 WHERE id = ?"
+    )
+    .run(next, voiceId);
 }

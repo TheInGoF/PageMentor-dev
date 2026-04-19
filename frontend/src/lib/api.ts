@@ -65,6 +65,10 @@ export interface Voice {
   engine: TtsEngine;
   flagship?: boolean;
   note?: string;
+  /** Gleitender Durchschnitt der Synthese-Dauer in ms/Zeichen.
+   *  Wird nach jedem erfolgreichen Chunk vom Backend per EMA
+   *  aktualisiert. Null heißt: noch nie erfolgreich synthetisiert. */
+  msPerChar?: number | null;
 }
 
 export interface CustomVoiceMeta {

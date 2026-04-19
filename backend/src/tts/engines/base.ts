@@ -19,6 +19,10 @@ export interface Voice {
   engine: EngineId;
   flagship?: boolean;
   note?: string;
+  /** Gleitender Durchschnitt der Synthese-Dauer pro Zeichen (ms/char).
+   *  `null` wenn noch keine Messpunkte vorliegen. Genutzt vom Frontend
+   *  für die initiale ETA-Schätzung eines Hörbuch-Runs. */
+  msPerChar?: number | null;
 }
 
 export interface SynthesizeParams {

@@ -239,6 +239,22 @@ export function initDb() {
     );
   `);
 
+  // Benchmark-Spalten für ETA-Berechnung. Nach jedem erfolgreichen
+  // Chunk updatet die qwen-Engine ms_per_char per Exponential-Moving-
+  // Average (alpha=0.2). Die Frontend-ETA nutzt das als Startwert,
+  // bevor der laufende Run eigene Messpunkte produziert.
+  const vsCols = d
+    .prepare("PRAGMA table_info(voice_samples)")
+    .all() as Array<{ name: string }>;
+  if (!vsCols.some((c) => c.name === "ms_per_char")) {
+    d.exec("ALTER TABLE voice_samples ADD COLUMN ms_per_char REAL");
+  }
+  if (!vsCols.some((c) => c.name === "samples_count")) {
+    d.exec(
+      "ALTER TABLE voice_samples ADD COLUMN samples_count INTEGER NOT NULL DEFAULT 0"
+    );
+  }
+
   // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
   // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
   // während einer Docling-Extraktion — Task-ID war nur in-memory, ist

@@ -24,6 +24,7 @@ import {
   getVoiceSample,
   listVoiceSamples,
   readVoiceRefBytes,
+  recordChunkTiming,
   type VoiceSample,
 } from "../../services/voiceSamples";
 import { applyAtempo } from "../ffmpeg";
@@ -138,6 +139,7 @@ function sampleToVoice(s: VoiceSample, idx: number): Voice {
     note: s.refText
       ? "Qwen3-TTS Voice-Clone · mit Transkript-Referenz"
       : "Qwen3-TTS Voice-Clone · x-vector-only",
+    msPerChar: s.msPerChar,
   };
 }
 
@@ -262,6 +264,16 @@ export const qwenEngine: TtsEngine = {
         `[qwen-tts] applied atempo=${speed.toFixed(3)} → ${params.outPath}`
       );
     }
+
+    // Benchmark aktualisieren: ms/Zeichen als EMA. Der Frontend-ETA-
+    // Rechner liest den Wert beim nächsten Book-Start und hat so
+    // sofort eine verlässliche Schätzung, statt bei 0 anzufangen.
+    try {
+      recordChunkTiming(sample.id, text.length, Date.now() - t0);
+    } catch (e) {
+      console.warn("[qwen-tts] benchmark update failed:", e);
+    }
+
     return { path: params.outPath, bytes: buf.length };
   },
 

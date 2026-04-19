@@ -48,6 +48,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     chunkCurrent: number;
     chunkTotal: number;
     startedAt: number;
+    /** Zeichenanzahl pro inkludiertem Kapitel (Reihenfolge wie im Run).
+     *  Dient der ETA-Berechnung: bekannte Zeichen × ms/Zeichen. Wird beim
+     *  `audiobook.start` einmal aus chapterStatus berechnet. */
+    chapterChars: number[];
   } | null>(null);
   const [elapsedTick, setElapsedTick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -71,6 +75,13 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [m4bBusy, setM4bBusy] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Snapshot für den SSE-Handler, der sonst stale chapterStatus sieht
+  // (useEffect-Deps halten es nicht frisch). Beim `audiobook.start`-
+  // Event wird chapterCharsRef.current gelesen.
+  const chapterStatusRef = useRef<ChapterAudioStatus[]>([]);
+  useEffect(() => {
+    chapterStatusRef.current = chapterStatus;
+  }, [chapterStatus]);
   const toast = useToast();
 
   const loadChapterStatus = useCallback(async () => {
@@ -123,12 +134,18 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       }
       // Book-level Progress aus den phase-Events ableiten.
       if (ev.phase === "audiobook.start") {
+        // Zeichen-Snapshot der zum Run eingeschlossenen Kapitel —
+        // bildet die Grundlage für die ETA (ms/Zeichen × remaining).
+        const chapterChars = chapterStatusRef.current
+          .filter(isChapterIncluded)
+          .map((c) => c.text_length || 0);
         setBookProgress({
           totalChapters: ev.total ?? 0,
           currentChapter: 0,
           chunkCurrent: 0,
           chunkTotal: 0,
           startedAt: Date.now(),
+          chapterChars,
         });
       } else if (ev.phase === "audiobook.chapter.start") {
         // Nur fortschreiben wenn ein Full-Book-Run schon gestartet
@@ -573,7 +590,14 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           </div>
         </div>
 
-        {bookProgress && <BookProgressPanel progress={bookProgress} />}
+        {bookProgress && (
+          <BookProgressPanel
+            progress={bookProgress}
+            benchmarkMsPerChar={
+              voices.find((v) => v.id === voiceId)?.msPerChar ?? null
+            }
+          />
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
           <div>
@@ -1193,6 +1217,7 @@ function formatDuration(ms: number): string {
 
 function BookProgressPanel({
   progress,
+  benchmarkMsPerChar,
 }: {
   progress: {
     totalChapters: number;
@@ -1200,25 +1225,54 @@ function BookProgressPanel({
     chunkCurrent: number;
     chunkTotal: number;
     startedAt: number;
+    chapterChars: number[];
   };
+  /** Vom Backend gemessener EMA-Durchschnitt für die gewählte Voice.
+   *  Wird als Startwert für die ETA genutzt, bevor der laufende Run
+   *  genug eigene Messpunkte hat. `null` → erste Generation dieser
+   *  Voice, wir zeigen keine ETA bis genug Daten da sind. */
+  benchmarkMsPerChar: number | null;
 }) {
-  const { totalChapters, currentChapter, chunkCurrent, chunkTotal, startedAt } = progress;
+  const {
+    totalChapters,
+    currentChapter,
+    chunkCurrent,
+    chunkTotal,
+    startedAt,
+    chapterChars,
+  } = progress;
   const elapsedMs = Date.now() - startedAt;
 
-  // Ø-Zeit pro komplettes Kapitel: erste fertige Kapitel-Übergänge sind
-  // rauschanfällig, aber nach 1-2 durch ist der Schätzer brauchbar.
-  const chaptersDone = Math.max(0, currentChapter - 1);
-  const avgPerChapterMs = chaptersDone > 0 ? elapsedMs / chaptersDone : null;
+  // Gesamt-Zeichen + bis hierhin gemachte Zeichen.
+  const totalChars = chapterChars.reduce((a, b) => a + b, 0);
 
-  // ETA = noch zu machende Kapitel × Ø plus bereits in aktuellem Kapitel
-  // verbrachte Zeit abziehen. Sauberer wäre chunk-basiert, aber die
-  // Chunks sind unterschiedlich lang (Einleitung kurz, Hauptkapitel
-  // lang) — Ø-pro-Kapitel ist ehrlicher.
-  const chaptersRemaining = Math.max(0, totalChapters - currentChapter);
+  // Fertige Kapitel bis currentChapter-1 (exkl.) zählen voll mit.
+  const completedIdx = Math.max(0, currentChapter - 1);
+  const completedChars = chapterChars
+    .slice(0, completedIdx)
+    .reduce((a, b) => a + b, 0);
+
+  // Aktuelles Kapitel proportional über chunks zählen.
+  const currentChapterTotal =
+    currentChapter >= 1 && currentChapter <= chapterChars.length
+      ? chapterChars[currentChapter - 1]
+      : 0;
+  const chapterFrac = chunkTotal > 0 ? chunkCurrent / chunkTotal : 0;
+  const charsDone = completedChars + currentChapterTotal * chapterFrac;
+  const charsRemaining = Math.max(0, totalChars - charsDone);
+
+  // Rate-Wahl: live wenn wir genug eigene Daten haben, sonst Backend-
+  // Benchmark. Schwelle 800 Zeichen = meistens >= 1 Chunk durch →
+  // genug um die live-Messung über Rauschen zu heben.
+  const liveRate = charsDone >= 800 ? elapsedMs / charsDone : null;
+  const rate = liveRate ?? benchmarkMsPerChar;
+
   const etaMs =
-    avgPerChapterMs !== null
-      ? Math.max(0, Math.round(avgPerChapterMs * chaptersRemaining))
-      : null;
+    rate !== null ? Math.max(0, Math.round(charsRemaining * rate)) : null;
+
+  // Anzeige der Rate in Zeichen/Sekunde, damit Gefühl dafür entsteht.
+  const charsPerSec =
+    rate !== null && rate > 0 ? Math.round(1000 / rate) : null;
 
   return (
     <div className="card p-4 bg-bg-elevated flex flex-col gap-2 border-accent-subtle">
@@ -1238,16 +1292,20 @@ function BookProgressPanel({
               })}
             </span>
           )}
+          {totalChars > 0 && (
+            <span className="text-[11px] text-neutral-500 font-mono">
+              · {Math.round(charsDone).toLocaleString()}/
+              {totalChars.toLocaleString()} chars
+            </span>
+          )}
         </div>
         <div className="text-[11px] text-neutral-500 font-mono flex items-baseline gap-3">
           <span>
             {t("audiobook.progress.elapsed", { time: formatDuration(elapsedMs) })}
           </span>
-          {avgPerChapterMs !== null && (
+          {charsPerSec !== null && (
             <span>
-              {t("audiobook.progress.avg", {
-                time: formatDuration(Math.round(avgPerChapterMs)),
-              })}
+              {t("audiobook.progress.rate", { n: charsPerSec })}
             </span>
           )}
           {etaMs !== null && (

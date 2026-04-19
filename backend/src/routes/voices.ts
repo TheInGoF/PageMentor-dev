@@ -30,6 +30,8 @@ voiceRoutes.get("/custom", (c) => {
       bytes: v.bytes,
       seed: v.seed,
       createdAt: v.createdAt,
+      msPerChar: v.msPerChar,
+      samplesCount: v.samplesCount,
     })),
   });
 });
@@ -77,6 +79,8 @@ voiceRoutes.post("/custom", async (c) => {
         bytes: sample.bytes,
         seed: sample.seed,
         createdAt: sample.createdAt,
+        msPerChar: sample.msPerChar,
+        samplesCount: sample.samplesCount,
       },
     });
   } catch (e) {
