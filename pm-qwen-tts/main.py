@@ -73,10 +73,11 @@ TOKENIZER_ID = os.environ.get(
 )
 DEVICE = os.environ.get("QWEN_TTS_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DTYPE_NAME = os.environ.get("QWEN_TTS_DTYPE", "bfloat16")
-# sdpa reicht für den Anfang; flash-attn-2 bringt 10-20% Speed aber
-# kostet Minuten Build-Zeit (C++-Compile) — wer das will setzt die ENV
-# und baut flash-attn im eigenen Downstream-Dockerfile.
-ATTN_IMPL = os.environ.get("QWEN_TTS_ATTN_IMPL", "sdpa")
+# flash_attention_2 ist ab v1.17.003 im Image vorinstalliert (prebuilt
+# wheel, siehe Dockerfile). Auf älteren GPUs (Compute Capability < 8.0,
+# z. B. RTX 20xx) `QWEN_TTS_ATTN_IMPL=sdpa` setzen — flash-attn unterstützt
+# erst Ampere+.
+ATTN_IMPL = os.environ.get("QWEN_TTS_ATTN_IMPL", "flash_attention_2")
 
 # Voice-Clone-Qualitäts-Tuning (können per ENV übersteuert werden).
 DEFAULT_LANGUAGE = os.environ.get("QWEN_TTS_DEFAULT_LANGUAGE", "German")

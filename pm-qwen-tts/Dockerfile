@@ -23,6 +23,18 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# flash-attention 2 als prebuilt wheel. Das Paket ist für die Version
+# torch 2.4.1 + CUDA 12.4 + cp311 vorkompiliert — kein nvcc-Build zur
+# Image-Bauzeit, kein MAX_JOBS-OOM auf CI-Runners. ~80 MB Download, ~2 s
+# Install.
+#
+# Falls Alibaba / Qwen eine neuere torch/CUDA-Kombi verlangt oder der
+# Wheel-URL irgendwann tot ist: Image startet weiter mit sdpa (Fallback
+# in der qwen-tts-Library) — kein Hard-Fail.
+RUN pip install --no-cache-dir \
+    https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.2.post1/flash_attn-2.7.2.post1+cu124torch2.4cxx11abiFALSE-cp311-cp311-linux_x86_64.whl \
+    || echo "WARN: flash-attn wheel install failed — continuing with sdpa fallback"
+
 COPY main.py ./
 
 EXPOSE 8880

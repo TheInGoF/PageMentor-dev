@@ -51,8 +51,13 @@ function apiKey(): string {
 const MODEL = process.env.PM_QWEN_TTS_MODEL || "Qwen/Qwen3-TTS-12Hz-1.7B-Base";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
-const SYNTH_TIMEOUT_MS = 5 * 60_000;
-const PREVIEW_TIMEOUT_MS = 2 * 60_000;
+// Qwen3-TTS-Base auf einer 3090 braucht ohne flash-attn gut 5-8 min für
+// einen langen Chunk (Intros, volle Absätze). Mit flash-attn 2 eher 2-4
+// min. 10 min Puffer verhindert, dass das Backend abschneidet bevor das
+// Modell fertig ist — der Client-HTTP-Hop bleibt offen (kein Buffern)
+// und Chrome/Firefox haben Default-Fetch-Timeout „nie".
+const SYNTH_TIMEOUT_MS = 10 * 60_000;
+const PREVIEW_TIMEOUT_MS = 3 * 60_000;
 
 const REFRESH_TTL_MS = 5 * 60_000;
 const REFRESH_RETRY_MS = 15_000;
