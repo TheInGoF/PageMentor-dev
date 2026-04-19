@@ -130,6 +130,10 @@ services:
       QWEN_TTS_DTYPE: "bfloat16"
       QWEN_TTS_ATTN_IMPL: "sdpa"       # "flash_attention_2" spart ~15% VRAM, braucht Downstream-Rebuild
       QWEN_TTS_DEFAULT_LANGUAGE: "German"
+      # Hard-Timeout pro Chunk in Sekunden. Reguläre Chunks auf 3090
+      # liegen bei ~4:30 min, 360 s (6 min) gibt Puffer. Bei
+      # Überschreitung: 504 + self-exit, Container startet sauber neu.
+      QWEN_TTS_GENERATION_TIMEOUT: "360"
     deploy:
       resources:
         reservations:

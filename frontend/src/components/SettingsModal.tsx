@@ -27,13 +27,17 @@ interface Props {
   onClose: () => void;
 }
 
-const RATES: Array<{ value: string; key: string }> = [
-  { value: "-10%", key: "rate.-10" },
-  { value: "+0%", key: "rate.0" },
-  { value: "+10%", key: "rate.+10" },
-  { value: "+20%", key: "rate.+20" },
-  { value: "+30%", key: "rate.+30" },
-];
+/** 5%-Schritte von -10 bis +30 — programmatisch, damit das Label-Set
+ *  konsistent zu Audiobook.tsx bleibt. */
+const RATES: Array<{ value: string; label: string }> = (() => {
+  const out: Array<{ value: string; label: string }> = [];
+  for (let pct = -10; pct <= 30; pct += 5) {
+    if (pct === 0) out.push({ value: "+0%", label: "Normal" });
+    else if (pct > 0) out.push({ value: `+${pct}%`, label: `+${pct} %` });
+    else out.push({ value: `${pct}%`, label: `−${Math.abs(pct)} %` });
+  }
+  return out;
+})();
 
 export function SettingsModal({ open, onClose }: Props) {
   useLocale();
@@ -301,7 +305,7 @@ export function SettingsModal({ open, onClose }: Props) {
               >
                 {RATES.map((r) => (
                   <option key={r.value} value={r.value}>
-                    {t(r.key)}
+                    {r.value === "+0%" ? t("rate.0") : r.label}
                   </option>
                 ))}
               </select>

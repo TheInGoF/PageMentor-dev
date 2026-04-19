@@ -19,13 +19,21 @@ interface Props {
   documentLanguage: string;
 }
 
-const RATE_OPTIONS: Array<{ value: string; key: string }> = [
-  { value: "-10%", key: "rate.-10" },
-  { value: "+0%", key: "rate.0" },
-  { value: "+10%", key: "rate.+10" },
-  { value: "+20%", key: "rate.+20" },
-  { value: "+30%", key: "rate.+30" },
-];
+/** Rate-Optionen in 5%-Schritten von -10 bis +30. Label direkt im
+ *  Component erzeugt, statt pro Schritt eigenen i18n-Key zu pflegen. */
+const RATE_OPTIONS: Array<{ value: string; label: string }> = (() => {
+  const steps: Array<{ value: string; label: string }> = [];
+  for (let pct = -10; pct <= 30; pct += 5) {
+    if (pct === 0) {
+      steps.push({ value: "+0%", label: "Normal" });
+    } else if (pct > 0) {
+      steps.push({ value: `+${pct}%`, label: `+${pct} %` });
+    } else {
+      steps.push({ value: `${pct}%`, label: `−${Math.abs(pct)} %` });
+    }
+  }
+  return steps;
+})();
 
 export function Audiobook({ docId, documentLanguage }: Props) {
   const [voices, setVoices] = useState<Voice[]>([]);
@@ -598,7 +606,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
               >
                 {RATE_OPTIONS.map((r) => (
                   <option key={r.value} value={r.value}>
-                    {t(r.key)}
+                    {r.value === "+0%" ? t("rate.0") : r.label}
                   </option>
                 ))}
               </select>
