@@ -1,10 +1,14 @@
 name: build pm-qwen-tts
 
-# Triggert nur bei Änderungen im Sidecar-Ordner oder am Workflow selbst
-# — spart CI-Minuten wenn nur Backend/Frontend-Code committed wird.
-# Das Image wird ~2-3 GB groß (PyTorch-CUDA-Base), baut ~5-8 min auf
-# Github-Runners und erst beim ersten Container-Start lädt es Qwen-TTS-
-# Flash (~5 GB) aus dem HF-Hub.
+# Triggert nur bei Änderungen im Sidecar-Ordner oder am Workflow selbst.
+# Das Image wird ~3-4 GB groß (PyTorch-CUDA-Base + flash-attn). Der
+# Build-Prozess:
+#   - Stage 1 (-devel): flash-attn 2.7.2 aus Source, ~15-20 min mit
+#     MAX_JOBS=2. Docker-Layer-Cache macht nachfolgende Builds schneller
+#     wenn sich weder torch noch flash-attn ändern.
+#   - Stage 2 (runtime): schlankes Image mit nur dem kompilierten
+#     flash-attn-Package.
+# Insgesamt ~20-30 min beim ersten Build, ~2-5 min wenn Cache trifft.
 on:
   push:
     branches: [main]
@@ -17,6 +21,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # flash-attn aus Source ist C++-schwer; default 6h ist ausreichend,
+    # aber wir setzen 60 min als Hard-Safety, damit ein hängender Build
+    # nicht still 6h Minuten frisst.
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
