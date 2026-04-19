@@ -260,8 +260,32 @@ const DE_LIST_MARKERS: Rule[] = [
   { pattern: /^[\s]*[-*•–][\s]+/gm, replacement: "" },
 ];
 
+/** Studienheft-Header mit Doppelpunkt: "Übung 1.7:", "Beispiel 3.2:",
+ *  "Definition:", "Satz:" usw. Edge-TTS macht bei `:` nur eine kurze
+ *  Pause — bei einem Header der das Thema einleitet wollen wir aber
+ *  eine deutliche Trennung zum folgenden Inhalt. Lösung: `:` → `.`
+ *  plus Absatz-Newline. Damit liest TTS den Header als eigenen Satz
+ *  und macht danach Atempause vor dem Inhalt.
+ *
+ *  Pattern matched nur am Zeilenanfang (^…$ mit m-flag) — Doppelpunkte
+ *  mitten im Satz ("Folgende drei Aspekte sind wichtig:") bleiben
+ *  unangetastet, das macht Edge selbst korrekt. */
+const DE_HEADERS: Rule[] = [
+  {
+    // Header mit optionaler Nummerierung: "Übung 1.7:", "Aufgabe 3:",
+    // "Beispiel A.2:", "Satz 4.1:" — Nummer ist optional.
+    pattern:
+      /^(Übung|Aufgabe|Beispiel|Definition|Satz|Lemma|Korollar|Theorem|Beweis|Bemerkung|Hinweis|Anmerkung|Achtung|Wichtig|Merksatz|Tipp|Frage|Lösung|Antwort|Vorgehen|Voraussetzung|Behauptung|Folgerung|Übungsaufgabe|Selbsttest)(\s+[\dA-Za-z]+(?:[.\-][\dA-Za-z]+)*)?\s*:\s*/gm,
+    replacement: (_, header: string, num?: string) =>
+      `${header}${num ?? ""}.\n\n`,
+  },
+];
+
 const DE_ALL: Rule[] = [
   ...MARKDOWN_STRIP,
+  // Header MÜSSEN nach MARKDOWN_STRIP laufen — "## Übung 1.7:" wird
+  // erst zu "Übung 1.7:" und matched dann das Header-Pattern.
+  ...DE_HEADERS,
   ...DE_COMPOUND,
   ...DE_TITLES,
   ...DE_WITH_NUMBER,
@@ -383,8 +407,19 @@ const EN_LIST_MARKERS: Rule[] = [
   { pattern: /^[\s]*[-*•–][\s]+/gm, replacement: "" },
 ];
 
+/** English textbook headers — same idea as DE_HEADERS. */
+const EN_HEADERS: Rule[] = [
+  {
+    pattern:
+      /^(Exercise|Problem|Example|Definition|Theorem|Lemma|Corollary|Proof|Remark|Note|Notice|Warning|Tip|Question|Answer|Solution|Approach|Hint|Self-Check)(\s+[\dA-Za-z]+(?:[.\-][\dA-Za-z]+)*)?\s*:\s*/gm,
+    replacement: (_, header: string, num?: string) =>
+      `${header}${num ?? ""}.\n\n`,
+  },
+];
+
 const EN_ALL: Rule[] = [
   ...MARKDOWN_STRIP,
+  ...EN_HEADERS,
   ...EN_COMPOUND,
   ...EN_TITLES,
   ...EN_WITH_NUMBER,
