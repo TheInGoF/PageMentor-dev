@@ -41,12 +41,12 @@ External services (called over network at runtime, not linked)
 - FFmpeg                (LGPL 2.1+) https://ffmpeg.org
   (invoked as a subprocess; no linking, AGPLv3-compatible usage)
 - Docling-Serve         (MIT)       https://github.com/docling-project/docling-serve
-- Qwen3-TTS-Flash       (Apache 2.0) https://huggingface.co/Qwen/Qwen3-TTS-Flash
-  Copyright 2025 Alibaba Cloud / Qwen Team. Multilingual TTS model with
-  native German support via the built-in speaker presets. The model is
-  downloaded at runtime from the HuggingFace Hub and is NOT bundled with
-  any image in this repository. See the model card for the full Apache
-  License 2.0 terms.
+- Qwen3-TTS             (Apache 2.0) https://huggingface.co/Qwen
+  Copyright 2026 Alibaba Cloud / Qwen Team. Multilingual TTS model
+  family (Qwen3-TTS-12Hz-0.6B/1.7B in Base / CustomVoice / VoiceDesign
+  variants). The selected model is downloaded at runtime from the
+  HuggingFace Hub and is NOT bundled with any image in this repository.
+  See the respective model card for the full Apache License 2.0 terms.
 - transformers          (Apache 2.0) https://github.com/huggingface/transformers
   loads Qwen3-TTS-Flash inside the pm-qwen-tts sidecar.
 - pm-qwen-tts           (this repo) — FastAPI wrapper around transformers

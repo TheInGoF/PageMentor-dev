@@ -1,46 +1,61 @@
 # pm-qwen-tts
 
-Qwen3-TTS-Flash als self-hosted Sidecar mit OpenAI-kompatibler API.
-Läuft hinter dem [`pm-gpu-arbiter`](../pm-gpu-arbiter/), teilt sich die
-GPU mit Ollama, wird on-demand vom Arbiter gestartet und nach TTS-Jobs
-wieder gestoppt.
+Voice-Clone-TTS-Sidecar auf Basis von
+[Qwen3-TTS-12Hz-1.7B-Base](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)
+(Apache 2.0). Klont aus einem 3-10 s Referenz-Audio eine Lesestimme
+und spricht beliebigen Text in dieser Stimme — deterministisch wenn
+derselbe Seed + dieselbe Referenz verwendet werden.
 
-- **Modell**: [Qwen/Qwen3-TTS-Flash](https://huggingface.co/Qwen/Qwen3-TTS-Flash)
-  (Apache 2.0, multilingual — jede Built-in-Voice spricht Deutsch nativ)
-- **API**: dieselbe Shape wie Kokoro-FastAPI / OpenAI (`/v1/audio/speech`)
-- **Deterministisch**: pro Voice ist ein fester Seed konfiguriert. Gleicher
-  Text + gleiche Voice → bit-identisches Audio
-- **Kein Model-Bundle**: Weights kommen beim ersten Start aus dem HF-Hub
-  (~5 GB), gecached im Volume. Image selbst nur ~2 GB (PyTorch-Base)
+Läuft hinter dem [`pm-gpu-arbiter`](../pm-gpu-arbiter/), teilt sich die
+GPU mit Ollama, wird vom Arbiter on-demand gestartet und nach TTS-Jobs
+wieder gestoppt.
 
 ## Endpoints
 
 | Endpoint | Zweck |
 |---|---|
-| `GET /health` | 200 wenn Modell geladen, 503 während Cold-Start |
-| `GET /v1/audio/voices` | Voice-Katalog + discovered Qwen-Speakers |
-| `POST /v1/audio/speech` | OpenAI-Shape: `{input, voice, response_format, speed, seed}` |
-| `GET /v1/audio/voices/{id}/preview?text=…` | Kurz-Preview als MP3 |
+| `GET /health` | 200 wenn Modell geladen, 503 mit Grund im Body |
+| `GET /v1/audio/voices` | Metadaten — Voice-Verwaltung sitzt im PageMentor-Backend |
+| `POST /v1/audio/speech` | Voice-Clone: Text + Referenz-Audio (base64) → Audio-Bytes |
+
+## POST /v1/audio/speech
+
+```json
+{
+  "input": "Guten Tag, hier spricht Anna.",
+  "ref_audio_b64": "<base64 eines 3-10 s WAV/MP3/FLAC>",
+  "ref_text": "Das ist ein Testsatz zur Referenz.",
+  "language": "German",
+  "seed": 12345,
+  "response_format": "mp3"
+}
+```
+
+- **`input`**: der zu sprechende Text
+- **`ref_audio_b64`**: Base64-Codierung eines 3-10 s Audioclips der Zielstimme
+  (WAV/MP3/FLAC akzeptiert)
+- **`ref_text`** (optional): Transkript der Referenz — wenn gesetzt, nutzt
+  das Modell den vollen Voice-Clone-Pfad (beste Qualität). Wenn leer, geht
+  es in den `x_vector_only_mode` (Stimmprofil ohne Transkript) — schneller,
+  Qualität leicht reduziert
+- **`language`**: `German` / `English` / `Chinese` / … (10 Sprachen, siehe
+  [Qwen3-TTS Doku](https://github.com/QwenLM/Qwen3-TTS)). Default `German`
+- **`seed`**: Integer, wird vor der Generation als `torch.manual_seed`
+  gesetzt — gleicher Seed + gleiche Referenz + gleicher Text = identisches
+  Audio
+- **`response_format`**: `mp3` | `wav` | `flac`
 
 ## Environment
 
 | Variable | Default | Zweck |
 |---|---|---|
-| `QWEN_TTS_MODEL` | `Qwen/Qwen3-TTS-Flash` | HuggingFace-Repo |
-| `QWEN_TTS_DEVICE` | `cuda` (wenn verfügbar) | `cpu` für Debug |
-| `QWEN_TTS_DTYPE` | `bfloat16` | `float16` wenn bf16 instabil |
-| `QWEN_TTS_SAMPLE_RATE` | `24000` | 24 kHz passt zu Qwen |
+| `QWEN_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | HF-Repo |
+| `QWEN_TTS_DEVICE` | `cuda` (wenn verfügbar) | `cpu` zum Debug |
+| `QWEN_TTS_DTYPE` | `bfloat16` | `float16` falls bf16 instabil |
+| `QWEN_TTS_ATTN_IMPL` | `sdpa` | `flash_attention_2` für -10 bis -20% VRAM (extra build) |
+| `QWEN_TTS_DEFAULT_LANGUAGE` | `German` | wenn Request kein `language` mitsendet |
 | `QWEN_TTS_MAX_NEW_TOKENS` | `4096` | Obergrenze pro Generation |
-| `QWEN_TTS_SPEAKER_F1` | `Cherry` | Preset → `de_f_anna` (Anna) |
-| `QWEN_TTS_SPEAKER_F2` | `Jada` | Preset → `de_f_emma` (Emma) |
-| `QWEN_TTS_SPEAKER_M1` | `Ethan` | Preset → `de_m_klaus` (Klaus) |
-| `QWEN_TTS_SPEAKER_M2` | `Nofish` | Preset → `de_m_max` (Max) |
-
-Wenn ein konfigurierter Preset-Name nicht im Modell existiert, fällt der
-Sidecar sichtbar im Log auf den ersten verfügbaren Speaker zurück — der
-Request scheitert nicht. Beim ersten Start auf die Log-Zeile
-„discovered speakers: …" achten und ggf. die `QWEN_TTS_SPEAKER_*`-
-Defaults überschreiben.
+| `QWEN_TTS_X_VECTOR_ONLY` | `true` | Fallback wenn kein `ref_text` im Request |
 
 ## Pre-built Image (empfohlen)
 
@@ -49,11 +64,12 @@ docker pull ghcr.io/lordvonbaum/pm-qwen-tts:latest
 ```
 
 In der Compose:
+
 ```yaml
 qwen-tts:
   image: ghcr.io/lordvonbaum/pm-qwen-tts:latest
   container_name: pm-qwen-tts
-  restart: "no"                # Arbiter kontrolliert Start/Stop
+  restart: "no"              # Arbiter kontrolliert Start/Stop
   ports:
     - "8880:8880"
   volumes:
@@ -67,7 +83,7 @@ qwen-tts:
             capabilities: [gpu]
 ```
 
-## Lokal bauen (für Dev/Contrib)
+## Lokal bauen (Dev/Contrib)
 
 ```bash
 docker build -t pm-qwen-tts:dev ./pm-qwen-tts
@@ -76,57 +92,42 @@ docker run --rm --gpus all -p 8880:8880 \
   pm-qwen-tts:dev
 ```
 
-## curl-Beispiele
+## curl-Beispiel (standalone test)
 
-**Voice-Katalog**
 ```bash
-curl -s http://localhost:8880/v1/audio/voices | jq
-```
+# 3 s WAV-Sample als base64 kodieren
+REF_B64=$(base64 -w0 alice-3s.wav)
 
-**Preview**
-```bash
-curl -o preview.mp3 \
-  "http://localhost:8880/v1/audio/voices/de_f_anna/preview?text=Hallo,%20dies%20ist%20Anna."
-```
-
-**Synthese (OpenAI-Shape)**
-```bash
 curl -X POST http://localhost:8880/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -o speech.mp3 \
-  -d '{
-    "input": "Willkommen im lokalen Qwen-TTS-Sidecar.",
-    "voice": "de_m_klaus",
-    "response_format": "mp3",
-    "speed": 1.0
-  }'
+  -o spoken.mp3 \
+  -d "{
+    \"input\": \"Hallo Welt, dies ist ein Test.\",
+    \"ref_audio_b64\": \"$REF_B64\",
+    \"ref_text\": \"This is the transcript of the reference audio.\",
+    \"language\": \"German\",
+    \"seed\": 42,
+    \"response_format\": \"mp3\"
+  }"
 ```
 
 ## Troubleshooting
 
-**Modell-Load hängt 3+ min beim ersten Start** — normal, Qwen3-TTS-Flash
-wird ~5 GB aus dem HF-Hub gezogen. Cache bleibt im `qwen-tts-hf`-Volume,
-zweiter Start ist in ~15 s warm.
+**503 von `/health`** — Modell noch nicht geladen oder Load-Error. Response-
+Body (`{"reason":"..."}`) zeigt den Grund. Typisch: HF-Download läuft
+(~3-4 GB einmalig), dauert beim ersten Start 2-5 min.
 
-**OOM beim Laden** — `QWEN_TTS_DTYPE=float16` setzen (spart VRAM ggü. bf16
-auf manchen Karten). Oder den Arbiter davor setzen, der entlädt Ollama
-automatisch bevor Qwen lädt.
+**OOM beim Generate** — `QWEN_TTS_DTYPE=float16` setzen oder
+`QWEN_TTS_ATTN_IMPL=flash_attention_2` (braucht Downstream-Rebuild).
 
-**„speaker preset ... nicht im Modell"** im Log — Qwen-Revision hat die
-Namen umbenannt. Log zeigt „discovered speakers" — passende Namen in
-`QWEN_TTS_SPEAKER_*` eintragen.
-
-**503 von `/health`** — Modell noch nicht geladen (Cold-Start). Der
-Arbiter hält dafür `TTS_STARTUP_TIMEOUT=300` vor. Beim ersten Download
-kann das knapp werden — dann auf 600 erhöhen.
+**Klone klingt brüchig** — schlechtes Referenzsample. Qwen will klare,
+ruhige 3-10 s ohne Musik/Hintergrundlärm. `ref_text` mitsenden verbessert
+die Qualität spürbar.
 
 ## Lizenz + Attribution
 
-Dieser Wrapper-Code: MIT (eigenes Repo).
+Wrapper-Code: MIT.
 
-Das TTS-Modell [Qwen/Qwen3-TTS-Flash](https://huggingface.co/Qwen/Qwen3-TTS-Flash)
-© Alibaba, Apache 2.0. Das Modell wird zur Laufzeit aus dem HuggingFace-
-Hub geladen und ist **nicht** Teil dieses Images. Die Apache-2.0-Lizenz
-erlaubt Distribution, Modifikation und kommerzielle Nutzung bei
-Bewahrung der Copyright- und Lizenz-Notice — siehe
-[NOTICE](../NOTICE) im Repo-Root.
+Die Qwen3-TTS-Modelle (`Qwen/Qwen3-TTS-12Hz-*`) sind © Alibaba, Apache 2.0.
+Das Modell wird zur Laufzeit aus dem HuggingFace-Hub geladen und ist
+**nicht** Teil dieses Images. Siehe [NOTICE](../NOTICE) im Repo-Root.

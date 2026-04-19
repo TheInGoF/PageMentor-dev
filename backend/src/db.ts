@@ -219,6 +219,26 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_chunks_chapter ON chunks(chapter_id);
   `);
 
+  // Voice-Samples für Qwen3-TTS Voice-Clone. User lädt eine 3-10 s
+  // Referenz-WAV/MP3 hoch, wir speichern die Datei im Data-Volume und
+  // halten Metadaten in dieser Tabelle. Der feste Seed (Random gewürfelt
+  // beim Upload) sorgt dafür, dass dieselbe Voice run-to-run identisch
+  // klingt.
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS voice_samples (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      gender TEXT NOT NULL DEFAULT 'female',
+      language TEXT NOT NULL DEFAULT 'de',
+      ref_path TEXT NOT NULL,
+      ref_text TEXT,
+      seed INTEGER NOT NULL,
+      bytes INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
   // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
   // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
   // während einer Docling-Extraktion — Task-ID war nur in-memory, ist

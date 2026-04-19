@@ -67,6 +67,17 @@ export interface Voice {
   note?: string;
 }
 
+export interface CustomVoiceMeta {
+  id: string;
+  label: string;
+  gender: "female" | "male";
+  language: string;
+  refTextPresent: boolean;
+  bytes: number;
+  seed: number;
+  createdAt: string;
+}
+
 export interface AudioTrack {
   id: string;
   chapter_id: string;
@@ -615,6 +626,32 @@ export const api = {
       }),
     removeKey: (provider: "anthropic" | "openai" | "google" | "qwenTts") =>
       request<{ config: unknown }>(`/api/llm/config/${provider}`, { method: "DELETE" }),
+  },
+  customVoices: {
+    list: () =>
+      request<{ voices: CustomVoiceMeta[] }>("/api/voices/custom"),
+    upload: (input: {
+      label: string;
+      gender: "female" | "male";
+      language?: string;
+      refText?: string;
+      file: File;
+    }) => {
+      const form = new FormData();
+      form.append("label", input.label);
+      form.append("gender", input.gender);
+      if (input.language) form.append("language", input.language);
+      if (input.refText) form.append("refText", input.refText);
+      form.append("file", input.file, input.file.name);
+      return request<{ voice: CustomVoiceMeta }>("/api/voices/custom", {
+        method: "POST",
+        body: form,
+      });
+    },
+    remove: (id: string) =>
+      request<{ ok: true }>(`/api/voices/custom/${id}`, { method: "DELETE" }),
+    previewUrl: (id: string, text?: string) =>
+      `/api/voices/custom/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
   },
   summary: {
     status: () => request<OllamaStatus>("/api/summary/status"),

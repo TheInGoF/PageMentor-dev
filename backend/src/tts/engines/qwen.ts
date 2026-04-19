@@ -1,22 +1,31 @@
 /**
- * Qwen3-TTS-Engine — spricht den pm-qwen-tts-Sidecar an (FastAPI-Wrapper
- * um `Qwen/Qwen3-TTS-Flash`) über den pm-gpu-arbiter.
+ * Qwen3-TTS-Engine — spricht den pm-qwen-tts Voice-Clone-Sidecar über
+ * den pm-gpu-arbiter an.
  *
- * Der Sidecar exponiert eine OpenAI-kompatible API (dieselbe Shape wie
- * Kokoro-FastAPI und OpenAI selbst):
- *   GET  /v1/audio/voices                   → Voice-Katalog
- *   POST /v1/audio/speech                   → Audio-Bytes
- *   GET  /v1/audio/voices/{id}/preview?text → Kurz-Preview
+ * Voice-Katalog kommt rein aus der SQLite-Tabelle `voice_samples` —
+ * der User lädt Referenz-Audio-Samples (3-10 s WAV/MP3) hoch, pro
+ * Sample wird ein fester Seed gewürfelt. Die Engine lädt bei jedem
+ * Synthese-Call die Referenz-Datei, base64-kodiert sie, und reicht
+ * sie plus den Seed an den Sidecar durch.
  *
- * Voice-ID-Mapping + Seed-Fixing macht der Sidecar — wir schicken
- * einfach unsere ID (`de_f_anna` etc.) und bekommen MP3 zurück. Dieselbe
- * Voice klingt zweimal hintereinander identisch, weil der Sidecar vor
- * jeder Generation `torch.manual_seed` mit einem pro-Voice fixen Wert
- * setzt.
+ * Determinismus: gleicher Seed + gleicher Referenz-Clip + gleicher
+ * Text ⇒ identisches Audio. Der Seed wird in der DB persistiert und
+ * nie geändert, bis der User das Sample löscht.
+ *
+ * Voice-ID-Konvention: `custom:<uuid>`. Der Präfix signalisiert dem
+ * Engine-Code, dass der Rest eine voice_samples.id ist — andere
+ * Präfixe könnten später built-in Voice-Packs o. ä. sein, ohne das
+ * UI anzufassen.
  */
 
 import { writeFile } from "fs/promises";
 import { effective } from "../../services/llmConfig";
+import {
+  getVoiceSample,
+  listVoiceSamples,
+  readVoiceRefBytes,
+  type VoiceSample,
+} from "../../services/voiceSamples";
 import type {
   TtsEngine,
   Voice,
@@ -25,13 +34,8 @@ import type {
   PreviewParams,
 } from "./base";
 
-/**
- * Auflösung der Upstream-URL:
- *   1. Settings-UI-Eintrag (qwenTtsUrl in llm-config.json)
- *   2. ENV `PM_QWEN_TTS_URL`
- *   3. Fallback `http://pm-gpu-arbiter:8790` — nur im gleichen Compose-
- *      Netz. Bei NAS-Setup trägt der User die 3090-IP in Settings ein.
- */
+const CUSTOM_VOICE_PREFIX = "custom:";
+
 function baseUrl(): string {
   const u =
     effective("qwenTtsUrl", "PM_QWEN_TTS_URL") ||
@@ -44,62 +48,14 @@ function apiKey(): string {
   return effective("qwenTtsApiKey", "PM_QWEN_TTS_API_KEY") || "";
 }
 
-const MODEL = process.env.PM_QWEN_TTS_MODEL || "Qwen/Qwen3-TTS-Flash";
+const MODEL = process.env.PM_QWEN_TTS_MODEL || "Qwen/Qwen3-TTS-12Hz-1.7B-Base";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
-/** Sidecar-Cold-Start (Arbiter triggert Container-Start, Modell lädt aus
- *  HF-Cache) plus lange Synthese → 5 min Puffer. */
 const SYNTH_TIMEOUT_MS = 5 * 60_000;
-const PREVIEW_TIMEOUT_MS = 60_000;
+const PREVIEW_TIMEOUT_MS = 2 * 60_000;
 
 const REFRESH_TTL_MS = 5 * 60_000;
 const REFRESH_RETRY_MS = 15_000;
-
-/**
- * Voice-Katalog — rein deklarativ. Das tatsächliche Qwen-Speaker-
- * Mapping + der Seed sitzen im Sidecar (pm-qwen-tts/main.py:
- * VOICES_CONFIG), damit Backend und Sidecar eine klare
- * Verantwortungs-Trennung haben.
- */
-const VOICES: Voice[] = [
-  {
-    id: "de_f_anna",
-    label: "Anna (DE)",
-    language: "de",
-    locale: "de-DE",
-    gender: "female",
-    engine: "qwen",
-    flagship: true,
-    note: "Qwen3-TTS-Flash · deterministischer Seed",
-  },
-  {
-    id: "de_f_emma",
-    label: "Emma (DE)",
-    language: "de",
-    locale: "de-DE",
-    gender: "female",
-    engine: "qwen",
-    note: "Qwen3-TTS-Flash · deterministischer Seed",
-  },
-  {
-    id: "de_m_klaus",
-    label: "Klaus (DE)",
-    language: "de",
-    locale: "de-DE",
-    gender: "male",
-    engine: "qwen",
-    note: "Qwen3-TTS-Flash · deterministischer Seed",
-  },
-  {
-    id: "de_m_max",
-    label: "Max (DE)",
-    language: "de",
-    locale: "de-DE",
-    gender: "male",
-    engine: "qwen",
-    note: "Qwen3-TTS-Flash · deterministischer Seed",
-  },
-];
 
 interface ProbeState {
   alive: boolean;
@@ -117,8 +73,6 @@ function authHeaders(): Record<string, string> {
 async function discover(): Promise<void> {
   const url = baseUrl();
   try {
-    // Arbiter antwortet auf /status ohne Lock zu akquirieren — billiger
-    // Liveness-Check ohne Container-Wecker.
     const statusRes = await fetch(`${url}/status`, {
       signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
     });
@@ -154,7 +108,6 @@ function maybeRefresh(): void {
   }
 }
 
-/** Edge-Rate ("+10%", "-5%") → Qwen speed (0.5..2.0). */
 function parseRate(rate: string): number {
   const m = /^([+-])(\d+)%$/.exec(rate);
   if (!m) return 1.0;
@@ -163,13 +116,41 @@ function parseRate(rate: string): number {
   return Math.max(0.5, Math.min(2.0, 1 + (sign * pct) / 100));
 }
 
+function sampleToVoice(s: VoiceSample, idx: number): Voice {
+  const locale =
+    s.language === "de" ? "de-DE" : s.language === "en" ? "en-US" : s.language;
+  return {
+    id: `${CUSTOM_VOICE_PREFIX}${s.id}`,
+    label: s.label,
+    language: s.language,
+    locale,
+    gender: s.gender,
+    engine: "qwen",
+    // Erste Voice einer Sprache als Flagship markieren — damit der Audio-
+    // Picker bei einem frischen Upload direkt einen Default wählt.
+    flagship: idx === 0,
+    note: s.refText
+      ? "Qwen3-TTS Voice-Clone · mit Transkript-Referenz"
+      : "Qwen3-TTS Voice-Clone · x-vector-only",
+  };
+}
+
+function resolveSample(voiceId: string): VoiceSample | null {
+  if (!voiceId.startsWith(CUSTOM_VOICE_PREFIX)) return null;
+  const id = voiceId.slice(CUSTOM_VOICE_PREFIX.length);
+  return getVoiceSample(id);
+}
+
 async function callSpeech(params: {
   text: string;
-  voice: string;
+  sample: VoiceSample;
   speed: number;
   timeoutMs: number;
 }): Promise<Buffer> {
   const url = baseUrl();
+  const refBytes = readVoiceRefBytes(params.sample);
+  const refB64 = refBytes.toString("base64");
+
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
     headers: {
@@ -179,16 +160,20 @@ async function callSpeech(params: {
     body: JSON.stringify({
       model: MODEL,
       input: params.text,
-      voice: params.voice,
+      voice: params.sample.id,            // nur für Logging im Sidecar
       response_format: "mp3",
       speed: params.speed,
+      ref_audio_b64: refB64,
+      ref_text: params.sample.refText ?? undefined,
+      language: params.sample.language === "de" ? "German" : "English",
+      seed: params.sample.seed,
     }),
     signal: AbortSignal.timeout(params.timeoutMs),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
     throw new Error(
-      `Qwen-TTS ${res.status} (${url}/v1/audio/speech, voice=${params.voice}): ${detail.slice(0, 200)}`
+      `Qwen-TTS ${res.status} (${url}/v1/audio/speech, voice=${params.sample.id}): ${detail.slice(0, 200)}`
     );
   }
   return Buffer.from(await res.arrayBuffer());
@@ -199,21 +184,35 @@ export const qwenEngine: TtsEngine = {
 
   isAvailable: () => {
     maybeRefresh();
+    // Engine ist auch „verfügbar" wenn Arbiter lebt aber noch keine
+    // Samples hochgeladen sind — die listVoices-Liste ist dann leer,
+    // also taucht keine Voice im Picker auf. Das ist die gewünschte UX.
     return probe.alive;
   },
 
   listVoices: () => {
     maybeRefresh();
-    return VOICES;
+    try {
+      return listVoiceSamples().map(sampleToVoice);
+    } catch (err) {
+      console.warn(`[qwen-tts] listVoiceSamples failed:`, err);
+      return [];
+    }
   },
 
   async synthesize(params: SynthesizeParams): Promise<SynthesizeResult> {
+    const sample = resolveSample(params.voice.id);
+    if (!sample) {
+      throw new Error(
+        `Qwen-TTS voice sample ${params.voice.id} not found in DB`
+      );
+    }
     const announce = params.announce ? `${params.announce}.\n\n` : "";
     const text = announce + params.segment.paragraphs.join("\n\n");
 
     const buf = await callSpeech({
       text,
-      voice: params.voice.id,
+      sample,
       speed: parseRate(params.rate),
       timeoutMs: SYNTH_TIMEOUT_MS,
     });
@@ -228,9 +227,15 @@ export const qwenEngine: TtsEngine = {
   },
 
   async preview(params: PreviewParams): Promise<Buffer> {
+    const sample = resolveSample(params.voice.id);
+    if (!sample) {
+      throw new Error(
+        `Qwen-TTS voice sample ${params.voice.id} not found in DB`
+      );
+    }
     const buf = await callSpeech({
       text: params.text,
-      voice: params.voice.id,
+      sample,
       speed: 1.0,
       timeoutMs: PREVIEW_TIMEOUT_MS,
     });
