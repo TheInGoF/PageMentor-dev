@@ -235,10 +235,16 @@ Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Wo
 12. ANTWORTFORMAT
 ================================================================
 - Gib NUR den umgeformten Text zurück.
-- KEINE Einleitung, KEINE Erklärung, KEINE Meta-Kommentare.
-- KEIN Markdown, KEINE Überschriften, KEINE Code-Fences, KEINE Bulletpoints.
+- KEINE Einleitung ("Hier ist der bereinigte Text…" etc.).
+- KEINE Erklärung oder Meta-Kommentare zu deiner Arbeit.
+- KEINE Änderungsliste, KEINE Zusammenfassung der Bearbeitungen, KEIN "Anmerkung:"-Block, KEIN "Hinweis:"-Block, KEIN "Ich habe Folgendes geändert…".
+- KEINE horizontale Trennlinie ("---") gefolgt von einer Erklärung.
+- KEIN Markdown, KEINE Überschriften, KEINE Code-Fences, KEINE Bulletpoints am Ende.
 - Beginne sofort mit dem ersten Wort des Kapitels.
-- Doppelte Zeilenumbrüche zwischen Absätzen, einfacher Zeilenumbruch innerhalb eines Absatzes nicht — alles im selben Absatz auf eine Zeile.`;
+- Der letzte Satz deiner Antwort ist der letzte Satz des bereinigten Texts. NICHTS danach.
+- Doppelte Zeilenumbrüche zwischen Absätzen, einfacher Zeilenumbruch innerhalb eines Absatzes nicht — alles im selben Absatz auf eine Zeile.
+
+Wenn du das Bedürfnis spürst, dem User mitzuteilen was du gemacht hast: unterdrücke es. Der User sieht die Änderung im Side-by-Side-Diff — er braucht keine Prosa-Zusammenfassung von dir.`;
 
 const SYSTEM_EN = `You are a copy editor preparing scientific study material for audiobook narration. Your task: rewrite the provided text so a TTS engine reads it fluently and naturally — without changing the technical content, without omissions, without simplifications.
 
@@ -411,10 +417,16 @@ If a formula is too complex to verbalize cleanly, describe it briefly ("The thir
 12. RESPONSE FORMAT
 ================================================================
 - Return ONLY the rewritten text.
-- NO preface, NO explanation, NO meta commentary.
-- NO markdown, NO headings, NO code fences, NO bullet points.
+- NO preface ("Here is the cleaned text…" etc.).
+- NO explanation or meta commentary about your work.
+- NO change list, NO summary of edits, NO "Note:" block, NO "Changes:" block, NO "I made the following changes…".
+- NO horizontal rule ("---") followed by an explanation.
+- NO markdown, NO headings, NO code fences, NO bullet points at the end.
 - Start immediately with the first word of the chapter.
-- Double newlines between paragraphs, no single newlines inside a paragraph — one paragraph on one line.`;
+- The last sentence of your response is the last sentence of the cleaned text. Nothing after that.
+- Double newlines between paragraphs, no single newlines inside a paragraph — one paragraph on one line.
+
+If you feel the urge to tell the user what you did: suppress it. The user sees the change in the side-by-side diff — they don't need a prose summary from you.`;
 
 export async function preprocessAvailable(): Promise<boolean> {
   return llmAvailable();
@@ -494,9 +506,16 @@ export async function preprocessChapterForAudio(params: {
   return { text: cleaned, model: result.model, cached: false };
 }
 
-/** Manche Modelle wrappen die Antwort doch in Code-Fences oder
- *  setzen ein "Hier ist der bereinigte Text:"-Vorwort, trotz expliziter
- *  Anweisung. Wir trimmen das defensive raus. */
+/** Kleinere LLMs halten sich trotz expliziter Anweisung nicht immer
+ *  an "nur den Text, keine Meta-Kommentare" — sie packen gerne:
+ *    - Code-Fences um den Output
+ *    - "Hier ist der bereinigte Text:"-Vorwort
+ *    - Am Ende eine "Änderungsliste" / "Edit summary" / "Ich habe
+ *      folgendes gemacht: …" mit Bullet-Aufzählung
+ *
+ *  Das schneidet das deterministisch wieder weg. Der System-Prompt
+ *  verbietet es auch explizit — beides zusammen fängt ~99% der Fälle
+ *  ab. */
 function stripWrappers(s: string): string {
   let t = s.trim();
   // Code-Fences entfernen.
@@ -506,6 +525,47 @@ function stripWrappers(s: string): string {
     /^(here is|hier ist|hier folgt|der überarbeitete text|the cleaned text|cleaned text|bereinigter text)[^\n]*\n+/i,
     ""
   );
+  // Trailing Edit-Listen / Meta-Kommentare am Ende abschneiden.
+  // Match ab der ersten Zeile die wie Meta-Header aussieht bis EOF.
+  // Typische Trigger:
+  //   "---" als Trenner vor einer Erklärung
+  //   "### Änderungen", "**Hinweis:**", "Änderungen:", "Changes:" …
+  //   "Ich habe folgendes / die folgenden …"
+  //   "Note:", "Notes:", "Anmerkung:"
+  const metaHeaderRe = new RegExp(
+    // optional: horizontale Trennlinie auf eigener Zeile
+    "\\n+(?:-{3,}\\s*\\n+)?" +
+      // optional Markdown-Heading/Bold-Marker
+      "(?:#{1,6}\\s*|\\*\\*\\s*)?" +
+      // das eigentliche Signalwort (case-insensitive)
+      "(?:" +
+      [
+        "Änderungen",
+        "Änderungsliste",
+        "Bearbeitungen",
+        "Vorgenommene\\s+Änderungen",
+        "Anmerkung",
+        "Anmerkungen",
+        "Hinweis",
+        "Hinweise",
+        "Zusammenfassung\\s+der\\s+Änderungen",
+        "Meine\\s+Bearbeitungen",
+        "Ich\\s+habe\\s+(?:folgende|die\\s+folgenden|hier\\s+)?(?:Änderungen|Anpassungen|Bearbeitungen)",
+        "Edit\\s*list",
+        "Changes",
+        "Modifications",
+        "Notes?",
+        "Summary\\s+of\\s+changes",
+        "I\\s+(?:made|have\\s+made|performed)\\s+the\\s+following",
+      ].join("|") +
+      ")" +
+      // Doppelpunkt oder Stern oder Newline nach dem Signalwort
+      "(?:\\*?\\s*:|\\s*\\n|\\s*\\*\\*)" +
+      // Alles bis EOF
+      "[\\s\\S]*$",
+    "i"
+  );
+  t = t.replace(metaHeaderRe, "");
   return t.trim();
 }
 
