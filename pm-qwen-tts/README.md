@@ -52,7 +52,7 @@ wieder gestoppt.
 | `QWEN_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | HF-Repo |
 | `QWEN_TTS_DEVICE` | `cuda` (wenn verfügbar) | `cpu` zum Debug |
 | `QWEN_TTS_DTYPE` | `bfloat16` | `float16` falls bf16 instabil |
-| `QWEN_TTS_ATTN_IMPL` | `flash_attention_2` | seit v1.18.008 aus Source gebaut und ins Image gebrannt. Auf Turing oder älter (RTX 20xx) per ENV auf `sdpa` stellen — flash-attn braucht Ampere+. |
+| `QWEN_TTS_ATTN_IMPL` | `flash_attention_2` | Das Image wird mit flash-attn 2 kompiliert. Auf Turing oder älter (RTX 20xx) per ENV auf `sdpa` stellen — flash-attn 2 braucht Ampere+. |
 | `QWEN_TTS_DEFAULT_LANGUAGE` | `German` | wenn Request kein `language` mitsendet |
 | `QWEN_TTS_MAX_NEW_TOKENS` | `4096` | Obergrenze pro Generation |
 | `QWEN_TTS_X_VECTOR_ONLY` | `true` | Fallback wenn kein `ref_text` im Request |
