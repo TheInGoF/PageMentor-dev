@@ -462,6 +462,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  health: () =>
+    request<{ status: string; version: string }>("/api/health"),
   auth: {
     check: () => request<{ authenticated: boolean }>("/api/auth/check"),
     login: (password: string) =>

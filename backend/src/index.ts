@@ -20,12 +20,25 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
-// Version aus package.json beim Modul-Load lesen — vermeidet, dass
-// /api/health nach jedem Bump händisch nach-editiert werden muss
-// (das vergessen wir verlässlich, siehe v1.11.010 → v1.12.x).
+// Version-Resolver: primär aus VERSION-Datei (Repo-Root, Single Source
+// of Truth), fallback auf package.json. VERSION landet im Docker-Image
+// unter /app/VERSION (siehe Dockerfile). Im lokalen Dev-Betrieb ist
+// die Datei zwei Ebenen über src/index.ts.
 const PKG_VERSION = ((): string => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, "..", "..", "VERSION"), // dev: backend/src → repo/VERSION
+    join(here, "..", "VERSION"),       // docker: /app/src → /app/VERSION
+  ];
+  for (const path of candidates) {
+    try {
+      const v = readFileSync(path, "utf-8").trim();
+      if (v.length > 0) return v;
+    } catch {
+      // try next
+    }
+  }
   try {
-    const here = dirname(fileURLToPath(import.meta.url));
     const pkg = JSON.parse(
       readFileSync(join(here, "..", "package.json"), "utf-8")
     ) as { version?: string };
@@ -34,6 +47,15 @@ const PKG_VERSION = ((): string => {
     return "0.0.0";
   }
 })();
+
+// Auffälliger Startup-Banner — macht im Portainer-Log sofort sichtbar
+// dass der neue Build auch wirklich läuft (Portainer zeigt Container-
+// Recreates oft ohne klares Signal, auch wenn's still durchging).
+console.log("================================================================");
+console.log(`  PageMentor backend v${PKG_VERSION}`);
+console.log(`  started at ${new Date().toISOString()}`);
+console.log(`  node_env=${process.env.NODE_ENV ?? "development"} data_dir=${process.env.PM_DATA_DIR ?? "./data"}`);
+console.log("================================================================");
 
 const app = new Hono();
 
@@ -75,4 +97,4 @@ export default {
   idleTimeout: 255,
 };
 
-console.log("PageMentor API running on :3000");
+console.log(`PageMentor API v${PKG_VERSION} running on :3000`);

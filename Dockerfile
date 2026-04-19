@@ -38,6 +38,10 @@ WORKDIR /app
 COPY --from=backend-deps /app/backend/node_modules ./node_modules
 COPY backend/ .
 COPY --from=frontend /app/dist ./public
+# VERSION (repo-root, single line) — Single Source of Truth für die
+# Versionsnummer. Backend liest sie zur Laufzeit und loggt sie im
+# Startup-Banner, Frontend zeigt sie im Settings-Modal.
+COPY VERSION /app/VERSION
 
 EXPOSE 3000
 CMD ["bun", "src/index.ts"]

@@ -46,6 +46,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [ollama, setOllama] = useState<OllamaStatus | null>(null);
   const [meiliEnabled, setMeiliEnabled] = useState<boolean | null>(null);
   const [doclingAlive, setDoclingAlive] = useState<boolean | null>(null);
+  const [backendVersion, setBackendVersion] = useState<string | null>(null);
   const [llmConfig, setLlmConfig] = useState<LlmConfig>({});
   const [anthropicKeyInput, setAnthropicKeyInput] = useState("");
   const [openaiKeyInput, setOpenaiKeyInput] = useState("");
@@ -73,6 +74,7 @@ export function SettingsModal({ open, onClose }: Props) {
     setS(getSettings());
     api.audio.voices().then((r) => setVoices(r.voices)).catch(() => setVoices([]));
     api.search.status().then((r) => setMeiliEnabled(r.enabled)).catch(() => setMeiliEnabled(false));
+    api.health().then((r) => setBackendVersion(r.version)).catch(() => setBackendVersion(null));
     api.documents.doclingStatus().then((r) => setDoclingAlive(r.alive)).catch(() => setDoclingAlive(false));
     api.rag.status().then(setRagStatus).catch(() => setRagStatus(null));
     api.llmConfig
@@ -678,6 +680,12 @@ export function SettingsModal({ open, onClose }: Props) {
               ok={doclingAlive === true}
               waiting={doclingAlive === null}
             />
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-neutral-500 pt-2 mt-1 border-t border-border/50">
+            <span>{t("settings.backendVersion")}</span>
+            <code className="font-mono text-neutral-300">
+              {backendVersion ?? "—"}
+            </code>
           </div>
         </section>
       </div>
