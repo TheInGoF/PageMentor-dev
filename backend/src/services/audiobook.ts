@@ -155,6 +155,44 @@ export async function generateAudiobook(params: {
       const ch = chapters[i];
       const outFile = chapterFile(audioDir, ch);
 
+      // Skip-Check: bereits fertige Kapitel nicht neu generieren.
+      // Wenn die User "Hörbuch erzeugen" klickt nachdem sie einzelne
+      // Kapitel vorab gebaut haben, soll das die fertigen behalten
+      // und nur die fehlenden Kapitel ergänzen. Per-Kapitel-Clear-
+      // Button erlaubt explizites Neu-Generieren.
+      const existingAudio = d
+        .prepare(
+          "SELECT status, duration_ms FROM audio WHERE chapter_id = ?"
+        )
+        .get(ch.id) as
+        | { status: string; duration_ms: number }
+        | undefined;
+
+      if (
+        existingAudio?.status === "done" &&
+        existsSync(outFile)
+      ) {
+        console.log(
+          `[audiobook] chapter ${ch.number} already done — skip synth (${existingAudio.duration_ms}ms existing)`
+        );
+        successfulChapterFiles.push(outFile);
+        chapterDurations.push({
+          title: ch.title || `Kapitel ${ch.number}`,
+          durationMs: existingAudio.duration_ms,
+        });
+        // Dem Frontend trotzdem Progress emitten, sonst steht die UI
+        // kurz auf "preprocessing" ohne Feedback.
+        emit({
+          phase: "audiobook.chapter.done",
+          docId: doc.id,
+          chapterId: ch.id,
+          chapterNumber: ch.number,
+          current: i + 1,
+          total: chapters.length,
+        });
+        continue;
+      }
+
       // Preprocessing: LLM bereinigt den Text für TTS (Abkürzungen
       // ausschreiben, Formeln verbalisieren, Zitate raus). Cached in
       // `chapters.audio_text` — beim zweiten Run kein LLM-Call mehr.
