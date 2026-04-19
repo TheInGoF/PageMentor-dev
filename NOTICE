@@ -67,10 +67,16 @@ Data / rule lists
 
 Embedding models (loaded into Ollama by the user, called over network
 at runtime):
-- BGE-M3              (MIT)        https://huggingface.co/BAAI/bge-m3
-  preferred default — multilingual, strong on German research texts.
-- nomic-embed-text    (Apache 2.0) https://huggingface.co/nomic-ai/nomic-embed-text-v1
-  fallback — smaller, English-focused.
+- jina-embeddings-v2-base-de  (Apache 2.0)
+  https://huggingface.co/jinaai/jina-embeddings-v2-base-de
+  preferred default for German study material — bilingual DE+EN,
+  trained on German corpora, 768 dim, 8k context, ~440 MB.
+- BGE-M3                      (MIT)
+  https://huggingface.co/BAAI/bge-m3
+  multilingual fallback for mixed-language libraries (100+ languages).
+- nomic-embed-text            (Apache 2.0)
+  https://huggingface.co/nomic-ai/nomic-embed-text-v1
+  last-resort fallback — smaller, English-focused.
 
 ================================================================================
 Third-party service: Microsoft Edge Read-Aloud API (Azure Neural TTS)

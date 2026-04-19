@@ -68,10 +68,16 @@ Baumstrukturen, Tags statt Zweige. Lokal, Portainer-Stack.
     kein LLM-Call mehr.
 - **LLM**: Ollama + Provider-Chain (Claude / OpenAI / Gemini als Fallback,
   alle Endpoints zur Laufzeit in Settings konfigurierbar)
-- **RAG-Embeddings**: Auto-Detect via Ollama-Tags. Bevorzugt
-  **bge-m3** (multilingual, MTEB-DE-stark, 1024 dim) wenn gepullt,
-  fällt sonst auf nomic-embed-text (768 dim) zurück. Re-Embed bei
-  Modell-Wechsel via `POST /api/rag/reembed`.
+- **RAG-Embeddings**: Auto-Detect via Ollama-Tags. Präferenz für
+  deutsche Studientexte:
+  1. `jina/jina-embeddings-v2-base-de` (Apache 2.0, bilingual DE+EN,
+     768 dim, 8k Kontext, ~440 MB) — explizit auf DE trainiert,
+     schlägt bge-m3 für deutsche Inhalte
+  2. `bge-m3` (multilingual Allrounder) als Fallback bei mehrsprachiger
+     Bibliothek
+  3. `nomic-embed-text` als finaler Fallback
+  Re-Embed bei Modell-Wechsel via Settings-Modal-Button oder
+  `POST /api/rag/reembed`.
 - **Deploy**: Docker Compose → Portainer-Stack (app + meilisearch +
   docling + kokoro)
 

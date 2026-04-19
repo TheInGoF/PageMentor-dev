@@ -16,13 +16,25 @@ import { getLlmConfig } from "./llmConfig";
 
 const ENV_DEFAULT = process.env.PM_EMBED_MODEL || "";
 
-/** Embedding-Modelle nach Präferenz. bge-m3 ist nativ multilingual
- *  und für deutsche Forschungs-/Studientexte deutlich stärker als
- *  das englisch-zentrierte nomic-embed-text (laut MTEB-DE Benchmark).
+/** Embedding-Modelle nach Präferenz. Reihenfolge spiegelt die
+ *  Eignung für deutsche Forschungs-/Studientexte wider:
+ *
+ *  1. jina/jina-embeddings-v2-base-de  — bilingual DE+EN, explizit
+ *     auf deutschen Korpora trainiert. ~440 MB, 768 dim, 8k Kontext.
+ *     Schlägt bge-m3 und multilingual-e5-large auf MTEB-DE bei
+ *     einem Bruchteil der Größe.
+ *  2. bge-m3  — multilingual (100+ Sprachen), 2.3 GB, 1024 dim,
+ *     8k Kontext. Solide Allrounder, DE im oberen Mittelfeld aber
+ *     nicht spezialisiert. Backup wenn der User mehrsprachige
+ *     Bibliothek hat (DE + EN + andere).
+ *  3. nomic-embed-text  — englisch-zentriert, 137 MB, 768 dim,
+ *     letzter Fallback wenn nichts spezialisiertes da ist.
+ *
  *  Wenn der User PM_EMBED_MODEL hart setzt, gewinnt das. Ansonsten
- *  nehmen wir das erste auf dem Ollama-Server installierte Modell
- *  aus dieser Liste. */
+ *  nehmen wir das erste installierte Modell aus dieser Liste.
+ */
 const PREFERRED_EMBED_MODELS = [
+  "jina/jina-embeddings-v2-base-de",
   "bge-m3",
   "nomic-embed-text",
 ];
