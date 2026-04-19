@@ -1,15 +1,8 @@
 /**
- * Engine-Dispatcher mit pro-Engine Retry- und Pace-Strategie.
- *
- * Qwen (lokaler Sidecar hinter dem Arbiter) hat keine Rate-Limits —
- * der Arbiter queued pro Request, keine Inter-Chunk-Pause nötig.
- * Edge (Microsoft Cloud) braucht 1.5 s Pause zwischen Chunks und
- * einen 30 s Cooldown nach Empty-Audio (Azure-Quota), weil kurze
- * Backoffs nichts bringen.
- *
- * Bei endgültigem Fail: `ChunkSynthesisFailure` nach oben — der
- * Caller kann das als Signal interpretieren, das Buch abzubrechen
- * oder auf einen anderen Provider auszuweichen.
+ * Engine-Dispatcher mit Retry + Backoff. Qwen (lokaler Sidecar hinter
+ * dem Arbiter) hat keine Rate-Limits — der Arbiter queued pro Request,
+ * keine Inter-Chunk-Pause. Bei endgültigem Fail: `ChunkSynthesisFailure`
+ * nach oben.
  */
 
 import { setTimeout as sleep } from "timers/promises";
@@ -22,13 +15,11 @@ const MAX_RETRIES = 2;
 interface EnginePolicy {
   /** Pause zwischen aufeinanderfolgenden Chunks. */
   interChunkDelayMs: number;
-  /** Cooldown nach Empty-Audio-Fehler — 0 deaktiviert die Spezialregel
-   *  (nur Edge braucht das). */
+  /** Cooldown nach Empty-Audio-Fehler. */
   emptyAudioCooldownMs: number;
 }
 
 const POLICIES: Record<EngineId, EnginePolicy> = {
-  edge: { interChunkDelayMs: 1500, emptyAudioCooldownMs: 30_000 },
   // Qwen läuft auf derselben GPU wie Ollama — der Arbiter queued pro
   // Request, zusätzliche Inter-Chunk-Pause bringt nichts.
   qwen: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0 },

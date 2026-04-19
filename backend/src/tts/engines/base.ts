@@ -1,16 +1,14 @@
 /**
- * Gemeinsames Interface für alle TTS-Engines.
+ * Gemeinsames Interface für TTS-Engines.
  *
  * Jede Engine meldet zur Laufzeit, ob sie verfügbar ist. Qwen pingt
- * den Arbiter, Edge antwortet immer `true` und fällt erst reaktiv um
- * (Microsofts Anti-Abuse-Gate kippt 0-Bytes statt eines klaren 4xx).
- * `listVoices()` darf bei Async-Engines synchronen Cache liefern, der
- * im Hintergrund aktualisiert wird (siehe qwen.ts).
+ * den Arbiter. `listVoices()` darf bei Async-Engines synchronen Cache
+ * liefern, der im Hintergrund aktualisiert wird (siehe qwen.ts).
  */
 
 import type { Segment } from "../segment";
 
-export type EngineId = "edge" | "qwen";
+export type EngineId = "qwen";
 
 export interface Voice {
   id: string;

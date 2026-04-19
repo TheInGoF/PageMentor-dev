@@ -53,7 +53,9 @@ Konzentriere dich stattdessen auf: Formeln, Zitate, Aufzählungs-Nummerierung (1
 
 ZIEL DER UMFORMUNG
 - Hörer beim Autofahren oder beim Joggen sollen dem Stoff folgen können, ohne dass die Stimme über Symbole, Abkürzungen, Formeln oder Verzeichnis-Notation stolpert.
-- Pausen entstehen ausschließlich durch Satzzeichen: Punkt = lange Pause, Strichpunkt = mittlere Pause, Komma = kurze Pause. Setze diese gezielt, wo das Verständnis sonst leidet (lange Aufzählungen, eingeschobene Definitionen, Formel-Erklärungen).
+- Pausen entstehen ausschließlich durch Punkt und Komma. Der Strichpunkt (;) ist TABU — er bringt die TTS-Engine aus dem Konzept. Wo du Strichpunkt gesetzt hättest: entweder neuer Satz (Punkt) oder Komma.
+- Gedankenstriche (— oder –) sind ebenfalls TABU. Ersetze durch Komma oder neuen Satz.
+- Lange Sätze in kürzere teilen — Faustregel maximal 20 Wörter pro Satz, bei Fachtext eher 15. Ein Hörer kann sich nicht „zurück-scrollen" — jeder Satz muss in sich verständlich sein.
 
 ================================================================
 1. ABKÜRZUNGEN VOLLSTÄNDIG AUSSCHREIBEN
@@ -199,7 +201,7 @@ Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Wo
 8. AUFZÄHLUNGEN UND LISTEN
 ================================================================
 - Marker am Zeilenanfang ("•", "–", "-", "*", "1.", "a)", "i)") entfernen.
-- Kurze Aufzählungen in einen Satz pressen mit "Erstens, … Zweitens, … Drittens, …" oder Kommas/Semikolons.
+- Kurze Aufzählungen in einen Satz pressen mit "Erstens, … Zweitens, … Drittens, …" oder Kommas (NICHT Semikolons).
 - Lange Aufzählungen (>5 Items): jeden Punkt zu einem eigenen Satz machen, mit Übergangswörtern ("Außerdem", "Darüber hinaus", "Schließlich", "Ein weiterer Aspekt ist").
 - Verschachtelte Listen plattmachen — die Hierarchie ist in Audio nicht reproduzierbar.
 
@@ -215,11 +217,12 @@ Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Wo
 ================================================================
 10. PAUSEN UND SATZRHYTHMUS (für TTS-Prosodie)
 ================================================================
-- Setze Punkte ein, wo der Satz sonst zu lang wird — Faustregel: maximal 25–30 Wörter pro Satz.
+- Setze Punkte ein, wo der Satz sonst zu lang wird — Faustregel: MAXIMAL 20 Wörter pro Satz, bei Fachtext eher 15. Wenn ein Satz zu lang ist: teile ihn in zwei oder drei eigenständige Sätze.
 - Setze Kommas vor erklärenden Nebensätzen ("die Energie, die im System steckt, …").
 - Verwende Doppelpunkt vor wichtigen Definitionen oder Aufzählungen — gibt eine spürbare Pause.
 - Bindestriche zwischen Wörtern entfernen (Zeilenumbruch-Trennung), zwischen Worten und Begriffen ("S-Kurve") behalten.
 - Anführungszeichen entfernen, wenn sie nur für Hervorhebung stehen — TTS liest sie nicht aus, sie können aber den Rhythmus stören.
+- Strichpunkt (;) NIEMALS verwenden. Gedankenstriche (— oder –) wie Komma oder Punkt behandeln. Horizontale Trennlinien (---, ===, ***) entfernen.
 
 ================================================================
 11. INHALTLICHE INVARIANTEN
@@ -262,7 +265,9 @@ Focus instead on: formulas, citations, numbered list items (1./2. at line start 
 
 GOAL OF THE TRANSFORMATION
 - A listener while driving or jogging should follow the material without the voice tripping over symbols, abbreviations, formulas, or index-style notation.
-- Pauses come from punctuation alone: period = long pause, semicolon = medium pause, comma = short pause. Place these deliberately where understanding would otherwise suffer (long enumerations, embedded definitions, formula explanations).
+- Pauses come from periods and commas only. The semicolon (;) is FORBIDDEN — it derails the TTS engine. Where you would use a semicolon: either a new sentence (period) or a comma.
+- Em-dashes (—) and en-dashes (–) are also forbidden. Replace with comma or new sentence.
+- Long sentences must be split — rule of thumb: max 20 words per sentence, technical text max 15. The listener cannot scroll back — every sentence must stand on its own.
 
 ================================================================
 1. EXPAND ABBREVIATIONS COMPLETELY
@@ -397,11 +402,12 @@ If a formula is too complex to verbalize cleanly, describe it briefly ("The thir
 ================================================================
 10. PAUSES AND RHYTHM (for TTS prosody)
 ================================================================
-- Insert periods to break long sentences — rule of thumb: max 25–30 words per sentence.
-- Use commas before explanatory subordinate clauses ("the energy, that is stored in the system, …").
+- Insert periods to break long sentences — rule of thumb: MAX 20 words per sentence, technical text max 15. If a sentence is too long: split into two or three self-contained sentences.
+- Use commas before explanatory subordinate clauses.
 - Use a colon before key definitions or enumerations — gives a noticeable pause.
 - Strip soft hyphens (line-break hyphenation), keep meaningful compound hyphens ("S-curve").
 - Drop quotation marks used only for emphasis — TTS doesn't speak them and they disrupt rhythm.
+- NEVER use semicolons (;). Treat em-dashes (— or –) like commas or periods. Strip horizontal rules (---, ===, ***).
 
 ================================================================
 11. CONTENT INVARIANTS
@@ -492,7 +498,9 @@ export async function preprocessChapterForAudio(params: {
     options: { temperature: 0.1, top_p: 0.9 },
   });
 
-  const cleaned = restoreHeadingParagraphs(stripWrappers(result.response));
+  const cleaned = stripProblematicCharsForTts(
+    restoreHeadingParagraphs(stripWrappers(result.response))
+  );
   if (!cleaned || cleaned.length < 20) {
     throw new Error(
       `Preprocessor returned suspiciously short output (${cleaned.length} chars) — falling back to original`
@@ -567,6 +575,36 @@ function stripWrappers(s: string): string {
   );
   t = t.replace(metaHeaderRe, "");
   return t.trim();
+}
+
+/** Deterministische Reinigung der LLM-Antwort von Zeichen, die Qwen3-TTS
+ *  aus dem Konzept bringen. Läuft als letzter Pass vor der Persistenz.
+ *  Der System-Prompt verbietet diese Zeichen auch, aber kleinere Modelle
+ *  halten sich nicht immer dran. */
+function stripProblematicCharsForTts(s: string): string {
+  return (
+    s
+      // Horizontale Trennlinien als Markdown / ASCII-Banner komplett raus.
+      // Muss VOR den Em-Dash-Regeln laufen, sonst sieht "---" aus wie
+      // drei Dashes und wird nur zu Kommas.
+      .replace(/^[ \t]*[-=*_]{3,}[ \t]*$/gm, "")
+      // Strichpunkt → Komma + Leerzeichen. Qwen versucht bei `;` eine
+      // dritte Pausenlänge zu produzieren und klingt gequetscht.
+      .replace(/\s*;\s*/g, ", ")
+      // Em-Dash (U+2014) zwischen Wörtern: wie Komma sprechen.
+      .replace(/\s*—\s*/g, ", ")
+      // En-Dash (U+2013) zwischen Wort-Boundaries: wie Komma. Kopplung
+      // zwischen Zahlen ("5–10") bleibt erhalten, weil dort keine
+      // Whitespace-Nachbarn sind.
+      .replace(/(\S)\s+–\s+(\S)/g, "$1, $2")
+      // Redundante Kommas und Leerzeichen nach dem Strip.
+      .replace(/,\s*,/g, ",")
+      .replace(/[ \t]+/g, " ")
+      // Leere Zeilen vom Trennlinien-Strip nicht als dreifache New-
+      // lines stehen lassen.
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }
 
 /** Manche Modelle (gerade kleinere wie Gemma) ignorieren die

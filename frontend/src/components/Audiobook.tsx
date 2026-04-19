@@ -61,6 +61,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [editChapterId, setEditChapterId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [m4bBusy, setM4bBusy] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const toast = useToast();
 
@@ -200,12 +201,30 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     }
   }
 
+  async function rebuildM4B() {
+    setM4bBusy(true);
+    try {
+      await api.audio.rebuildM4B(docId);
+      const refreshed = await api.audio.get(docId);
+      setState(refreshed);
+      toast.show(t("audiobook.m4b.built"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setM4bBusy(false);
+    }
+  }
+
   async function clearChapter(audioId: string) {
     if (!confirm(t("audiobook.clearChapterConfirm"))) return;
     try {
       await api.audio.clearChapter(audioId);
+      // Reihenfolge matters: Audio-Liste UND per-Kapitel-Status aus
+      // dem Backend neu ziehen, sonst bleibt die Row im UI als "fertig"
+      // stehen weil chapterStatus noch die alte audio_id hält.
       const refreshed = await api.audio.get(docId);
       setState(refreshed);
+      await loadChapterStatus();
       toast.show(t("audiobook.cleared"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -496,10 +515,26 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             <p className="text-xs text-neutral-500 mt-1">{t("audiobook.subtitle")}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {state?.book && (
+            {state?.book ? (
               <a href={state.book.url} className="btn-outline" download>
                 {t("audiobook.download.m4b")}
               </a>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={rebuildM4B}
+                disabled={
+                  m4bBusy ||
+                  (state?.audio.filter((a) => a.status === "done").length ?? 0) === 0
+                }
+                title={
+                  (state?.audio.filter((a) => a.status === "done").length ?? 0) === 0
+                    ? t("audiobook.m4b.noChaptersYet")
+                    : t("audiobook.m4b.buildTooltip")
+                }
+              >
+                {m4bBusy ? t("audiobook.m4b.building") : t("audiobook.m4b.build")}
+              </Button>
             )}
             {(state?.audio.length ?? 0) > 0 && (
               <Button variant="danger" onClick={clearAll}>
@@ -669,17 +704,8 @@ function VoiceChip({
         {voice.flagship && (
           <span className="tag-accent text-[10px]">{t("audiobook.voice.top")}</span>
         )}
-        <span
-          className={cn(
-            "text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded",
-            voice.engine === "qwen"
-              ? "bg-fuchsia-500/15 text-fuchsia-300"
-              : "bg-sky-500/15 text-sky-300"
-          )}
-        >
-          {voice.engine === "qwen"
-            ? t("audiobook.engine.qwen")
-            : t("audiobook.engine.edge")}
+        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300">
+          {t("audiobook.engine.qwen")}
         </span>
       </div>
       <span className="text-[11px] text-neutral-500">
@@ -689,15 +715,8 @@ function VoiceChip({
   );
 }
 
-/** Stimmen sortieren: Qwen (self-hosted, deutsche Premium-Voices) vor
- *  Edge (Cloud-Fallback), dann Flagship vor non-Flagship, dann
- *  alphabetisch. */
-const ENGINE_RANK: Record<Voice["engine"], number> = {
-  qwen: 0,
-  edge: 1,
-};
+/** Stimmen sortieren: Flagship vor non-Flagship, dann alphabetisch. */
 function compareVoices(a: Voice, b: Voice): number {
-  if (a.engine !== b.engine) return ENGINE_RANK[a.engine] - ENGINE_RANK[b.engine];
   if (!!a.flagship !== !!b.flagship) return a.flagship ? -1 : 1;
   return a.label.localeCompare(b.label);
 }
@@ -1155,54 +1174,60 @@ function BookProgressPanel({
   };
 }) {
   const { totalChapters, currentChapter, chunkCurrent, chunkTotal, startedAt } = progress;
-  const chapterShare = chunkTotal > 0 ? chunkCurrent / chunkTotal : 0;
-  const done = Math.max(0, currentChapter - 1) + chapterShare;
-  const frac = totalChapters > 0 ? Math.min(1, done / totalChapters) : 0;
-  const pct = Math.round(frac * 100);
-
   const elapsedMs = Date.now() - startedAt;
-  // ETA nur sinnvoll sobald es echten Fortschritt gibt, sonst extrapolieren
-  // wir ins Uferlose.
-  const eta =
-    frac > 0.02 ? Math.max(0, Math.round((elapsedMs * (1 - frac)) / frac)) : null;
+
+  // Ø-Zeit pro komplettes Kapitel: erste fertige Kapitel-Übergänge sind
+  // rauschanfällig, aber nach 1-2 durch ist der Schätzer brauchbar.
+  const chaptersDone = Math.max(0, currentChapter - 1);
+  const avgPerChapterMs = chaptersDone > 0 ? elapsedMs / chaptersDone : null;
+
+  // ETA = noch zu machende Kapitel × Ø plus bereits in aktuellem Kapitel
+  // verbrachte Zeit abziehen. Sauberer wäre chunk-basiert, aber die
+  // Chunks sind unterschiedlich lang (Einleitung kurz, Hauptkapitel
+  // lang) — Ø-pro-Kapitel ist ehrlicher.
+  const chaptersRemaining = Math.max(0, totalChapters - currentChapter);
+  const etaMs =
+    avgPerChapterMs !== null
+      ? Math.max(0, Math.round(avgPerChapterMs * chaptersRemaining))
+      : null;
 
   return (
     <div className="card p-4 bg-bg-elevated flex flex-col gap-2 border-accent-subtle">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-semibold text-accent font-mono">{pct}%</span>
-          <span className="text-xs text-neutral-400">
+          <span className="text-sm font-semibold text-accent">
             {t("audiobook.progress.chapter", {
               current: currentChapter,
               total: totalChapters,
             })}
           </span>
+          {chunkTotal > 0 && (
+            <span className="text-[11px] text-neutral-500">
+              · {t("audiobook.progress.chunk", {
+                current: chunkCurrent,
+                total: chunkTotal,
+              })}
+            </span>
+          )}
         </div>
-        <div className="text-[11px] text-neutral-500 font-mono text-right">
-          <div>
+        <div className="text-[11px] text-neutral-500 font-mono flex items-baseline gap-3">
+          <span>
             {t("audiobook.progress.elapsed", { time: formatDuration(elapsedMs) })}
-          </div>
-          {eta !== null && (
-            <div>
-              {t("audiobook.progress.eta", { time: formatDuration(eta) })}
-            </div>
+          </span>
+          {avgPerChapterMs !== null && (
+            <span>
+              {t("audiobook.progress.avg", {
+                time: formatDuration(Math.round(avgPerChapterMs)),
+              })}
+            </span>
+          )}
+          {etaMs !== null && (
+            <span>
+              {t("audiobook.progress.eta", { time: formatDuration(etaMs) })}
+            </span>
           )}
         </div>
       </div>
-      <div className="h-2 bg-black/40 rounded overflow-hidden">
-        <div
-          className="h-full bg-accent transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      {chunkTotal > 0 && (
-        <div className="text-[11px] text-neutral-500">
-          {t("audiobook.progress.chunk", {
-            current: chunkCurrent,
-            total: chunkTotal,
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -1230,16 +1255,14 @@ function buildIntroDefault(
       lines.push(`Von ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Aufbereitet durch ${model}.`);
+      lines.push(`Aufbereitet durch ${phoneticizeModelName(model, "de")}.`);
     }
     if (voice) {
-      const engine =
-        voice.engine === "edge"
-          ? "Sprachsynthese Azure Edge"
-          : "Qwen drei T T S";
-      // Komma vor "mit der Stimme" gibt eine kurze Pause, dann
-      // Schlusspunkt.
-      lines.push(`Gesprochen durch ${engine}, mit der Stimme ${voice.label}.`);
+      // "Qwen" ausgeschrieben mit Doppel-N, damit Qwen-TTS nicht "Kwen"
+      // sagt. Model-Version als phonetische Zahl.
+      lines.push(
+        `Gesprochen durch Qwenn drei T T S, mit der Stimme ${voice.label}.`
+      );
     }
   } else {
     lines.push(`Audiobook: ${meta.title}.`);
@@ -1248,17 +1271,53 @@ function buildIntroDefault(
       lines.push(`By ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Prepared with ${model}.`);
+      lines.push(`Prepared with ${phoneticizeModelName(model, "en")}.`);
     }
     if (voice) {
-      const engine =
-        voice.engine === "edge"
-          ? "Azure Edge speech synthesis"
-          : "Qwen three T T S";
-      lines.push(`Narrated by ${engine}, with the voice ${voice.label}.`);
+      lines.push(
+        `Narrated by Qwenn three T T S, with the voice ${voice.label}.`
+      );
     }
   }
   return lines.join("\n");
+}
+
+/** Modellnamen wie `gemma4:26b` in lesbare Intro-Phonetik umbauen:
+ *  `gemma4:26b` → "Gemma Vier", `llama3.1:8b` → "Lama drei Punkt eins".
+ *  Die TTS-Engine würde sonst „gemma-vier-doppelpunkt-sechsundzwanzig-b"
+ *  sagen, was unschön klingt. */
+function phoneticizeModelName(model: string, lang: "de" | "en"): string {
+  // Alles nach Doppelpunkt (":26b", ":8b") ist Parameter-Größe — für
+  // Menschen unnötig, für Betonung nervig. Abschneiden.
+  let stem = model.split(":")[0] ?? model;
+  // Provider-Präfix wie "jina/jina-embeddings-v2-base-de" abschneiden.
+  stem = stem.includes("/") ? stem.split("/").pop()! : stem;
+
+  const digitsDe = ["null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun"];
+  const digitsEn = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+  const digits = lang === "de" ? digitsDe : digitsEn;
+
+  // Ziffern zu Wörtern, Bindestriche/Unterstriche als Leerzeichen.
+  let s = stem.replace(/[_-]/g, " ");
+  // Zahlen 0-9 als Wort, mehrstellig Ziffer-für-Ziffer.
+  s = s.replace(/(\d+)/g, (m) =>
+    m
+      .split("")
+      .map((d) => digits[Number(d)] ?? d)
+      .join(" ")
+  );
+  // Punkt → "Punkt"/"point" ausgeschrieben, damit TTS nicht abrupt
+  // satz-bricht. Nur wenn zwischen Buchstaben/Wörtern.
+  s = s.replace(/(\w) *\. *(\w)/g, (_, a, b) =>
+    lang === "de" ? `${a} Punkt ${b}` : `${a} point ${b}`
+  );
+  // Erster Buchstabe groß ("gemma" → "Gemma"), Rest lowercase mit
+  // Preserved-Spaces. Wortgrenzen wie gehabt.
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function IntroEditor({

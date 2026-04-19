@@ -143,12 +143,6 @@ export async function generateAudiobook(params: {
 
   const successfulChapterFiles: string[] = [];
   const chapterDurations: Array<{ title: string; durationMs: number }> = [];
-  // Circuit-Breaker: wenn Edge zwei Kapitel hintereinander mit Empty-
-  // Audio scheitert, ist Azure in der Quota-Bremse und weitere Kapitel
-  // werden genauso scheitern. Abbrechen spart Zeit und räumt klar auf.
-  let consecutiveEdgeEmpty = 0;
-  let tripped = false;
-  const EDGE_EMPTY_CIRCUIT_BREAKER = 2;
 
   try {
     for (let i = 0; i < chapters.length; i++) {
@@ -230,7 +224,6 @@ export async function generateAudiobook(params: {
           durationMs,
         });
 
-        consecutiveEdgeEmpty = 0;
         emit({
           phase: "audiobook.chapter.done",
           docId: doc.id,
@@ -247,9 +240,6 @@ export async function generateAudiobook(params: {
         // das UI das Kapitel sauber als "noch kein Audio" anzeigt.
         deleteAudioForChapter(ch.id, outFile);
         const message = err instanceof Error ? err.message : String(err);
-        const isEdgeEmpty = engineId === "edge" && /empty audio/i.test(message);
-        if (isEdgeEmpty) consecutiveEdgeEmpty++;
-        else consecutiveEdgeEmpty = 0;
 
         emit({
           phase: "audiobook.chapter.failed",
@@ -261,28 +251,10 @@ export async function generateAudiobook(params: {
           message,
         });
         console.error(`[tts] chapter ${ch.number} failed:`, err);
-
-        if (consecutiveEdgeEmpty >= EDGE_EMPTY_CIRCUIT_BREAKER) {
-          const reason =
-            `Edge TTS (Microsoft) antwortet mit leerem Audio — Azure-Quota erreicht. ` +
-            `Bereits fertige Kapitel bleiben erhalten. ` +
-            `Wechsle auf eine Qwen-Stimme (lokal, ohne Quota) und generiere die fehlenden Kapitel neu.`;
-          emit({
-            phase: "audiobook.failed",
-            docId: doc.id,
-            message: reason,
-          });
-          console.error(`[tts] aborting book: ${reason}`);
-          tripped = true;
-          break;
-        }
       }
     }
 
-    // Wenn der Circuit-Breaker ausgelöst hat, überspringen wir M4B-Build
-    // und das Done-Event — der Failed-Event ist bereits raus, und ein
-    // Done-Event würde den Client-State ins Inkonsistente kippen.
-    if (!tripped) {
+    {
       if (successfulChapterFiles.length > 0) {
         emit({
           phase: "audiobook.book.building",
@@ -384,10 +356,16 @@ export async function generateSingleChapterAudio(params: {
   mkdirSync(audioDir, { recursive: true });
   const outFile = chapterFile(audioDir, row as Chapter);
 
-  // Abort-Signal akzeptieren wir hier nicht von außen — Single-Chapter-
-  // Runs sollen kurz genug sein dass Cancel via UI unnötig ist. Im
-  // Fehlerfall propagiert der Exception nach oben.
-  const abortController = new AbortController();
+  // Auch Single-Chapter-Runs im `running`-Map registrieren, damit
+  // `cancelAudiobook(docId)` sie stoppt. Wenn ein Full-Book-Run schon
+  // läuft, teilen wir uns seinen Controller — dann cancelt der User
+  // mit einem Klick beides.
+  const alreadyRunning = running.has(row.document_id);
+  const abortController =
+    running.get(row.document_id) ?? new AbortController();
+  if (!alreadyRunning) {
+    running.set(row.document_id, abortController);
+  }
 
   const chapterForSynth: Chapter = {
     ...row,
@@ -471,6 +449,8 @@ export async function generateSingleChapterAudio(params: {
       message: err instanceof Error ? err.message : String(err),
     });
     throw err;
+  } finally {
+    if (!alreadyRunning) running.delete(row.document_id);
   }
 }
 
@@ -510,12 +490,16 @@ export async function generateIntroAudio(params: {
     message: "Intro",
   });
 
-  const abortController = new AbortController();
+  const alreadyRunning = running.has(params.docId);
+  const abortController =
+    running.get(params.docId) ?? new AbortController();
+  if (!alreadyRunning) {
+    running.set(params.docId, abortController);
+  }
   // Synthetisches Single-Chapter. Title ist bewusst LEER — der
   // User-Intro-Text ("Hörbuch: Foo. Verfasst von Bar.") ist selbst-
   // erklärend, eine zusätzliche TTS-Ansage "Intro." vornweg würde
-  // redundant wirken. Plus: Edge erkennt "Intro" als englisches
-  // Lehnwort und spricht es englisch aus — macht es holprig.
+  // redundant wirken.
   const synth: Chapter = {
     id: `intro-${params.docId}`,
     document_id: params.docId,
@@ -564,6 +548,8 @@ export async function generateIntroAudio(params: {
       message: err instanceof Error ? err.message : String(err),
     });
     throw err;
+  } finally {
+    if (!alreadyRunning) running.delete(params.docId);
   }
 }
 
@@ -590,6 +576,10 @@ async function synthesizeChapter(params: {
     const segments = segmentText(chapter.text);
     if (segments.length === 0) throw new Error("Keine Segmente aus Kapiteltext.");
 
+    // Initial Chunk-Total melden, damit das Frontend den Total-Wert
+    // sofort sieht ("0/3" statt erst "1/1", später "1/3").
+    params.onChunk(0, segments.length);
+
     const isDe = params.voice.locale.startsWith("de");
 
     const chunkFiles: string[] = [];
@@ -597,26 +587,20 @@ async function synthesizeChapter(params: {
       if (signal.aborted) throw new AudiobookCanceled();
       // Erste Chunk bekommt eine Kapitel-Ansage davor — außer das
       // synthetische "Kapitel" hat number 0 + leeren title (= Intro).
-      // Dann ist der User-Intro-Text selbst-erklärend.
-      //
-      // Sprach-Anker-Strategie: ein klar nicht-englisches Übergangs-
-      // wort vorne, damit Edge die Sprache vor dem ersten Inhalts-
-      // wort festlegt. "Kapitel" allein reicht nicht — Edge sieht
-      // das als großgeschriebenen Eigennamen und bleibt im EN-Modus
-      // (User-Bug: "Kapitel Zusammenfassung" → "capitol
-      // zissenmentfassing"). "Es folgt" / "Now reading" sind
-      // eindeutige Sprach-Trigger ohne Lehnwort-Charakter.
+      // Dann ist der User-Intro-Text selbst-erklärend. Qwen erkennt
+      // Sprachumschaltung zuverlässig aus dem Text selbst, wir brauchen
+      // keinen Sprach-Anker mehr wie damals bei Edge.
       const explicitTitle = chapter.title?.trim();
       let announcement: string | undefined;
       if (i === 0) {
-        const intro = isDe ? "Es folgt" : "Now reading";
         if (explicitTitle) {
-          announcement = `${intro}: ${explicitTitle}`;
+          announcement = isDe
+            ? `Kapitel: ${explicitTitle}`
+            : `Chapter: ${explicitTitle}`;
         } else if (chapter.number > 0) {
-          const numTerm = isDe
+          announcement = isDe
             ? `Kapitel ${chapter.number}`
             : `Chapter ${chapter.number}`;
-          announcement = `${intro}: ${numTerm}`;
         }
       }
       const paragraphText = segments[i].paragraphs.join("\n\n");
@@ -801,5 +785,82 @@ export function clearAudioForChapter(audioId: string): boolean {
 
   d.prepare("DELETE FROM audio WHERE id = ?").run(audioId);
   return true;
+}
+
+/** Baut ein M4B aus allen bereits existierenden Kapitel-MP3s des
+ *  Dokuments. Wird von der UI gerufen, wenn der User per-chapter
+ *  generiert hat und nachträglich ein Komplett-Download möchte. */
+export async function rebuildM4B(docId: string): Promise<{
+  path: string;
+  chapters: number;
+}> {
+  const d = db();
+  const doc = d
+    .prepare("SELECT id, title, language FROM documents WHERE id = ?")
+    .get(docId) as Document | undefined;
+  if (!doc) throw new Error("Document not found");
+
+  const audioDir = join(DATA_DIR, "audio", docId);
+  mkdirSync(audioDir, { recursive: true });
+
+  // Alle done-Audios in Kapitel-Reihenfolge sammeln.
+  const rows = d
+    .prepare(
+      `SELECT a.stored_path, c.title, a.duration_ms, c.number, c.sort_order
+       FROM audio a
+       JOIN chapters c ON c.id = a.chapter_id
+       WHERE c.document_id = ? AND a.status = 'done'
+       ORDER BY c.sort_order ASC, c.number ASC`
+    )
+    .all(docId) as Array<{
+    stored_path: string;
+    title: string | null;
+    duration_ms: number;
+    number: number;
+    sort_order: number;
+  }>;
+
+  if (rows.length === 0) {
+    throw new Error(
+      "Keine fertigen Kapitel-Audios gefunden — zuerst Kapitel generieren."
+    );
+  }
+
+  const inputs: string[] = [];
+  const m4bChapters: Array<{ title: string; durationMs: number }> = [];
+
+  const introPath = join(audioDir, "intro.mp3");
+  if (existsSync(introPath)) {
+    inputs.push(introPath);
+    const introLabel = doc.language === "de" ? "Einleitung" : "Intro";
+    m4bChapters.push({ title: introLabel, durationMs: 0 });
+  }
+
+  for (const r of rows) {
+    const full = join(DATA_DIR, r.stored_path);
+    if (!existsSync(full)) continue;
+    inputs.push(full);
+    m4bChapters.push({
+      title: r.title || `Kapitel ${r.number}`,
+      durationMs: r.duration_ms,
+    });
+  }
+
+  if (inputs.length === 0) {
+    throw new Error(
+      "Alle Kapitel-Datei-Referenzen zeigen ins Leere — bitte Kapitel neu generieren."
+    );
+  }
+
+  const bookPath = join(audioDir, "book.m4b");
+  await buildM4B({
+    inputs,
+    chapters: m4bChapters,
+    output: bookPath,
+    title: doc.title,
+    coverPath: coverPathFor(doc.id),
+  });
+
+  return { path: bookPath, chapters: m4bChapters.length };
 }
 

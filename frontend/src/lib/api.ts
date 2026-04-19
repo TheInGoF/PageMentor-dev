@@ -54,7 +54,7 @@ export interface Chapter {
   kind?: ChapterKind;
 }
 
-export type TtsEngine = "edge" | "qwen";
+export type TtsEngine = "qwen";
 
 export interface Voice {
   id: string;
@@ -763,6 +763,10 @@ export const api = {
       request<{ status: string }>(`/api/audio/chapter/${audioId}`, { method: "DELETE" }),
     cancel: (docId: string) =>
       request<{ status: string }>(`/api/audio/cancel/${docId}`, { method: "POST" }),
+    rebuildM4B: (docId: string) =>
+      request<{ ok: true; chapters: number }>(`/api/audio/rebuild-m4b/${docId}`, {
+        method: "POST",
+      }),
     fileUrl: (audioId: string) => `/api/audio/file/${audioId}`,
     bookUrl: (docId: string) => `/api/audio/book/${docId}`,
     streamUrl: (docId: string) => `/api/audio/stream/${docId}`,

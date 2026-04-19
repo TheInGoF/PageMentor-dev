@@ -13,6 +13,7 @@ import {
   clearAudio,
   clearAudioForChapter,
   cancelAudiobook,
+  rebuildM4B,
 } from "../services/audiobook";
 import {
   preprocessChapterForAudio,
@@ -414,6 +415,18 @@ audioRoutes.delete("/chapter/:audioId", (c) => {
 audioRoutes.post("/cancel/:docId", (c) => {
   const ok = cancelAudiobook(c.req.param("docId"));
   return c.json({ status: ok ? "canceling" : "not-running" });
+});
+
+// Baut ein M4B aus allen bereits fertigen Kapitel-MP3s + Intro. Wird
+// benötigt, wenn der User per-chapter generiert hat und nachträglich
+// ein Komplett-Download möchte (ein Full-Book-Run baut das M4B automatisch).
+audioRoutes.post("/rebuild-m4b/:docId", async (c) => {
+  try {
+    const res = await rebuildM4B(c.req.param("docId"));
+    return c.json({ ok: true, chapters: res.chapters });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
 });
 
 // Stream a chapter MP3 with HTTP Range support (for seek/scrub).
