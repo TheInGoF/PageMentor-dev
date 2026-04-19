@@ -115,7 +115,11 @@ export interface PreprocessedChapter {
 export interface AudiobookIntro {
   text: string | null;
   audioUrl: string | null;
-  defaultText: string | null;
+  docMeta: {
+    title: string;
+    author: string | null;
+    language: string;
+  } | null;
 }
 
 export interface ChapterStatusResponse {
@@ -464,6 +468,7 @@ export const api = {
       body: Partial<Pick<Document, "title" | "type" | "tags">> & {
         module_id?: string | null;
         thumb_page?: number;
+        author?: string | null;
       }
     ) =>
       request<Document>(`/api/documents/${id}`, {

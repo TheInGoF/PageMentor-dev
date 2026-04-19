@@ -49,8 +49,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [intro, setIntro] = useState<{
     text: string | null;
     audioUrl: string | null;
-    defaultText: string | null;
-  }>({ text: null, audioUrl: null, defaultText: null });
+    docMeta: {
+      title: string;
+      author: string | null;
+      language: string;
+    } | null;
+  }>({ text: null, audioUrl: null, docMeta: null });
   const [introBusy, setIntroBusy] = useState(false);
   const [kindBulkBusy, setKindBulkBusy] = useState<string | null>(null);
   const [busyChapter, setBusyChapter] = useState<
@@ -581,6 +585,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
 
       <IntroEditor
         intro={intro}
+        voice={voices.find((v) => v.id === voiceId) ?? null}
+        modelName={getSettings().defaultOllamaModel}
         busy={introBusy}
         canGenerate={!!voiceId}
         onSave={saveIntroText}
@@ -1195,15 +1201,68 @@ function BookProgressPanel({
 // Intro-Editor
 // ---------------------------------------------------------------------
 
+function buildIntroDefault(
+  meta: { title: string; author: string | null; language: string } | null,
+  voice: Voice | null,
+  model: string
+): string {
+  if (!meta) return "";
+  const isDe = meta.language === "de";
+  const lines: string[] = [];
+
+  if (isDe) {
+    lines.push(`Hörbuch: ${meta.title}.`);
+    if (meta.author) {
+      lines.push("");
+      lines.push(`von ${meta.author}`);
+    }
+    if (model) {
+      lines.push(`Aufbereitet durch ${model}`);
+    }
+    if (voice) {
+      const engine =
+        voice.engine === "edge" ? "Sprachsynthese Azure Edge" : "Kokoro";
+      lines.push(`Gesprochen durch ${engine} mit der Stimme ${voice.label}`);
+    }
+  } else {
+    lines.push(`Audiobook: ${meta.title}.`);
+    if (meta.author) {
+      lines.push("");
+      lines.push(`by ${meta.author}`);
+    }
+    if (model) {
+      lines.push(`Prepared by ${model}`);
+    }
+    if (voice) {
+      const engine =
+        voice.engine === "edge" ? "Azure Edge speech synthesis" : "Kokoro";
+      lines.push(`Narrated by ${engine} with voice ${voice.label}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 function IntroEditor({
   intro,
+  voice,
+  modelName,
   busy,
   canGenerate,
   onSave,
   onGenerate,
   onDeleteAudio,
 }: {
-  intro: { text: string | null; audioUrl: string | null; defaultText: string | null };
+  intro: {
+    text: string | null;
+    audioUrl: string | null;
+    docMeta: {
+      title: string;
+      author: string | null;
+      language: string;
+    } | null;
+  };
+  voice: Voice | null;
+  modelName: string;
   busy: boolean;
   canGenerate: boolean;
   onSave: (text: string | null) => void;
@@ -1217,6 +1276,11 @@ function IntroEditor({
   useEffect(() => {
     setDraft(intro.text ?? "");
   }, [intro.text]);
+
+  const defaultText = useMemo(
+    () => buildIntroDefault(intro.docMeta, voice, modelName),
+    [intro.docMeta, voice, modelName]
+  );
 
   const dirty = (intro.text ?? "") !== draft;
   const hasIntro = !!(intro.text && intro.text.trim().length > 0);
@@ -1251,15 +1315,15 @@ function IntroEditor({
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="w-full bg-bg-elevated border border-border rounded-lg p-3 min-h-[80px] font-mono text-[12px] leading-relaxed text-neutral-100 resize-y focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
-            placeholder={intro.defaultText ?? t("audiobook.intro.placeholder")}
+            className="w-full bg-bg-elevated border border-border rounded-lg p-3 min-h-[140px] font-mono text-[12px] leading-relaxed text-neutral-100 resize-y focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+            placeholder={defaultText || t("audiobook.intro.placeholder")}
             spellCheck
           />
           <div className="flex items-center gap-2 flex-wrap">
-            {intro.defaultText && draft !== intro.defaultText && (
+            {defaultText && draft !== defaultText && (
               <Button
                 variant="ghost"
-                onClick={() => setDraft(intro.defaultText ?? "")}
+                onClick={() => setDraft(defaultText)}
                 disabled={busy}
               >
                 {t("audiobook.intro.useDefault")}

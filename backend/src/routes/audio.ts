@@ -104,32 +104,20 @@ audioRoutes.get("/chapter-status/:docId", (c) => {
     intro: {
       text: doc?.audio_intro_text ?? null,
       audioUrl: existsSync(introPath) ? `/api/audio/intro/${docId}/file` : null,
-      // Für den "Default-Vorschlag generieren" Button im Frontend.
-      defaultText: doc
-        ? buildDefaultIntro(doc.title, doc.doc_title, doc.author, doc.language)
+      // Roh-Metadaten für den Default-Vorschlag im Frontend. Der baut
+      // den ausführlichen Default selbst, weil er Modell + Voice
+      // (Frontend-State) auch kennt — die wollen wir nicht im
+      // Backend hin- und herreichen.
+      docMeta: doc
+        ? {
+            title: doc.doc_title || doc.title,
+            author: doc.author,
+            language: doc.language,
+          }
         : null,
     },
   });
 });
-
-/** Default-Intro-Vorschlag aus Doc-Metadata. Wird vom Frontend als
- *  Button "Aus Metadata generieren" angeboten — User kann den Text
- *  übernehmen und nach Belieben anpassen. */
-function buildDefaultIntro(
-  uiTitle: string,
-  docTitle: string | null,
-  author: string | null,
-  language: string
-): string {
-  const title = docTitle || uiTitle;
-  if (language === "en") {
-    if (author) return `Audiobook: ${title}. Written by ${author}.`;
-    return `Audiobook: ${title}.`;
-  }
-  // DE-Default
-  if (author) return `Hörbuch: ${title}. Verfasst von ${author}.`;
-  return `Hörbuch: ${title}.`;
-}
 
 // Intro-Text setzen / lesen / löschen.
 audioRoutes.put("/intro/:docId", async (c) => {

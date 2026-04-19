@@ -26,6 +26,7 @@ const TYPES: DocType[] = ["studienheft", "script", "klausur", "uebung", "sonstig
 
 export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
   const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
   const [type, setType] = useState<DocType>("studienheft");
   const [tags, setTags] = useState("");
   const [moduleId, setModuleId] = useState<string>("");
@@ -37,6 +38,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
   useEffect(() => {
     if (open && doc) {
       setTitle(doc.title);
+      setAuthor(doc.author ?? "");
       setType(doc.type);
       setTags(doc.tags.join(", "));
       setModuleId(doc.module_id ?? "");
@@ -60,6 +62,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
         tags: tagList,
         module_id: moduleId || null,
         thumb_page: thumbPage,
+        author: author.trim() ? author.trim() : null,
       });
       onSaved();
       onClose();
@@ -95,6 +98,12 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
+            />
+            <Input
+              label={t("doc.field.author")}
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              placeholder={t("doc.field.authorPlaceholder")}
             />
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-neutral-400">

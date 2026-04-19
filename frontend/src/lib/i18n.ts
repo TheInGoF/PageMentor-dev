@@ -706,6 +706,8 @@ const en: Record<string, string> = {
   "module.modal.icon": "Icon (emoji)",
   "module.modal.iconPlaceholder": "📘",
 
+  "doc.field.author": "Author (used in audiobook intro + ID3 tags)",
+  "doc.field.authorPlaceholder": "e.g. First Last",
   "doc.field.module": "Module (optional)",
   "doc.field.module.none": "— unassigned —",
   "doc.field.module.newInline": "+ create module",
@@ -1376,6 +1378,8 @@ const de: Record<string, string> = {
   "module.modal.icon": "Icon (Emoji)",
   "module.modal.iconPlaceholder": "📘",
 
+  "doc.field.author": "Autor (wird im Hörbuch-Intro + ID3-Tags genutzt)",
+  "doc.field.authorPlaceholder": "z. B. Vorname Nachname",
   "doc.field.module": "Modul (optional)",
   "doc.field.module.none": "— ohne Modul —",
   "doc.field.module.newInline": "+ neues Modul",

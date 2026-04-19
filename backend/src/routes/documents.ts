@@ -236,6 +236,7 @@ documentRoutes.patch("/:id", async (c) => {
     tags?: string[];
     module_id?: string | null;
     thumb_page?: number;
+    author?: string | null;
   }>();
 
   const doc = db().prepare("SELECT id, page_count FROM documents WHERE id = ?").get(id) as
@@ -256,6 +257,16 @@ documentRoutes.patch("/:id", async (c) => {
     const max = doc.page_count > 0 ? doc.page_count : Number.MAX_SAFE_INTEGER;
     const clamped = Math.max(1, Math.min(max, Math.floor(body.thumb_page)));
     db().prepare("UPDATE documents SET thumb_page = ? WHERE id = ?").run(clamped, id);
+  }
+  if (body.author !== undefined) {
+    // null oder leerer String → Spalte zurück auf NULL setzen,
+    // sonst trim und speichern. So kann der User einen
+    // versehentlich falsch gepullten Autor wieder löschen.
+    const value =
+      body.author === null || body.author.trim().length === 0
+        ? null
+        : body.author.trim();
+    db().prepare("UPDATE documents SET author = ? WHERE id = ?").run(value, id);
   }
   if (body.tags !== undefined) {
     const d = db();
