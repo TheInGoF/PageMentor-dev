@@ -156,6 +156,11 @@ services:
       # Erster HF-Download des Qwen-Modells kann 5+ min dauern;
       # danach lädt es aus dem Volume und ist in ~15 s warm.
       TTS_STARTUP_TIMEOUT: "600"
+      # Nach einem TTS-Call bleibt der Container 60 s am Leben. Spart
+      # bei Hörbuch-Batches den Restart zwischen den Chunks (~7 s pro
+      # Chunk). LLM-Requests killen den Container trotzdem sofort.
+      # Auf 0 setzen = altes Verhalten (Stop nach jedem Call).
+      TTS_IDLE_LINGER_SECONDS: "60"
       PROXY_REQUEST_TIMEOUT: "1800"
     volumes:
       # Socket-Mount, damit der Arbiter pm-qwen-tts start/stoppen kann.

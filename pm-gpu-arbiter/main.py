@@ -67,6 +67,12 @@ TTS_STARTUP_TIMEOUT = int(
         os.environ.get("VIBEVOICE_STARTUP_TIMEOUT", "180"),
     )
 )
+# Nach einem TTS-Call bleibt der Container N Sekunden am Leben. Kommt in
+# der Zeit ein weiterer TTS-Call rein, muss er nicht neu gebootet werden
+# (spart ~7 s pro Chunk bei Hörbuch-Batches). Ein zwischenzeitlicher
+# LLM-Call stoppt den Container trotzdem sofort (im own_gpu("llm")-
+# Enter-Pfad). Auf 0 setzen = altes Verhalten (sofortiger Stop).
+TTS_IDLE_LINGER_SECONDS = int(os.environ.get("TTS_IDLE_LINGER_SECONDS", "60"))
 PROXY_REQUEST_TIMEOUT = float(os.environ.get("PROXY_REQUEST_TIMEOUT", "1800"))
 
 Owner = Literal["idle", "llm", "tts"]
@@ -95,6 +101,41 @@ state = ArbiterState()
 
 http_client: httpx.AsyncClient | None = None
 docker_client: docker.DockerClient | None = None
+
+# Idle-Linger-Task: wird gesetzt, wenn nach einem TTS-Call der Stopp
+# verzögert werden soll. Wird vom nächsten own_gpu-Entry gecancelt.
+_tts_idle_task: asyncio.Task[None] | None = None
+
+
+def _cancel_pending_tts_stop() -> None:
+    """Verwirft einen geplanten Idle-Stop (weil ein neuer Request den
+    Container sowieso gleich benutzen oder hart stoppen wird)."""
+    global _tts_idle_task
+    t = _tts_idle_task
+    _tts_idle_task = None
+    if t is not None and not t.done():
+        t.cancel()
+
+
+async def _idle_stop_tts(linger_seconds: int) -> None:
+    """Wartet ``linger_seconds`` und stoppt dann pm-qwen-tts, wenn die
+    GPU in der Zeit idle geblieben ist. Abbrechen mit ``task.cancel()``
+    wenn ein neuer Request reinkommt."""
+    try:
+        await asyncio.sleep(linger_seconds)
+    except asyncio.CancelledError:
+        return
+    # Lock holen, damit wir nicht in einen laufenden Request reinstoppen.
+    async with state.lock:
+        if state.owner != "idle":
+            return  # Aktiver Request — der kümmert sich selbst
+        try:
+            status = await asyncio.to_thread(_container_status, TTS_CONTAINER)
+            if status == "running":
+                log.info("tts idle linger (%ss) expired → stopping", linger_seconds)
+                await _stop_tts()
+        except Exception as e:  # noqa: BLE001
+            log.warning("idle stop failed: %r", e)
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +248,10 @@ async def _unload_all_ollama_models() -> None:
 async def own_gpu(desired: Owner):
     assert desired in ("llm", "tts")
     state.queue_depth += 1
+    # Neuer Request übernimmt die Kontrolle — ein ausstehender Idle-Stop
+    # würde jetzt nur stören (bei TTS: Container noch warm nutzen;
+    # bei LLM: wir stoppen gleich selbst synchron).
+    _cancel_pending_tts_stop()
     try:
         async with state.lock:
             state.owner = desired
@@ -215,17 +260,42 @@ async def own_gpu(desired: Owner):
                 if desired == "llm":
                     await _stop_tts()
                 else:
-                    await _unload_all_ollama_models()
-                    await _start_tts_and_wait()
+                    # Wenn qwen-tts dank Linger noch läuft, sparen wir
+                    # uns hier Ollama-Unload + Container-Start + Health-
+                    # Poll (~7 s).
+                    container_running = False
+                    try:
+                        container_running = (
+                            await asyncio.to_thread(_container_status, TTS_CONTAINER)
+                        ) == "running"
+                    except Exception:  # noqa: BLE001
+                        container_running = False
+                    if not container_running:
+                        await _unload_all_ollama_models()
+                        await _start_tts_and_wait()
 
                 try:
                     yield
                 finally:
                     if desired == "tts":
-                        try:
-                            await _stop_tts()
-                        except Exception as e:  # noqa: BLE001
-                            log.warning("stop-after-tts fehlgeschlagen: %r", e)
+                        # Statt sofort zu stoppen: Idle-Linger planen.
+                        # Kommt innerhalb der Linger-Zeit ein neuer TTS-
+                        # Call, wird der Task in own_gpu() gecancelt und
+                        # wir sparen den Restart.
+                        if TTS_IDLE_LINGER_SECONDS > 0:
+                            global _tts_idle_task
+                            _tts_idle_task = asyncio.create_task(
+                                _idle_stop_tts(TTS_IDLE_LINGER_SECONDS)
+                            )
+                            log.info(
+                                "tts done — linger %ss before stop",
+                                TTS_IDLE_LINGER_SECONDS,
+                            )
+                        else:
+                            try:
+                                await _stop_tts()
+                            except Exception as e:  # noqa: BLE001
+                                log.warning("stop-after-tts fehlgeschlagen: %r", e)
             finally:
                 state.owner = "idle"
                 state.since = time.time()
@@ -276,11 +346,13 @@ async def status():
     return {
         **state.snapshot(),
         "tts_container": tts_status,
+        "tts_idle_pending": _tts_idle_task is not None and not _tts_idle_task.done(),
         "config": {
             "ollama_url": OLLAMA_URL,
             "tts_url": TTS_URL,
             "tts_container": TTS_CONTAINER,
             "tts_startup_timeout": TTS_STARTUP_TIMEOUT,
+            "tts_idle_linger_seconds": TTS_IDLE_LINGER_SECONDS,
             "proxy_request_timeout": PROXY_REQUEST_TIMEOUT,
         },
     }

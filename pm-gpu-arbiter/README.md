@@ -22,6 +22,7 @@ funktioniert transparent.
 | `TTS_CONTAINER` | `pm-qwen-tts` | Docker-Container zum Start/Stop |
 | `TTS_API_KEY` | *(leer)* | wird als `X-API-Key` weitergereicht |
 | `TTS_STARTUP_TIMEOUT` | `180` | Sek. Warten auf `/health` — Qwen braucht beim Cold-Start bis zu 3 min |
+| `TTS_IDLE_LINGER_SECONDS` | `60` | Sek. die der TTS-Container nach einem Call am Leben bleibt. Kommt in der Zeit ein weiterer TTS-Call → kein Restart nötig. LLM-Call killt trotzdem sofort. `0` = altes Verhalten (Stop nach jedem Call). |
 | `PROXY_REQUEST_TIMEOUT` | `1800` | Sek. für lange Synth-Jobs (30 min) |
 
 Alte `VIBEVOICE_*`-Variablen werden als Fallback weiter akzeptiert,
