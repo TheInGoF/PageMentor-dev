@@ -1,0 +1,192 @@
+# Beispiel-Compose für den externen GPU-Host (Windows+WSL2 oder Linux
+# mit NVIDIA-GPU, z. B. RTX 3090, 24 GB VRAM).
+#
+# Dieser Stack läuft NICHT auf der Synology, sondern auf dem GPU-Host
+# neben PageMentor. Er fährt vier Services hoch:
+#
+#   - ollama          ← LLM + Embeddings
+#   - docling         ← PDF-Extraktion auf GPU
+#   - qwen-tts        ← Voice-Clone-TTS (Qwen3-TTS-Flash 1.7B Base)
+#   - pm-gpu-arbiter  ← serialisiert GPU zwischen ollama und qwen-tts
+#
+# Der pm-gpu-arbiter ist der einzige Endpoint, den PageMentor (auf der
+# Synology) aktiv anspricht — Port 8790. Dahinter reicht er Anfragen
+# transparent an ollama (Port 11434) oder qwen-tts (Port 8880) weiter
+# und entlädt vor einem TTS-Call die Ollama-Modelle aus VRAM bzw. vor
+# einem LLM-Call den TTS-Container. Docling läuft unabhängig (nur
+# wenige 100 MB VRAM) — siehe Hinweis unten, falls das zu eng wird.
+#
+# ----------------------------------------------------------------------
+# Anwendung auf dem GPU-Host:
+#
+#   1. Datei kopieren:
+#        cp docker-compose.gpu-host.example.yaml docker-compose.yaml
+#
+#   2. Secrets anpassen (DOCLING_SERVE_API_KEY auf den Wert, der in der
+#      NAS-.env unter DOCLING_API_KEY steht — beide Seiten müssen gleich
+#      sein, sonst 401 von Docling).
+#
+#   3. `docker compose pull && docker compose up -d`
+#
+#   4. Firewall-Freigabe auf dem Host: Port 8790 (Arbiter) + 5001
+#      (Docling) von der NAS-IP aus erreichbar machen. 11434 und 8880
+#      können privat bleiben — die NAS spricht NICHT direkt mit ihnen.
+#
+#   5. In PageMentor → Settings → Lokale TTS → Arbiter-URL auf
+#      `http://<gpu-host-ip>:8790` setzen. Und → LLM → Ollama-URL auf
+#      `http://<gpu-host-ip>:8790` setzen (ja, derselbe Port — der
+#      Arbiter sprichts beides).
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: pm-ollama
+    restart: unless-stopped
+    # Port 11434 bleibt nur für Debug/Bypass offen; PageMentor
+    # spricht gegen 8790 (Arbiter).
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_KEEP_ALIVE: "30m"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "2"
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: "q8_0"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # Init-Container zieht alle benötigten Modelle beim ersten Start.
+  # `restart: "no"` sorgt dafür, dass er nach erfolgreichem Pull
+  # beendet bleibt.
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_started
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_HOST: "http://ollama:11434"
+    entrypoint: >
+      sh -c "
+      sleep 8 &&
+      ollama pull nomic-embed-text &&
+      ollama pull jina/jina-embeddings-v2-base-de &&
+      ollama pull gemma4:26b &&
+      ollama pull llama3.1:8b
+      "
+    restart: "no"
+
+  docling:
+    image: quay.io/docling-project/docling-serve:v1.16.1
+    container_name: pm-docling
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    user: "0:0"
+    environment:
+      UVICORN_PORT: "5001"
+      # Muss identisch sein mit DOCLING_API_KEY in der NAS-.env.
+      DOCLING_SERVE_API_KEY: "change-me-internal"
+      DOCLING_SERVE_CORS_ORIGINS: '["*"]'
+      DOCLING_SERVE_MAX_FILE_SIZE: "209715200"
+      DOCLING_SERVE_MAX_NUM_PAGES: "2000"
+      DOCLING_SERVE_ENG_LOC_NUM_WORKERS: "2"
+      DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "true"
+      DOCLING_DEVICE: cuda
+      DOCLING_PERF_PAGE_BATCH_SIZE: "4"
+    volumes:
+      - docling-cache:/opt/app-root/src/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Qwen3-TTS Voice-Clone-Sidecar. restart: "no" ist zwingend — der
+  # Arbiter ist der einzige Owner und stoppt/startet den Container je
+  # nach Anfragetyp. Docker soll nicht selbst dazwischengrätschen.
+  qwen-tts:
+    image: ghcr.io/lordvonbaum/pm-qwen-tts:latest
+    container_name: pm-qwen-tts
+    restart: "no"
+    ports:
+      - "8880:8880"
+    volumes:
+      - qwen-tts-hf:/root/.cache/huggingface
+    environment:
+      QWEN_TTS_MODEL: "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+      QWEN_TTS_DEVICE: "cuda"
+      QWEN_TTS_DTYPE: "bfloat16"
+      QWEN_TTS_ATTN_IMPL: "sdpa"       # "flash_attention_2" spart ~15% VRAM, braucht Downstream-Rebuild
+      QWEN_TTS_DEFAULT_LANGUAGE: "German"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # GPU-Arbiter — der einzige Endpoint, den PageMentor aktiv anspricht.
+  # Proxy-Routen:
+  #   /api/*      → Ollama  (vorher qwen-tts stoppen)
+  #   /v1/audio/* → Qwen-TTS (vorher Ollama-Modelle unloaden +
+  #                            qwen-tts starten; nachher wieder stoppen)
+  pm-gpu-arbiter:
+    image: ghcr.io/lordvonbaum/pm-gpu-arbiter:latest
+    container_name: pm-gpu-arbiter
+    restart: unless-stopped
+    ports:
+      - "8790:8790"
+    environment:
+      OLLAMA_URL: "http://ollama:11434"
+      TTS_UPSTREAM_URL: "http://qwen-tts:8880"
+      TTS_CONTAINER: "pm-qwen-tts"
+      # Erster HF-Download des Qwen-Modells kann 5+ min dauern;
+      # danach lädt es aus dem Volume und ist in ~15 s warm.
+      TTS_STARTUP_TIMEOUT: "600"
+      PROXY_REQUEST_TIMEOUT: "1800"
+    volumes:
+      # Socket-Mount, damit der Arbiter pm-qwen-tts start/stoppen kann.
+      # Unter Windows+WSL2 wie unter Linux identischer Pfad.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - ollama
+
+volumes:
+  ollama-models:
+  docling-cache:
+  qwen-tts-hf:
+
+# ----------------------------------------------------------------------
+# VRAM-Budget auf einer 3090 (24 GB)
+# ----------------------------------------------------------------------
+#   gemma4:26b           ~18 GB
+#   llama3.1:8b           ~6 GB
+#   qwen3-tts 1.7B (bf16) ~3.4 GB
+#   docling (Layout-LM)   ~0.5-1 GB
+#
+# Der Arbiter serialisiert Ollama vs. Qwen-TTS → maximal eine der
+# beiden liegt gleichzeitig im VRAM. Docling wird NICHT arbitriert
+# — es läuft parallel. In der Praxis passt das, weil:
+#   - Docling + Qwen (beide klein):     ~4 GB    → OK
+#   - Docling + Gemma4:26b:            ~19 GB   → OK
+#   - Docling + alle Ollama-Modelle:   tight, aber Ollama lädt
+#     automatisch nur das aktive (OLLAMA_MAX_LOADED_MODELS=2)
+#
+# Wenn du aber gleichzeitig eine 500-Seiten-PDF OCRst UND ein
+# Hörbuch generierst, kann es knapp werden. Ausweg: Docling auf CPU
+# stellen (DOCLING_DEVICE: cpu) — dauert länger, macht aber keinen
+# Konflikt mehr. Alternativ den Arbiter erweitern, dass er Docling
+# mitverwaltet (derzeit nicht implementiert).

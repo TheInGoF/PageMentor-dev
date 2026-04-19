@@ -147,6 +147,35 @@ docker exec -it pm-ollama ollama pull llama3.2:3b
 
 Then set `PM_OLLAMA_MODEL=llama3.2:3b` in the stack env and redeploy.
 
+### 5 — External GPU host (Ollama + Qwen3-TTS + Docling on CUDA)
+
+For real throughput (Gemma 26B, Qwen3-TTS voice-cloning, GPU Docling),
+run the heavy sidecars on a separate NVIDIA box. A complete example
+compose lives at
+[docker-compose.gpu-host.example.yaml](docker-compose.gpu-host.example.yaml):
+
+```bash
+# on the GPU host:
+curl -fLO https://raw.githubusercontent.com/LordVonBaum/PageMentor/main/docker-compose.gpu-host.example.yaml
+mv docker-compose.gpu-host.example.yaml docker-compose.yaml
+# edit DOCLING_SERVE_API_KEY to match your NAS .env
+docker compose pull
+docker compose up -d
+```
+
+That brings up `ollama`, `docling`, `qwen-tts`, and `pm-gpu-arbiter`.
+PageMentor (on the NAS) then only talks to the arbiter at
+`http://<gpu-host-ip>:8790` — the arbiter serializes GPU access
+between the LLM and the TTS sidecar. Set that URL once in the
+Settings modal (LLM → Ollama URL, and Local TTS → Arbiter URL) and
+it persists in `llm-config.json`.
+
+Images `ghcr.io/lordvonbaum/pm-gpu-arbiter` and
+`ghcr.io/lordvonbaum/pm-qwen-tts` are built and pushed by the GitHub
+Actions workflows in this repo (`publish-arbiter.yml`,
+`publish-qwen-tts.yml`) — you only `docker compose pull`, never build
+locally.
+
 ## Local development
 
 ```bash
