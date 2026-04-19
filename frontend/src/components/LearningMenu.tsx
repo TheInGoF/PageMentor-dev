@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import {
   api,
   subscribeProgress,
-  type Chapter,
   type Document,
   type ProgressEvent,
+  type RagSource,
 } from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
 import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
 import { Audiobook } from "./Audiobook";
 import { PdfViewer } from "./PdfViewer";
+import { PdfModal } from "./PdfModal";
 import { Cards } from "./Cards";
 import { ExamTrainer } from "./ExamTrainer";
 import { Summaries } from "./Summaries";
@@ -21,7 +22,6 @@ import { cn } from "../lib/cn";
 export type Tab =
   | "overview"
   | "reader"
-  | "chapters"
   | "audiobook"
   | "exercises"
   | "exam"
@@ -31,7 +31,6 @@ export type Tab =
 const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = [
   { id: "overview", labelKey: "learn.tab.overview", requiresExtraction: false },
   { id: "reader", labelKey: "learn.tab.reader", requiresExtraction: false },
-  { id: "chapters", labelKey: "learn.tab.chapters", requiresExtraction: true },
   { id: "audiobook", labelKey: "learn.tab.audiobook", requiresExtraction: true },
   { id: "exercises", labelKey: "learn.tab.exercises", requiresExtraction: true },
   { id: "exam", labelKey: "learn.tab.exam", requiresExtraction: true },
@@ -50,6 +49,11 @@ export function LearningMenu({ docId, onBack }: Props) {
   const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
   const [extractionStartedAt, setExtractionStartedAt] = useState<number | null>(null);
   const [busyExtract, setBusyExtract] = useState(false);
+  // RAG-Quelle im PDF-Modal anzeigen: der User soll die Chat-Antwort
+  // nicht verlieren, während er die zitierte Textstelle anschaut.
+  const [pdfSource, setPdfSource] = useState<
+    { docId: string; initialPage?: number; title?: string } | null
+  >(null);
   const toast = useToast();
   useLocale();
 
@@ -196,9 +200,6 @@ export function LearningMenu({ docId, onBack }: Props) {
           />
         )}
         {tab === "reader" && <PdfViewer docId={docId} />}
-        {tab === "chapters" && extractionDone && (
-          <ChaptersTab docId={docId} docStatus={doc?.ocr_status} />
-        )}
         {tab === "audiobook" && extractionDone &&
           (doc ? (
             <Audiobook docId={docId} documentLanguage={doc.language} />
@@ -211,10 +212,17 @@ export function LearningMenu({ docId, onBack }: Props) {
         {tab === "qa" && extractionDone && (
           <RagQA
             docId={docId}
-            onJumpToChapter={() => setTab("chapters")}
+            onOpenSource={(src: RagSource) =>
+              setPdfSource({
+                docId: src.document_id,
+                initialPage: src.start_page,
+                title: src.document_title || src.chapter_title,
+              })
+            }
           />
         )}
       </main>
+      <PdfModal source={pdfSource} onClose={() => setPdfSource(null)} />
     </div>
   );
 }
@@ -265,226 +273,6 @@ function ExtractionGate({
         </div>
       </div>
     </section>
-  );
-}
-
-function ChaptersTab({
-  docId,
-  docStatus,
-}: {
-  docId: string;
-  docStatus: Document["ocr_status"] | undefined;
-}) {
-  const [chapters, setChapters] = useState<Chapter[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const toast = useToast();
-
-  async function load() {
-    try {
-      setChapters(await api.chapters.list(docId));
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docId]);
-
-  useEffect(() => {
-    if (docStatus === "running" || docStatus === "pending") {
-      const iv = setInterval(load, 3000);
-      return () => clearInterval(iv);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docStatus]);
-
-  async function redetect() {
-    if (!confirm(t("chapters.detectConfirm"))) return;
-    setBusy(true);
-    try {
-      const res = await api.chapters.detect(docId);
-      toast.show(t("chapters.detectedToast", { n: res.chapters }), "success");
-      setSelected(new Set());
-      await load();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveTitle(id: string) {
-    try {
-      await api.chapters.patch(id, { title: editTitle.trim() });
-      setEditing(null);
-      await load();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    }
-  }
-
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  async function mergeSelected() {
-    if (selected.size < 2 || !chapters) return;
-    const inOrder = chapters.filter((c) => selected.has(c.id)).map((c) => c.id);
-    setBusy(true);
-    try {
-      await api.chapters.merge(inOrder);
-      toast.show(t("chapters.merged", { n: inOrder.length }), "success");
-      setSelected(new Set());
-      await load();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function deleteChapter(ch: Chapter) {
-    if (
-      !confirm(
-        t("chapters.deleteConfirm", {
-          title: ch.title || `${t("learn.tab.chapters")} ${ch.number}`,
-        })
-      )
-    )
-      return;
-    try {
-      await api.chapters.remove(ch.id);
-      setSelected((s) => {
-        const next = new Set(s);
-        next.delete(ch.id);
-        return next;
-      });
-      await load();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-lg font-semibold">{t("chapters.title")}</h2>
-        <div className="flex gap-2">
-          {selected.size >= 2 && (
-            <Button variant="outline" onClick={mergeSelected} disabled={busy}>
-              {t("chapters.merge", { n: selected.size })}
-            </Button>
-          )}
-          <Button variant="outline" onClick={redetect} disabled={busy}>
-            {busy ? t("common.loading") : t("chapters.detect")}
-          </Button>
-        </div>
-      </div>
-
-      {!chapters ? (
-        <p className="text-sm text-neutral-500">{t("common.loading")}</p>
-      ) : chapters.length === 0 ? (
-        <div className="card p-8 text-center text-sm text-neutral-500">
-          {t("chapters.empty")}
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {chapters.map((ch) => (
-            <li key={ch.id} className="card card-hover p-4">
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={selected.has(ch.id)}
-                  onChange={() => toggleSelect(ch.id)}
-                  className="mt-1 accent-accent"
-                />
-                <div className="text-accent font-mono text-sm min-w-[2ch] text-right pt-0.5">
-                  {String(ch.number).padStart(2, "0")}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {editing === ch.id ? (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        saveTitle(ch.id);
-                      }}
-                      className="flex items-center gap-2"
-                    >
-                      <input
-                        className="input !py-1"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") setEditing(null);
-                        }}
-                      />
-                      <Button
-                        className="!py-1 !px-2 text-xs"
-                        onClick={() => saveTitle(ch.id)}
-                        aria-label={t("common.save")}
-                      >
-                        ✓
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        className="!py-1 !px-2 text-xs"
-                        onClick={() => setEditing(null)}
-                        aria-label={t("common.cancel")}
-                      >
-                        ✕
-                      </Button>
-                    </form>
-                  ) : (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <h3
-                        className="font-medium text-neutral-100 truncate cursor-text hover:text-accent"
-                        onClick={() => {
-                          setEditing(ch.id);
-                          setEditTitle(ch.title || "");
-                        }}
-                        title={t("library.editHint")}
-                      >
-                        {ch.title || `${t("learn.tab.chapters")} ${ch.number}`}
-                      </h3>
-                      {ch.kind && ch.kind !== "content" && (
-                        <span className="tag text-[10px] uppercase shrink-0 opacity-70">
-                          {t(`chapters.kind.${ch.kind}`)}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {t("chapters.pages")} {ch.start_page}
-                    {ch.end_page !== ch.start_page ? `–${ch.end_page}` : ""}
-                    {ch.text &&
-                      ` · ${t("chapters.chars", { n: ch.text.length.toLocaleString() })}`}
-                  </p>
-                </div>
-                <button
-                  onClick={() => deleteChapter(ch)}
-                  className="text-neutral-500 hover:text-accent text-xs"
-                  title={t("common.delete")}
-                  aria-label={t("common.delete")}
-                >
-                  ✕
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }
 

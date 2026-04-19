@@ -224,7 +224,9 @@ const en: Record<string, string> = {
   "qa.source.score": "Cosine similarity to your question",
   "qa.source.more": "Show full snippet",
   "qa.source.less": "Show less",
-  "qa.source.openChapter": "Open chapter",
+  "qa.source.openInDoc": "Open in document",
+  "pdfModal.title": "Document",
+  "pdfModal.page": "page {n}",
   "qa.history": "Earlier questions",
   "qa.history.reopen": "Click to reopen this question",
 
@@ -940,7 +942,9 @@ const de: Record<string, string> = {
   "qa.source.score": "Cosine-Ähnlichkeit zur Frage",
   "qa.source.more": "Ganzes Snippet zeigen",
   "qa.source.less": "Weniger zeigen",
-  "qa.source.openChapter": "Kapitel öffnen",
+  "qa.source.openInDoc": "Im Dokument öffnen",
+  "pdfModal.title": "Dokument",
+  "pdfModal.page": "Seite {n}",
   "qa.history": "Frühere Fragen",
   "qa.history.reopen": "Klicken um diese Frage erneut zu öffnen",
 

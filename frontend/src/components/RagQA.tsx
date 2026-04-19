@@ -7,12 +7,13 @@ import { t } from "../lib/i18n";
 
 interface Props {
   docId: string;
-  /** Optional: Springe zu einem anderen Tab (Reader, Chapters) wenn der
-   *  User auf eine Quellen-Card klickt. Wird vom LearningMenu durchgereicht. */
-  onJumpToChapter?: (chapterId: string) => void;
+  /** Öffnet das PDF-Modal auf der Seite einer RAG-Quelle. Wird vom
+   *  LearningMenu gesteuert, nicht lokal — so behält die Chat-Ansicht
+   *  ihren Zustand während der User das PDF nebenher liest. */
+  onOpenSource?: (source: RagSource) => void;
 }
 
-export function RagQA({ docId, onJumpToChapter }: Props) {
+export function RagQA({ docId, onOpenSource }: Props) {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<RagSource[] | null>(null);
@@ -189,7 +190,7 @@ export function RagQA({ docId, onJumpToChapter }: Props) {
                 key={s.id}
                 index={idx + 1}
                 source={s}
-                onJump={onJumpToChapter}
+                onOpen={onOpenSource}
               />
             ))}
           </aside>
@@ -232,11 +233,11 @@ export function RagQA({ docId, onJumpToChapter }: Props) {
 function SourceCard({
   index,
   source,
-  onJump,
+  onOpen,
 }: {
   index: number;
   source: RagSource;
-  onJump?: (chapterId: string) => void;
+  onOpen?: (source: RagSource) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const pageRange =
@@ -284,13 +285,13 @@ function SourceCard({
         >
           {expanded ? t("qa.source.less") : t("qa.source.more")}
         </button>
-        {onJump && (
+        {onOpen && (
           <button
             type="button"
-            onClick={() => onJump(source.chapter_id)}
+            onClick={() => onOpen(source)}
             className="text-[11px] text-accent hover:underline"
           >
-            {t("qa.source.openChapter")} →
+            {t("qa.source.openInDoc")} →
           </button>
         )}
       </div>

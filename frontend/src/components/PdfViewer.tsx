@@ -16,6 +16,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 interface Props {
   docId: string;
+  /** Wenn gesetzt, springt der Viewer nach dem ersten PDF-Load auf
+   *  diese Seite. Wird aus RagQA-Quellen-Clicks gefüttert. */
+  initialPage?: number;
 }
 
 const ZOOMS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5];
@@ -26,7 +29,7 @@ interface ActiveSelection {
   rect: { top: number; left: number; width: number };
 }
 
-export function PdfViewer({ docId }: Props) {
+export function PdfViewer({ docId, initialPage }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [sidebar, setSidebar] = useState(true);
   const [zoom, setZoom] = useState(1);
@@ -117,6 +120,22 @@ export function PdfViewer({ docId }: Props) {
       containerRef.current.scrollTo({ top: el.offsetTop - 16, behavior: "smooth" });
     }
   }
+
+  // Auto-Jump auf `initialPage` sobald das PDF geladen ist und die Page-
+  // Refs stehen. Triggert einmal pro (docId, initialPage)-Wechsel —
+  // verhindert erneutes Springen wenn der User danach manuell scrollt.
+  const jumpedToInitialRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialPage || !numPages) return;
+    const key = `${docId}:${initialPage}`;
+    if (jumpedToInitialRef.current === key) return;
+    // Kurz warten bis Page-DOM-Elemente gemountet sind.
+    const timer = setTimeout(() => {
+      jumpTo(Math.max(1, Math.min(numPages, initialPage)));
+      jumpedToInitialRef.current = key;
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [docId, initialPage, numPages]);
 
   function changeZoom(delta: number) {
     const idx = ZOOMS.findIndex((z) => z >= zoom);
