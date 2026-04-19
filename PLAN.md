@@ -68,6 +68,10 @@ Baumstrukturen, Tags statt Zweige. Lokal, Portainer-Stack.
     kein LLM-Call mehr.
 - **LLM**: Ollama + Provider-Chain (Claude / OpenAI / Gemini als Fallback,
   alle Endpoints zur Laufzeit in Settings konfigurierbar)
+- **RAG-Embeddings**: Auto-Detect via Ollama-Tags. Bevorzugt
+  **bge-m3** (multilingual, MTEB-DE-stark, 1024 dim) wenn gepullt,
+  fällt sonst auf nomic-embed-text (768 dim) zurück. Re-Embed bei
+  Modell-Wechsel via `POST /api/rag/reembed`.
 - **Deploy**: Docker Compose → Portainer-Stack (app + meilisearch +
   docling + kokoro)
 

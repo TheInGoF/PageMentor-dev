@@ -65,6 +65,13 @@ Data / rule lists
   fine-tuned on the HUI-Audio-Corpus-German dataset, with espeak-ng
   as the phonemizer backend.
 
+Embedding models (loaded into Ollama by the user, called over network
+at runtime):
+- BGE-M3              (MIT)        https://huggingface.co/BAAI/bge-m3
+  preferred default — multilingual, strong on German research texts.
+- nomic-embed-text    (Apache 2.0) https://huggingface.co/nomic-ai/nomic-embed-text-v1
+  fallback — smaller, English-focused.
+
 ================================================================================
 Third-party service: Microsoft Edge Read-Aloud API (Azure Neural TTS)
 ================================================================================

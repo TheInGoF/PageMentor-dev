@@ -203,6 +203,9 @@ configured" hint and the rest of the app keeps working.
 - **Search:** Meilisearch v1.12
 - **LLM:** Ollama (optional, self-hosted) — also drives the audio
   text preprocessor before TTS
+- **Embeddings:** auto-detected against the Ollama server, prefers
+  `bge-m3` (MIT, multilingual, strong on German research text) and
+  falls back to `nomic-embed-text` if bge-m3 isn't pulled
 - **Audio:** FFmpeg (loudnorm + M4B chapters, invoked as subprocess)
 
 ## Project structure

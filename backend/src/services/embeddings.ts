@@ -14,18 +14,69 @@
 
 import { getLlmConfig } from "./llmConfig";
 
-const DEFAULT_MODEL = process.env.PM_EMBED_MODEL || "nomic-embed-text";
+const ENV_DEFAULT = process.env.PM_EMBED_MODEL || "";
+
+/** Embedding-Modelle nach Präferenz. bge-m3 ist nativ multilingual
+ *  und für deutsche Forschungs-/Studientexte deutlich stärker als
+ *  das englisch-zentrierte nomic-embed-text (laut MTEB-DE Benchmark).
+ *  Wenn der User PM_EMBED_MODEL hart setzt, gewinnt das. Ansonsten
+ *  nehmen wir das erste auf dem Ollama-Server installierte Modell
+ *  aus dieser Liste. */
+const PREFERRED_EMBED_MODELS = [
+  "bge-m3",
+  "nomic-embed-text",
+];
+
+/** Letzter Fallback wenn weder ENV-Override noch ein präferiertes
+ *  Modell installiert ist — embedText wirft dann 404 und der Caller
+ *  weiß dass er was pullen muss. */
+const FALLBACK_MODEL = "nomic-embed-text";
 
 export interface EmbedderConfig {
   url: string;
   model: string;
 }
 
-/** Ermittelt welche Ollama-Instanz (und welches Modell) wir nutzen,
- *  anhand der Settings-Modal-Config + ENV-Overrides. Probiert die
- *  Kandidaten in der Chain-Order durch — PC-Ollama, Mac-Ollama,
- *  generic Ollama, ENV-Default. Claude/OpenAI/Gemini-Embeddings sind
- *  ein separater Pfad den wir hier nicht anfassen. */
+/** Holt die Liste der gepullten Modelle vom Ollama-Server. */
+async function ollamaTagNames(url: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${url}/api/tags`, {
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { models?: Array<{ name: string }> };
+    return (data.models ?? []).map((m) => m.name);
+  } catch {
+    return [];
+  }
+}
+
+/** Findet das beste passende Modell in der installierten Liste.
+ *  Toleriert Tag-Suffixe (`bge-m3` matcht auch `bge-m3:latest`). */
+function matchInstalled(wanted: string, installed: string[]): string | null {
+  if (installed.includes(wanted)) return wanted;
+  const tagged = installed.find((n) => n === wanted || n.startsWith(wanted + ":"));
+  return tagged ?? null;
+}
+
+function pickEmbedModel(installed: string[]): string {
+  if (ENV_DEFAULT) {
+    const found = matchInstalled(ENV_DEFAULT, installed);
+    if (found) return found;
+    // ENV gesetzt aber nicht gepullt — wir nehmen ihn trotzdem,
+    // damit der embedText-404 dem User zeigt was zu pullen ist.
+    return ENV_DEFAULT;
+  }
+  for (const model of PREFERRED_EMBED_MODELS) {
+    const found = matchInstalled(model, installed);
+    if (found) return found;
+  }
+  return FALLBACK_MODEL;
+}
+
+/** Ermittelt welche Ollama-Instanz und welches Modell wir nutzen.
+ *  Probiert die LLM-Chain-Endpoints in der konfigurierten Reihenfolge
+ *  durch und wählt pro Server das beste verfügbare Embed-Modell. */
 export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
   try {
     const cfg = getLlmConfig();
@@ -38,21 +89,19 @@ export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
     ].filter((u): u is string => !!u && u.trim().length > 0);
 
     for (const url of candidates) {
-      if (await ping(url)) return { url, model: DEFAULT_MODEL };
+      const installed = await ollamaTagNames(url);
+      if (installed.length === 0) continue; // server nicht erreichbar
+      const model = pickEmbedModel(installed);
+      console.log(
+        `[embeddings] using ${model} on ${url}` +
+          (installed.includes(model) ? "" : " (NOT INSTALLED — pull first)")
+      );
+      return { url, model };
     }
   } catch {
     // fall through
   }
   return null;
-}
-
-async function ping(url: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${url}/api/tags`, { method: "GET" });
-    return res.ok;
-  } catch {
-    return false;
-  }
 }
 
 /** Holt das Embedding für einen Text von Ollama. Wirft wenn der
