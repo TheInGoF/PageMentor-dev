@@ -50,6 +50,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     Record<string, "preprocess" | "generate" | undefined>
   >({});
   const [editChapterId, setEditChapterId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const toast = useToast();
 
@@ -220,6 +222,78 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         const { [chapterId]: _, ...rest } = b;
         return rest;
       });
+    }
+  }
+
+  function toggleSelection(chapterId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(chapterId)) next.delete(chapterId);
+      else next.add(chapterId);
+      return next;
+    });
+  }
+
+  function selectAll(includedOnly: boolean) {
+    setSelectedIds(
+      new Set(
+        chapterStatus
+          .filter((c) =>
+            !includedOnly
+              ? true
+              : c.include_in_audio == null
+              ? c.kind === "content" || c.kind === "summary"
+              : c.include_in_audio === 1
+          )
+          .map((c) => c.chapter_id)
+      )
+    );
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  /** Sequentielles Preprocess für alle ausgewählten. Sequentiell statt
+   *  parallel weil Ollama auf einem Modell eh nur einen Generate-Call
+   *  zur Zeit verarbeitet — paralleler Aufruf würde nur die HTTP-Queue
+   *  füllen und die App ggf. mit Timeouts überraschen. */
+  async function bulkPreprocess(force: boolean) {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    let ok = 0;
+    let failed = 0;
+    try {
+      for (const id of ids) {
+        setBusyChapter((b) => ({ ...b, [id]: "preprocess" }));
+        try {
+          await api.audio.preprocessChapter(id, { force });
+          ok++;
+        } catch (err) {
+          failed++;
+          console.warn(`[bulk preprocess] chapter ${id} failed:`, err);
+        } finally {
+          setBusyChapter((b) => {
+            const { [id]: _drop, ...rest } = b;
+            return rest;
+          });
+        }
+        // Kurze Pause damit das UI atmen kann + status-load nicht
+        // direkt mit dem nächsten Generate-Call kollidiert.
+        await loadChapterStatus();
+      }
+      if (failed === 0) {
+        toast.show(t("audiobook.bulk.done", { n: ok }), "success");
+      } else {
+        toast.show(
+          t("audiobook.bulk.partialDone", { ok, failed }),
+          failed > ok ? "error" : "success"
+        );
+      }
+      clearSelection();
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -435,12 +509,18 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         chapters={chapterStatus}
         chapterProgress={chapterProgress}
         busyChapter={busyChapter}
+        bulkBusy={bulkBusy}
+        selectedIds={selectedIds}
         disabled={!voiceId}
         onPreprocess={preprocessChapter}
         onEdit={(id) => setEditChapterId(id)}
         onGenerate={generateChapter}
         onClearChapter={clearChapter}
         onToggleInclude={toggleInclude}
+        onToggleSelect={toggleSelection}
+        onSelectAll={selectAll}
+        onClearSelection={clearSelection}
+        onBulkPreprocess={bulkPreprocess}
       />
 
       {editChapterId && (
@@ -531,22 +611,34 @@ function ChapterWorkbench({
   chapters,
   chapterProgress,
   busyChapter,
+  bulkBusy,
+  selectedIds,
   disabled,
   onPreprocess,
   onEdit,
   onGenerate,
   onClearChapter,
   onToggleInclude,
+  onToggleSelect,
+  onSelectAll,
+  onClearSelection,
+  onBulkPreprocess,
 }: {
   chapters: ChapterAudioStatus[];
   chapterProgress: Map<string, ProgressEvent>;
   busyChapter: Record<string, "preprocess" | "generate" | undefined>;
+  bulkBusy: boolean;
+  selectedIds: Set<string>;
   disabled: boolean;
   onPreprocess: (chapterId: string, force: boolean) => void;
   onEdit: (chapterId: string) => void;
   onGenerate: (chapterId: string) => void;
   onClearChapter: (audioId: string) => void;
   onToggleInclude: (chapterId: string, next: boolean) => void;
+  onToggleSelect: (chapterId: string) => void;
+  onSelectAll: (includedOnly: boolean) => void;
+  onClearSelection: () => void;
+  onBulkPreprocess: (force: boolean) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   if (chapters.length === 0) {
@@ -598,6 +690,51 @@ function ChapterWorkbench({
           )}
         </div>
       </div>
+      {selectedIds.size > 0 ? (
+        <div className="card p-3 flex items-center gap-2 flex-wrap bg-bg-elevated border-accent-subtle sticky top-14 z-20">
+          <span className="text-sm text-neutral-200 font-medium">
+            {t("audiobook.bulk.selected", { n: selectedIds.size })}
+          </span>
+          <div className="flex-1" />
+          <Button
+            variant="outline"
+            onClick={() => onBulkPreprocess(false)}
+            disabled={bulkBusy}
+          >
+            {bulkBusy
+              ? t("audiobook.bulk.busy")
+              : t("audiobook.bulk.preprocess")}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => onBulkPreprocess(true)}
+            disabled={bulkBusy}
+          >
+            {t("audiobook.bulk.preprocessForce")}
+          </Button>
+          <Button variant="ghost" onClick={onClearSelection} disabled={bulkBusy}>
+            {t("audiobook.bulk.clear")}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-xs text-neutral-500">
+          <span>{t("audiobook.bulk.hint")}</span>
+          <button
+            type="button"
+            onClick={() => onSelectAll(true)}
+            className="text-accent hover:underline"
+          >
+            {t("audiobook.bulk.selectIncluded")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectAll(false)}
+            className="text-accent hover:underline"
+          >
+            {t("audiobook.bulk.selectAll")}
+          </button>
+        </div>
+      )}
       <ul className="flex flex-col gap-2">
         {visible.map((ch) => (
           <ChapterRow
@@ -607,6 +744,7 @@ function ChapterWorkbench({
             busy={busyChapter[ch.chapter_id]}
             disabled={disabled}
             included={isChapterIncluded(ch)}
+            selected={selectedIds.has(ch.chapter_id)}
             onPreprocess={(force) => onPreprocess(ch.chapter_id, force)}
             onEdit={() => onEdit(ch.chapter_id)}
             onGenerate={() => onGenerate(ch.chapter_id)}
@@ -614,6 +752,7 @@ function ChapterWorkbench({
               ch.audio_id ? onClearChapter(ch.audio_id) : undefined
             }
             onToggleInclude={(next) => onToggleInclude(ch.chapter_id, next)}
+            onToggleSelect={() => onToggleSelect(ch.chapter_id)}
           />
         ))}
       </ul>
@@ -627,22 +766,26 @@ function ChapterRow({
   busy,
   disabled,
   included,
+  selected,
   onPreprocess,
   onEdit,
   onGenerate,
   onClear,
   onToggleInclude,
+  onToggleSelect,
 }: {
   chapter: ChapterAudioStatus;
   progress: ProgressEvent | null;
   busy: "preprocess" | "generate" | undefined;
   disabled: boolean;
   included: boolean;
+  selected: boolean;
   onPreprocess: (force: boolean) => void;
   onEdit: () => void;
   onGenerate: () => void;
   onClear: () => void;
   onToggleInclude: (next: boolean) => void;
+  onToggleSelect: () => void;
 }) {
   const phase = progress?.phase;
   const ttsRunning =
@@ -659,10 +802,11 @@ function ChapterRow({
     <li
       className={cn(
         "card p-4 flex flex-col gap-3 transition-opacity",
-        !included && "opacity-50"
+        !included && !selected && "opacity-50",
+        selected && "ring-1 ring-accent/60 bg-accent/5"
       )}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3">
         <label
           className="flex items-center pt-1 cursor-pointer"
           title={
@@ -676,6 +820,17 @@ function ChapterRow({
             checked={included}
             onChange={(e) => onToggleInclude(e.target.checked)}
             className="w-4 h-4 accent-accent cursor-pointer"
+          />
+        </label>
+        <label
+          className="flex items-center pt-1 cursor-pointer"
+          title={t("audiobook.chapter.select.tooltip")}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            className="w-4 h-4 cursor-pointer accent-sky-400"
           />
         </label>
         <div className="font-mono text-sm text-accent min-w-[2ch] text-right pt-1">
