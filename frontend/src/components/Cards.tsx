@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, type Card, type CardStats } from "../lib/api";
+import { api, subscribeProgress, type Card, type CardStats, type ProgressEvent } from "../lib/api";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
 import { Input } from "./ui/Input";
@@ -9,7 +9,6 @@ import { cn } from "../lib/cn";
 import { t } from "../lib/i18n";
 
 type Difficulty = "easy" | "medium" | "hard";
-type Style = "basic" | "deep" | "exam";
 
 interface Props {
   docId: string;
@@ -21,7 +20,7 @@ export function Cards({ docId }: Props) {
   const [reviewing, setReviewing] = useState<Card[] | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [editCard, setEditCard] = useState<Card | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [filterChapter, setFilterChapter] = useState<string>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,19 +52,6 @@ export function Cards({ docId }: Props) {
   useEffect(() => {
     load();
   }, [load]);
-
-  async function extract(replace: boolean) {
-    setBusy(true);
-    try {
-      const res = await api.cards.extract(docId, replace);
-      toast.show(t("cards.extractedToast", { n: res.extracted }), "success");
-      await load();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function startReview() {
     try {
@@ -126,15 +112,13 @@ export function Cards({ docId }: Props) {
             <Button variant="outline" onClick={() => setAddOpen(true)}>
               {t("cards.new")}
             </Button>
-            <Button variant="outline" onClick={() => extract(false)} disabled={busy}>
-              {busy ? "…" : t("cards.extract")}
-            </Button>
             <Button
               variant="outline"
-              onClick={() => setAiOpen(true)}
-              disabled={busy || chapters.length === 0}
+              onClick={() => setGenOpen(true)}
+              disabled={busy}
+              title={t("cards.generateTitle")}
             >
-              {t("cards.ai")}
+              {t("cards.generate")}
             </Button>
             {(stats?.total ?? 0) > 0 && (
               <a
@@ -260,15 +244,11 @@ export function Cards({ docId }: Props) {
           await load();
         }}
       />
-      <AiCardModal
-        open={aiOpen}
-        chapters={chapters}
-        defaultChapterId={filterChapter !== "all" ? filterChapter : ""}
-        onClose={() => setAiOpen(false)}
-        onDone={async () => {
-          setAiOpen(false);
-          await load();
-        }}
+      <GenerateModal
+        open={genOpen}
+        docId={docId}
+        onClose={() => setGenOpen(false)}
+        onReload={load}
       />
     </div>
   );
@@ -288,6 +268,13 @@ function StatPill({ label, value, accent }: { label: string; value: number; acce
       <div className="text-xs text-neutral-500 mt-0.5">{label}</div>
     </div>
   );
+}
+
+function sourceLabel(source: Card["source"]): string {
+  if (source === "extracted") return t("cards.source.extracted");
+  if (source === "ai_generated") return t("cards.source.ai");
+  if (source === "ai_filled") return t("cards.source.filled");
+  return t("cards.source.manual");
 }
 
 function CardRow({
@@ -319,13 +306,7 @@ function CardRow({
               </span>
             )}
             <span>·</span>
-            <span>
-              {card.source === "extracted"
-                ? t("cards.source.extracted")
-                : card.source === "ai_generated"
-                ? t("cards.source.ai")
-                : t("cards.source.manual")}
-            </span>
+            <span>{sourceLabel(card.source)}</span>
             {card.hint && (
               <>
                 <span>·</span>
@@ -524,136 +505,284 @@ function AddCardModal({
   );
 }
 
-function AiCardModal({
+interface GenProgressState {
+  phase: ProgressEvent["phase"] | null;
+  extractTotal: number;
+  extractMatched: number;
+  fillTotal: number;
+  fillCurrent: number;
+  fillChapterNum: number | null;
+  fillNote: "no-embedder" | "no-chunks" | null;
+  errorMsg: string | null;
+}
+
+const initialGenState: GenProgressState = {
+  phase: null,
+  extractTotal: 0,
+  extractMatched: 0,
+  fillTotal: 0,
+  fillCurrent: 0,
+  fillChapterNum: null,
+  fillNote: null,
+  errorMsg: null,
+};
+
+function GenerateModal({
   open,
-  chapters,
-  defaultChapterId,
+  docId,
   onClose,
-  onDone,
+  onReload,
 }: {
   open: boolean;
-  chapters: Array<{ id: string; title: string; number: number }>;
-  defaultChapterId: string;
+  docId: string;
   onClose: () => void;
-  onDone: () => void;
+  onReload: () => Promise<void>;
 }) {
-  const [chapterId, setChapterId] = useState("");
-  const [count, setCount] = useState(5);
-  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
-  const [style, setStyle] = useState<Style>("deep");
-  const [busy, setBusy] = useState(false);
+  const [doExtract, setDoExtract] = useState(true);
+  const [doFill, setDoFill] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [state, setState] = useState<GenProgressState>(initialGenState);
   const toast = useToast();
+  const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (open) {
-      setChapterId(defaultChapterId || chapters[0]?.id || "");
-      setCount(5);
-      setDifficulty("medium");
-      setStyle("deep");
+    if (!open) {
+      // Modal zu — Subscription sauber beenden, State reset.
+      unsubRef.current?.();
+      unsubRef.current = null;
+      setState(initialGenState);
+      setRunning(false);
     }
-  }, [open, defaultChapterId, chapters]);
+  }, [open]);
 
-  async function submit() {
-    if (!chapterId) return;
-    setBusy(true);
+  // Beim Unmount ggf. Stream schließen — sonst leaken EventSource-
+  // Instanzen wenn der User Tabs wechselt während ein Lauf aktiv ist.
+  useEffect(() => {
+    return () => {
+      unsubRef.current?.();
+      unsubRef.current = null;
+    };
+  }, []);
+
+  async function start() {
+    if (!doExtract && !doFill) return;
+    setRunning(true);
+    setState({ ...initialGenState, phase: "cards.start" });
+
+    unsubRef.current?.();
+    unsubRef.current = subscribeProgress(docId, (ev) => {
+      if (!ev.phase.startsWith("cards.")) return;
+      setState((prev) => {
+        const next = { ...prev, phase: ev.phase };
+        if (ev.phase === "cards.extract.done") {
+          next.extractTotal = ev.total ?? 0;
+          next.extractMatched = ev.current ?? 0;
+        } else if (ev.phase === "cards.fill.start") {
+          next.fillTotal = ev.total ?? 0;
+          next.fillCurrent = 0;
+          next.fillNote = null;
+        } else if (ev.phase === "cards.fill.progress") {
+          next.fillCurrent = ev.current ?? prev.fillCurrent;
+          next.fillTotal = ev.total ?? prev.fillTotal;
+          if (ev.message === "no-embedder") next.fillNote = "no-embedder";
+          else if (ev.message === "no-chunks") next.fillNote = "no-chunks";
+          if (ev.chapterNumber != null) next.fillChapterNum = ev.chapterNumber;
+        } else if (ev.phase === "cards.fill.chapter") {
+          if (ev.chapterNumber != null) next.fillChapterNum = ev.chapterNumber;
+        } else if (ev.phase === "cards.done") {
+          next.errorMsg = null;
+        } else if (ev.phase === "cards.failed") {
+          next.errorMsg = ev.message ?? "unknown";
+        }
+        return next;
+      });
+
+      if (ev.phase === "cards.done") {
+        unsubRef.current?.();
+        unsubRef.current = null;
+        setRunning(false);
+        void onReload();
+        // Summary-Toast aus dem in message encodierten JSON lesen.
+        let extracted = 0;
+        let filled = 0;
+        let fillTotal = 0;
+        try {
+          if (ev.message) {
+            const parsed = JSON.parse(ev.message) as {
+              extracted?: number;
+              filled?: number;
+              fillTotal?: number;
+            };
+            extracted = parsed.extracted ?? 0;
+            filled = parsed.filled ?? 0;
+            fillTotal = parsed.fillTotal ?? 0;
+          }
+        } catch {
+          // ignore — fallback auf event totals
+        }
+        toast.show(
+          t("cards.gen.doneToast", { extracted, filled, fillTotal }),
+          "success"
+        );
+      } else if (ev.phase === "cards.failed") {
+        unsubRef.current?.();
+        unsubRef.current = null;
+        setRunning(false);
+        void onReload();
+        toast.show(
+          t("cards.gen.phase.failed", { msg: ev.message ?? "unknown" }),
+          "error"
+        );
+      }
+    });
+
     try {
-      const res = await api.cards.aiGenerate(chapterId, { count, difficulty, style });
-      toast.show(
-        t("cards.aiGenerated", { n: res.generated, model: res.model }),
-        "success"
-      );
-      onDone();
+      await api.cards.generate(docId, { extract: doExtract, fill: doFill });
     } catch (err) {
+      unsubRef.current?.();
+      unsubRef.current = null;
+      setRunning(false);
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    } finally {
-      setBusy(false);
     }
   }
+
+  const percent =
+    running && state.fillTotal > 0
+      ? Math.min(100, Math.round((state.fillCurrent / state.fillTotal) * 100))
+      : running && state.phase === "cards.extract.done"
+      ? 100
+      : 0;
+
+  const status = phaseMessage(state);
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={t("cards.ai.title")}
+      title={t("cards.gen.title")}
       footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
-            {t("common.cancel")}
+        running ? (
+          <Button variant="ghost" onClick={onClose}>
+            {t("cards.gen.keepRunning")}
           </Button>
-          <Button onClick={submit} disabled={busy || !chapterId}>
-            {busy ? t("cards.ai.submitting") : t("cards.ai.submit")}
-          </Button>
-        </>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              {t("cards.gen.cancel")}
+            </Button>
+            <Button
+              onClick={start}
+              disabled={!doExtract && !doFill}
+            >
+              {t("cards.gen.submit")}
+            </Button>
+          </>
+        )
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-neutral-500">{t("cards.ai.description")}</p>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-neutral-400">
-            {t("cards.field.chapter")}
-          </label>
-          <select
-            className="input"
-            value={chapterId}
-            onChange={(e) => setChapterId(e.target.value)}
-          >
-            {chapters.map((ch) => (
-              <option key={ch.id} value={ch.id}>
-                {String(ch.number).padStart(2, "0")} ·{" "}
-                {ch.title || `${t("learn.tab.chapters")} ${ch.number}`}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="flex flex-col gap-1 min-w-0">
-            <label className="text-xs font-medium text-neutral-400">
-              {t("cards.ai.count")}
-            </label>
-            <select
-              className="input"
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-            >
-              {[3, 5, 8, 10, 15].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+        <p className="text-xs text-neutral-500">{t("cards.gen.description")}</p>
+
+        <label className="flex items-start gap-3 p-3 rounded border border-border hover:border-border-strong transition-colors cursor-pointer">
+          <input
+            type="checkbox"
+            checked={doExtract}
+            onChange={(e) => setDoExtract(e.target.checked)}
+            disabled={running}
+            className="mt-1 accent-accent"
+          />
+          <div className="flex-1">
+            <div className="text-sm font-medium text-neutral-100">
+              {t("cards.gen.stepExtract")}
+            </div>
+            <div className="text-xs text-neutral-500 mt-0.5">
+              {t("cards.gen.stepExtractHint")}
+            </div>
           </div>
-          <div className="flex flex-col gap-1 min-w-0">
-            <label className="text-xs font-medium text-neutral-400">
-              {t("cards.ai.difficulty")}
-            </label>
-            <select
-              className="input"
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-            >
-              <option value="easy">{t("cards.diff.easy")}</option>
-              <option value="medium">{t("cards.diff.medium")}</option>
-              <option value="hard">{t("cards.diff.hard")}</option>
-            </select>
+        </label>
+
+        <label className="flex items-start gap-3 p-3 rounded border border-border hover:border-border-strong transition-colors cursor-pointer">
+          <input
+            type="checkbox"
+            checked={doFill}
+            onChange={(e) => setDoFill(e.target.checked)}
+            disabled={running}
+            className="mt-1 accent-accent"
+          />
+          <div className="flex-1">
+            <div className="text-sm font-medium text-neutral-100">
+              {t("cards.gen.stepFill")}
+            </div>
+            <div className="text-xs text-neutral-500 mt-0.5">
+              {t("cards.gen.stepFillHint")}
+            </div>
           </div>
-          <div className="flex flex-col gap-1 min-w-0">
-            <label className="text-xs font-medium text-neutral-400">
-              {t("cards.ai.style")}
-            </label>
-            <select
-              className="input"
-              value={style}
-              onChange={(e) => setStyle(e.target.value as Style)}
-            >
-              <option value="basic">{t("cards.ai.style.basic")}</option>
-              <option value="deep">{t("cards.ai.style.deep")}</option>
-              <option value="exam">{t("cards.ai.style.exam")}</option>
-            </select>
+        </label>
+
+        {(running || state.phase) && (
+          <div className="card p-3 flex flex-col gap-2 border-accent-subtle">
+            {status && <div className="text-sm text-neutral-200">{status}</div>}
+            {state.fillTotal > 0 && (
+              <div className="h-1.5 bg-neutral-800 rounded overflow-hidden">
+                <div
+                  className="h-full bg-accent transition-all duration-200"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            )}
+            {state.fillNote === "no-embedder" && (
+              <div className="text-xs text-amber-400">
+                {t("cards.gen.phase.noEmbedder")}
+              </div>
+            )}
+            {state.fillNote === "no-chunks" && (
+              <div className="text-xs text-amber-400">
+                {t("cards.gen.phase.noChunks")}
+              </div>
+            )}
+            {state.errorMsg && (
+              <div className="text-xs text-red-400">
+                {t("cards.gen.phase.failed", { msg: state.errorMsg })}
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </Modal>
   );
+}
+
+function phaseMessage(s: GenProgressState): string | null {
+  switch (s.phase) {
+    case "cards.start":
+      return t("cards.gen.phase.start");
+    case "cards.extract.done": {
+      const gaps = Math.max(0, s.extractTotal - s.extractMatched);
+      return t("cards.gen.phase.extractDone", {
+        current: s.extractMatched,
+        total: s.extractTotal,
+        gaps,
+      });
+    }
+    case "cards.fill.start":
+    case "cards.fill.chapter":
+    case "cards.fill.progress": {
+      const base = t("cards.gen.phase.filling", {
+        current: s.fillCurrent,
+        total: s.fillTotal,
+      });
+      if (s.fillChapterNum != null) {
+        return `${base} · ${t("cards.gen.phase.fillChapter", { num: s.fillChapterNum })}`;
+      }
+      return base;
+    }
+    case "cards.done":
+      return t("cards.gen.phase.done");
+    case "cards.failed":
+      return null;
+    default:
+      return null;
+  }
 }
 
 // Re-exported because some callers may want the shared Input style.

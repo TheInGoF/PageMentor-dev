@@ -23,12 +23,19 @@ llmConfigRoutes.put("/", async (c) => {
     openaiModel?: string;
     googleApiKey?: string;
     googleModel?: string;
+    qwenTtsUrl?: string;
+    qwenTtsApiKey?: string;
   }>();
 
   // Only overwrite an API key when the client sends a non-empty string.
   // Empty / undefined means "keep what's stored".
   const patch = { ...body };
-  for (const keyField of ["anthropicApiKey", "openaiApiKey", "googleApiKey"] as const) {
+  for (const keyField of [
+    "anthropicApiKey",
+    "openaiApiKey",
+    "googleApiKey",
+    "qwenTtsApiKey",
+  ] as const) {
     const v = patch[keyField];
     if (v === undefined || v === "" || v === "•••") {
       delete patch[keyField];
@@ -49,6 +56,7 @@ llmConfigRoutes.delete("/:provider", (c) => {
   if (provider === "anthropic") patch.anthropicApiKey = "";
   else if (provider === "openai") patch.openaiApiKey = "";
   else if (provider === "google") patch.googleApiKey = "";
+  else if (provider === "qwenTts") patch.qwenTtsApiKey = "";
   else return c.json({ error: "Unknown provider" }, 400);
   setLlmConfig(patch);
   reloadCandidates();

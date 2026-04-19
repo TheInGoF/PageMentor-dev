@@ -1,10 +1,11 @@
 /**
  * Engine-Dispatcher mit pro-Engine Retry- und Pace-Strategie.
  *
- * Kokoro (lokaler Sidecar) hat keine Rate-Limits — kurzer Backoff
- * reicht, keine Inter-Chunk-Pause. Edge (Microsoft Cloud) braucht
- * 1.5 s Pause zwischen Chunks und einen 30 s Cooldown nach Empty-
- * Audio (Azure-Quota), weil kurze Backoffs nichts bringen.
+ * Qwen (lokaler Sidecar hinter dem Arbiter) hat keine Rate-Limits —
+ * der Arbiter queued pro Request, keine Inter-Chunk-Pause nötig.
+ * Edge (Microsoft Cloud) braucht 1.5 s Pause zwischen Chunks und
+ * einen 30 s Cooldown nach Empty-Audio (Azure-Quota), weil kurze
+ * Backoffs nichts bringen.
  *
  * Bei endgültigem Fail: `ChunkSynthesisFailure` nach oben — der
  * Caller kann das als Signal interpretieren, das Buch abzubrechen
@@ -28,7 +29,9 @@ interface EnginePolicy {
 
 const POLICIES: Record<EngineId, EnginePolicy> = {
   edge: { interChunkDelayMs: 1500, emptyAudioCooldownMs: 30_000 },
-  kokoro: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0 },
+  // Qwen läuft auf derselben GPU wie Ollama — der Arbiter queued pro
+  // Request, zusätzliche Inter-Chunk-Pause bringt nichts.
+  qwen: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0 },
 };
 
 export interface ChunkSynthesisParams {
@@ -106,7 +109,7 @@ export async function synthesizeChunk(
 }
 
 /** Inter-Chunk-Pause zur Rate-Limit-Vermeidung. Pro Engine konfiguriert
- *  — Kokoro = 0 ms, Edge = 1500 ms. */
+ *  — Qwen = 0 ms, Edge = 1500 ms. */
 export async function interChunkPause(engineId: EngineId): Promise<void> {
   const ms = POLICIES[engineId]?.interChunkDelayMs ?? 0;
   if (ms > 0) await sleep(ms);

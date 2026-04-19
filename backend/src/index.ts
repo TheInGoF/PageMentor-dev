@@ -9,7 +9,6 @@ import { cardRoutes } from "./routes/cards";
 import { examRoutes } from "./routes/exam";
 import { searchRoutes } from "./routes/search";
 import { summaryRoutes } from "./routes/summaries";
-import { feedApiRoutes, feedPublicRoutes } from "./routes/feed";
 import { dashboardRoutes } from "./routes/dashboard";
 import { llmConfigRoutes } from "./routes/llmConfig";
 import { moduleRoutes } from "./routes/modules";
@@ -42,9 +41,6 @@ app.use("/*", cors());
 // Public
 app.get("/api/health", (c) => c.json({ status: "ok", version: PKG_VERSION }));
 app.route("/api/auth", authRoutes);
-// Podcast-Feed liegt öffentlich (Token-Auth im Pfad), damit Apple
-// Podcasts / Overcast ihn ohne Cookie ziehen können.
-app.route("/feed", feedPublicRoutes);
 
 // Protected
 app.use("/api/*", authMiddleware);
@@ -55,7 +51,6 @@ app.route("/api/cards", cardRoutes);
 app.route("/api/exam", examRoutes);
 app.route("/api/search", searchRoutes);
 app.route("/api/summary", summaryRoutes);
-app.route("/api/feed", feedApiRoutes);
 app.route("/api/dashboard", dashboardRoutes);
 app.route("/api/llm/config", llmConfigRoutes);
 app.route("/api/modules", moduleRoutes);

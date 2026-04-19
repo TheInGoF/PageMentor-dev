@@ -10,13 +10,13 @@
 # Deploy:
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 #
-# Das hier tauscht nur das docling- und kokoro-Image gegen die GPU-
-# Variante und hängt `deploy.resources.reservations.devices: nvidia`
-# dran. Alle anderen Services (app, meilisearch) bleiben unverändert.
+# Hängt Docling (einziger GPU-Service im Haupt-Stack) an die NVIDIA-
+# Runtime. TTS läuft NICHT hier — dafür liegt auf dem GPU-Host eine
+# separate Compose mit Ollama + vllm-Qwen-TTS + pm-gpu-arbiter, siehe
+# eigene_windows-sidecars-compose.yaml.
 #
-# Erwartete Beschleunigung je nach GPU:
-#   - Docling: 10-30x (siehe unten)
-#   - Kokoro:  20-50x (eine Stunde Hörbuch in ~1-2 min auf 3090)
+# Erwartete Beschleunigung durch GPU: Docling 10-30x (100-Seiten-PDF
+# in ~30-60 s statt 25-70 min auf Synology-CPU).
 
 services:
   docling:
@@ -29,36 +29,6 @@ services:
       DOCLING_PERF_PAGE_BATCH_SIZE: "4"
       # NNPACK ist CPU-only, auf GPU-Systemen irrelevant — Variable
       # bewusst unset lassen (Default bleibt aktiv aber harmlos).
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  # Kokoro-TTS auf GPU. ~300 MB VRAM pro Worker — selbst auf einer
-  # 3060 problemlos parallel zu Docling möglich, solange du kein
-  # 11 B-Modell daneben fährst. Auf einer 3090 reicht es locker für
-  # Docling + Kokoro + ein 7 B Ollama-Modell gleichzeitig.
-  kokoro:
-    image: ghcr.io/remsky/kokoro-fastapi-gpu:latest
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  # Deutscher Kokoro-Sidecar auf GPU. Nur aktiv mit `--profile de`.
-  # GPU-Build aus dem r1di-Repo dauert ~10-15 min beim ersten Mal
-  # (PyTorch CUDA-Layer ~5 GB), danach gecached.
-  kokoro-de:
-    image: pagementor/kokoro-fastapi-german-gpu:latest
-    build:
-      context: https://github.com/r1di/kokoro-fastapi-german.git
-      dockerfile: docker/gpu/Dockerfile
     deploy:
       resources:
         reservations:

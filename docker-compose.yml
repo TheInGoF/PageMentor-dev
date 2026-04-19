@@ -38,18 +38,16 @@ services:
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-pm-dev-key}
       PM_DOCLING_URL: http://docling:5001
       PM_DOCLING_API_KEY: ${DOCLING_API_KEY:-pm-docling-internal}
-      PM_KOKORO_URL: http://kokoro:8880
-      # Optional: Deutscher Kokoro-Sidecar (df_eva, dm_bernd) — leer
-      # lassen wenn der `kokoro-de`-Service unten nicht aktiviert ist.
-      # Standardmäßig wird er nur mit `--profile de` mitgestartet, damit
-      # ein leerer Wert kein Connection-Error im Log produziert.
-      PM_KOKORO_DE_URL: ${PM_KOKORO_DE_URL:-}
+      # TTS: der Qwen-Sidecar läuft auf dem GPU-Host (z. B. 3090-PC)
+      # hinter dem pm-gpu-arbiter. URL wird üblicherweise im Settings-
+      # Modal eingetragen (persistiert in data/llm-config.json). Diese
+      # ENV dient nur als Default wenn Settings leer ist.
+      PM_QWEN_TTS_URL: ${PM_QWEN_TTS_URL:-}
     volumes:
       - /volume1/docker/pagementor/data:/data
     depends_on:
       meilisearch: { condition: service_healthy }
       docling: { condition: service_started }
-      kokoro: { condition: service_started }
 
   meilisearch:
     image: getmeili/meilisearch:v1.12
@@ -102,47 +100,14 @@ services:
     volumes:
       - /volume1/docker/pagementor/docling-cache:/opt/app-root/src/.cache
 
-  # Kokoro-FastAPI als TTS-Sidecar. Apache-2.0-lizenziertes Modell
-  # (~82 M Parameter), läuft auf CPU mit ~3-5x Realtime auf modernen
-  # x86-Cores; auf GPU (siehe docker-compose.gpu.yml) ~30-50x.
+  # Hinweis: TTS läuft NICHT in diesem Compose-Stack.
   #
-  # Image bringt das Modell + alle Standard-Voice-Packs (~500 MB) mit
-  # — wird einmal beim `docker compose pull` gezogen, danach offline-
-  # tauglich. KEIN Bind-Mount auf /app/api/src/voices: das würde die
-  # vom Image gelieferten Voices mit einem leeren Host-Verzeichnis
-  # überdecken, der Sidecar startet dann nicht (af_heart.pt fehlt).
+  # Qwen3-TTS-Flash braucht eine CUDA-GPU und koexistiert mit einem
+  # Ollama-Server auf derselben Karte. Beide liegen deshalb auf einem
+  # separaten GPU-Host (z. B. Windows+WSL2 oder Linux-Workstation mit
+  # 3090) hinter dem pm-gpu-arbiter. Siehe:
+  #   eigene_windows-sidecars-compose.yaml  bzw.
+  #   pm-gpu-arbiter/README.md
   #
-  # Wer eigene Community-Voices nachladen will: separaten Mount auf
-  # ein zweites Verzeichnis legen und in der Kokoro-Settings-API
-  # ergänzen — die Standard-Voices bleiben im Image-Layer wo sie
-  # hingehören.
-  #
-  # API: OpenAI-kompatibel unter /v1/audio/speech, Voice-Discovery
-  # unter /v1/audio/voices.
-  kokoro:
-    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
-    container_name: pm-kokoro
-    restart: unless-stopped
-
-  # Deutscher Kokoro-Sidecar — opt-in via Profile, weil:
-  #   1. Kein vorgebautes Image existiert (Build aus dem r1di-Repo
-  #      dauert ~5-10 min beim ersten Up).
-  #   2. Auf der NAS-CPU würde dieser Sidecar besonders zäh laufen,
-  #      idealerweise auf einem stärkeren Host (Mac, Windows-PC mit
-  #      GPU) als externer Sidecar betreiben (siehe
-  #      eigene_mac-sidecars-compose.yaml / eigene_windows-…).
-  #
-  # Aktivieren mit:
-  #   PM_KOKORO_DE_URL=http://kokoro-de:8880 docker compose --profile de up -d
-  #
-  # Voices die er liefert: df_eva (weiblich), dm_bernd (männlich).
-  # Basis: Tundragoon/Kokoro-German v1.1, Phonemizer espeak-ng.
-  # Apache 2.0.
-  kokoro-de:
-    image: pagementor/kokoro-fastapi-german:latest
-    build:
-      context: https://github.com/r1di/kokoro-fastapi-german.git
-      dockerfile: docker/cpu/Dockerfile
-    container_name: pm-kokoro-de
-    restart: unless-stopped
-    profiles: ["de"]
+  # PageMentor spricht den Arbiter per URL an, konfigurierbar im
+  # Settings-Modal (oder via PM_QWEN_TTS_URL oben).

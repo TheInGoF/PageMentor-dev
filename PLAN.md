@@ -48,17 +48,17 @@ Baumstrukturen, Tags statt Zweige. Lokal, Portainer-Stack.
 - **Text-Extraktion**: Docling-Serve (CPU-Image, Layout-Modell mit Section-
   Header-Erkennung). Manuell gestartet pro Upload, 15–30 s/Seite auf CPU.
 - **TTS**:
-  - **Default: Kokoro** als Sidecar-Container (Apache 2.0, lokal,
-    OpenAI-kompatible API via remsky/Kokoro-FastAPI). Hörbuch-tauglich
-    auch für lange wissenschaftliche Texte, für Hochschulen und Firmen
-    empfehlbar. CPU-Default (~3-5x Realtime), GPU-Override via
-    `docker-compose.gpu.yml` (~30-50x auf 3090).
-  - **Deutsche Voices** über zweiten optionalen Sidecar `kokoro-de`
-    (r1di/kokoro-fastapi-german, Tundragoon/Kokoro-German v1.1):
-    `df_eva` (weiblich) und `dm_bernd` (männlich). Aktivieren mit
-    `--profile de` oder als externer Sidecar auf einem stärkeren Host.
-    Backend mergt die Voice-Listen beider Sidecars und routet
-    Synthese-Calls anhand der Voice-ID.
+  - **Default: Qwen3-TTS-Flash via vLLM** — Apache-2.0-Modell von
+    Alibaba, multilingual (jede Built-in-Voice spricht Deutsch nativ).
+    Läuft im offiziellen `vllm/vllm-openai`-Image auf dem GPU-Host,
+    teilt sich die GPU mit Ollama über den `pm-gpu-arbiter`
+    (FastAPI-Reverse-Proxy der pro Request zwischen LLM- und TTS-Mode
+    umschaltet, entlädt Ollama-Modelle via `keep_alive:0` und stoppt
+    den TTS-Container wieder).
+  - **Deutsche Voices**: 4 kuratierte Slots (Anna/Emma/Klaus/Max), im
+    Backend auf Qwen-Built-in-Speaker (Cherry/Jada/Ethan/Nofish)
+    gemappt. Jede Voice hat einen festen Seed → gleiche Stimme klingt
+    run-to-run identisch.
   - **Fallback: Edge** (msedge-tts, Microsoft Neural Voices) als
     Cloud-Option ohne Setup. Bleibt im Voice-Picker auswählbar.
   - **Audio-Preprocessor**: Vor jedem Kapitel läuft der LLM einmal
@@ -79,7 +79,9 @@ Baumstrukturen, Tags statt Zweige. Lokal, Portainer-Stack.
   Re-Embed bei Modell-Wechsel via Settings-Modal-Button oder
   `POST /api/rag/reembed`.
 - **Deploy**: Docker Compose → Portainer-Stack (app + meilisearch +
-  docling + kokoro)
+  docling auf dem NAS). Separater GPU-Host (Windows+WSL2 oder Linux)
+  fährt Ollama + vllm-qwen-tts + pm-gpu-arbiter via
+  `eigene_windows-sidecars-compose.yaml`.
 
 **Theme**: Night-Default — `#000` Backgrounds, `#111` Elevated, **rote Akzente** (`#ef4444`)
 
@@ -194,8 +196,8 @@ pdf-parse wurde rausgeflogen.
 ### 4.1 TTS
 
 - [x] Engine-Abstraktion (Dispatcher in `tts/synth.ts`, Engine-Interface in
-  `tts/engines/base.ts`) — bereit für spätere Engines (Kokoro / XTTS), falls
-  Edge mal dauerhaft bricht
+  `tts/engines/base.ts`) — Qwen (Default) + Edge (Cloud-Fallback);
+  weitere Engines (vLLM-basierte TTS-Modelle, XTTS) einfach ergänzbar.
 - [x] **Edge-TTS** (msedge-tts ^2.0.5, minimal-SSML-Template seit v1.10.006
   damit Azure keine silent-rejects mehr macht)
   - [x] Stimmen-Auswahl pro Sprache, 3-Sekunden-Preview
@@ -207,10 +209,9 @@ pdf-parse wurde rausgeflogen.
 - [x] Settings: Stimme, Geschwindigkeit (persistent via localStorage)
 - [x] Piper endgültig entfernt (v1.11.001) — DE-Qualität nicht
   Studienheft-tauglich. **Kein Re-Add geplant**.
-- [x] **Kokoro-Sidecar als Default-TTS** — lokales Apache-2.0-Modell
-  via remsky/Kokoro-FastAPI. CPU-Default, GPU-Override über zweites
-  Compose-File (analog Docling). Edge bleibt als Zweit-Provider im
-  Picker.
+- [x] **Qwen3-TTS-Flash via vLLM als Default-TTS** — self-hosted
+  auf GPU-Host hinter pm-gpu-arbiter, 4 kuratierte DE-Voices mit festen
+  Seeds. Edge bleibt als Zweit-Provider im Picker für Setups ohne GPU.
 - [x] **LLM-Audio-Preprocessor** — Ollama bereinigt Kapiteltext für
   TTS (Abkürzungen, Formeln, Zitate, Bullet-Listen). Cached in
   `chapters.audio_text`. Bei manuellen Kapitel-Edits oder Merge wird

@@ -41,8 +41,13 @@ External services (called over network at runtime, not linked)
 - FFmpeg                (LGPL 2.1+) https://ffmpeg.org
   (invoked as a subprocess; no linking, AGPLv3-compatible usage)
 - Docling-Serve         (MIT)       https://github.com/docling-project/docling-serve
-- Kokoro-FastAPI        (Apache 2.0) https://github.com/remsky/Kokoro-FastAPI
-  serves the Kokoro-82M TTS model (Apache 2.0, hexgrad/Kokoro-82M).
+- vLLM                  (Apache 2.0) https://github.com/vllm-project/vllm
+  serves Qwen3-TTS-Flash via vllm/vllm-openai:latest on the GPU host.
+- Qwen3-TTS-Flash       (Apache 2.0) https://huggingface.co/Qwen/Qwen3-TTS-Flash
+  multilingual TTS model by Alibaba; native German support via the
+  built-in multilingual speaker presets.
+- pm-gpu-arbiter        (this repo) — thin FastAPI reverse-proxy that
+  serializes GPU access between Ollama and the TTS sidecar.
 
 ================================================================================
 Data / rule lists
@@ -58,13 +63,6 @@ Data / rule lists
   Per CC-BY 4.0: copyright 2020 repodiac, licensed under Creative
   Commons Attribution 4.0 International. See
   https://creativecommons.org/licenses/by/4.0/ for terms.
-- Kokoro-FastAPI-German (Apache 2.0) https://github.com/r1di/kokoro-fastapi-german
-  optional second TTS sidecar exposing the German community voices
-  df_eva + dm_bernd. Built on Tundragoon/Kokoro-German v1.1
-  (Apache 2.0, https://huggingface.co/Tundragoon/Kokoro-German),
-  fine-tuned on the HUI-Audio-Corpus-German dataset, with espeak-ng
-  as the phonemizer backend.
-
 Embedding models (loaded into Ollama by the user, called over network
 at runtime):
 - jina-embeddings-v2-base-de  (Apache 2.0)
@@ -91,9 +89,9 @@ themselves are proprietary and remain the property of Microsoft / Azure.
   use of the kind a browser user would generate with Microsoft Edge.
 - Large-scale automated use may violate Microsoft's terms of service.
 
-If you need guaranteed-compliant TTS, use the bundled Kokoro sidecar
-instead (Apache 2.0, runs locally — see docker-compose.yml). Edge stays
-available as a no-setup fallback.
+If you need guaranteed-compliant TTS, use the Qwen3-TTS sidecar instead
+(Apache 2.0, runs on your own GPU host — see pm-gpu-arbiter/). Edge
+stays available as a no-setup fallback for environments without a GPU.
 
 ================================================================================
 Apache License 2.0 components

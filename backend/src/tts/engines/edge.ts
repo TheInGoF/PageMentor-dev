@@ -8,7 +8,7 @@
  *
  * Wenn Azure throttelt oder ein stale Client stumm 0 Bytes liefert,
  * meldet der Dispatcher das nach oben — der User kann dann auf eine
- * Kokoro-Stimme (lokaler Sidecar, ohne Quota) umschalten.
+ * Qwen-Stimme (lokaler Sidecar, ohne Quota) umschalten.
  */
 
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";

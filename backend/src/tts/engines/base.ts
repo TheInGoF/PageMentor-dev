@@ -1,16 +1,16 @@
 /**
  * Gemeinsames Interface für alle TTS-Engines.
  *
- * Jede Engine meldet zur Laufzeit, ob sie verfügbar ist. Kokoro pingt
- * den Sidecar, Edge antwortet immer `true` und fällt erst reaktiv um
+ * Jede Engine meldet zur Laufzeit, ob sie verfügbar ist. Qwen pingt
+ * den Arbiter, Edge antwortet immer `true` und fällt erst reaktiv um
  * (Microsofts Anti-Abuse-Gate kippt 0-Bytes statt eines klaren 4xx).
  * `listVoices()` darf bei Async-Engines synchronen Cache liefern, der
- * im Hintergrund aktualisiert wird (siehe kokoro.ts).
+ * im Hintergrund aktualisiert wird (siehe qwen.ts).
  */
 
 import type { Segment } from "../segment";
 
-export type EngineId = "edge" | "kokoro";
+export type EngineId = "edge" | "qwen";
 
 export interface Voice {
   id: string;
@@ -46,7 +46,7 @@ export interface PreviewParams {
 
 export interface TtsEngine {
   id: EngineId;
-  /** Engines mit Sidecar (Kokoro) melden hier `false`, wenn der
+  /** Engines mit Sidecar (Qwen) melden hier `false`, wenn der
    *  Sidecar beim letzten Discovery-Refresh nicht antwortete.
    *  Netz-basierte Engines (Edge) melden immer `true` und fallen erst
    *  reaktiv um, wenn der Server stumm Empty-Audio liefert. */

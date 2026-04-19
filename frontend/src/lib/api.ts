@@ -54,7 +54,7 @@ export interface Chapter {
   kind?: ChapterKind;
 }
 
-export type TtsEngine = "edge" | "kokoro";
+export type TtsEngine = "edge" | "qwen";
 
 export interface Voice {
   id: string;
@@ -136,7 +136,7 @@ export interface Card {
   hint: string | null;
   difficulty: "easy" | "medium" | "hard";
   source_page: number | null;
-  source: "extracted" | "manual" | "ai_generated";
+  source: "extracted" | "manual" | "ai_generated" | "ai_filled";
   created_at: string;
   chapter_title?: string;
   chapter_number?: number;
@@ -390,7 +390,14 @@ export type ProgressPhase =
   | "audiobook.book.building"
   | "audiobook.done"
   | "audiobook.failed"
-  | "audiobook.canceled";
+  | "audiobook.canceled"
+  | "cards.start"
+  | "cards.extract.done"
+  | "cards.fill.start"
+  | "cards.fill.progress"
+  | "cards.fill.chapter"
+  | "cards.done"
+  | "cards.failed";
 
 export interface ProgressEvent {
   phase: ProgressPhase;
@@ -514,6 +521,11 @@ export const api = {
         `/api/cards/extract/${docId}`,
         { method: "POST", body: JSON.stringify({ replace }) }
       ),
+    generate: (docId: string, body: { extract: boolean; fill: boolean }) =>
+      request<{ status: string }>(`/api/cards/generate/${docId}`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     create: (body: {
       document_id: string;
       chapter_id?: string | null;
@@ -601,7 +613,7 @@ export const api = {
         method: "PUT",
         body: JSON.stringify(body),
       }),
-    removeKey: (provider: "anthropic" | "openai" | "google") =>
+    removeKey: (provider: "anthropic" | "openai" | "google" | "qwenTts") =>
       request<{ config: unknown }>(`/api/llm/config/${provider}`, { method: "DELETE" }),
   },
   summary: {
@@ -770,12 +782,6 @@ export const api = {
         { method: "DELETE" }
       ),
     introUrl: (docId: string) => `/api/audio/intro/${docId}/file`,
-  },
-  feed: {
-    urls: (docId: string) =>
-      request<{ title: string; feedUrl: string; m4bUrl: string }>(
-        `/api/feed/urls/${docId}`
-      ),
   },
   rag: {
     answerStream: async (

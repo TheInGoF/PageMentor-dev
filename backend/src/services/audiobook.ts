@@ -266,7 +266,7 @@ export async function generateAudiobook(params: {
           const reason =
             `Edge TTS (Microsoft) antwortet mit leerem Audio — Azure-Quota erreicht. ` +
             `Bereits fertige Kapitel bleiben erhalten. ` +
-            `Wechsle auf eine Kokoro-Stimme (lokal, ohne Quota) und generiere die fehlenden Kapitel neu.`;
+            `Wechsle auf eine Qwen-Stimme (lokal, ohne Quota) und generiere die fehlenden Kapitel neu.`;
           emit({
             phase: "audiobook.failed",
             docId: doc.id,

@@ -1,9 +1,12 @@
 import { Hono } from "hono";
 import { randomUUID } from "crypto";
 import { db } from "../db";
-import { extractCards } from "../services/cards";
+import { extractCards, extractCardsFromDoc } from "../services/cards";
 import { initialState, updateProgress, type Quality } from "../services/sm2";
 import { generate as ollamaGenerate, isAvailable as ollamaAvailable } from "../services/llm";
+import { resolveEmbedder } from "../services/embeddings";
+import { loadDocChunks, fillAnswerFromChunks } from "../services/cardFill";
+import { emit as emitEvent } from "../services/events";
 import { tt } from "../lib/i18n";
 
 export const cardRoutes = new Hono();
@@ -82,6 +85,217 @@ cardRoutes.post("/extract/:docId", async (c) => {
 
   return c.json({ status: "ok", extracted: total, chapters: chapters.length });
 });
+
+// Fire-and-forget hybrid pipeline:
+//   Stage 1 (deterministisch): Aufgaben aus Markern in content-Kapiteln
+//     ziehen + Lösungen aus content UND solutions-Kapiteln matchen.
+//   Stage 2 (RAG+LLM): für alle Aufgaben ohne Antwort per Embedding-
+//     Retrieval die wahrscheinlichsten Chunks holen und das LLM
+//     wörtlich zitieren lassen.
+// Progress geht über den gemeinsamen Event-Bus (`cards.*`-Phasen) und
+// wird von der Frontend-UI via /api/audio/stream/:docId abonniert.
+const cardRunsActive = new Set<string>();
+
+cardRoutes.post("/generate/:docId", async (c) => {
+  const docId = c.req.param("docId");
+  const body = (await c.req
+    .json<{ extract?: boolean; fill?: boolean }>()
+    .catch(() => ({}))) as { extract?: boolean; fill?: boolean };
+  const doExtract = body.extract !== false; // default on
+  const doFill = body.fill !== false; // default on
+
+  const doc = db()
+    .prepare("SELECT id FROM documents WHERE id = ?")
+    .get(docId);
+  if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+
+  if (cardRunsActive.has(docId)) {
+    return c.json({ status: "busy" }, 409);
+  }
+  if (!doExtract && !doFill) {
+    return c.json({ error: tt(c, "err.missingFields") }, 400);
+  }
+
+  cardRunsActive.add(docId);
+  // Fire-and-forget — UI sieht Progress über SSE.
+  void runCardGenerate(docId, doExtract, doFill).finally(() => {
+    cardRunsActive.delete(docId);
+  });
+
+  return c.json({ status: "started" }, 202);
+});
+
+async function runCardGenerate(
+  docId: string,
+  doExtract: boolean,
+  doFill: boolean
+): Promise<void> {
+  const d = db();
+  const doc = d
+    .prepare("SELECT id, language FROM documents WHERE id = ?")
+    .get(docId) as { id: string; language: string } | undefined;
+  if (!doc) {
+    emitEvent({ phase: "cards.failed", docId, message: "document not found" });
+    return;
+  }
+
+  try {
+    emitEvent({ phase: "cards.start", docId });
+
+    let extracted = 0;
+    let extractedGaps = 0;
+    if (doExtract) {
+      const chapters = d
+        .prepare(
+          `SELECT id, number, title, text, start_page, COALESCE(kind, 'content') as kind
+           FROM chapters WHERE document_id = ? ORDER BY sort_order`
+        )
+        .all(docId) as Array<{
+        id: string;
+        number: number;
+        title: string;
+        text: string;
+        start_page: number;
+        kind: string;
+      }>;
+
+      d.prepare(
+        "DELETE FROM cards WHERE document_id = ? AND source IN ('extracted', 'ai_filled')"
+      ).run(docId);
+
+      const { cards, unmatched } = extractCardsFromDoc(chapters);
+      const insert = d.prepare(
+        "INSERT INTO cards (id, document_id, chapter_id, question, answer, difficulty, source_page, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'extracted')"
+      );
+      const tx = d.transaction(() => {
+        for (const card of cards) {
+          insert.run(
+            randomUUID(),
+            docId,
+            card.chapterId,
+            card.question,
+            card.answer,
+            "medium",
+            card.sourcePage
+          );
+        }
+      });
+      tx();
+      extracted = cards.length;
+      extractedGaps = unmatched.length;
+      emitEvent({
+        phase: "cards.extract.done",
+        docId,
+        total: extracted,
+        current: extracted - extractedGaps,
+      });
+    }
+
+    let filled = 0;
+    let fillTotal = 0;
+    if (doFill) {
+      const empties = d
+        .prepare(
+          `SELECT c.id, c.question, c.chapter_id, ch.number as chapter_number, ch.sort_order
+           FROM cards c
+           LEFT JOIN chapters ch ON ch.id = c.chapter_id
+           WHERE c.document_id = ?
+             AND (c.answer IS NULL OR c.answer = '')
+             AND c.question != ''
+           ORDER BY ch.sort_order ASC, ch.number ASC, c.created_at ASC`
+        )
+        .all(docId) as Array<{
+        id: string;
+        question: string;
+        chapter_id: string | null;
+        chapter_number: number | null;
+      }>;
+      fillTotal = empties.length;
+      emitEvent({ phase: "cards.fill.start", docId, total: fillTotal, current: 0 });
+
+      if (fillTotal > 0) {
+        const embedder = await resolveEmbedder();
+        const llmOk = await ollamaAvailable();
+        if (!embedder || !llmOk) {
+          emitEvent({
+            phase: "cards.fill.progress",
+            docId,
+            total: fillTotal,
+            current: 0,
+            message: "no-embedder",
+          });
+        } else {
+          const chunks = loadDocChunks(docId, embedder.model);
+          if (chunks.length === 0) {
+            emitEvent({
+              phase: "cards.fill.progress",
+              docId,
+              total: fillTotal,
+              current: 0,
+              message: "no-chunks",
+            });
+          } else {
+            const language: "de" | "en" = doc.language === "de" ? "de" : "en";
+            const update = d.prepare(
+              "UPDATE cards SET answer = ?, source = 'ai_filled', source_page = COALESCE(?, source_page) WHERE id = ?"
+            );
+            let lastChapterNum: number | null = null;
+            for (let i = 0; i < empties.length; i++) {
+              const card = empties[i];
+              if (card.chapter_number !== lastChapterNum) {
+                lastChapterNum = card.chapter_number;
+                emitEvent({
+                  phase: "cards.fill.chapter",
+                  docId,
+                  chapterId: card.chapter_id ?? undefined,
+                  chapterNumber: card.chapter_number ?? undefined,
+                  current: i,
+                  total: fillTotal,
+                });
+              }
+              try {
+                const res = await fillAnswerFromChunks({
+                  chunks,
+                  question: card.question,
+                  language,
+                  embedder,
+                });
+                if (res) {
+                  update.run(res.answer, res.page ?? null, card.id);
+                  filled++;
+                }
+              } catch {
+                // Einzelne Frage ausfallen lassen, Gesamtlauf weiter.
+              }
+              emitEvent({
+                phase: "cards.fill.progress",
+                docId,
+                current: i + 1,
+                total: fillTotal,
+                chapterNumber: card.chapter_number ?? undefined,
+                chapterId: card.chapter_id ?? undefined,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    emitEvent({
+      phase: "cards.done",
+      docId,
+      total: extracted,
+      current: filled,
+      message: JSON.stringify({ extracted, extractedGaps, fillTotal, filled }),
+    });
+  } catch (err) {
+    emitEvent({
+      phase: "cards.failed",
+      docId,
+      message: err instanceof Error ? err.message : "unknown",
+    });
+  }
+}
 
 // Create a manual card.
 cardRoutes.post("/", async (c) => {

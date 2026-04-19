@@ -166,7 +166,7 @@ Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Wo
 5. ZAHLEN, EINHEITEN, DATUM
 ================================================================
 - Ziffern unter 13 ausschreiben, größere als Ziffern lassen — TTS liest sie ohnehin korrekt.
-- Dezimalzahlen mit Komma: "0,5" lassen — Kokoro liest "null Komma fünf".
+- Dezimalzahlen mit Komma: "0,5" lassen — TTS liest "null Komma fünf".
 - Brüche: "1/2" → "ein halb", "3/4" → "drei viertel"
 - Datum: "12.03.2024" → "zwölfter März zweitausendvierundzwanzig"
 - Jahreszahlen: "1998" lassen — TTS liest korrekt; nur bei Mehrdeutigkeit (z. B. "im Jahre 1525") ausschreiben.

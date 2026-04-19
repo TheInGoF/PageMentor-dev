@@ -24,6 +24,11 @@ export interface LlmConfig {
   openaiModel?: string;
   googleApiKey?: string;
   googleModel?: string;
+  /** URL des pm-gpu-arbiter, hinter dem Qwen3-TTS sitzt. Default aus
+   *  der ENV `PM_QWEN_TTS_URL`, im NAS-Setup zeigt das auf den
+   *  3090-PC (z. B. `http://192.168.1.50:8790`). */
+  qwenTtsUrl?: string;
+  qwenTtsApiKey?: string;
 }
 
 let cached: LlmConfig | null = null;
@@ -75,6 +80,7 @@ export function publicConfig() {
     anthropicApiKey,
     openaiApiKey,
     googleApiKey,
+    qwenTtsApiKey,
     ...rest
   } = cfg;
   return {
@@ -82,5 +88,6 @@ export function publicConfig() {
     anthropicApiKeyPresent: !!anthropicApiKey,
     openaiApiKeyPresent: !!openaiApiKey,
     googleApiKeyPresent: !!googleApiKey,
+    qwenTtsApiKeyPresent: !!qwenTtsApiKey,
   };
 }

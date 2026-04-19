@@ -266,8 +266,8 @@ const en: Record<string, string> = {
   // Audiobook
   "audiobook.title": "Generate audiobook",
   "audiobook.subtitle":
-    "Local Kokoro TTS (Apache 2.0) · Edge fallback · LLM-cleaned text · EBU R128 loudness · MP3 per chapter + complete M4B",
-  "audiobook.engine.kokoro": "Local",
+    "Local Qwen3-TTS-Flash (Apache 2.0) · Edge fallback · LLM-cleaned text · EBU R128 loudness · MP3 per chapter + complete M4B",
+  "audiobook.engine.qwen": "Qwen",
   "audiobook.engine.edge": "Edge",
   "audiobook.voice": "Voice",
   "audiobook.voice.more": "More voices ({n})",
@@ -292,7 +292,6 @@ const en: Record<string, string> = {
   "audiobook.clearConfirm": "Delete all generated audiobook files?",
   "audiobook.cleared": "Audiobook deleted",
   "audiobook.download.m4b": "Download M4B",
-  "audiobook.apple": "📱 Send to Apple",
   "audiobook.empty": "No audiobook yet. Pick a voice and start generation.",
   "audiobook.queued": "Generation queued …",
   "audiobook.chaptersEmpty": "No chapters detected yet — run Docling first.",
@@ -398,6 +397,8 @@ const en: Record<string, string> = {
   "cards.extractedToast": "{n} cards extracted",
   "cards.ai": "✨ AI cards",
   "cards.aiGenerated": "{n} cards generated with {model}",
+  "cards.generate": "✨ Generate cards",
+  "cards.generateTitle": "Extract from markers, then fill gaps with AI",
   "cards.exportCsv": "↓ CSV",
   "cards.exportTitle": "CSV export (Anki-compatible)",
   "cards.importCsv": "↑ CSV",
@@ -414,6 +415,7 @@ const en: Record<string, string> = {
   "cards.empty.filter": "No cards in this chapter.",
   "cards.source.extracted": "extracted",
   "cards.source.ai": "AI",
+  "cards.source.filled": "AI-filled",
   "cards.source.manual": "manual",
   "cards.reviewed": "{n}× reviewed",
   "cards.hintChip": "💡 Hint",
@@ -443,6 +445,34 @@ const en: Record<string, string> = {
   "cards.ai.style.exam": "Exam level",
   "cards.ai.submit": "Generate",
   "cards.ai.submitting": "Generating …",
+
+  // Unified generate (extract + fill)
+  "cards.gen.title": "Generate flashcards",
+  "cards.gen.description":
+    "Extracts exercises and solutions from chapter markers. Gaps are filled by the LLM using retrieval over the document — answers are quoted verbatim, never invented.",
+  "cards.gen.stepExtract": "Extract from chapter markers",
+  "cards.gen.stepExtractHint":
+    "Regex finds “Aufgabe 3.1 / Lösung 3.1” style markers across all chapters, including the appendix.",
+  "cards.gen.stepFill": "Fill empty answers with AI",
+  "cards.gen.stepFillHint":
+    "For every exercise without a matching solution the LLM retrieves the most relevant passages from the whole document and cites the answer verbatim.",
+  "cards.gen.submit": "Generate",
+  "cards.gen.cancel": "Close",
+  "cards.gen.keepRunning": "Continue in background",
+  "cards.gen.phase.start": "Starting …",
+  "cards.gen.phase.extracting": "Extracting from markers …",
+  "cards.gen.phase.extractDone":
+    "{current} of {total} extracted with answer — {gaps} open",
+  "cards.gen.phase.filling": "Filling answers: {current}/{total}",
+  "cards.gen.phase.fillChapter": "Chapter {num}",
+  "cards.gen.phase.noEmbedder":
+    "No Ollama embedder reachable — skipped filling. Configure in Settings.",
+  "cards.gen.phase.noChunks":
+    "Document has no embedded chunks yet — re-run extraction after Ollama is online.",
+  "cards.gen.phase.done": "Done",
+  "cards.gen.phase.failed": "Failed: {msg}",
+  "cards.gen.doneToast":
+    "{extracted} extracted · {filled}/{fillTotal} answers found by AI",
 
   // Review
   "review.title": "Review",
@@ -525,25 +555,6 @@ const en: Record<string, string> = {
   "search.group.documents": "Documents ({n})",
   "search.group.chapters": "Chapters ({n})",
 
-  // Podcast share
-  "podcast.title": "Send to Apple",
-  "podcast.books": "Apple Books (audiobook)",
-  "podcast.books.description":
-    "Download the M4B file with chapter markers, then AirDrop or iCloud Drive it to your iPhone. Books.app opens it as an audiobook.",
-  "podcast.books.download": "↓ Download M4B",
-  "podcast.books.copyUrl": "Copy URL",
-  "podcast.books.urlCopied": "M4B URL copied",
-  "podcast.pc.title": "Apple Podcasts / Overcast",
-  "podcast.pc.description":
-    "Subscribe to this private feed — each chapter becomes an episode with chapter skips and auto-sync. On Mac: \u201CFile \u2192 Subscribe to Show by URL\u201D. In Overcast/Pocket Casts: \u201CAdd by URL\u201D.",
-  "podcast.pc.copy": "Copy feed URL",
-  "podcast.pc.urlCopied": "Feed URL copied",
-  "podcast.pc.open": "Open",
-  "podcast.pc.openTitle": "Open Apple Podcasts",
-  "podcast.pc.note":
-    "The token is derived from PM_PASSWORD — changing it invalidates the feed. The server must be reachable from your iPhone (local network, Tailscale, Cloudflare Tunnel, etc.).",
-  "podcast.clipboardFail": "Clipboard unavailable",
-
   // Settings
   "settings.title": "Settings",
   "settings.saved": "Settings saved",
@@ -599,6 +610,13 @@ const en: Record<string, string> = {
   "settings.llm.candidates": "Configured chain: {n}",
   "settings.llm.save": "Save LLM config",
   "settings.llm.saved": "LLM config saved",
+  "settings.llm.removeKey": "Remove",
+  "settings.tts.title": "Local TTS (Qwen3-TTS via vLLM)",
+  "settings.tts.subtitle":
+    "URL of the pm-gpu-arbiter on the GPU host. Leave empty to fall back to the PM_QWEN_TTS_URL environment variable.",
+  "settings.tts.qwenTtsUrl": "Arbiter URL",
+  "settings.tts.qwenTtsApiKey": "Arbiter API key (optional)",
+  "settings.tts.qwenTtsKeyPlaceholder": "Bearer token",
   "settings.section.status": "Status",
   "settings.status.checking": "checking …",
   "settings.status.online": "online",
@@ -936,8 +954,8 @@ const de: Record<string, string> = {
   // Audiobook
   "audiobook.title": "Hörbuch erzeugen",
   "audiobook.subtitle":
-    "Lokales Kokoro TTS (Apache 2.0) · Edge-Fallback · LLM-bereinigter Text · EBU R128 Loudness · MP3 pro Kapitel + M4B komplett",
-  "audiobook.engine.kokoro": "Lokal",
+    "Lokales Qwen3-TTS-Flash (Apache 2.0) · Edge-Fallback · LLM-bereinigter Text · EBU R128 Loudness · MP3 pro Kapitel + M4B komplett",
+  "audiobook.engine.qwen": "Qwen",
   "audiobook.engine.edge": "Edge",
   "audiobook.voice": "Stimme",
   "audiobook.voice.more": "Weitere Stimmen ({n})",
@@ -962,7 +980,6 @@ const de: Record<string, string> = {
   "audiobook.clearConfirm": "Alle generierten Hörbuch-Dateien löschen?",
   "audiobook.cleared": "Hörbuch gelöscht",
   "audiobook.download.m4b": "M4B herunterladen",
-  "audiobook.apple": "📱 An Apple senden",
   "audiobook.empty": "Noch kein Hörbuch erzeugt. Wähle eine Stimme und starte die Generierung.",
   "audiobook.queued": "Generierung gestartet …",
   "audiobook.chaptersEmpty": "Noch keine Kapitel erkannt — lass zuerst Docling laufen.",
@@ -1068,6 +1085,8 @@ const de: Record<string, string> = {
   "cards.extractedToast": "{n} Karten extrahiert",
   "cards.ai": "✨ KI-Karten",
   "cards.aiGenerated": "{n} Karten mit {model} generiert",
+  "cards.generate": "✨ Karten generieren",
+  "cards.generateTitle": "Aus Markern ziehen, dann offene Antworten per KI belegen",
   "cards.exportCsv": "↓ CSV",
   "cards.exportTitle": "CSV-Export (Anki-kompatibel)",
   "cards.importCsv": "↑ CSV",
@@ -1085,6 +1104,7 @@ const de: Record<string, string> = {
   "cards.empty.filter": "Keine Karten in diesem Kapitel.",
   "cards.source.extracted": "extrahiert",
   "cards.source.ai": "KI",
+  "cards.source.filled": "KI-belegt",
   "cards.source.manual": "manuell",
   "cards.reviewed": "{n}× gelernt",
   "cards.hintChip": "💡 Hinweis",
@@ -1114,6 +1134,34 @@ const de: Record<string, string> = {
   "cards.ai.style.exam": "Klausur",
   "cards.ai.submit": "Generieren",
   "cards.ai.submitting": "Generiere …",
+
+  // Unified generate (extract + fill)
+  "cards.gen.title": "Karten generieren",
+  "cards.gen.description":
+    "Zieht Aufgaben und Lösungen aus den Kapitel-Markern. Leere Antworten werden per KI aus dem gesamten Dokument belegt — zitiert wörtlich, nie erfunden.",
+  "cards.gen.stepExtract": "Aus Kapitel-Markern extrahieren",
+  "cards.gen.stepExtractHint":
+    "Regex findet „Aufgabe 3.1 / Lösung 3.1“-Marker über alle Kapitel inklusive Anhang.",
+  "cards.gen.stepFill": "Leere Antworten per KI belegen",
+  "cards.gen.stepFillHint":
+    "Für jede Aufgabe ohne Lösung holt das LLM die relevantesten Passagen aus dem ganzen Dokument und zitiert die Antwort wörtlich.",
+  "cards.gen.submit": "Los",
+  "cards.gen.cancel": "Schließen",
+  "cards.gen.keepRunning": "Im Hintergrund laufen lassen",
+  "cards.gen.phase.start": "Starte …",
+  "cards.gen.phase.extracting": "Extrahiere aus Markern …",
+  "cards.gen.phase.extractDone":
+    "{current} von {total} mit Antwort extrahiert — {gaps} offen",
+  "cards.gen.phase.filling": "Belege Antworten: {current}/{total}",
+  "cards.gen.phase.fillChapter": "Kapitel {num}",
+  "cards.gen.phase.noEmbedder":
+    "Kein Ollama-Embedder erreichbar — Belegen übersprungen. Konfigurier die LLM-Kette in den Einstellungen.",
+  "cards.gen.phase.noChunks":
+    "Dokument hat noch keine Embeddings — bitte Extraktion erneut laufen lassen, sobald Ollama online ist.",
+  "cards.gen.phase.done": "Fertig",
+  "cards.gen.phase.failed": "Fehlgeschlagen: {msg}",
+  "cards.gen.doneToast":
+    "{extracted} extrahiert · {filled}/{fillTotal} Antworten durch KI belegt",
 
   // Review
   "review.title": "Lerneinheit",
@@ -1196,25 +1244,6 @@ const de: Record<string, string> = {
   "search.group.documents": "Dokumente ({n})",
   "search.group.chapters": "Kapitel ({n})",
 
-  // Podcast share
-  "podcast.title": "An Apple senden",
-  "podcast.books": "Apple Bücher (Hörbuch)",
-  "podcast.books.description":
-    "Lade die M4B-Datei mit Kapitelmarken, schicke sie per AirDrop oder iCloud Drive aufs iPhone. Bücher.app öffnet sie als Hörbuch.",
-  "podcast.books.download": "↓ M4B herunterladen",
-  "podcast.books.copyUrl": "URL kopieren",
-  "podcast.books.urlCopied": "M4B-URL kopiert",
-  "podcast.pc.title": "Apple Podcasts / Overcast",
-  "podcast.pc.description":
-    "Abonniere diesen privaten Feed — jedes Kapitel wird eine Episode, mit Kapitelsprung und Auto-Sync. Auf dem Mac: \u201EDatei \u2192 Sendung über URL abonnieren\u201C. In Overcast/Pocket Casts: \u201EAdd by URL\u201C.",
-  "podcast.pc.copy": "Feed-URL kopieren",
-  "podcast.pc.urlCopied": "Feed-URL kopiert",
-  "podcast.pc.open": "Öffnen",
-  "podcast.pc.openTitle": "Apple Podcasts öffnen",
-  "podcast.pc.note":
-    "Der Token ist aus PM_PASSWORD abgeleitet — beim Passwort-Wechsel wird der Feed ungültig. Der Server muss vom iPhone erreichbar sein (lokales Netz, Tailscale, Cloudflare Tunnel o. ä.).",
-  "podcast.clipboardFail": "Clipboard nicht verfügbar",
-
   // Settings
   "settings.title": "Einstellungen",
   "settings.saved": "Einstellungen gespeichert",
@@ -1271,6 +1300,13 @@ const de: Record<string, string> = {
   "settings.llm.candidates": "Kette: {n} Endpoints konfiguriert",
   "settings.llm.save": "LLM-Config speichern",
   "settings.llm.saved": "LLM-Config gespeichert",
+  "settings.llm.removeKey": "Entfernen",
+  "settings.tts.title": "Lokale TTS (Qwen3-TTS via vLLM)",
+  "settings.tts.subtitle":
+    "URL des pm-gpu-arbiter auf dem GPU-Host. Leer lassen, um auf die ENV-Variable PM_QWEN_TTS_URL zurückzufallen.",
+  "settings.tts.qwenTtsUrl": "Arbiter-URL",
+  "settings.tts.qwenTtsApiKey": "Arbiter-API-Key (optional)",
+  "settings.tts.qwenTtsKeyPlaceholder": "Bearer-Token",
   "settings.section.status": "Status",
   "settings.status.checking": "prüfe …",
   "settings.status.online": "online",

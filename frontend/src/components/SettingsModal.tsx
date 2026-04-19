@@ -18,6 +18,8 @@ interface LlmConfig {
   openaiApiKeyPresent?: boolean;
   googleModel?: string;
   googleApiKeyPresent?: boolean;
+  qwenTtsUrl?: string;
+  qwenTtsApiKeyPresent?: boolean;
 }
 
 interface Props {
@@ -44,6 +46,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [anthropicKeyInput, setAnthropicKeyInput] = useState("");
   const [openaiKeyInput, setOpenaiKeyInput] = useState("");
   const [googleKeyInput, setGoogleKeyInput] = useState("");
+  const [qwenTtsKeyInput, setQwenTtsKeyInput] = useState("");
   const [llmBusy, setLlmBusy] = useState(false);
   const [ragStatus, setRagStatus] = useState<{
     total: number;
@@ -70,6 +73,7 @@ export function SettingsModal({ open, onClose }: Props) {
     setAnthropicKeyInput("");
     setOpenaiKeyInput("");
     setGoogleKeyInput("");
+    setQwenTtsKeyInput("");
   }, [open]);
 
   async function saveLlmConfig() {
@@ -83,16 +87,19 @@ export function SettingsModal({ open, onClose }: Props) {
         anthropicModel: llmConfig.anthropicModel ?? "",
         openaiModel: llmConfig.openaiModel ?? "",
         googleModel: llmConfig.googleModel ?? "",
+        qwenTtsUrl: llmConfig.qwenTtsUrl ?? "",
       };
       if (anthropicKeyInput.trim()) patch.anthropicApiKey = anthropicKeyInput.trim();
       if (openaiKeyInput.trim()) patch.openaiApiKey = openaiKeyInput.trim();
       if (googleKeyInput.trim()) patch.googleApiKey = googleKeyInput.trim();
+      if (qwenTtsKeyInput.trim()) patch.qwenTtsApiKey = qwenTtsKeyInput.trim();
       const res = await api.llmConfig.put(patch);
       setLlmConfig(res.config as LlmConfig);
       setOllama(res.status);
       setAnthropicKeyInput("");
       setOpenaiKeyInput("");
       setGoogleKeyInput("");
+      setQwenTtsKeyInput("");
       toast.show(t("settings.llm.saved"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -124,7 +131,9 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   }
 
-  async function removeApiKey(provider: "anthropic" | "openai" | "google") {
+  async function removeApiKey(
+    provider: "anthropic" | "openai" | "google" | "qwenTts"
+  ) {
     try {
       await api.llmConfig.removeKey(provider);
       const r = await api.llmConfig.get();
@@ -360,6 +369,47 @@ export function SettingsModal({ open, onClose }: Props) {
             modelValue={llmConfig.googleModel ?? ""}
             onModelChange={(v) => setLlmConfig({ ...llmConfig, googleModel: v })}
           />
+
+          <div className="border-t border-border pt-3 mt-1 flex flex-col gap-2">
+            <h4 className="text-xs font-semibold text-neutral-300">
+              {t("settings.tts.title")}
+            </h4>
+            <p className="text-[11px] text-neutral-500">
+              {t("settings.tts.subtitle")}
+            </p>
+            <Input
+              label={t("settings.tts.qwenTtsUrl")}
+              type="url"
+              value={llmConfig.qwenTtsUrl ?? ""}
+              onChange={(e) =>
+                setLlmConfig({ ...llmConfig, qwenTtsUrl: e.target.value })
+              }
+              placeholder="http://192.168.1.50:8790"
+            />
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Input
+                  label={t("settings.tts.qwenTtsApiKey")}
+                  type="password"
+                  value={qwenTtsKeyInput}
+                  onChange={(e) => setQwenTtsKeyInput(e.target.value)}
+                  placeholder={
+                    llmConfig.qwenTtsApiKeyPresent
+                      ? "•••"
+                      : t("settings.tts.qwenTtsKeyPlaceholder")
+                  }
+                />
+              </div>
+              {llmConfig.qwenTtsApiKeyPresent && (
+                <Button
+                  variant="ghost"
+                  onClick={() => removeApiKey("qwenTts")}
+                >
+                  {t("settings.llm.removeKey")}
+                </Button>
+              )}
+            </div>
+          </div>
 
           <Button onClick={saveLlmConfig} disabled={llmBusy}>
             {llmBusy ? t("common.saving") : t("settings.llm.save")}

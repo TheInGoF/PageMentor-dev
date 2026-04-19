@@ -25,7 +25,14 @@ export type ProgressPhase =
   | "audiobook.book.building"
   | "audiobook.done"
   | "audiobook.failed"
-  | "audiobook.canceled";
+  | "audiobook.canceled"
+  | "cards.start"
+  | "cards.extract.done"
+  | "cards.fill.start"
+  | "cards.fill.progress"
+  | "cards.fill.chapter"
+  | "cards.done"
+  | "cards.failed";
 
 export interface ProgressEvent {
   phase: ProgressPhase;

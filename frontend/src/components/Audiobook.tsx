@@ -11,7 +11,6 @@ import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
 import { cn } from "../lib/cn";
 import { getSettings } from "../lib/settings";
-import { PodcastShareModal } from "./PodcastShareModal";
 import { AudioTextEditModal } from "./AudioTextEditModal";
 import { t } from "../lib/i18n";
 
@@ -44,7 +43,6 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   } | null>(null);
   const [elapsedTick, setElapsedTick] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [chapterStatus, setChapterStatus] = useState<ChapterAudioStatus[]>([]);
   const [intro, setIntro] = useState<{
     text: string | null;
@@ -503,11 +501,6 @@ export function Audiobook({ docId, documentLanguage }: Props) {
                 {t("audiobook.download.m4b")}
               </a>
             )}
-            {(state?.audio.some((a) => a.status === "done") ?? false) && (
-              <Button variant="outline" onClick={() => setShareOpen(true)}>
-                {t("audiobook.apple")}
-              </Button>
-            )}
             {(state?.audio.length ?? 0) > 0 && (
               <Button variant="danger" onClick={clearAll}>
                 {t("audiobook.clear")}
@@ -646,11 +639,6 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         />
       )}
 
-      <PodcastShareModal
-        open={shareOpen}
-        docId={docId}
-        onClose={() => setShareOpen(false)}
-      />
     </div>
   );
 }
@@ -684,13 +672,13 @@ function VoiceChip({
         <span
           className={cn(
             "text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded",
-            voice.engine === "kokoro"
-              ? "bg-emerald-500/15 text-emerald-300"
+            voice.engine === "qwen"
+              ? "bg-fuchsia-500/15 text-fuchsia-300"
               : "bg-sky-500/15 text-sky-300"
           )}
         >
-          {voice.engine === "kokoro"
-            ? t("audiobook.engine.kokoro")
+          {voice.engine === "qwen"
+            ? t("audiobook.engine.qwen")
             : t("audiobook.engine.edge")}
         </span>
       </div>
@@ -701,10 +689,15 @@ function VoiceChip({
   );
 }
 
-/** Stimmen sortieren: Kokoro vor Edge (lokal first), Flagship vor
- *  non-Flagship, dann alphabetisch. */
+/** Stimmen sortieren: Qwen (self-hosted, deutsche Premium-Voices) vor
+ *  Edge (Cloud-Fallback), dann Flagship vor non-Flagship, dann
+ *  alphabetisch. */
+const ENGINE_RANK: Record<Voice["engine"], number> = {
+  qwen: 0,
+  edge: 1,
+};
 function compareVoices(a: Voice, b: Voice): number {
-  if (a.engine !== b.engine) return a.engine === "kokoro" ? -1 : 1;
+  if (a.engine !== b.engine) return ENGINE_RANK[a.engine] - ENGINE_RANK[b.engine];
   if (!!a.flagship !== !!b.flagship) return a.flagship ? -1 : 1;
   return a.label.localeCompare(b.label);
 }
@@ -1241,7 +1234,9 @@ function buildIntroDefault(
     }
     if (voice) {
       const engine =
-        voice.engine === "edge" ? "Sprachsynthese Azure Edge" : "Kokoro";
+        voice.engine === "edge"
+          ? "Sprachsynthese Azure Edge"
+          : "Qwen drei T T S";
       // Komma vor "mit der Stimme" gibt eine kurze Pause, dann
       // Schlusspunkt.
       lines.push(`Gesprochen durch ${engine}, mit der Stimme ${voice.label}.`);
@@ -1257,7 +1252,9 @@ function buildIntroDefault(
     }
     if (voice) {
       const engine =
-        voice.engine === "edge" ? "Azure Edge speech synthesis" : "Kokoro";
+        voice.engine === "edge"
+          ? "Azure Edge speech synthesis"
+          : "Qwen three T T S";
       lines.push(`Narrated by ${engine}, with the voice ${voice.label}.`);
     }
   }

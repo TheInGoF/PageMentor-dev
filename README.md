@@ -19,7 +19,8 @@ SQLite ◀───── Bun + Hono backend ───────────�
    │             ├─── Docling-Serve (sidecar) → markdown + chapter sections
    │             │
    │             ├─── Ollama → audio-text preprocessor (cached per chapter)
-   │             │      └── Kokoro-FastAPI (sidecar, Apache 2.0, default)
+   │             │      └── Qwen3-TTS-Flash via vLLM (GPU-host sidecar,
+   │             │             Apache 2.0, default) behind pm-gpu-arbiter,
    │             │             or Microsoft Edge Neural TTS (cloud fallback)
    │             │             └── ffmpeg loudnorm → MP3 per chapter → M4B
    │             │
@@ -46,9 +47,12 @@ SQLite ◀───── Bun + Hono backend ───────────�
   expanding abbreviations, verbalising formulas and Greek letters,
   stripping citations, removing bullet markers. Result is cached per
   chapter so re-generation is free.
-- **Audiobook** — defaults to **Kokoro** (Apache 2.0, runs in a local
-  sidecar — recommendable for universities and companies, no cloud
-  dependency). **Edge** stays available as a no-setup cloud fallback.
+- **Audiobook** — defaults to **Qwen3-TTS-Flash via vLLM** (Apache 2.0,
+  runs on a GPU host behind pm-gpu-arbiter — no cloud dependency,
+  recommendable for universities and companies). Four curated German
+  voices (Anna/Emma/Klaus/Max) with fixed seeds → each voice always
+  sounds identical. **Edge** stays available as a no-setup cloud
+  fallback.
   EBU R128 loudness normalisation, MP3 per chapter and a complete M4B
   with chapter markers.
 - **Send to Apple** — M4B download for Apple Books, private RSS feed for
@@ -187,16 +191,12 @@ configured" hint and the rest of the app keeps working.
 
 - **Backend:** Bun + Hono + better-sqlite3
 - **Frontend:** Vite + React 19 + Tailwind (night theme, red accents)
-- **TTS (default):** Kokoro 82 M (Apache 2.0) via
-  [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) sidecar
-- **TTS (German voices):** optional second sidecar
-  [Kokoro-FastAPI-German](https://github.com/r1di/kokoro-fastapi-german)
-  exposing `df_eva` + `dm_bernd` from
-  [Tundragoon/Kokoro-German](https://huggingface.co/Tundragoon/Kokoro-German).
-  The Tundragoon model repo is HuggingFace-gated, so the image needs
-  to be built locally with a HF token — see [scripts/build-kokoro-de.sh](scripts/build-kokoro-de.sh).
-  Once built, enable with `--profile de` or run as external sidecar on
-  a stronger host (Mac, Windows + GPU).
+- **TTS (default):** [Qwen3-TTS-Flash](https://huggingface.co/Qwen/Qwen3-TTS-Flash)
+  (Apache 2.0) served via [vLLM's OpenAI-compatible server](https://docs.vllm.ai/)
+  on a GPU host, proxied through [pm-gpu-arbiter](pm-gpu-arbiter/) which
+  serializes GPU access with Ollama. Four curated German voice slots
+  (Anna / Emma / Klaus / Max) map to Qwen built-in speakers with fixed
+  per-voice seeds — same voice always produces identical audio.
 - **TTS (fallback):** Microsoft Azure Neural voices via
   [msedge-tts](https://www.npmjs.com/package/msedge-tts)
 - **Text extraction:** [Docling-Serve](https://github.com/docling-project/docling-serve) sidecar
