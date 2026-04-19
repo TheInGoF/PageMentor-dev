@@ -30,6 +30,21 @@ jobs:
       packages: write
 
     steps:
+      # GHA-Default-Runner hat nur ~14 GB freien Speicher — pytorch-devel
+      # ist 17 GB plus flash-attn-Build-Tempdateien. Ohne Reclaim landet
+      # der Build bei "No space left on device". Das Action räumt ~30 GB
+      # Preinstalled-Junk (dotnet, swift, android-sdk, haskell, …).
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false  # die brauchen wir gleich
+          swap-storage: true
+
       - name: Checkout
         uses: actions/checkout@v4
 
