@@ -13,10 +13,14 @@ export interface ExtractedCard {
   difficulty?: "easy" | "medium" | "hard";
 }
 
+// Pattern toleriert Markdown-Bold/Italic-Wrapping: "**Aufgabe 1.1:**",
+// "*Frage 3*" etc. Docling liefert Aufgaben-Marker im neueren Output
+// häufig als Bold. Plus optional "Selbstüberprüfung", "Übungsaufgabe"
+// als Synonyme.
 const TASK_RE =
-  /(?:^|\n)\s*(?:Aufgabe|Übung|Exercise|Problem|Frage|Question)\s+(\d+(?:\.\d+)?)\s*[:.)\-–]?\s*/gi;
+  /(?:^|\n)\s*[*_]{0,2}\s*(?:Aufgabe|Übung|Übungsaufgabe|Selbstüberprüfung|Selbsttest|Exercise|Problem|Frage|Question)\s+(\d+(?:\.\d+)?)\s*[:.)\-–]?\s*[*_]{0,2}\s*/gi;
 const SOL_RE =
-  /(?:^|\n)\s*(?:Lösung|Lösungen|Musterlösung|Solution|Answer)(?:\s+(?:zu\s+)?(?:Aufgabe\s+)?(\d+(?:\.\d+)?))?\s*[:.)\-–]?\s*/gi;
+  /(?:^|\n)\s*[*_]{0,2}\s*(?:Lösung|Lösungen|Musterlösung|Solution|Answer)(?:\s+(?:zu\s+)?(?:Aufgabe\s+)?(\d+(?:\.\d+)?))?\s*[:.)\-–]?\s*[*_]{0,2}\s*/gi;
 
 interface Marker {
   type: "task" | "solution";
