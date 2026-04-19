@@ -159,8 +159,27 @@ async function resolveOllamaModel(
 ): Promise<string> {
   const available = await ollamaTags(url);
   if (requested && available.includes(requested)) return requested;
+
+  // Fallback — der User hat was konkretes angefragt, aber Ollama kennt
+  // es nicht (Tag-Mismatch, Modell noch nicht gepullt, `/api/tags`
+  // lieferte gerade ein inkonsistentes Listing während Arbiter-Unload,
+  // …). LAUT loggen damit der User sieht warum sein Modell nicht
+  // verwendet wurde.
   const generative = available.filter((n) => !isEmbeddingModel(n));
-  if (generative.length > 0) return generative[0];
+  if (generative.length > 0) {
+    if (requested) {
+      console.warn(
+        `[llm] requested model "${requested}" NOT in Ollama /api/tags at ${url}; ` +
+          `available generative: [${generative.join(", ")}]; ` +
+          `falling back to "${generative[0]}"`
+      );
+    }
+    return generative[0];
+  }
+  console.warn(
+    `[llm] no generative models found at ${url}; requested=${requested ?? "(none)"}, ` +
+      `falling back to "llama3.2:3b"`
+  );
   return requested || "llama3.2:3b";
 }
 

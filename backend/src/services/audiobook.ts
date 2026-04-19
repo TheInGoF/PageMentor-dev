@@ -74,6 +74,10 @@ export async function generateAudiobook(params: {
   docId: string;
   voiceId?: string;
   rate?: string;
+  /** Override für das Preprocess-LLM. Kommt vom Frontend aus
+   *  `settings.defaultOllamaModel`. Wenn leer, wird der LLM-Config-
+   *  Default (Settings → LLM → Ollama-Model) verwendet. */
+  model?: string;
 }): Promise<void> {
   if (running.has(params.docId)) return;
   const abortController = new AbortController();
@@ -170,8 +174,12 @@ export async function generateAudiobook(params: {
           const pp = await preprocessChapterForAudio({
             chapterId: ch.id,
             language: doc.language,
+            model: params.model,
           });
           chapterText = pp.text;
+          console.log(
+            `[audiobook] chapter ${ch.number} preprocessed by model="${pp.model}" (requested="${params.model ?? "(default)"}", cached=${pp.cached})`
+          );
         } catch (err) {
           console.warn(
             `[audiobook] preprocess failed for chapter ${ch.number}, falling back to raw text:`,

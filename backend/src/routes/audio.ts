@@ -372,8 +372,8 @@ audioRoutes.get("/document/:docId", (c) => {
 audioRoutes.post("/generate/:docId", async (c) => {
   const docId = c.req.param("docId");
   const body = await c.req
-    .json<{ voice?: string; rate?: string }>()
-    .catch(() => ({} as { voice?: string; rate?: string }));
+    .json<{ voice?: string; rate?: string; model?: string }>()
+    .catch(() => ({} as { voice?: string; rate?: string; model?: string }));
 
   const doc = db().prepare("SELECT id, language FROM documents WHERE id = ?").get(docId) as
     | { id: string; language: string }
@@ -385,7 +385,7 @@ audioRoutes.post("/generate/:docId", async (c) => {
   const voiceId = body.voice || defaultVoiceFor(doc.language);
   const rate = body.rate || "+0%";
 
-  generateAudiobook({ docId, voiceId, rate }).catch((err) =>
+  generateAudiobook({ docId, voiceId, rate, model: body.model }).catch((err) =>
     console.error("[tts] audiobook failed:", err)
   );
 

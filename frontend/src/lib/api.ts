@@ -752,10 +752,10 @@ export const api = {
     previewUrl: (voiceId: string) =>
       `/api/audio/preview?voice=${encodeURIComponent(voiceId)}`,
     get: (docId: string) => request<AudioDocument>(`/api/audio/document/${docId}`),
-    generate: (docId: string, voice: string, rate: string) =>
+    generate: (docId: string, voice: string, rate: string, model?: string) =>
       request<{ status: string; voice: string }>(`/api/audio/generate/${docId}`, {
         method: "POST",
-        body: JSON.stringify({ voice, rate }),
+        body: JSON.stringify({ voice, rate, model }),
       }),
     clear: (docId: string) =>
       request<{ status: string }>(`/api/audio/document/${docId}`, { method: "DELETE" }),
@@ -792,10 +792,15 @@ export const api = {
         `/api/audio/preprocessed/${chapterId}`,
         { method: "PATCH", body: JSON.stringify({ text }) }
       ),
-    generateChapter: (chapterId: string, voice: string, rate: string) =>
+    generateChapter: (
+      chapterId: string,
+      voice: string,
+      rate: string,
+      model?: string
+    ) =>
       request<{ status: string; chapterId: string; voice: string }>(
         `/api/audio/generate-chapter/${chapterId}`,
-        { method: "POST", body: JSON.stringify({ voice, rate }) }
+        { method: "POST", body: JSON.stringify({ voice, rate, model }) }
       ),
     setInclude: (chapterId: string, include: boolean | null) =>
       request<{ chapterId: string; include: boolean | null }>(
@@ -812,10 +817,15 @@ export const api = {
         `/api/audio/intro/${docId}`,
         { method: "PUT", body: JSON.stringify({ text }) }
       ),
-    generateIntro: (docId: string, voice: string, rate: string) =>
+    generateIntro: (
+      docId: string,
+      voice: string,
+      rate: string,
+      model?: string
+    ) =>
       request<{ status: string; docId: string; voice: string }>(
         `/api/audio/intro/${docId}/generate`,
-        { method: "POST", body: JSON.stringify({ voice, rate }) }
+        { method: "POST", body: JSON.stringify({ voice, rate, model }) }
       ),
     deleteIntroAudio: (docId: string) =>
       request<{ status: string }>(

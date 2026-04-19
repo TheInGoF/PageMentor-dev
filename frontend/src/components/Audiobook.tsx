@@ -196,7 +196,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     if (!voiceId) return;
     setBusy(true);
     try {
-      await api.audio.generate(docId, voiceId, rate);
+      await api.audio.generate(
+        docId,
+        voiceId,
+        rate,
+        getSettings().defaultOllamaModel || undefined
+      );
       toast.show(t("audiobook.queued"), "success");
       setChapterProgress(new Map());
       setBookProgress(null);
@@ -254,7 +259,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   async function preprocessChapter(chapterId: string, force: boolean) {
     setBusyChapter((b) => ({ ...b, [chapterId]: "preprocess" }));
     try {
-      const res = await api.audio.preprocessChapter(chapterId, { force });
+      const res = await api.audio.preprocessChapter(chapterId, {
+        force,
+        model: getSettings().defaultOllamaModel || undefined,
+      });
       toast.show(
         res.cached
           ? t("audiobook.chapter.preprocess.cached")
@@ -292,7 +300,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     }
     setIntroBusy(true);
     try {
-      await api.audio.generateIntro(docId, voiceId, rate);
+      await api.audio.generateIntro(
+        docId,
+        voiceId,
+        rate,
+        getSettings().defaultOllamaModel || undefined
+      );
       toast.show(t("audiobook.intro.queued"), "success");
       // Background-Job läuft, Status wird via SSE aktualisiert.
     } catch (err) {
@@ -381,7 +394,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       for (const id of ids) {
         setBusyChapter((b) => ({ ...b, [id]: "preprocess" }));
         try {
-          await api.audio.preprocessChapter(id, { force });
+          await api.audio.preprocessChapter(id, {
+            force,
+            model: getSettings().defaultOllamaModel || undefined,
+          });
           ok++;
         } catch (err) {
           failed++;
@@ -434,7 +450,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     }
     setBusyChapter((b) => ({ ...b, [chapterId]: "generate" }));
     try {
-      await api.audio.generateChapter(chapterId, voiceId, rate);
+      await api.audio.generateChapter(
+        chapterId,
+        voiceId,
+        rate,
+        getSettings().defaultOllamaModel || undefined
+      );
       toast.show(t("audiobook.chapter.generate.queued"), "success");
       await loadChapterStatus();
     } catch (err) {
