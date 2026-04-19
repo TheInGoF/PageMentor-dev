@@ -18,7 +18,7 @@
  * UI anzufassen.
  */
 
-import { writeFile } from "fs/promises";
+import { writeFile, unlink } from "fs/promises";
 import { effective } from "../../services/llmConfig";
 import {
   getVoiceSample,
@@ -26,6 +26,7 @@ import {
   readVoiceRefBytes,
   type VoiceSample,
 } from "../../services/voiceSamples";
+import { applyAtempo } from "../ffmpeg";
 import type {
   TtsEngine,
   Voice,
@@ -215,10 +216,15 @@ export const qwenEngine: TtsEngine = {
     const announce = params.announce ? `${params.announce}.\n\n` : "";
     const text = announce + params.segment.paragraphs.join("\n\n");
 
+    // Qwen-Base akzeptiert KEIN speed-Kwarg im generate_voice_clone —
+    // das Tempo zieht's aus dem Referenz-Audio. Wir senden die
+    // Rohausgabe und passen die Geschwindigkeit danach per ffmpeg
+    // atempo an (ändert Tempo ohne Tonhöhe zu verschieben).
+    const speed = parseRate(params.rate);
     const buf = await callSpeech({
       text,
       sample,
-      speed: parseRate(params.rate),
+      speed: 1.0, // Info fürs Sidecar-Log, faktisch ignoriert
       timeoutMs: SYNTH_TIMEOUT_MS,
     });
 
@@ -227,7 +233,26 @@ export const qwenEngine: TtsEngine = {
         `Qwen-TTS returned empty audio for voice=${params.voice.id}`
       );
     }
-    await writeFile(params.outPath, buf);
+
+    if (Math.abs(speed - 1.0) < 1e-3) {
+      await writeFile(params.outPath, buf);
+    } else {
+      // Raw-MP3 erst zwischenspeichern, dann atempo-Pass → Zielpfad.
+      const rawPath = `${params.outPath}.raw.mp3`;
+      await writeFile(rawPath, buf);
+      try {
+        await applyAtempo(rawPath, params.outPath, speed);
+      } finally {
+        try {
+          await unlink(rawPath);
+        } catch {
+          /* best effort */
+        }
+      }
+      console.log(
+        `[qwen-tts] applied atempo=${speed.toFixed(3)} to ${params.voice.id} chunk`
+      );
+    }
     return { path: params.outPath, bytes: buf.length };
   },
 

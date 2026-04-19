@@ -23,6 +23,49 @@ export async function run(bin: string, args: string[]): Promise<{ stdout: string
 }
 
 /** Concat MP3 files with identical encoding (stream copy). */
+/**
+ * Ändert das Wiedergabe-Tempo einer MP3-Datei via ffmpeg `atempo`-
+ * Filter, ohne Tonhöhe zu verschieben.
+ *
+ * `atempo` akzeptiert nur 0.5 ≤ f ≤ 2.0. Für Werte außerhalb müssten
+ * wir verketten (atempo=2.0,atempo=2.0 für 4×), aber unser Edge-Rate-
+ * Format "+/-30%" liegt ohnehin im [0.7, 1.3]-Bereich — safe.
+ *
+ * `factor > 1` = schneller (Audio wird kürzer), `< 1` = langsamer.
+ * `factor === 1` ist Opt-out und macht einen Dateikopie-Trick statt
+ * Re-Encode (spart Qualitätsverlust).
+ */
+export async function applyAtempo(
+  inPath: string,
+  outPath: string,
+  factor: number
+): Promise<void> {
+  if (Math.abs(factor - 1.0) < 1e-3) {
+    // Identity — einfach kopieren (bzw. umbenennen wenn das OK ist).
+    if (inPath !== outPath) {
+      const { copyFile } = await import("fs/promises");
+      await copyFile(inPath, outPath);
+    }
+    return;
+  }
+  const clamped = Math.max(0.5, Math.min(2.0, factor));
+  await run("ffmpeg", [
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-i",
+    inPath,
+    "-filter:a",
+    `atempo=${clamped.toFixed(3)}`,
+    "-c:a",
+    "libmp3lame",
+    "-b:a",
+    "96k",
+    outPath,
+  ]);
+}
+
 export async function concatMp3(inputs: string[], output: string): Promise<void> {
   const listPath = join(dirname(output), `.concat-${basename(output)}.txt`);
   const content = inputs.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n");
