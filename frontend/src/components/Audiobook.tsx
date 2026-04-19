@@ -124,13 +124,23 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           startedAt: Date.now(),
         });
       } else if (ev.phase === "audiobook.chapter.start") {
-        setBookProgress((prev) => ({
-          totalChapters: ev.total ?? prev?.totalChapters ?? 0,
-          currentChapter: ev.current ?? prev?.currentChapter ?? 0,
-          chunkCurrent: 0,
-          chunkTotal: 0,
-          startedAt: prev?.startedAt ?? Date.now(),
-        }));
+        // Nur fortschreiben wenn ein Full-Book-Run schon gestartet
+        // ist (audiobook.start hat bookProgress != null gesetzt).
+        // Single-Chapter- und Intro-Generates emittieren chapter.*-
+        // Events ohne audiobook.start — die sollen das Full-Book-
+        // Progress-Panel NICHT aktivieren, sonst hängt es ewig
+        // weil kein audiobook.done je kommt.
+        setBookProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalChapters: ev.total ?? prev.totalChapters,
+                currentChapter: ev.current ?? prev.currentChapter,
+                chunkCurrent: 0,
+                chunkTotal: 0,
+              }
+            : null
+        );
       } else if (ev.phase === "audiobook.chapter.progress") {
         setBookProgress((prev) =>
           prev
@@ -458,8 +468,15 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     progress?.phase === "audiobook.done" ||
     progress?.phase === "audiobook.failed" ||
     progress?.phase === "audiobook.canceled";
+  // „in flight" nur wenn ein Full-Book-Run aktiv ist (bookProgress
+  // gesetzt). Bei Single-Chapter- oder Intro-Generates emittiert das
+  // Backend ja chapter.start/done, aber das ist KEIN Full-Book-Run —
+  // sonst bliebe der Generate-Button disabled bis zum nächsten
+  // Doc-Wechsel. Per-chapter „busy"-State zeigt das schon im Row.
   const progressIsInFlight =
-    progress?.phase.startsWith("audiobook.") === true && !progressIsTerminal;
+    !!bookProgress &&
+    progress?.phase.startsWith("audiobook.") === true &&
+    !progressIsTerminal;
   const generating = (state?.generating ?? false) || progressIsInFlight;
   const phaseMessage = progress ? describePhase(progress) : null;
 
