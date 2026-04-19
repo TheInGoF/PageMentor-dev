@@ -45,6 +45,12 @@ export function SettingsModal({ open, onClose }: Props) {
   const [openaiKeyInput, setOpenaiKeyInput] = useState("");
   const [googleKeyInput, setGoogleKeyInput] = useState("");
   const [llmBusy, setLlmBusy] = useState(false);
+  const [ragStatus, setRagStatus] = useState<{
+    total: number;
+    embedded: number;
+    documents: number;
+  } | null>(null);
+  const [reembedBusy, setReembedBusy] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -53,6 +59,7 @@ export function SettingsModal({ open, onClose }: Props) {
     api.audio.voices().then((r) => setVoices(r.voices)).catch(() => setVoices([]));
     api.search.status().then((r) => setMeiliEnabled(r.enabled)).catch(() => setMeiliEnabled(false));
     api.documents.doclingStatus().then((r) => setDoclingAlive(r.alive)).catch(() => setDoclingAlive(false));
+    api.rag.status().then(setRagStatus).catch(() => setRagStatus(null));
     api.llmConfig
       .get()
       .then((r) => {
@@ -91,6 +98,29 @@ export function SettingsModal({ open, onClose }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
       setLlmBusy(false);
+    }
+  }
+
+  async function reembedAll() {
+    if (!confirm(t("settings.embed.reembedConfirm"))) return;
+    setReembedBusy(true);
+    try {
+      const res = await api.rag.reembed();
+      toast.show(
+        t("settings.embed.reembedDone", {
+          ok: res.embedded,
+          failed: res.failed ?? 0,
+          total: res.total,
+        }),
+        (res.failed ?? 0) > 0 ? "error" : "success"
+      );
+      // Status nachladen so the UI shows the new counts.
+      const fresh = await api.rag.status();
+      setRagStatus(fresh);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setReembedBusy(false);
     }
   }
 
@@ -368,6 +398,37 @@ export function SettingsModal({ open, onClose }: Props) {
           ) : (
             <p className="text-xs text-neutral-500">{t("settings.ollama.disabled")}</p>
           )}
+
+          <div className="flex flex-col gap-2 pt-3 border-t border-border">
+            <h4 className="text-xs uppercase tracking-wide text-neutral-500">
+              {t("settings.embed.title")}
+            </h4>
+            {ragStatus ? (
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.embed.stats", {
+                  embedded: ragStatus.embedded,
+                  total: ragStatus.total,
+                  docs: ragStatus.documents,
+                })}
+              </p>
+            ) : (
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.embed.statsLoading")}
+              </p>
+            )}
+            <p className="text-[11px] text-neutral-500">
+              {t("settings.embed.hint")}
+            </p>
+            <Button
+              variant="outline"
+              onClick={reembedAll}
+              disabled={reembedBusy || !ollama?.available}
+            >
+              {reembedBusy
+                ? t("settings.embed.reembedBusy")
+                : t("settings.embed.reembed")}
+            </Button>
+          </div>
         </section>
 
         <section className="flex flex-col gap-2 pt-2 border-t border-border">

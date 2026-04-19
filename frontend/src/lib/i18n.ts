@@ -539,6 +539,18 @@ const en: Record<string, string> = {
   "settings.ollama.connected": "Connected to {url}",
   "settings.ollama.disabled":
     "Ollama not available — summaries and AI cards are disabled.",
+  "settings.embed.title": "Embeddings (RAG / Q&A)",
+  "settings.embed.stats":
+    "{embedded} / {total} chunks embedded across {docs} document(s).",
+  "settings.embed.statsLoading": "Loading embedding stats …",
+  "settings.embed.hint":
+    "Re-embeds all chunks whose model differs from the currently active one. Run after switching embed models (e.g. nomic → bge-m3) so the RAG search gets consistent vectors.",
+  "settings.embed.reembed": "Re-embed all chunks",
+  "settings.embed.reembedBusy": "Re-embedding …",
+  "settings.embed.reembedConfirm":
+    "Re-embed every chunk that uses an outdated embedding model? Each chunk = one Ollama call, this can take minutes for big libraries.",
+  "settings.embed.reembedDone":
+    "{ok} re-embedded, {failed} failed (of {total})",
   "settings.llm.title": "LLM provider chain",
   "settings.llm.subtitle":
     "PageMentor tries these in order, the first that responds is used. Changes save instantly, no redeploy.",
@@ -1171,6 +1183,18 @@ const de: Record<string, string> = {
   "settings.ollama.connected": "Verbunden mit {url}",
   "settings.ollama.disabled":
     "Ollama nicht erreichbar — Zusammenfassungen und KI-Karten sind deaktiviert.",
+  "settings.embed.title": "Embeddings (RAG / Frage stellen)",
+  "settings.embed.stats":
+    "{embedded} / {total} Chunks embedded über {docs} Dokument(e).",
+  "settings.embed.statsLoading": "Embedding-Statistik lädt …",
+  "settings.embed.hint":
+    "Re-embedded alle Chunks deren Modell vom aktuell aktiven abweicht. Anwerfen nach Embed-Modell-Wechsel (z. B. nomic → bge-m3), damit die RAG-Suche konsistente Vektoren bekommt.",
+  "settings.embed.reembed": "Alle Chunks neu embedden",
+  "settings.embed.reembedBusy": "Embedde neu …",
+  "settings.embed.reembedConfirm":
+    "Alle Chunks neu embedden, deren Modell veraltet ist? Pro Chunk = ein Ollama-Call, das kann bei großer Bibliothek mehrere Minuten dauern.",
+  "settings.embed.reembedDone":
+    "{ok} neu embedded, {failed} fehlgeschlagen (von {total})",
   "settings.llm.title": "LLM-Kette",
   "settings.llm.subtitle":
     "PageMentor probiert die Endpoints der Reihe nach, der erste antwortende wird verwendet. Speichert sofort, kein Redeploy nötig.",
