@@ -582,29 +582,33 @@ function stripWrappers(s: string): string {
  *  Der System-Prompt verbietet diese Zeichen auch, aber kleinere Modelle
  *  halten sich nicht immer dran. */
 function stripProblematicCharsForTts(s: string): string {
-  return (
-    s
-      // Horizontale Trennlinien als Markdown / ASCII-Banner komplett raus.
-      // Muss VOR den Em-Dash-Regeln laufen, sonst sieht "---" aus wie
-      // drei Dashes und wird nur zu Kommas.
-      .replace(/^[ \t]*[-=*_]{3,}[ \t]*$/gm, "")
-      // Strichpunkt → Komma + Leerzeichen. Qwen versucht bei `;` eine
-      // dritte Pausenlänge zu produzieren und klingt gequetscht.
-      .replace(/\s*;\s*/g, ", ")
-      // Em-Dash (U+2014) zwischen Wörtern: wie Komma sprechen.
-      .replace(/\s*—\s*/g, ", ")
-      // En-Dash (U+2013) zwischen Wort-Boundaries: wie Komma. Kopplung
-      // zwischen Zahlen ("5–10") bleibt erhalten, weil dort keine
-      // Whitespace-Nachbarn sind.
-      .replace(/(\S)\s+–\s+(\S)/g, "$1, $2")
-      // Redundante Kommas und Leerzeichen nach dem Strip.
-      .replace(/,\s*,/g, ",")
-      .replace(/[ \t]+/g, " ")
-      // Leere Zeilen vom Trennlinien-Strip nicht als dreifache New-
-      // lines stehen lassen.
-      .replace(/\n{3,}/g, "\n\n")
-      .trim()
-  );
+  const counts = {
+    horizontalRule: (s.match(/^[ \t]*[-=*_]{3,}[ \t]*$/gm) ?? []).length,
+    semicolon: (s.match(/;/g) ?? []).length,
+    emDash: (s.match(/—/g) ?? []).length,
+    enDash: (s.match(/(\S)\s+–\s+(\S)/g) ?? []).length,
+  };
+
+  const cleaned = s
+    .replace(/^[ \t]*[-=*_]{3,}[ \t]*$/gm, "")
+    .replace(/\s*;\s*/g, ", ")
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/(\S)\s+–\s+(\S)/g, "$1, $2")
+    .replace(/,\s*,/g, ",")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const total =
+    counts.horizontalRule + counts.semicolon + counts.emDash + counts.enDash;
+  if (total > 0) {
+    console.log(
+      `[audio-preprocess] stripped ${total} TTS-problem chars: ` +
+        `; ×${counts.semicolon}, — ×${counts.emDash}, – ×${counts.enDash}, ` +
+        `--- ×${counts.horizontalRule}`
+    );
+  }
+  return cleaned;
 }
 
 /** Manche Modelle (gerade kleinere wie Gemma) ignorieren die

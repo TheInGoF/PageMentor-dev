@@ -1,6 +1,7 @@
 import { join } from "path";
 import { randomUUID } from "crypto";
-import { existsSync, mkdirSync, rmSync, readdirSync } from "fs";
+import { existsSync, mkdirSync, rmSync, readdirSync, statSync } from "fs";
+import { createHash } from "crypto";
 import { join as pathJoin } from "path";
 import { db } from "../db";
 import { segmentText } from "../tts/segment";
@@ -569,9 +570,13 @@ async function synthesizeChapter(params: {
     throw new Error("Chapter text is too short or empty.");
   }
 
+  // Tmp-Dir bleibt stabil pro Kapitel. Bei erfolgreicher Generierung
+  // wird er am Ende gelöscht, bei Fehler BEHALTEN — so können bereits
+  // fertige Chunks beim Retry übersprungen werden.
   const tmpDir = join(audioDir, `.tmp-${chapter.id}`);
   mkdirSync(tmpDir, { recursive: true });
 
+  let success = false;
   try {
     const segments = segmentText(chapter.text);
     if (segments.length === 0) throw new Error("Keine Segmente aus Kapiteltext.");
@@ -581,15 +586,12 @@ async function synthesizeChapter(params: {
     params.onChunk(0, segments.length);
 
     const isDe = params.voice.locale.startsWith("de");
+    const bookStart = Date.now();
 
     const chunkFiles: string[] = [];
+    let skippedCount = 0;
     for (let i = 0; i < segments.length; i++) {
       if (signal.aborted) throw new AudiobookCanceled();
-      // Erste Chunk bekommt eine Kapitel-Ansage davor — außer das
-      // synthetische "Kapitel" hat number 0 + leeren title (= Intro).
-      // Dann ist der User-Intro-Text selbst-erklärend. Qwen erkennt
-      // Sprachumschaltung zuverlässig aus dem Text selbst, wir brauchen
-      // keinen Sprach-Anker mehr wie damals bei Edge.
       const explicitTitle = chapter.title?.trim();
       let announcement: string | undefined;
       if (i === 0) {
@@ -607,7 +609,36 @@ async function synthesizeChapter(params: {
       const plainText = announcement
         ? `${announcement}.\n\n${paragraphText}`
         : paragraphText;
-      const chunkPath = join(tmpDir, `chunk-${String(i).padStart(3, "0")}.mp3`);
+
+      // Hash-basierter Cache-Key: wenn Text, Voice, Rate sich ändern,
+      // wandert der Hash und eine alte Datei wird ignoriert. Der Hash
+      // ist bewusst KEIN Zeitstempel — derselbe Input = dieselbe Datei.
+      const cacheKey = chunkHash({
+        text: plainText,
+        voice: voice.id,
+        rate,
+        chapterId: chapter.id,
+        index: i,
+      });
+      const chunkPath = join(
+        tmpDir,
+        `chunk-${String(i).padStart(3, "0")}-${cacheKey}.mp3`
+      );
+
+      if (existsSync(chunkPath) && statSync(chunkPath).size > 0) {
+        console.log(
+          `[tts] chunk ${i + 1}/${segments.length} cached (${cacheKey}) — skip`
+        );
+        chunkFiles.push(chunkPath);
+        params.onChunk(i + 1, segments.length);
+        skippedCount++;
+        continue;
+      }
+
+      const t0 = Date.now();
+      console.log(
+        `[tts] chunk ${i + 1}/${segments.length} (${cacheKey}) → ${plainText.length} chars, synth start`
+      );
       const { engineId } = await synthesizeChunk({
         segment: segments[i],
         text: plainText,
@@ -618,6 +649,10 @@ async function synthesizeChapter(params: {
         outPath: chunkPath,
         signal,
       });
+      const took = ((Date.now() - t0) / 1000).toFixed(1);
+      console.log(
+        `[tts] chunk ${i + 1}/${segments.length} (${cacheKey}) done in ${took}s`
+      );
       chunkFiles.push(chunkPath);
       params.onChunk(i + 1, segments.length);
       if (i < segments.length - 1) {
@@ -625,10 +660,16 @@ async function synthesizeChapter(params: {
       }
     }
 
+    console.log(
+      `[tts] chapter ${chapter.number}: ${segments.length} chunks ready (${skippedCount} cached, ${segments.length - skippedCount} fresh) in ${((Date.now() - bookStart) / 1000).toFixed(1)}s`
+    );
+
     const mergedPath = join(tmpDir, "merged.mp3");
     if (chunkFiles.length === 1) {
-      // Kein Concat nötig
-      await run_rename(chunkFiles[0], mergedPath);
+      // Kein Concat nötig — aber kopieren statt renamen, damit die
+      // Quelle im Cache bleibt.
+      const { copyFile } = await import("fs/promises");
+      await copyFile(chunkFiles[0], mergedPath);
     } else {
       await concatMp3(chunkFiles, mergedPath);
     }
@@ -643,20 +684,43 @@ async function synthesizeChapter(params: {
       coverPath: cover,
     });
 
+    success = true;
     return { durationMs };
   } finally {
-    try {
-      rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // best effort
+    // Nur bei Erfolg aufräumen. Bei Failure BEHALTEN — der User kann
+    // den Retry anstoßen und landet direkt in der Cache-Lese-Schleife.
+    if (success) {
+      try {
+        rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // best effort
+      }
+    } else {
+      console.log(
+        `[tts] chapter ${chapter.number} failed — keeping tmp dir ${tmpDir} for resume`
+      );
     }
   }
 }
 
-async function run_rename(src: string, dest: string): Promise<void> {
-  const { rename } = await import("fs/promises");
-  await rename(src, dest);
+/** Deterministischer 8-stelliger Hash pro Chunk (text + voice + rate +
+ *  chapter + index). Ändert sich einer dieser Inputs, bekommt der
+ *  Chunk einen neuen Cache-Key und wird neu generiert. */
+function chunkHash(input: {
+  text: string;
+  voice: string;
+  rate: string;
+  chapterId: string;
+  index: number;
+}): string {
+  return createHash("sha256")
+    .update(
+      `${input.text}|${input.voice}|${input.rate}|${input.chapterId}|${input.index}`
+    )
+    .digest("hex")
+    .slice(0, 8);
 }
+
 
 function coverPathFor(docId: string): string | undefined {
   // pdftoppm writes "{base}-1.jpg" (single-digit) for single-page renders.
