@@ -510,6 +510,23 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     audio.play().catch(() => toast.show(t("audiobook.previewFailed"), "error"));
   }
 
+  // Counts für den Haupt-Button-Label. Das Backend überspringt bereits
+  // fertige Kapitel beim Hörbuch-Run (v1.18.010); das UI soll das auch
+  // ehrlich widerspiegeln statt "Neu erzeugen" zu sagen während in
+  // Wahrheit nur die fehlenden generiert werden.
+  const includedCount = useMemo(
+    () => chapterStatus.filter(isChapterIncluded).length,
+    [chapterStatus]
+  );
+  const doneCount = useMemo(
+    () =>
+      chapterStatus.filter(
+        (c) => isChapterIncluded(c) && c.audio_status === "done"
+      ).length,
+    [chapterStatus]
+  );
+  const missingCount = Math.max(0, includedCount - doneCount);
+
   const langVoices = useMemo(
     () =>
       voices
@@ -663,12 +680,24 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         </div>
 
         <div className="flex items-center gap-3 pt-2 border-t border-border">
-          <Button onClick={generate} disabled={busy || generating || !voiceId}>
+          <Button
+            onClick={generate}
+            disabled={
+              busy ||
+              generating ||
+              !voiceId ||
+              (includedCount > 0 && missingCount === 0)
+            }
+          >
             {generating
               ? t("audiobook.generating")
-              : state?.audio.length
-              ? t("audiobook.regenerate")
-              : t("audiobook.generate")}
+              : includedCount === 0
+              ? t("audiobook.generate")
+              : missingCount === 0
+              ? t("audiobook.allDone")
+              : doneCount === 0
+              ? t("audiobook.generate")
+              : t("audiobook.generateMissing", { n: missingCount })}
           </Button>
           {generating && (
             <Button variant="danger" onClick={cancelRun}>
