@@ -64,6 +64,13 @@ logging.basicConfig(
 log = logging.getLogger("qwen-tts")
 
 MODEL_ID = os.environ.get("QWEN_TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
+# Audio-Tokenizer. Qwen hostet Base-Modell und Tokenizer als getrennte
+# HF-Repos, der qwen-tts-Loader erwartet aber einen speech_tokenizer/-
+# Unterordner im Base-Snapshot — wir laden beide und symlinken sie
+# zusammen (siehe `_prepare_model_path`).
+TOKENIZER_ID = os.environ.get(
+    "QWEN_TTS_TOKENIZER_MODEL", "Qwen/Qwen3-TTS-Tokenizer-12Hz"
+)
 DEVICE = os.environ.get("QWEN_TTS_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DTYPE_NAME = os.environ.get("QWEN_TTS_DTYPE", "bfloat16")
 # sdpa reicht für den Anfang; flash-attn-2 bringt 10-20% Speed aber
@@ -99,6 +106,53 @@ _model = None
 _load_error: Optional[str] = None
 
 
+def _prepare_model_path() -> str:
+    """Lädt Base-Modell und Audio-Tokenizer aus dem HF-Hub und verlinkt
+    den Tokenizer als ``speech_tokenizer/``-Unterordner im Base-Snapshot.
+
+    Qwen hat die beiden Modelle als getrennte HF-Repos veröffentlicht,
+    aber der ``Qwen3TTSModel``-Loader erwartet sie zusammen. Der
+    Symlink ist idempotent — bei Neustart auf bereits gecachtem Volume
+    macht die Funktion nichts mehr.
+
+    Gibt den lokalen Pfad des (jetzt vollständigen) Base-Snapshots zurück.
+    """
+    from huggingface_hub import snapshot_download  # noqa: WPS433
+
+    log.info("resolving %s (base model)", MODEL_ID)
+    base_dir = snapshot_download(repo_id=MODEL_ID)
+    log.info("resolving %s (audio tokenizer)", TOKENIZER_ID)
+    tokenizer_dir = snapshot_download(repo_id=TOKENIZER_ID)
+
+    target = os.path.join(base_dir, "speech_tokenizer")
+
+    if os.path.islink(target):
+        # Bereits verlinkt — Link auf den erwarteten Snapshot zeigen
+        # lassen (Repo-Update könnte Snapshot-Hash ändern).
+        current = os.readlink(target)
+        if os.path.realpath(current) != os.path.realpath(tokenizer_dir):
+            log.info("updating stale tokenizer symlink %s → %s", target, tokenizer_dir)
+            os.remove(target)
+            os.symlink(tokenizer_dir, target, target_is_directory=True)
+        return base_dir
+
+    if os.path.isdir(target):
+        # Vom Upstream bereits mitgeliefert (Repo-Struktur kann sich
+        # später ändern). Nicht anfassen, erwartbarer Best-Case.
+        log.info("speech_tokenizer/ already present in base snapshot")
+        return base_dir
+
+    log.info("symlinking %s → %s/speech_tokenizer", tokenizer_dir, base_dir)
+    try:
+        os.symlink(tokenizer_dir, target, target_is_directory=True)
+    except OSError as e:
+        # Fallback für FS ohne Symlink-Support (manche bind-mounts).
+        log.warning("symlink failed (%r), falling back to copytree", e)
+        import shutil  # noqa: WPS433
+        shutil.copytree(tokenizer_dir, target)
+    return base_dir
+
+
 def _load_model() -> None:
     global _model, _load_error
     if _model is not None or _load_error is not None:
@@ -117,8 +171,9 @@ def _load_model() -> None:
     )
     t0 = time.time()
     try:
+        model_path = _prepare_model_path()
         _model = Qwen3TTSModel.from_pretrained(
-            MODEL_ID,
+            model_path,
             device_map=DEVICE,
             dtype=_torch_dtype(DTYPE_NAME),
             attn_implementation=ATTN_IMPL,

@@ -9,11 +9,13 @@ FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/root/.cache/huggingface \
-    TRANSFORMERS_CACHE=/root/.cache/huggingface \
     PIP_NO_CACHE_DIR=1
 
+# sox wird von qwen-tts für Audio-Resampling genutzt (soundfile reicht
+# nicht für alle Pfade); fehlt er, kommt eine Warnung und spätere Calls
+# schlagen fehl. ffmpeg deckt MP3-Encoding in pydub ab.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ffmpeg libsndfile1 ca-certificates \
+        ffmpeg libsndfile1 sox ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
