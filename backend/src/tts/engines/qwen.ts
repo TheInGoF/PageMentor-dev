@@ -221,12 +221,19 @@ export const qwenEngine: TtsEngine = {
     // Rohausgabe und passen die Geschwindigkeit danach per ffmpeg
     // atempo an (ändert Tempo ohne Tonhöhe zu verschieben).
     const speed = parseRate(params.rate);
+    const t0 = Date.now();
+    console.log(
+      `[qwen-tts] synth request start voice=${params.voice.id} text=${text.length}c rate=${params.rate} out=${params.outPath}`
+    );
     const buf = await callSpeech({
       text,
       sample,
       speed: 1.0, // Info fürs Sidecar-Log, faktisch ignoriert
       timeoutMs: SYNTH_TIMEOUT_MS,
     });
+    console.log(
+      `[qwen-tts] synth response voice=${params.voice.id} bytes=${buf.length} took=${((Date.now() - t0) / 1000).toFixed(1)}s`
+    );
 
     if (buf.length === 0) {
       throw new Error(
@@ -236,8 +243,10 @@ export const qwenEngine: TtsEngine = {
 
     if (Math.abs(speed - 1.0) < 1e-3) {
       await writeFile(params.outPath, buf);
+      console.log(
+        `[qwen-tts] wrote ${buf.length} bytes → ${params.outPath}`
+      );
     } else {
-      // Raw-MP3 erst zwischenspeichern, dann atempo-Pass → Zielpfad.
       const rawPath = `${params.outPath}.raw.mp3`;
       await writeFile(rawPath, buf);
       try {
@@ -250,7 +259,7 @@ export const qwenEngine: TtsEngine = {
         }
       }
       console.log(
-        `[qwen-tts] applied atempo=${speed.toFixed(3)} to ${params.voice.id} chunk`
+        `[qwen-tts] applied atempo=${speed.toFixed(3)} → ${params.outPath}`
       );
     }
     return { path: params.outPath, bytes: buf.length };

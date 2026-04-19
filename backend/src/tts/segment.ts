@@ -1,15 +1,25 @@
 /**
  * Text-Segmentierung für TTS.
  *
- * Die Azure-WebSocket-API hat einen harten Längen- und Laufzeit-Limit
- * pro SSML-Request. Wir schneiden daher den Kapiteltext in Chunks von
- * max ~2500 Zeichen — bevorzugt an Absatz-, sekundär an Satzgrenzen.
+ * Wir schneiden den Kapiteltext in Chunks von max ~1500 Zeichen —
+ * bevorzugt an Absatz-, sekundär an Satzgrenzen. 1500 ist ein Kompromiss
+ * für Qwen3-TTS:
+ *   - kurz genug, um einen hängenden Chunk schnell zu bemerken (~2-3 min
+ *     auf der 3090 statt 4-6 min bei 2500-Zeichen-Chunks)
+ *   - groß genug, dass die Qwen-Prosodie kohärent bleibt (bei zu kurzen
+ *     Chunks wird das Tempo weniger stabil; siehe Intro-"überhastet"-
+ *     Symptom)
+ *   - Cache-Granularität: ein fehlgeschlagener Chunk bedeutet kleineren
+ *     Retry-Verlust.
  *
- * Die Segmente behalten Absatz-Struktur: ein Segment kann mehrere Absätze
- * enthalten, die beim SSML-Build mit <break/> getrennt werden.
+ * Override per ENV `PM_TTS_MAX_CHUNK` — akzeptiert 500-5000.
  */
 
-const MAX_CHUNK = 2500;
+const MAX_CHUNK = (() => {
+  const raw = parseInt(process.env.PM_TTS_MAX_CHUNK ?? "", 10);
+  if (!Number.isFinite(raw) || raw < 500 || raw > 5000) return 1500;
+  return raw;
+})();
 
 export interface Segment {
   /** Absätze innerhalb dieses Segments (mit Satz-Trennungen) */
