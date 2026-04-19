@@ -597,32 +597,26 @@ async function synthesizeChapter(params: {
       if (signal.aborted) throw new AudiobookCanceled();
       // Erste Chunk bekommt eine Kapitel-Ansage davor — außer das
       // synthetische "Kapitel" hat number 0 + leeren title (= Intro).
-      // Dann ist der eigentliche User-Text selbst-erklärend, wir
-      // wollen kein doppeltes "Intro." vorweg.
+      // Dann ist der User-Intro-Text selbst-erklärend.
       //
-      // Ein "Kapitel:" / "Chapter:" wird immer vorangestellt wenn
-      // der Titel nicht schon mit dem Wort beginnt — das gibt Edge
-      // einen klaren Sprach-Kontext beim ersten Wort, sonst wird
-      // ein deutsches "Vorwort" als englisches "worword" gesprochen
-      // (Lehnwort-Ambiguität, Edge fällt auf EN als Default zurück).
+      // Sprach-Anker-Strategie: ein klar nicht-englisches Übergangs-
+      // wort vorne, damit Edge die Sprache vor dem ersten Inhalts-
+      // wort festlegt. "Kapitel" allein reicht nicht — Edge sieht
+      // das als großgeschriebenen Eigennamen und bleibt im EN-Modus
+      // (User-Bug: "Kapitel Zusammenfassung" → "capitol
+      // zissenmentfassing"). "Es folgt" / "Now reading" sind
+      // eindeutige Sprach-Trigger ohne Lehnwort-Charakter.
       const explicitTitle = chapter.title?.trim();
       let announcement: string | undefined;
       if (i === 0) {
+        const intro = isDe ? "Es folgt" : "Now reading";
         if (explicitTitle) {
-          const alreadyPrefixed = isDe
-            ? /^(kapitel|abschnitt|teil)\b/i.test(explicitTitle)
-            : /^(chapter|section|part)\b/i.test(explicitTitle);
-          if (alreadyPrefixed) {
-            announcement = explicitTitle;
-          } else {
-            announcement = isDe
-              ? `Kapitel: ${explicitTitle}`
-              : `Chapter: ${explicitTitle}`;
-          }
+          announcement = `${intro}: ${explicitTitle}`;
         } else if (chapter.number > 0) {
-          announcement = isDe
+          const numTerm = isDe
             ? `Kapitel ${chapter.number}`
             : `Chapter ${chapter.number}`;
+          announcement = `${intro}: ${numTerm}`;
         }
       }
       const paragraphText = segments[i].paragraphs.join("\n\n");

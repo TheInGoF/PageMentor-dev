@@ -37,11 +37,21 @@ export function buildSsml(segment: Segment, opts: BuildOptions): string {
   void opts.rate;
   void opts.pitch;
 
+  // Multilingual-Voices (z. B. de-DE-SeraphinaMultilingualNeural) machen
+  // ihre eigene per-Phrase-Spracherkennung und ignorieren das
+  // Top-Level xml:lang im <speak>. Ergebnis: deutsche Lehnwörter wie
+  // "Vorwort" oder "Zusammenfassung" werden englisch ausgesprochen
+  // ("worword", "zissemenfassing"), weil die Voice das Wort isoliert
+  // klassifiziert. Das Azure-Override-Element dafür ist <lang> auf der
+  // <voice>-Ebene — damit zwingen wir die Sprache pro Block fest.
+  // Eine zweite, getrennte <lang>-Hülle um die Ansage hilft zusätzlich
+  // weil Edge sonst nach dem Doppelpunkt erneut detektiert.
   const parts: string[] = [];
   if (opts.announce) {
-    parts.push(escapeXml(opts.announce) + ".");
+    parts.push(`<lang xml:lang="${opts.locale}">${escapeXml(opts.announce)}.</lang>`);
   }
-  parts.push(segment.paragraphs.map(escapeXml).join("\n\n"));
+  const body = segment.paragraphs.map(escapeXml).join("\n\n");
+  parts.push(`<lang xml:lang="${opts.locale}">${body}</lang>`);
 
   return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${opts.locale}"><voice name="${opts.voice}">${parts.join("\n\n")}</voice></speak>`;
 }
