@@ -112,6 +112,17 @@ export interface PreprocessedChapter {
   cleaned: boolean;
 }
 
+export interface AudiobookIntro {
+  text: string | null;
+  audioUrl: string | null;
+  defaultText: string | null;
+}
+
+export interface ChapterStatusResponse {
+  chapters: ChapterAudioStatus[];
+  intro: AudiobookIntro;
+}
+
 export interface Card {
   id: string;
   document_id: string;
@@ -703,7 +714,7 @@ export const api = {
     streamUrl: (docId: string) => `/api/audio/stream/${docId}`,
     // Per-Chapter workflow (manual Ollama-clean + per-chapter TTS).
     chapterStatus: (docId: string) =>
-      request<{ chapters: ChapterAudioStatus[] }>(
+      request<ChapterStatusResponse>(
         `/api/audio/chapter-status/${docId}`
       ),
     preprocessChapter: (chapterId: string, body?: { model?: string; force?: boolean }) =>
@@ -733,6 +744,27 @@ export const api = {
         `/api/audio/chapter-include/${chapterId}`,
         { method: "PATCH", body: JSON.stringify({ include }) }
       ),
+    setIncludeByKind: (docId: string, kind: string, include: boolean | null) =>
+      request<{ kind: string; include: boolean | null; updated: number }>(
+        `/api/audio/include-by-kind/${docId}`,
+        { method: "PATCH", body: JSON.stringify({ kind, include }) }
+      ),
+    setIntroText: (docId: string, text: string | null) =>
+      request<{ docId: string; text: string | null }>(
+        `/api/audio/intro/${docId}`,
+        { method: "PUT", body: JSON.stringify({ text }) }
+      ),
+    generateIntro: (docId: string, voice: string, rate: string) =>
+      request<{ status: string; docId: string; voice: string }>(
+        `/api/audio/intro/${docId}/generate`,
+        { method: "POST", body: JSON.stringify({ voice, rate }) }
+      ),
+    deleteIntroAudio: (docId: string) =>
+      request<{ status: string }>(
+        `/api/audio/intro/${docId}/file`,
+        { method: "DELETE" }
+      ),
+    introUrl: (docId: string) => `/api/audio/intro/${docId}/file`,
   },
   feed: {
     urls: (docId: string) =>

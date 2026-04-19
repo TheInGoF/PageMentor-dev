@@ -289,11 +289,23 @@ export async function generateAudiobook(params: {
           docId: doc.id,
           message: "Baue M4B mit Kapitelmarken …",
         });
+
+        // Wenn ein Intro-MP3 existiert, als Track 0 voranstellen.
+        // Duration via ffprobe (innerhalb buildM4B) — wir geben hier
+        // 0 vor, ffmpeg ermittelt die echte Länge selbst.
+        const introPath = join(audioDir, "intro.mp3");
+        const inputs = [...successfulChapterFiles];
+        const m4bChapters = [...chapterDurations];
+        if (existsSync(introPath)) {
+          inputs.unshift(introPath);
+          m4bChapters.unshift({ title: "Intro", durationMs: 0 });
+        }
+
         const bookPath = join(audioDir, "book.m4b");
         try {
           await buildM4B({
-            inputs: successfulChapterFiles,
-            chapters: chapterDurations,
+            inputs,
+            chapters: m4bChapters,
             output: bookPath,
             title: doc.title,
             coverPath: coverPathFor(doc.id),
@@ -451,6 +463,96 @@ export async function generateSingleChapterAudio(params: {
       docId: row.document_id,
       chapterId: row.id,
       chapterNumber: row.number,
+      current: 1,
+      total: 1,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+/** Erzeugt das Intro-Audio (eine .mp3 die vor dem ersten Kapitel
+ *  liegt). Nutzt denselben TTS-Pfad wie ein Kapitel, aber speichert
+ *  als deterministischer Pfad `audio/{docId}/intro.mp3` ohne DB-Eintrag. */
+export async function generateIntroAudio(params: {
+  docId: string;
+  text: string;
+  voiceId: string;
+  rate?: string;
+}): Promise<{ path: string; durationMs: number }> {
+  const voice = findVoice(params.voiceId);
+  if (!voice) throw new Error(`Unknown voice: ${params.voiceId}`);
+  const rate = params.rate || "+0%";
+
+  const audioDir = join(DATA_DIR, "audio", params.docId);
+  mkdirSync(audioDir, { recursive: true });
+  const outFile = join(audioDir, "intro.mp3");
+
+  // Bestehendes M4B invalidieren — neuer Intro = altes Buch passt nicht mehr.
+  const bookPath = join(audioDir, "book.m4b");
+  if (existsSync(bookPath)) {
+    try {
+      rmSync(bookPath, { force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+
+  emit({
+    phase: "audiobook.chapter.start",
+    docId: params.docId,
+    chapterNumber: 0,
+    current: 1,
+    total: 1,
+    message: "Intro",
+  });
+
+  const abortController = new AbortController();
+  // Synthetisches Single-Chapter mit kind=meta. Nutzt synthesizeChapter
+  // damit die normale chunking + ffmpeg-Pipeline läuft.
+  const synth: Chapter = {
+    id: `intro-${params.docId}`,
+    document_id: params.docId,
+    number: 0,
+    title: "Intro",
+    text: params.text,
+    start_page: 0,
+    end_page: 0,
+    sort_order: -1,
+    kind: "meta",
+  };
+
+  try {
+    const { durationMs } = await synthesizeChapter({
+      chapter: synth,
+      audioDir,
+      voice,
+      locale: voice.locale,
+      rate,
+      outFile,
+      signal: abortController.signal,
+      onChunk: (current, total) =>
+        emit({
+          phase: "audiobook.chapter.progress",
+          docId: params.docId,
+          chapterNumber: 0,
+          current,
+          total,
+        }),
+    });
+    emit({
+      phase: "audiobook.chapter.done",
+      docId: params.docId,
+      chapterNumber: 0,
+      current: 1,
+      total: 1,
+    });
+    return { path: outFile, durationMs };
+  } catch (err) {
+    emit({
+      phase: "audiobook.chapter.failed",
+      docId: params.docId,
+      chapterNumber: 0,
       current: 1,
       total: 1,
       message: err instanceof Error ? err.message : String(err),

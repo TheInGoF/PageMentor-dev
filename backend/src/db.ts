@@ -190,6 +190,13 @@ export function initDb() {
     // und exakte Bibliografie.
     d.exec("ALTER TABLE documents ADD COLUMN doc_title TEXT");
   }
+  if (!docCols.some((c) => c.name === "audio_intro_text")) {
+    // Optionaler Intro-Text der vor dem ersten Kapitel ins Hörbuch
+    // eingeführt wird ("Hörbuch: ..., Verfasst von ..., ..."). NULL
+    // = kein Intro, Hörbuch beginnt direkt mit Kapitel 1. User
+    // editiert das im Audiobook-Tab über die Intro-Box.
+    d.exec("ALTER TABLE documents ADD COLUMN audio_intro_text TEXT");
+  }
 
   // chunks-Tabelle für RAG. Pro Chunk ca. 800 Tokens Text + ein 768-
   // float32-Embedding (3 KB) von nomic-embed-text. Brute-Force-Cosine

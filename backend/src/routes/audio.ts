@@ -8,6 +8,7 @@ import { synthesizePreview } from "../tts/synth";
 import {
   generateAudiobook,
   generateSingleChapterAudio,
+  generateIntroAudio,
   isGenerating,
   clearAudio,
   clearAudioForChapter,
@@ -65,8 +66,10 @@ audioRoutes.get("/preview", async (c) => {
 //   5. POST /generate-chapter/:chapterId → TTS für das eine Kapitel
 
 // Vereinheitlichter Status pro Kapitel — kombiniert chapters + audio +
-// audio_text damit das UI alles aus einem Call bekommt.
+// audio_text damit das UI alles aus einem Call bekommt. Liefert auch
+// das doc-level Intro (audio_intro_text + ggf. existing intro.mp3).
 audioRoutes.get("/chapter-status/:docId", (c) => {
+  const docId = c.req.param("docId");
   const rows = db()
     .prepare(
       `SELECT c.id as chapter_id, c.number, c.title, c.kind,
@@ -81,8 +84,145 @@ audioRoutes.get("/chapter-status/:docId", (c) => {
        WHERE c.document_id = ?
        ORDER BY c.sort_order ASC, c.number ASC`
     )
-    .all(c.req.param("docId"));
-  return c.json({ chapters: rows });
+    .all(docId);
+  const doc = db()
+    .prepare(
+      "SELECT title, doc_title, author, language, audio_intro_text FROM documents WHERE id = ?"
+    )
+    .get(docId) as
+    | {
+        title: string;
+        doc_title: string | null;
+        author: string | null;
+        language: string;
+        audio_intro_text: string | null;
+      }
+    | undefined;
+  const introPath = join(DATA_DIR, "audio", docId, "intro.mp3");
+  return c.json({
+    chapters: rows,
+    intro: {
+      text: doc?.audio_intro_text ?? null,
+      audioUrl: existsSync(introPath) ? `/api/audio/intro/${docId}/file` : null,
+      // Für den "Default-Vorschlag generieren" Button im Frontend.
+      defaultText: doc
+        ? buildDefaultIntro(doc.title, doc.doc_title, doc.author, doc.language)
+        : null,
+    },
+  });
+});
+
+/** Default-Intro-Vorschlag aus Doc-Metadata. Wird vom Frontend als
+ *  Button "Aus Metadata generieren" angeboten — User kann den Text
+ *  übernehmen und nach Belieben anpassen. */
+function buildDefaultIntro(
+  uiTitle: string,
+  docTitle: string | null,
+  author: string | null,
+  language: string
+): string {
+  const title = docTitle || uiTitle;
+  if (language === "en") {
+    if (author) return `Audiobook: ${title}. Written by ${author}.`;
+    return `Audiobook: ${title}.`;
+  }
+  // DE-Default
+  if (author) return `Hörbuch: ${title}. Verfasst von ${author}.`;
+  return `Hörbuch: ${title}.`;
+}
+
+// Intro-Text setzen / lesen / löschen.
+audioRoutes.put("/intro/:docId", async (c) => {
+  const docId = c.req.param("docId");
+  const body = await c.req
+    .json<{ text?: string | null }>()
+    .catch(() => ({} as { text?: string | null }));
+  const exists = db()
+    .prepare("SELECT id FROM documents WHERE id = ?")
+    .get(docId);
+  if (!exists) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+
+  const value =
+    body.text == null || body.text.trim().length === 0
+      ? null
+      : body.text.trim();
+  db()
+    .prepare("UPDATE documents SET audio_intro_text = ? WHERE id = ?")
+    .run(value, docId);
+  return c.json({ docId, text: value });
+});
+
+// Intro-MP3 generieren (nutzt aktuelle audio_intro_text).
+audioRoutes.post("/intro/:docId/generate", async (c) => {
+  const docId = c.req.param("docId");
+  const body = await c.req
+    .json<{ voice?: string; rate?: string }>()
+    .catch(() => ({} as { voice?: string; rate?: string }));
+
+  const doc = db()
+    .prepare(
+      "SELECT id, language, audio_intro_text FROM documents WHERE id = ?"
+    )
+    .get(docId) as
+    | { id: string; language: string; audio_intro_text: string | null }
+    | undefined;
+  if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+  if (!doc.audio_intro_text || doc.audio_intro_text.trim().length === 0) {
+    return c.json({ error: "Intro text is empty" }, 400);
+  }
+  const voiceId = body.voice || defaultVoiceFor(doc.language);
+  if (!voiceId) return c.json({ error: "No voice available" }, 400);
+
+  generateIntroAudio({
+    docId,
+    text: doc.audio_intro_text,
+    voiceId,
+    rate: body.rate,
+  }).catch((err) => console.error(`[tts] intro generation failed:`, err));
+
+  return c.json({ status: "queued", docId, voice: voiceId });
+});
+
+// Intro-MP3 streamen (HTTP Range, wie chapter-files).
+audioRoutes.get("/intro/:docId/file", (c) => {
+  const docId = c.req.param("docId");
+  const fullPath = join(DATA_DIR, "audio", docId, "intro.mp3");
+  if (!existsSync(fullPath)) return c.json({ error: tt(c, "err.notReady") }, 404);
+  return serveFileWithRange(c, fullPath, "audio/mpeg");
+});
+
+// Intro-MP3 löschen (Text bleibt — User will evtl. neu generieren).
+audioRoutes.delete("/intro/:docId/file", (c) => {
+  const docId = c.req.param("docId");
+  const fullPath = join(DATA_DIR, "audio", docId, "intro.mp3");
+  if (existsSync(fullPath)) {
+    try {
+      const { rmSync } = require("fs");
+      rmSync(fullPath, { force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+  return c.json({ status: "ok" });
+});
+
+// Bulk-Toggle aller Kapitel eines kind. UI nutzt das für
+// "alle Beispiele inkludieren" / "alle Übungen ausschließen" etc.
+audioRoutes.patch("/include-by-kind/:docId", async (c) => {
+  const docId = c.req.param("docId");
+  const body = await c.req
+    .json<{ kind?: string; include?: boolean | null }>()
+    .catch(() => ({} as { kind?: string; include?: boolean | null }));
+  if (!body.kind) return c.json({ error: tt(c, "err.missingFields") }, 400);
+
+  const value =
+    body.include === true ? 1 : body.include === false ? 0 : null;
+  const result = db()
+    .prepare(
+      "UPDATE chapters SET include_in_audio = ? WHERE document_id = ? AND kind = ?"
+    )
+    .run(value, docId, body.kind);
+  return c.json({ kind: body.kind, include: body.include ?? null, updated: result.changes });
 });
 
 // Toggle ob ein Kapitel ins Hörbuch geht. NULL als Wert = "Default

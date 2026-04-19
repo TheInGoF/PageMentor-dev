@@ -46,6 +46,13 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [busy, setBusy] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [chapterStatus, setChapterStatus] = useState<ChapterAudioStatus[]>([]);
+  const [intro, setIntro] = useState<{
+    text: string | null;
+    audioUrl: string | null;
+    defaultText: string | null;
+  }>({ text: null, audioUrl: null, defaultText: null });
+  const [introBusy, setIntroBusy] = useState(false);
+  const [kindBulkBusy, setKindBulkBusy] = useState<string | null>(null);
   const [busyChapter, setBusyChapter] = useState<
     Record<string, "preprocess" | "generate" | undefined>
   >({});
@@ -59,6 +66,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     try {
       const res = await api.audio.chapterStatus(docId);
       setChapterStatus(res.chapters);
+      if (res.intro) setIntro(res.intro);
     } catch {
       // Silent — wenn der Endpoint mal kurz nicht geht (Pipeline-Reload),
       // nicht mit Toast spammen.
@@ -222,6 +230,72 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         const { [chapterId]: _, ...rest } = b;
         return rest;
       });
+    }
+  }
+
+  async function saveIntroText(text: string | null) {
+    setIntroBusy(true);
+    try {
+      const res = await api.audio.setIntroText(docId, text);
+      setIntro((prev) => ({ ...prev, text: res.text }));
+      toast.show(t("audiobook.intro.saved"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setIntroBusy(false);
+    }
+  }
+
+  async function generateIntroAudio() {
+    if (!voiceId) {
+      toast.show(t("audiobook.voice.emptyForLang", { lang: documentLanguage }), "error");
+      return;
+    }
+    setIntroBusy(true);
+    try {
+      await api.audio.generateIntro(docId, voiceId, rate);
+      toast.show(t("audiobook.intro.queued"), "success");
+      // Background-Job läuft, Status wird via SSE aktualisiert.
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setIntroBusy(false);
+    }
+  }
+
+  async function deleteIntroAudio() {
+    if (!confirm(t("audiobook.intro.deleteAudioConfirm"))) return;
+    try {
+      await api.audio.deleteIntroAudio(docId);
+      setIntro((prev) => ({ ...prev, audioUrl: null }));
+      toast.show(t("audiobook.intro.audioDeleted"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  async function bulkIncludeByKind(kind: string, include: boolean) {
+    setKindBulkBusy(kind);
+    // Optimistic — UI updaten bevor Backend antwortet.
+    setChapterStatus((prev) =>
+      prev.map((c) =>
+        c.kind === kind ? { ...c, include_in_audio: include ? 1 : 0 } : c
+      )
+    );
+    try {
+      const res = await api.audio.setIncludeByKind(docId, kind, include);
+      toast.show(
+        t("audiobook.kindFilter.applied", {
+          kind: t(`chapters.kind.${kind}`),
+          n: res.updated,
+        }),
+        "success"
+      );
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+      await loadChapterStatus(); // rollback
+    } finally {
+      setKindBulkBusy(null);
     }
   }
 
@@ -504,6 +578,21 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           )}
         </div>
       </section>
+
+      <IntroEditor
+        intro={intro}
+        busy={introBusy}
+        canGenerate={!!voiceId}
+        onSave={saveIntroText}
+        onGenerate={generateIntroAudio}
+        onDeleteAudio={deleteIntroAudio}
+      />
+
+      <KindFilterBar
+        chapters={chapterStatus}
+        busy={kindBulkBusy}
+        onToggle={bulkIncludeByKind}
+      />
 
       <ChapterWorkbench
         chapters={chapterStatus}
@@ -1099,5 +1188,226 @@ function BookProgressPanel({
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Intro-Editor
+// ---------------------------------------------------------------------
+
+function IntroEditor({
+  intro,
+  busy,
+  canGenerate,
+  onSave,
+  onGenerate,
+  onDeleteAudio,
+}: {
+  intro: { text: string | null; audioUrl: string | null; defaultText: string | null };
+  busy: boolean;
+  canGenerate: boolean;
+  onSave: (text: string | null) => void;
+  onGenerate: () => void;
+  onDeleteAudio: () => void;
+}) {
+  const [draft, setDraft] = useState<string>("");
+  const [open, setOpen] = useState<boolean>(false);
+
+  // Bei Intro-Update von außen lokal sync — verhindert Stale-Draft.
+  useEffect(() => {
+    setDraft(intro.text ?? "");
+  }, [intro.text]);
+
+  const dirty = (intro.text ?? "") !== draft;
+  const hasIntro = !!(intro.text && intro.text.trim().length > 0);
+
+  return (
+    <section className="card p-4 flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-base font-semibold flex items-center gap-2">
+            {t("audiobook.intro.title")}
+            {hasIntro && (
+              <span className="tag-accent text-[10px]">
+                {t("audiobook.intro.active")}
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            {t("audiobook.intro.hint")}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-xs text-accent hover:underline"
+        >
+          {open ? t("audiobook.intro.collapse") : t("audiobook.intro.expand")}
+        </button>
+      </div>
+
+      {open && (
+        <>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-full bg-bg-elevated border border-border rounded-lg p-3 min-h-[80px] font-mono text-[12px] leading-relaxed text-neutral-100 resize-y focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+            placeholder={intro.defaultText ?? t("audiobook.intro.placeholder")}
+            spellCheck
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            {intro.defaultText && draft !== intro.defaultText && (
+              <Button
+                variant="ghost"
+                onClick={() => setDraft(intro.defaultText ?? "")}
+                disabled={busy}
+              >
+                {t("audiobook.intro.useDefault")}
+              </Button>
+            )}
+            <div className="flex-1" />
+            {hasIntro && intro.audioUrl && (
+              <Button variant="outline" onClick={onDeleteAudio} disabled={busy}>
+                {t("audiobook.intro.deleteAudio")}
+              </Button>
+            )}
+            {hasIntro && (
+              <Button
+                variant="outline"
+                onClick={onGenerate}
+                disabled={busy || !canGenerate}
+                title={!canGenerate ? t("audiobook.voice.empty") : undefined}
+              >
+                {intro.audioUrl
+                  ? t("audiobook.intro.regenerateAudio")
+                  : t("audiobook.intro.generateAudio")}
+              </Button>
+            )}
+            <Button
+              onClick={() => onSave(draft.trim() ? draft : null)}
+              disabled={busy || !dirty}
+            >
+              {busy ? t("common.saving") : t("audiobook.intro.save")}
+            </Button>
+          </div>
+          {intro.audioUrl && (
+            <audio
+              controls
+              preload="none"
+              src={intro.audioUrl}
+              className="w-full accent-accent [color-scheme:dark]"
+            />
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Kind-Filter-Bar
+// ---------------------------------------------------------------------
+
+const KIND_FILTERS: Array<{ kind: string; defaultOn: boolean }> = [
+  { kind: "content", defaultOn: true },
+  { kind: "summary", defaultOn: true },
+  { kind: "example", defaultOn: false },
+  { kind: "exercise", defaultOn: false },
+  { kind: "self_check", defaultOn: false },
+  { kind: "solutions", defaultOn: false },
+  { kind: "index", defaultOn: false },
+  { kind: "references", defaultOn: false },
+  { kind: "meta", defaultOn: false },
+];
+
+function KindFilterBar({
+  chapters,
+  busy,
+  onToggle,
+}: {
+  chapters: ChapterAudioStatus[];
+  busy: string | null;
+  onToggle: (kind: string, include: boolean) => void;
+}) {
+  // Pro kind: wie viele Kapitel + wie viele aktuell included.
+  const stats = useMemo(() => {
+    const m = new Map<string, { total: number; included: number }>();
+    for (const c of chapters) {
+      const cur = m.get(c.kind) ?? { total: 0, included: 0 };
+      cur.total++;
+      const isIncluded =
+        c.include_in_audio == null
+          ? c.kind === "content" || c.kind === "summary"
+          : c.include_in_audio === 1;
+      if (isIncluded) cur.included++;
+      m.set(c.kind, cur);
+    }
+    return m;
+  }, [chapters]);
+
+  // Nur Filter zeigen für kinds die im Doc tatsächlich vorkommen.
+  const visible = KIND_FILTERS.filter((f) => stats.has(f.kind));
+  if (visible.length === 0) return null;
+
+  return (
+    <section className="card p-3 flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold">
+          {t("audiobook.kindFilter.title")}
+        </h3>
+        <span className="text-[11px] text-neutral-500">
+          {t("audiobook.kindFilter.hint")}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {visible.map(({ kind }) => {
+          const s = stats.get(kind)!;
+          const allOn = s.included === s.total;
+          const allOff = s.included === 0;
+          const label = t(`chapters.kind.${kind}`);
+          return (
+            <div
+              key={kind}
+              className="flex items-center gap-1 px-2 py-1 rounded border border-border bg-bg-elevated"
+            >
+              <span className="text-xs text-neutral-300">
+                {label}{" "}
+                <span className="text-neutral-500">
+                  ({s.included}/{s.total})
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => onToggle(kind, true)}
+                disabled={busy != null || allOn}
+                className={cn(
+                  "text-[10px] px-1.5 py-0.5 rounded ml-1",
+                  allOn
+                    ? "bg-emerald-700/40 text-emerald-200 cursor-default"
+                    : "bg-neutral-700 text-neutral-200 hover:bg-emerald-700/30"
+                )}
+                title={t("audiobook.kindFilter.allOn")}
+              >
+                {busy === kind ? "…" : t("common.yes")}
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggle(kind, false)}
+                disabled={busy != null || allOff}
+                className={cn(
+                  "text-[10px] px-1.5 py-0.5 rounded",
+                  allOff
+                    ? "bg-red-700/40 text-red-200 cursor-default"
+                    : "bg-neutral-700 text-neutral-200 hover:bg-red-700/30"
+                )}
+                title={t("audiobook.kindFilter.allOff")}
+              >
+                {t("common.no")}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

@@ -31,11 +31,37 @@ interface Rule {
  *    - Bold     → von Kommas umschlossen (kurze Atempause)
  *    - Italic   → nur Text (keine Pause — Italic ist emphasis,
  *                 das kann die Voice-Prosodie nicht nachbilden)
+ *
+ *  Sonderfälle die Docling-Output mitbringt:
+ *    - "**Beispiel 1.1:**" am Zeilenanfang ist ein Studienheft-
+ *      Header (Bold gewrapped). Wird zu "Beispiel 1.1." mit Absatz
+ *      damit TTS eine saubere Pause macht.
+ *    - "## Foo:" → das angehängte "." am Ende würde "Foo:." machen.
+ *      Kein doppeltes Satzzeichen wenn das Heading schon mit
+ *      .:?!/; endet.
  */
 const MARKDOWN_STRIP: Rule[] = [
-  // Heading: "## 1.1 Titel" → "1.1 Titel." — Docling liefert Headings
-  // mit \n\n drumherum, der Punkt gibt TTS eine saubere Satz-Pause.
-  { pattern: /^#{1,6}\s+(.+?)\s*$/gm, replacement: "$1." },
+  // ZUERST: Bold-wrapped Studienheft-Header am Zeilenanfang. Diese
+  // sehen aus wie "**Beispiel 1.1:**" / "**Übung 3:**" — kommen
+  // alleinstehend in einer Zeile vor. Wir machen sie zu Headern
+  // bevor der generische Bold-Strip "** ... **" zu Kommas macht
+  // und das Pattern verschüttet.
+  {
+    pattern:
+      /^\s*\*\*\s*(Übung|Aufgabe|Beispiel|Definition|Satz|Lemma|Korollar|Theorem|Beweis|Bemerkung|Hinweis|Anmerkung|Achtung|Wichtig|Merksatz|Tipp|Frage|Lösung|Antwort|Vorgehen|Voraussetzung|Behauptung|Folgerung|Übungsaufgabe|Selbsttest|Exercise|Problem|Example|Definition|Theorem|Lemma|Corollary|Proof|Remark|Note|Notice|Warning|Tip|Question|Answer|Solution|Approach|Hint)(\s+[\dA-Za-z]+(?:[.\-][\dA-Za-z]+)*)?\s*:?\s*\*\*\s*$/gm,
+    replacement: (_, header: string, num?: string) =>
+      `${header}${num ?? ""}.\n\n`,
+  },
+  // Heading: "## 1.1 Titel" → "1.1 Titel." — wenn das Heading
+  // bereits mit Satzzeichen endet, KEIN doppeltes anhängen
+  // (sonst wird "## Foo:" zu "Foo:." was TTS verwirrt).
+  {
+    pattern: /^#{1,6}\s+(.+?)\s*$/gm,
+    replacement: (_, title: string) => {
+      const t = title.trim();
+      return /[.,:;!?]$/.test(t) ? t : `${t}.`;
+    },
+  },
   // Horizontal rule → Absatz-Trenner (zwei Newlines die die
   // paragraph-splitter in tts/segment.ts als Absatz-Grenze liest)
   { pattern: /^---+\s*$/gm, replacement: "\n\n" },
@@ -60,9 +86,15 @@ const MARKDOWN_STRIP: Rule[] = [
   { pattern: /(?<![\w*])\*([^*\n]+)\*(?![\w*])/g, replacement: "$1" },
   { pattern: /(?<![\w_])_([^_\n]+)_(?![\w_])/g, replacement: "$1" },
   // Doppelte Satzzeichen nach unseren Einschüben aufräumen:
-  // ",, Text ,," → ", Text,"  |  ".." → "."
+  // ",, Text ,," → ", Text,"  |  ".." → "."  |  "((Text)" → "(Text)"
+  // Letzteres ist ein häufiges Docling-Artefakt bei Citations.
   { pattern: /,\s*,/g, replacement: "," },
   { pattern: /\.\s*\./g, replacement: "." },
+  { pattern: /\(\s*\(/g, replacement: "(" },
+  { pattern: /\)\s*\)/g, replacement: ")" },
+  // Heading-Endung mit Doppelpunkt + Punkt aufräumen für den Fall
+  // dass die Endsatzzeichen-Erkennung im Heading-Strip mal versagt.
+  { pattern: /:\.\s/g, replacement: ": " },
 ];
 
 /** Multi-Token-Abkürzungen mit Punkten: z. B., d. h., i. d. R., …
@@ -138,6 +170,10 @@ const DE_SINGLE: Rule[] = [
   { pattern: /\bMio\b\.?/g, replacement: "Millionen" },
   { pattern: /\bMrd\b\.?/g, replacement: "Milliarden" },
   { pattern: /\bTsd\b\.?/g, replacement: "Tausend" },
+  // Bibliografie: "S. 29 ff." / "S. 29ff" → "Seite 29 und folgende"
+  // Das "S." selbst behandeln wir oben in DE_WITH_NUMBER, hier nur
+  // das nachfolgende ff./ff
+  { pattern: /(\d)\s*ff\b\.?/g, replacement: "$1 und folgende" },
   // Studienheft-typisch (ohne Zahl — „siehe Abb. rechts")
   { pattern: /\bAbb\b\.?/g, replacement: "Abbildung" },
   { pattern: /\bTab\b\.?/g, replacement: "Tabelle" },

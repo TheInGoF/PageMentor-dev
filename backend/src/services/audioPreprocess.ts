@@ -492,7 +492,7 @@ export async function preprocessChapterForAudio(params: {
     options: { temperature: 0.1, top_p: 0.9 },
   });
 
-  const cleaned = stripWrappers(result.response);
+  const cleaned = restoreHeadingParagraphs(stripWrappers(result.response));
   if (!cleaned || cleaned.length < 20) {
     throw new Error(
       `Preprocessor returned suspiciously short output (${cleaned.length} chars) — falling back to original`
@@ -567,6 +567,26 @@ function stripWrappers(s: string): string {
   );
   t = t.replace(metaHeaderRe, "");
   return t.trim();
+}
+
+/** Manche Modelle (gerade kleinere wie Gemma) ignorieren die
+ *  „Absatz-Struktur erhalten"-Regel und ziehen Heading + erster
+ *  Body-Satz auf eine Zeile zusammen. Beispiel:
+ *
+ *    Input:  "1.4 Dienstleistung.\n\nDer Begriff …"
+ *    Output: "1.4 Dienstleistung. Der Begriff …"
+ *
+ *  Heuristik macht das rückgängig: nummerierter Heading-Pattern
+ *  (Sub-Section-Notation, Großbuchstabe, Punkt am Ende) gefolgt
+ *  von einem Großbuchstaben → Absatz-Newline einschieben. */
+function restoreHeadingParagraphs(text: string): string {
+  return text.replace(
+    // Match: "<num>.<num> Capitalized Title.<space><Capital>"
+    // Group 1 = die Heading-Phrase inkl. Punkt
+    // Lookahead = Großbuchstabe als Start des nächsten Satzes
+    /^(\d+(?:\.\d+){0,3}\s+[A-ZÄÖÜ][^\n.]{2,80}\.)\s+(?=[A-ZÄÖÜ])/gm,
+    "$1\n\n"
+  );
 }
 
 /** Cache leeren — z. B. wenn der User den Modell-Override ändert oder
