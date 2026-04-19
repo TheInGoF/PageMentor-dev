@@ -17,6 +17,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     MAX_JOBS=2
 
+# git wird von flash-attn setup.py für `git submodule update --init
+# csrc/cutlass` benötigt. pytorch/pytorch:devel-Images bringen es NICHT
+# mit — ohne diesen apt-install scheitert der Build mit "No such file
+# or directory: 'git'".
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir packaging ninja wheel setuptools
 
 # `pip wheel` baut das Wheel ohne es zu installieren. --no-build-isolation
