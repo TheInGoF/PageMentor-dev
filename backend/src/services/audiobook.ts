@@ -293,12 +293,15 @@ export async function generateAudiobook(params: {
         // Wenn ein Intro-MP3 existiert, als Track 0 voranstellen.
         // Duration via ffprobe (innerhalb buildM4B) — wir geben hier
         // 0 vor, ffmpeg ermittelt die echte Länge selbst.
+        // Chapter-Marker-Label sprachabhängig — wird nur im Player
+        // angezeigt, nicht vorgelesen.
         const introPath = join(audioDir, "intro.mp3");
         const inputs = [...successfulChapterFiles];
         const m4bChapters = [...chapterDurations];
         if (existsSync(introPath)) {
           inputs.unshift(introPath);
-          m4bChapters.unshift({ title: "Intro", durationMs: 0 });
+          const introLabel = doc.language === "de" ? "Einleitung" : "Intro";
+          m4bChapters.unshift({ title: introLabel, durationMs: 0 });
         }
 
         const bookPath = join(audioDir, "book.m4b");
@@ -508,13 +511,16 @@ export async function generateIntroAudio(params: {
   });
 
   const abortController = new AbortController();
-  // Synthetisches Single-Chapter mit kind=meta. Nutzt synthesizeChapter
-  // damit die normale chunking + ffmpeg-Pipeline läuft.
+  // Synthetisches Single-Chapter. Title ist bewusst LEER — der
+  // User-Intro-Text ("Hörbuch: Foo. Verfasst von Bar.") ist selbst-
+  // erklärend, eine zusätzliche TTS-Ansage "Intro." vornweg würde
+  // redundant wirken. Plus: Edge erkennt "Intro" als englisches
+  // Lehnwort und spricht es englisch aus — macht es holprig.
   const synth: Chapter = {
     id: `intro-${params.docId}`,
     document_id: params.docId,
     number: 0,
-    title: "Intro",
+    title: "",
     text: params.text,
     start_page: 0,
     end_page: 0,
@@ -587,8 +593,16 @@ async function synthesizeChapter(params: {
     const chunkFiles: string[] = [];
     for (let i = 0; i < segments.length; i++) {
       if (signal.aborted) throw new AudiobookCanceled();
+      // Erste Chunk bekommt eine Kapitel-Ansage davor — außer das
+      // synthetische "Kapitel" hat number 0 + leeren title (= Intro).
+      // Dann ist der eigentliche User-Text selbst-erklärend, wir
+      // wollen kein doppeltes "Intro." vorweg.
+      const explicitTitle = chapter.title?.trim();
       const announcement =
-        i === 0 ? chapter.title || `Kapitel ${chapter.number}` : undefined;
+        i === 0
+          ? explicitTitle ||
+            (chapter.number > 0 ? `Kapitel ${chapter.number}` : undefined)
+          : undefined;
       const paragraphText = segments[i].paragraphs.join("\n\n");
       const plainText = announcement
         ? `${announcement}.\n\n${paragraphText}`
