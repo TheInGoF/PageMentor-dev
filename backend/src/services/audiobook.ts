@@ -590,6 +590,8 @@ async function synthesizeChapter(params: {
     const segments = segmentText(chapter.text);
     if (segments.length === 0) throw new Error("Keine Segmente aus Kapiteltext.");
 
+    const isDe = params.voice.locale.startsWith("de");
+
     const chunkFiles: string[] = [];
     for (let i = 0; i < segments.length; i++) {
       if (signal.aborted) throw new AudiobookCanceled();
@@ -597,12 +599,32 @@ async function synthesizeChapter(params: {
       // synthetische "Kapitel" hat number 0 + leeren title (= Intro).
       // Dann ist der eigentliche User-Text selbst-erklärend, wir
       // wollen kein doppeltes "Intro." vorweg.
+      //
+      // Ein "Kapitel:" / "Chapter:" wird immer vorangestellt wenn
+      // der Titel nicht schon mit dem Wort beginnt — das gibt Edge
+      // einen klaren Sprach-Kontext beim ersten Wort, sonst wird
+      // ein deutsches "Vorwort" als englisches "worword" gesprochen
+      // (Lehnwort-Ambiguität, Edge fällt auf EN als Default zurück).
       const explicitTitle = chapter.title?.trim();
-      const announcement =
-        i === 0
-          ? explicitTitle ||
-            (chapter.number > 0 ? `Kapitel ${chapter.number}` : undefined)
-          : undefined;
+      let announcement: string | undefined;
+      if (i === 0) {
+        if (explicitTitle) {
+          const alreadyPrefixed = isDe
+            ? /^(kapitel|abschnitt|teil)\b/i.test(explicitTitle)
+            : /^(chapter|section|part)\b/i.test(explicitTitle);
+          if (alreadyPrefixed) {
+            announcement = explicitTitle;
+          } else {
+            announcement = isDe
+              ? `Kapitel: ${explicitTitle}`
+              : `Chapter: ${explicitTitle}`;
+          }
+        } else if (chapter.number > 0) {
+          announcement = isDe
+            ? `Kapitel ${chapter.number}`
+            : `Chapter ${chapter.number}`;
+        }
+      }
       const paragraphText = segments[i].paragraphs.join("\n\n");
       const plainText = announcement
         ? `${announcement}.\n\n${paragraphText}`
