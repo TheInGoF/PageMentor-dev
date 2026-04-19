@@ -491,19 +491,63 @@ export async function preprocessChapterForAudio(params: {
   const pretreated = expandAbbreviations(row.text, params.language);
 
   const system = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
-  const result = await generate({
+
+  // num_ctx großzügig bemessen — der System-Prompt ist lang (~6k
+  // Tokens), dazu kommt der Kapitel-Text (bis ~4k Tokens) und die
+  // Ausgabe (~4k). Der Ollama-Default von 2048 reicht bei weitem
+  // nicht und führt zu sofortigem EOS → leere Response. 32k ist
+  // sicher und nahezu alle Modelle akzeptieren das.
+  //
+  // num_predict = -1: unbegrenzt generieren bis das Modell selbst
+  // EOS sagt. Sonst würde der Text-Output an irgendeiner Token-Grenze
+  // abgeschnitten.
+  const ollamaOptions = {
+    temperature: 0.1,
+    top_p: 0.9,
+    num_ctx: 32768,
+    num_predict: -1,
+  };
+
+  // LLM aufrufen mit Retry bei leerer Antwort. Ollama liefert gelegent-
+  // lich "" wenn das Modell gerade frisch geladen wurde (Arbiter-Swap
+  // zwischen TTS- und LLM-Modus) oder wenn der Call mitten in einem
+  // Container-Wechsel ankam. Ein einzelner Retry behebt das meistens.
+  let result = await generate({
     prompt: pretreated,
     system,
     model: params.model,
-    options: { temperature: 0.1, top_p: 0.9 },
+    options: ollamaOptions,
   });
+
+  if (!result.response || result.response.trim().length < 20) {
+    console.warn(
+      `[audio-preprocess] leere/kurze Antwort von ${result.model} (${result.response.length} chars) — Retry nach 2s. ` +
+        `Pretreated: ${pretreated.length} chars, raw response: ${JSON.stringify(result.response.slice(0, 200))}`
+    );
+    await new Promise((r) => setTimeout(r, 2000));
+    result = await generate({
+      prompt: pretreated,
+      system,
+      model: params.model,
+      options: ollamaOptions,
+    });
+  }
 
   const cleaned = stripProblematicCharsForTts(
     restoreHeadingParagraphs(stripWrappers(result.response))
   );
   if (!cleaned || cleaned.length < 20) {
+    // Fehler mit viel Context, damit das Frontend-Toast + Log brauchbar
+    // sind: welches Modell, wie kurz die Antwort, Input-Länge.
     throw new Error(
-      `Preprocessor returned suspiciously short output (${cleaned.length} chars) — falling back to original`
+      `Preprocessor returned only ${cleaned.length} chars (input was ${pretreated.length} chars, ` +
+        `model=${result.model}, raw=${JSON.stringify(
+          result.response.slice(0, 120)
+        )}). ` +
+        `Mögliche Ursachen: (1) Ollama lädt das Modell gerade neu; ` +
+        `(2) Kontext des Modells reicht nicht für diesen Kapiteltext; ` +
+        `(3) Modell hat den Prompt nicht verstanden. Retry später oder ` +
+        `ein anderes Modell in den Settings wählen.`
     );
   }
 

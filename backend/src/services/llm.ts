@@ -316,9 +316,25 @@ export async function generate(params: {
       const txt = await res.text().catch(() => res.statusText);
       throw new Error(`Ollama ${res.status}: ${txt.slice(0, 200)}`);
     }
-    const data = (await res.json()) as { response?: string; model?: string };
+    const data = (await res.json()) as {
+      response?: string;
+      model?: string;
+      done?: boolean;
+      done_reason?: string;
+      prompt_eval_count?: number;
+      eval_count?: number;
+    };
+    const response = (data.response ?? "").trim();
+    if (response.length === 0) {
+      console.warn(
+        `[llm] Ollama returned empty response (model=${data.model ?? model}, ` +
+          `done=${data.done}, reason=${data.done_reason ?? "?"}, ` +
+          `prompt_tokens=${data.prompt_eval_count ?? "?"}, ` +
+          `output_tokens=${data.eval_count ?? 0})`
+      );
+    }
     return {
-      response: (data.response ?? "").trim(),
+      response,
       model: data.model ?? model,
       provider: p.label,
       totalMs: Date.now() - started,
