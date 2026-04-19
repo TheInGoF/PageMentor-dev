@@ -483,8 +483,14 @@ class SpeechRequest(BaseModel):
     seed: int = 0
 
 
+# WICHTIG: `def` statt `async def`. Der Synth-Call blockiert Minuten-
+# lang (threading.Event.wait im Heartbeat-Wrapper). Ein `async def`-
+# Handler würde den asyncio-Event-Loop blockieren, bis die Generation
+# fertig ist → Docker-Healthcheck auf /health kriegt keine Antwort und
+# markiert den Container als unhealthy. FastAPI führt `def`-Handler
+# automatisch im Threadpool aus; Event-Loop bleibt responsiv.
 @app.post("/v1/audio/speech")
-async def speech(req: SpeechRequest):
+def speech(req: SpeechRequest):
     ref_audio = _decode_ref_audio(req.ref_audio_b64)
     samples, sr = _synth_clone(
         text=req.input,
