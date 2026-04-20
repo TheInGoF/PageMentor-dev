@@ -567,6 +567,11 @@ const en: Record<string, string> = {
 
   // Settings
   "settings.title": "Settings",
+  "settings.tab.general": "General",
+  "settings.tab.audiobook": "Audiobook",
+  "settings.tab.tts": "Qwen TTS",
+  "settings.tab.llm": "LLM providers",
+  "settings.tab.ai": "AI & embeddings",
   "settings.saved": "Settings saved",
   "settings.section.locale": "Language",
   "settings.locale": "Interface language",
@@ -1344,6 +1349,11 @@ const de: Record<string, string> = {
 
   // Settings
   "settings.title": "Einstellungen",
+  "settings.tab.general": "Allgemein",
+  "settings.tab.audiobook": "Hörbuch",
+  "settings.tab.tts": "Qwen TTS",
+  "settings.tab.llm": "LLM-Provider",
+  "settings.tab.ai": "KI & Embeddings",
   "settings.saved": "Einstellungen gespeichert",
   "settings.section.locale": "Sprache",
   "settings.locale": "Sprache der Oberfläche",

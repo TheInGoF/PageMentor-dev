@@ -38,6 +38,16 @@ interface Props {
   onClose: () => void;
 }
 
+type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "ai";
+
+const TABS: Array<{ id: SettingsTab; labelKey: string }> = [
+  { id: "general", labelKey: "settings.tab.general" },
+  { id: "audiobook", labelKey: "settings.tab.audiobook" },
+  { id: "tts", labelKey: "settings.tab.tts" },
+  { id: "llm", labelKey: "settings.tab.llm" },
+  { id: "ai", labelKey: "settings.tab.ai" },
+];
+
 /** 5%-Schritte von -10 bis +30 — programmatisch, damit das Label-Set
  *  konsistent zu Audiobook.tsx bleibt. */
 const RATES: Array<{ value: string; label: string }> = (() => {
@@ -86,6 +96,7 @@ export function SettingsModal({ open, onClose }: Props) {
     seed: "",
   });
   const [designBusy, setDesignBusy] = useState(false);
+  const [tab, setTab] = useState<SettingsTab>("general");
   const [llmBusy, setLlmBusy] = useState(false);
   const [gpuResetBusy, setGpuResetBusy] = useState(false);
   const [previewVoiceId, setPreviewVoiceId] = useState<string>("");
@@ -394,6 +405,7 @@ export function SettingsModal({ open, onClose }: Props) {
       open={open}
       onClose={onClose}
       title={t("settings.title")}
+      size="2xl"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -403,7 +415,26 @@ export function SettingsModal({ open, onClose }: Props) {
         </>
       }
     >
-      <div className="flex flex-col gap-5">
+      <div className="flex gap-4 -mx-1">
+        <nav className="w-40 shrink-0 flex flex-col gap-1 pr-2 border-r border-border">
+          {TABS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTab(item.id)}
+              className={
+                "text-left text-sm px-3 py-2 rounded transition-colors " +
+                (tab === item.id
+                  ? "bg-accent/15 text-accent"
+                  : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/60")
+              }
+            >
+              {t(item.labelKey)}
+            </button>
+          ))}
+        </nav>
+        <div className="flex-1 min-w-0 flex flex-col gap-5">
+        {tab === "general" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.section.locale")}
@@ -428,7 +459,9 @@ export function SettingsModal({ open, onClose }: Props) {
             </select>
           </div>
         </section>
+        )}
 
+        {tab === "general" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.section.library")}
@@ -449,7 +482,9 @@ export function SettingsModal({ open, onClose }: Props) {
             </select>
           </div>
         </section>
+        )}
 
+        {tab === "audiobook" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.section.audiobook")}
@@ -490,7 +525,9 @@ export function SettingsModal({ open, onClose }: Props) {
             </div>
           </div>
         </section>
+        )}
 
+        {tab === "general" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.section.exam")}
@@ -518,7 +555,9 @@ export function SettingsModal({ open, onClose }: Props) {
             />
           </div>
         </section>
+        )}
 
+        {tab === "llm" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.llm.title")}
@@ -607,8 +646,19 @@ export function SettingsModal({ open, onClose }: Props) {
             onModelChange={(v) => setLlmConfig({ ...llmConfig, googleModel: v })}
           />
 
-          <div className="border-t border-border pt-3 mt-1 flex flex-col gap-2">
-            <h4 className="text-xs font-semibold text-neutral-300">
+          <Button onClick={saveLlmConfig} disabled={llmBusy}>
+            {llmBusy ? t("common.saving") : t("settings.llm.save")}
+          </Button>
+        </section>
+        )}
+
+        {tab === "tts" && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs uppercase tracking-wide text-neutral-500">
+            {t("settings.tts.title")}
+          </h3>
+          <div className="flex flex-col gap-2">
+            <h4 className="text-xs font-semibold text-neutral-300 sr-only">
               {t("settings.tts.title")}
             </h4>
             <p className="text-[11px] text-neutral-500">
@@ -858,7 +908,9 @@ export function SettingsModal({ open, onClose }: Props) {
             {llmBusy ? t("common.saving") : t("settings.llm.save")}
           </Button>
         </section>
+        )}
 
+        {tab === "tts" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.voices.title")}
@@ -976,7 +1028,9 @@ export function SettingsModal({ open, onClose }: Props) {
             </Button>
           </div>
         </section>
+        )}
 
+        {tab === "tts" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.design.title")}
@@ -1114,7 +1168,9 @@ export function SettingsModal({ open, onClose }: Props) {
             </Button>
           </div>
         </section>
+        )}
 
+        {tab === "ai" && (
         <section className="flex flex-col gap-3">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.section.ai")}
@@ -1179,7 +1235,9 @@ export function SettingsModal({ open, onClose }: Props) {
             </Button>
           </div>
         </section>
+        )}
 
+        {tab === "general" && (
         <section className="flex flex-col gap-2 pt-2 border-t border-border">
           <h3 className="text-xs uppercase tracking-wide text-neutral-500">
             {t("settings.section.status")}
@@ -1208,6 +1266,8 @@ export function SettingsModal({ open, onClose }: Props) {
             </code>
           </div>
         </section>
+        )}
+        </div>
       </div>
     </Modal>
   );
