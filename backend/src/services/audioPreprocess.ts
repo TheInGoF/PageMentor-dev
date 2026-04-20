@@ -508,54 +508,147 @@ export async function preprocessChapterForAudio(params: {
     num_predict: -1,
   };
 
-  // LLM aufrufen mit Retry bei leerer Antwort. Ollama liefert gelegent-
-  // lich "" wenn das Modell gerade frisch geladen wurde (Arbiter-Swap
-  // zwischen TTS- und LLM-Modus) oder wenn der Call mitten in einem
-  // Container-Wechsel ankam. Ein einzelner Retry behebt das meistens.
-  let result = await generate({
-    prompt: pretreated,
-    system,
-    model: params.model,
-    options: ollamaOptions,
-  });
-
-  if (!result.response || result.response.trim().length < 20) {
-    console.warn(
-      `[audio-preprocess] leere/kurze Antwort von ${result.model} (${result.response.length} chars) — Retry nach 2s. ` +
-        `Pretreated: ${pretreated.length} chars, raw response: ${JSON.stringify(result.response.slice(0, 200))}`
+  // Lange Kapitel aufspalten. Ein 80k-Zeichen-Kapitel sprengt jedes
+  // realistische Context-Fenster — 25k Tokens Input + 6k Prompt +
+  // 25k Output > 32k num_ctx-Limit der meisten Modelle. Wir splitten
+  // an Absatzgrenzen (sekundär Satz) zu Stücken à ~3500 Zeichen und
+  // konkatenieren die Ergebnisse.
+  const subChunks = splitForPreprocess(pretreated, 3500);
+  if (subChunks.length > 1) {
+    console.log(
+      `[audio-preprocess] chapter ${row.id} (${pretreated.length} chars) → ` +
+        `${subChunks.length} sub-chunks für LLM (je ~${Math.round(pretreated.length / subChunks.length)} chars)`
     );
-    await new Promise((r) => setTimeout(r, 2000));
-    result = await generate({
-      prompt: pretreated,
+  }
+
+  const responses: string[] = [];
+  let lastModel = "(unknown)";
+  for (let i = 0; i < subChunks.length; i++) {
+    const chunk = subChunks[i];
+    const label = subChunks.length > 1 ? ` [${i + 1}/${subChunks.length}]` : "";
+    const t0 = Date.now();
+
+    let result = await generate({
+      prompt: chunk,
       system,
       model: params.model,
       options: ollamaOptions,
     });
+
+    if (!result.response || result.response.trim().length < 20) {
+      console.warn(
+        `[audio-preprocess]${label} leere/kurze Antwort von ${result.model} ` +
+          `(${result.response.length} chars), Input ${chunk.length} chars — Retry nach 2s`
+      );
+      await new Promise((r) => setTimeout(r, 2000));
+      result = await generate({
+        prompt: chunk,
+        system,
+        model: params.model,
+        options: ollamaOptions,
+      });
+    }
+
+    const piece = result.response.trim();
+    if (piece.length < 20) {
+      throw new Error(
+        `Preprocessor returned only ${piece.length} chars for sub-chunk${label} ` +
+          `(input ${chunk.length} chars, model=${result.model}, raw=${JSON.stringify(
+            result.response.slice(0, 120)
+          )}). Context overfull? Ollama still loading? Retry later ` +
+          `oder anderes Modell in Settings wählen.`
+      );
+    }
+
+    lastModel = result.model;
+    responses.push(piece);
+    console.log(
+      `[audio-preprocess]${label} done in ${((Date.now() - t0) / 1000).toFixed(1)}s ` +
+        `(input ${chunk.length}c → output ${piece.length}c, model=${result.model})`
+    );
   }
 
+  // Sub-Chunk-Outputs mit doppelter Newline zusammenfügen — entspricht
+  // der Absatz-Konvention im Rest des Systems.
+  const combined = responses.join("\n\n");
   const cleaned = stripProblematicCharsForTts(
-    restoreHeadingParagraphs(stripWrappers(result.response))
+    restoreHeadingParagraphs(stripWrappers(combined))
   );
   if (!cleaned || cleaned.length < 20) {
-    // Fehler mit viel Context, damit das Frontend-Toast + Log brauchbar
-    // sind: welches Modell, wie kurz die Antwort, Input-Länge.
     throw new Error(
-      `Preprocessor returned only ${cleaned.length} chars (input was ${pretreated.length} chars, ` +
-        `model=${result.model}, raw=${JSON.stringify(
-          result.response.slice(0, 120)
-        )}). ` +
-        `Mögliche Ursachen: (1) Ollama lädt das Modell gerade neu; ` +
-        `(2) Kontext des Modells reicht nicht für diesen Kapiteltext; ` +
-        `(3) Modell hat den Prompt nicht verstanden. Retry später oder ` +
-        `ein anderes Modell in den Settings wählen.`
+      `Preprocessor aggregate returned only ${cleaned.length} chars after joining ` +
+        `${subChunks.length} sub-chunks (model=${lastModel}).`
     );
   }
 
   d.prepare(
     "UPDATE chapters SET audio_text = ?, audio_text_model = ? WHERE id = ?"
-  ).run(cleaned, result.model, params.chapterId);
+  ).run(cleaned, lastModel, params.chapterId);
 
-  return { text: cleaned, model: result.model, cached: false };
+  return { text: cleaned, model: lastModel, cached: false };
+}
+
+/** Teilt einen Text auf ≤ `maxChars`-Stücke an bevorzugt Absatz-,
+ *  sekundär Satzgrenzen. Ein einzelner überlanger Absatz wird an
+ *  Satzzeichen (. ! ?) gesplittet; wenn sogar ein einzelner Satz
+ *  noch zu lang ist, Hart-Cut an Zeichengrenze.
+ *
+ *  Zweck: der Audio-Preprocessor kann keinen 80k-Zeichen-Chapter auf
+ *  einmal verarbeiten (Context-Limit der LLMs). Wir fahren ihn in
+ *  Stücken durch und konkatenieren die Ergebnisse. Absatzgrenzen als
+ *  Split-Punkt sind semantisch klean — der LLM sieht nie einen Satz
+ *  halbiert.
+ */
+function splitForPreprocess(text: string, maxChars: number): string[] {
+  if (text.length <= maxChars) return [text];
+
+  const paragraphs = text.split(/\n{2,}/);
+  const out: string[] = [];
+  let buf = "";
+
+  const flush = () => {
+    const trimmed = buf.trim();
+    if (trimmed) out.push(trimmed);
+    buf = "";
+  };
+
+  for (const p of paragraphs) {
+    if (p.length > maxChars) {
+      // Einzelner Absatz zu groß — Satzweise nachsplitten.
+      if (buf) flush();
+      const sentences = p.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) ?? [p];
+      let subBuf = "";
+      for (const s of sentences) {
+        if (s.length > maxChars) {
+          // Ein einzelner Satz zu lang — hart durchschneiden.
+          if (subBuf.trim()) out.push(subBuf.trim());
+          subBuf = "";
+          for (let i = 0; i < s.length; i += maxChars) {
+            out.push(s.slice(i, i + maxChars).trim());
+          }
+          continue;
+        }
+        if ((subBuf + s).length > maxChars && subBuf) {
+          out.push(subBuf.trim());
+          subBuf = s;
+        } else {
+          subBuf += s;
+        }
+      }
+      if (subBuf.trim()) out.push(subBuf.trim());
+      continue;
+    }
+
+    const nextLen = buf ? buf.length + 2 + p.length : p.length;
+    if (nextLen > maxChars && buf) {
+      flush();
+      buf = p;
+    } else {
+      buf = buf ? buf + "\n\n" + p : p;
+    }
+  }
+  flush();
+  return out;
 }
 
 /** Kleinere LLMs halten sich trotz expliziter Anweisung nicht immer

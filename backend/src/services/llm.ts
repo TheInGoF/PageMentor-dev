@@ -301,6 +301,9 @@ export async function generate(params: {
 
   if (p.type === "ollama" && p.url) {
     model = await resolveOllamaModel(p.url, model);
+    // 15 min Hard-Timeout. Ohne das wartet Node's fetch unbegrenzt —
+    // wenn Ollama wegen zu großem Context hängt oder der Modell-
+    // Wechsel stecken bleibt, friert der ganze Audiobook-Run ein.
     const res = await fetch(`${p.url}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -311,6 +314,7 @@ export async function generate(params: {
         stream: false,
         options: { temperature: 0.3, top_p: 0.9, ...params.options },
       }),
+      signal: AbortSignal.timeout(15 * 60 * 1000),
     });
     if (!res.ok) {
       const txt = await res.text().catch(() => res.statusText);
