@@ -1,6 +1,6 @@
 {
   "name": "pagementor-frontend",
-  "version": "1.18.025",
+  "version": "1.18.026",
   "private": true,
   "type": "module",
   "scripts": {

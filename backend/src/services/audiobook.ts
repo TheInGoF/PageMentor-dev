@@ -45,6 +45,8 @@ function isIncluded(ch: Pick<Chapter, "kind" | "include_in_audio">): boolean {
 interface Document {
   id: string;
   title: string;
+  doc_title: string | null;
+  author: string | null;
   language: string;
 }
 
@@ -85,9 +87,11 @@ export async function generateAudiobook(params: {
   const signal = abortController.signal;
 
   const d = db();
-  const doc = d.prepare("SELECT id, title, language FROM documents WHERE id = ?").get(params.docId) as
-    | Document
-    | undefined;
+  const doc = d
+    .prepare(
+      "SELECT id, title, doc_title, author, language FROM documents WHERE id = ?"
+    )
+    .get(params.docId) as Document | undefined;
   if (!doc) {
     running.delete(params.docId);
     throw new Error("Document not found");
@@ -329,7 +333,8 @@ export async function generateAudiobook(params: {
             inputs,
             chapters: m4bChapters,
             output: bookPath,
-            title: doc.title,
+            title: doc.doc_title || doc.title,
+            artist: doc.author ?? undefined,
             coverPath: coverPathFor(doc.id),
           });
         } catch (err) {
@@ -907,7 +912,9 @@ export async function rebuildM4B(docId: string): Promise<{
 }> {
   const d = db();
   const doc = d
-    .prepare("SELECT id, title, language FROM documents WHERE id = ?")
+    .prepare(
+      "SELECT id, title, doc_title, author, language FROM documents WHERE id = ?"
+    )
     .get(docId) as Document | undefined;
   if (!doc) throw new Error("Document not found");
 
@@ -968,7 +975,8 @@ export async function rebuildM4B(docId: string): Promise<{
     inputs,
     chapters: m4bChapters,
     output: bookPath,
-    title: doc.title,
+    title: doc.doc_title || doc.title,
+    artist: doc.author ?? undefined,
     coverPath: coverPathFor(doc.id),
   });
 
