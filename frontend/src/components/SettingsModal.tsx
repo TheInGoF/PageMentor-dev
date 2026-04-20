@@ -106,6 +106,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [designBusy, setDesignBusy] = useState(false);
   const [designPreviewUrl, setDesignPreviewUrl] = useState<string | null>(null);
   const [designPreviewSeed, setDesignPreviewSeed] = useState<number | null>(null);
+  const [designPreviewBlob, setDesignPreviewBlob] = useState<Blob | null>(null);
   const [tab, setTab] = useState<SettingsTab>("general");
   const [llmBusy, setLlmBusy] = useState(false);
   const [gpuResetBusy, setGpuResetBusy] = useState(false);
@@ -384,6 +385,10 @@ export function SettingsModal({ open, onClose }: Props) {
         return url;
       });
       setDesignPreviewSeed(seed);
+      // Blob für Save merken — damit die gespeicherte Voice EXAKT so
+      // klingt wie das gerade angehörte Preview (Qwen VoiceDesign ist
+      // nicht deterministisch, Re-Generate würde abweichen).
+      setDesignPreviewBlob(blob);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
@@ -409,6 +414,10 @@ export function SettingsModal({ open, onClose }: Props) {
         language: designDraft.language,
         description: designDraft.description.trim(),
         seed: designPreviewSeed,
+        // Blob mitsenden — Backend speichert ihn als Referenz-Audio
+        // und nutzt ihn ab jetzt für alle Synthese-Calls über Base-
+        // Clone (stabile Stimme über alle Hörbuch-Chunks).
+        refBlob: designPreviewBlob ?? undefined,
       });
       const r = await api.voiceDesigns.list();
       setVoiceDesigns(r.voices);
@@ -422,6 +431,7 @@ export function SettingsModal({ open, onClose }: Props) {
       if (designPreviewUrl) URL.revokeObjectURL(designPreviewUrl);
       setDesignPreviewUrl(null);
       setDesignPreviewSeed(null);
+      setDesignPreviewBlob(null);
       notifyVoicesChanged();
       toast.show(t("settings.design.created"), "success");
     } catch (err) {

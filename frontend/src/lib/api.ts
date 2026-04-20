@@ -696,17 +696,35 @@ export const api = {
   },
   voiceDesigns: {
     list: () => request<{ voices: VoiceDesignMeta[] }>("/api/voices/design"),
+    /** Legt eine Design-Voice an. `refBlob` ist optional aber stark
+     *  empfohlen: enthält das Audio aus dem Preview-Wizard. Backend
+     *  speichert es als Referenz und nutzt es für alle zukünftigen
+     *  Synthese-Calls (via Base-Clone) — damit klingt die Stimme im
+     *  Hörbuch EXAKT wie das, was der User im Preview gutgeheißen hat.
+     *  Ohne Blob generiert der Server selbst eine Referenz, was
+     *  wegen Qwens Non-Determinismus vom Preview abweichen kann. */
     create: (input: {
       label: string;
       gender: "female" | "male";
       language?: string;
       description: string;
       seed?: number;
-    }) =>
-      request<{ voice: VoiceDesignMeta }>("/api/voices/design", {
+      refBlob?: Blob;
+      refText?: string;
+    }) => {
+      const form = new FormData();
+      form.append("label", input.label);
+      form.append("gender", input.gender);
+      if (input.language) form.append("language", input.language);
+      form.append("description", input.description);
+      if (input.seed !== undefined) form.append("seed", String(input.seed));
+      if (input.refBlob) form.append("ref_blob", input.refBlob, "preview.mp3");
+      if (input.refText) form.append("ref_text", input.refText);
+      return request<{ voice: VoiceDesignMeta }>("/api/voices/design", {
         method: "POST",
-        body: JSON.stringify(input),
-      }),
+        body: form,
+      });
+    },
     remove: (id: string) =>
       request<{ ok: true }>(`/api/voices/design/${id}`, { method: "DELETE" }),
     previewUrl: (id: string, text?: string) =>

@@ -593,8 +593,10 @@ def _synth_clone(
         f"{text}|{seed}|{len(ref_audio[0])}".encode("utf-8")
     ).hexdigest()[:8]
     log.info(
-        "synth start [%s] text_len=%d seed=%d lang=%s ref_text=%s",
-        req_hash, len(text), seed, language, "yes" if ref_text else "no",
+        "clone start [%s] seed=%d lang=%s text[0:60]=%r ref_text[0:60]=%r ref_audio_samples=%d kwargs=%s",
+        req_hash, seed, language,
+        text[:60], (ref_text or "")[:60], len(ref_audio[0]),
+        sorted(gen_kwargs.keys()),
     )
     t0 = time.time()
 
@@ -691,9 +693,10 @@ def _synth_custom(
         f"{text}|{seed}|{speaker}|{instruct or ''}".encode("utf-8")
     ).hexdigest()[:8]
     log.info(
-        "customvoice start [%s] text_len=%d seed=%d speaker=%s lang=%s instruct=%s",
-        req_hash, len(text), seed, speaker, language,
-        "yes" if instruct else "no",
+        "customvoice start [%s] seed=%d speaker=%s lang=%s text[0:60]=%r instruct[0:80]=%r kwargs=%s",
+        req_hash, seed, speaker, language,
+        text[:60], (instruct or "")[:80],
+        sorted(gen_kwargs.keys()),
     )
     t0 = time.time()
 
@@ -783,8 +786,10 @@ def _synth_design(
         f"{text}|{seed}|{voice_description}".encode("utf-8")
     ).hexdigest()[:8]
     log.info(
-        "voicedesign start [%s] text_len=%d seed=%d lang=%s desc_len=%d",
-        req_hash, len(text), seed, language, len(voice_description),
+        "voicedesign start [%s] seed=%d lang=%s text[0:60]=%r description[0:120]=%r kwargs=%s",
+        req_hash, seed, language,
+        text[:60], voice_description[:120],
+        sorted(gen_kwargs.keys()),
     )
     t0 = time.time()
 

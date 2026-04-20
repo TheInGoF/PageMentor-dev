@@ -274,6 +274,24 @@ export function initDb() {
     );
   `);
 
+  // Referenz-Audio pro Design. Qwen3-TTS VoiceDesign liefert keinen
+  // seed-stabilen Output pro Generate-Call, dafür ist es nicht gebaut —
+  // die offizielle Qwen-README zeigt das "VoiceDesign → Clone"-Pattern:
+  // einmalig eine Referenz-WAV via VoiceDesign erzeugen, dann für jede
+  // weitere Synthese das Base-Clone-Modell mit dieser Referenz nutzen
+  // (Clone IST seed-stabil). Spalten werden lazy gefüllt: beim Create
+  // einer neuen Design-Voice, oder beim ersten Audiobook-Use einer
+  // alten Design-Voice ohne gespeicherte Referenz.
+  const vdCols = d
+    .prepare("PRAGMA table_info(voice_designs)")
+    .all() as Array<{ name: string }>;
+  if (!vdCols.some((c) => c.name === "ref_path")) {
+    d.exec("ALTER TABLE voice_designs ADD COLUMN ref_path TEXT");
+  }
+  if (!vdCols.some((c) => c.name === "ref_text")) {
+    d.exec("ALTER TABLE voice_designs ADD COLUMN ref_text TEXT");
+  }
+
   // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
   // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
   // während einer Docling-Extraktion — Task-ID war nur in-memory, ist

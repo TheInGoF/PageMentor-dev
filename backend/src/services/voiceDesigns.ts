@@ -18,7 +18,20 @@
  */
 
 import { randomUUID, randomInt } from "node:crypto";
+import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { db } from "../db";
+
+const DATA_DIR = process.env.PM_DATA_DIR || "./data";
+const DESIGN_DIR = join(DATA_DIR, "voice-designs");
+
+function ensureDesignDir(): void {
+  if (!existsSync(DESIGN_DIR)) mkdirSync(DESIGN_DIR, { recursive: true });
+}
+
+export function designRefPath(id: string): string {
+  return join(DESIGN_DIR, `${id}.mp3`);
+}
 
 export type Gender = "female" | "male";
 
@@ -32,6 +45,13 @@ export interface VoiceDesign {
   createdAt: string;
   msPerChar: number | null;
   samplesCount: number;
+  /** Pfad zum Referenz-Audio auf Disk. Leer wenn noch nie generiert —
+   *  dann muss der Caller `ensureDesignReference` aufrufen bevor die
+   *  Voice für Clone-basierte Synthese genutzt werden kann. */
+  refPath: string | null;
+  /** Transkript des Referenz-Audios (wird als ref_text an Base-Clone
+   *  gereicht, verbessert Clone-Qualität). */
+  refText: string | null;
 }
 
 interface Row {
@@ -44,6 +64,8 @@ interface Row {
   created_at: string;
   ms_per_char: number | null;
   samples_count: number;
+  ref_path: string | null;
+  ref_text: string | null;
 }
 
 function rowToDesign(r: Row): VoiceDesign {
@@ -57,6 +79,8 @@ function rowToDesign(r: Row): VoiceDesign {
     createdAt: r.created_at,
     msPerChar: r.ms_per_char ?? null,
     samplesCount: r.samples_count ?? 0,
+    refPath: r.ref_path ?? null,
+    refText: r.ref_text ?? null,
   };
 }
 
@@ -117,8 +141,35 @@ export function createVoiceDesign(
 }
 
 export function deleteVoiceDesign(id: string): boolean {
+  const design = getVoiceDesign(id);
+  if (!design) return false;
+  // Referenz-Audio auch löschen, sonst hinterlassen wir verwaiste
+  // MP3-Dateien auf Disk.
+  if (design.refPath && existsSync(design.refPath)) {
+    try {
+      unlinkSync(design.refPath);
+    } catch (e) {
+      console.warn(`[voice-designs] failed to unlink ${design.refPath}:`, e);
+    }
+  }
   const r = db().prepare("DELETE FROM voice_designs WHERE id = ?").run(id);
   return r.changes > 0;
+}
+
+/** Persistiert einen frisch generierten Referenz-Audio-Pfad + Transkript
+ *  zur Design-Row. Wird nach dem erfolgreichen VoiceDesign-Generate-Call
+ *  aufgerufen (im Create-Flow, oder lazy beim ersten Audiobook-Use). */
+export function setDesignReference(
+  id: string,
+  refPath: string,
+  refText: string
+): void {
+  ensureDesignDir();
+  db()
+    .prepare(
+      "UPDATE voice_designs SET ref_path = ?, ref_text = ? WHERE id = ?"
+    )
+    .run(refPath, refText, id);
 }
 
 /** EMA-Update analog zu voiceSamples.recordChunkTiming — Frontend nutzt

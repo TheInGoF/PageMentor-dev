@@ -22,8 +22,10 @@ import {
   getVoiceDesign,
   listVoiceDesigns,
 } from "../services/voiceDesigns";
+import { writeFileSync } from "node:fs";
 import { synthesizePreview } from "../tts/synth";
-import { previewDesignUnsaved } from "../tts/engines/qwen";
+import { previewDesignUnsaved, ensureDesignReference } from "../tts/engines/qwen";
+import { designRefPath, setDesignReference } from "../services/voiceDesigns";
 
 export const voiceRoutes = new Hono();
 
@@ -109,34 +111,126 @@ voiceRoutes.get("/design", (c) => {
   });
 });
 
+/** Legt eine Voice-Design-Row an UND persistiert die Referenz-Audio-
+ *  Datei die in allen zukünftigen Synthese-Calls als Clone-Prompt
+ *  verwendet wird (Qwens offizielles "Voice Design then Clone"-Pattern).
+ *
+ *  Zwei Content-Types akzeptiert:
+ *
+ *  - **multipart/form-data** (empfohlen): enthält `ref_blob` = die
+ *    Audio-Bytes, die der User eben im Preview-Wizard gehört und
+ *    gutgeheißen hat. Backend speichert die Bytes 1:1 als Referenz —
+ *    garantiert, dass die gespeicherte Stimme EXAKT so klingt wie
+ *    das was der User probe-gehört hat.
+ *
+ *  - **application/json** (Fallback): keine Audio-Bytes. Backend ruft
+ *    dann lazily `ensureDesignReference` auf (serverseitige Neu-
+ *    Generierung via VoiceDesign). Risiko: die regenerierte Stimme
+ *    könnte wegen Qwens Non-Determinismus vom Preview abweichen.
+ */
 voiceRoutes.post("/design", async (c) => {
-  const body = await c.req.json<{
-    label: string;
-    gender?: Gender;
-    language?: string;
-    description: string;
-    seed?: number;
-  }>();
+  const contentType = c.req.header("content-type") ?? "";
+  let label = "";
+  let gender: Gender = "female";
+  let language = "de";
+  let description = "";
+  let seed: number | undefined;
+  let refBlob: ArrayBuffer | null = null;
+  let refText: string | null = null;
+
+  try {
+    if (contentType.includes("multipart/form-data")) {
+      const form = await c.req.parseBody({ all: false });
+      label = String(form.label ?? "").trim();
+      gender = String(form.gender ?? "female") === "male" ? "male" : "female";
+      language = String(form.language ?? "de") || "de";
+      description = String(form.description ?? "").trim();
+      const seedRaw = form.seed ? String(form.seed) : "";
+      if (seedRaw) {
+        const n = parseInt(seedRaw, 10);
+        if (Number.isFinite(n) && n > 0) seed = n;
+      }
+      refText = form.ref_text ? String(form.ref_text) : null;
+      const blob = form.ref_blob;
+      // Hono gibt Upload-Files unter Bun/Node als File-Objekt zurück
+      // (File extends Blob). Duck-typing statt instanceof — vermeidet
+      // Typ-Probleme wenn Node-Globals nicht verfügbar sind.
+      if (
+        blob &&
+        typeof blob === "object" &&
+        typeof (blob as { arrayBuffer?: unknown }).arrayBuffer === "function"
+      ) {
+        refBlob = await (blob as Blob).arrayBuffer();
+      }
+    } else {
+      const body = await c.req.json<{
+        label: string;
+        gender?: Gender;
+        language?: string;
+        description: string;
+        seed?: number;
+      }>();
+      label = body.label;
+      gender = body.gender === "male" ? "male" : "female";
+      language = body.language ?? "de";
+      description = body.description;
+      seed = body.seed;
+    }
+  } catch (e) {
+    return c.json({ error: `bad request: ${(e as Error).message}` }, 400);
+  }
 
   try {
     const { design } = createVoiceDesign({
-      label: body.label,
-      gender: body.gender === "male" ? "male" : "female",
-      language: body.language,
-      description: body.description,
-      seed: body.seed,
+      label,
+      gender,
+      language,
+      description,
+      seed,
     });
+
+    // Referenz-Audio persistieren. Blob-Upload vom Client bevorzugen
+    // (matched exakt den User-Preview), sonst serverseitig generieren.
+    let finalDesign = design;
+    if (refBlob) {
+      const path = designRefPath(design.id);
+      writeFileSync(path, Buffer.from(refBlob));
+      const effectiveRefText =
+        refText ||
+        (language === "de"
+          ? "Hallo, dies ist eine Sprachprobe. Der Text geht über mehrere Sätze, damit die Stimm-Charakteristik sichtbar wird."
+          : "Hello, this is a voice sample. The text spans several sentences so the voice character becomes clear.");
+      setDesignReference(design.id, path, effectiveRefText);
+      finalDesign = { ...design, refPath: path, refText: effectiveRefText };
+    } else {
+      // Server-seitige Generierung. Das ist der Fallback-Pfad (JSON-
+      // Clients ohne Blob). Kann ~30-60 s dauern.
+      try {
+        finalDesign = await ensureDesignReference(design);
+      } catch (e) {
+        console.warn(
+          `[voices] ensureDesignReference for ${design.id} failed:`,
+          e
+        );
+        // Row bleibt liegen ohne ref_path — beim ersten Synthese-Use
+        // wird erneut versucht. Dem Client melden wir trotzdem Erfolg,
+        // damit die UI die Design-Voice anzeigen und vom User löschen
+        // lassen kann.
+      }
+    }
+
     return c.json({
       voice: {
-        id: design.id,
-        label: design.label,
-        gender: design.gender,
-        language: design.language,
-        description: design.description,
-        seed: design.seed,
-        createdAt: design.createdAt,
-        msPerChar: design.msPerChar,
-        samplesCount: design.samplesCount,
+        id: finalDesign.id,
+        label: finalDesign.label,
+        gender: finalDesign.gender,
+        language: finalDesign.language,
+        description: finalDesign.description,
+        seed: finalDesign.seed,
+        createdAt: finalDesign.createdAt,
+        msPerChar: finalDesign.msPerChar,
+        samplesCount: finalDesign.samplesCount,
+        hasReference: !!finalDesign.refPath,
       },
     });
   } catch (e) {

@@ -27,10 +27,13 @@ import {
   recordChunkTiming,
   type VoiceSample,
 } from "../../services/voiceSamples";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import {
+  designRefPath,
   getVoiceDesign,
   listVoiceDesigns,
   recordDesignChunkTiming,
+  setDesignReference,
   type VoiceDesign,
 } from "../../services/voiceDesigns";
 import { applyAtempo } from "../ffmpeg";
@@ -283,6 +286,95 @@ function buildDesignInstruct(design: VoiceDesign): string {
   return prefix + desc;
 }
 
+/** Sendet Text + Design-Referenz-Audio als Base-Voice-Clone-Request
+ *  an den Sidecar. Damit ist die Stimm-Identität über alle Chunks
+ *  stabil — Base-Clone IST seed-deterministisch, VoiceDesign ist es
+ *  nicht. Offizielles "Voice Design then Clone"-Pattern aus der
+ *  Qwen3-TTS-README.
+ */
+async function callSpeechCloneFromDesign(params: {
+  text: string;
+  design: VoiceDesign;
+  timeoutMs: number;
+}): Promise<Buffer> {
+  if (!params.design.refPath || !existsSync(params.design.refPath)) {
+    throw new Error(
+      `Design ${params.design.id} hat keine Referenz-Audio — bitte neu anlegen oder ensureDesignReference() aufrufen.`
+    );
+  }
+  const url = baseUrl();
+  const refBytes = readFileSync(params.design.refPath);
+  const refB64 = refBytes.toString("base64");
+
+  const res = await fetch(`${url}/v1/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      input: params.text,
+      voice: `design:${params.design.id}`,
+      response_format: "mp3",
+      speed: 1.0,
+      ref_audio_b64: refB64,
+      ref_text: params.design.refText ?? undefined,
+      language: qwenLanguageFor(params.design.language),
+      seed: params.design.seed,
+    }),
+    signal: AbortSignal.timeout(params.timeoutMs),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(
+      `Qwen-TTS-Clone-from-Design ${res.status} (design=${params.design.id}): ${detail.slice(0, 200)}`
+    );
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/** Stellt sicher, dass eine Design-Voice eine Referenz-Audio-Datei
+ *  auf Disk hat. Wenn nicht, wird EINMAL via VoiceDesign generiert,
+ *  das Ergebnis als MP3 gespeichert und die DB-Row geupdatet. Danach
+ *  zeigt `design.refPath` auf die Datei. Gibt das aktualisierte Design
+ *  zurück.
+ *
+ *  Nötig für alte Designs aus v1.18.025-v1.18.032 (vor dem Refactor
+ *  auf Clone-Pattern) sowie als Server-Fallback wenn der Client beim
+ *  Create keinen Blob mitschickt.
+ */
+export async function ensureDesignReference(
+  design: VoiceDesign,
+  timeoutMs: number = 3 * 60_000
+): Promise<VoiceDesign> {
+  if (design.refPath && existsSync(design.refPath)) return design;
+
+  const refText =
+    design.language === "de"
+      ? "Hallo, dies ist eine Sprachprobe. Der Text geht über mehrere Sätze, damit die Stimm-Charakteristik sichtbar wird."
+      : "Hello, this is a voice sample. The text spans several sentences so the voice character becomes clear.";
+
+  console.log(
+    `[qwen-tts] ensuring reference audio for design ${design.id} — generating via VoiceDesign (one-time)`
+  );
+  const buf = await previewDesignUnsaved({
+    text: refText,
+    description: design.description,
+    gender: design.gender,
+    language: design.language,
+    seed: design.seed,
+    timeoutMs,
+  });
+  const path = designRefPath(design.id);
+  writeFileSync(path, buf);
+  setDesignReference(design.id, path, refText);
+  console.log(
+    `[qwen-tts] design ${design.id} reference saved to ${path} (${buf.length} bytes)`
+  );
+  return { ...design, refPath: path, refText };
+}
+
 /** Preview-Synthese für eine NOCH-NICHT-gespeicherte Voice-Design —
  *  wird vom Settings-Form genutzt bevor die Design-Zeile in die DB
  *  persistiert wird. Ermöglicht Seed-Reroll ohne Insert-Delete-Dance.
@@ -311,6 +403,8 @@ export async function previewDesignUnsaved(params: {
     createdAt: "",
     msPerChar: null,
     samplesCount: 0,
+    refPath: null,
+    refText: null,
   };
   return callSpeechDesign({
     text: params.text,
@@ -454,16 +548,18 @@ export const qwenEngine: TtsEngine = {
     let buf: Buffer;
 
     if (design) {
-      const dials = readDials();
+      // Offizielles Qwen-Pattern: Design-Voice einmalig referenz-
+      // bouncen, dann über Base-Clone rendern. Das ist seed-stabil —
+      // jeder Chunk bekommt dieselbe Stimm-Identität. VoiceDesign
+      // direkt pro Chunk aufzurufen wäre es nicht.
+      const ready = await ensureDesignReference(design, SYNTH_TIMEOUT_MS);
       console.log(
-        `[qwen-tts] synth design=${design.id} (${design.label}) text=${text.length}c rate=${params.rate} ` +
-          `seed=${dials.seedOverride ?? design.seed} temp=${dials.temperature ?? "def"}`
+        `[qwen-tts] synth design=${ready.id} (${ready.label}) via clone text=${text.length}c rate=${params.rate} seed=${ready.seed}`
       );
-      buf = await callSpeechDesign({
+      buf = await callSpeechCloneFromDesign({
         text,
-        design,
+        design: ready,
         timeoutMs: SYNTH_TIMEOUT_MS,
-        dials,
       });
     } else if (presetSpeaker) {
       const instruct = effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
@@ -557,28 +653,13 @@ export const qwenEngine: TtsEngine = {
   async preview(params: PreviewParams): Promise<Buffer> {
     const design = resolveDesign(params.voice.id);
     if (design) {
-      const base = readDials();
-      const dials: AdvancedDials = {
-        temperature:
-          params.temperatureOverride !== undefined
-            ? params.temperatureOverride
-            : base.temperature,
-        topP:
-          params.topPOverride !== undefined ? params.topPOverride : base.topP,
-        maxNewTokens:
-          params.maxNewTokensOverride !== undefined
-            ? params.maxNewTokensOverride
-            : base.maxNewTokens,
-        seedOverride:
-          params.seedOverride !== undefined
-            ? params.seedOverride
-            : base.seedOverride,
-      };
-      const buf = await callSpeechDesign({
+      // Preview auf einer GESPEICHERTEN Design-Voice geht über Clone —
+      // dieselbe stabile Stimme die der User im Audiobook hören wird.
+      const ready = await ensureDesignReference(design, PREVIEW_TIMEOUT_MS);
+      const buf = await callSpeechCloneFromDesign({
         text: params.text,
-        design,
+        design: ready,
         timeoutMs: PREVIEW_TIMEOUT_MS,
-        dials,
       });
       if (buf.length === 0) {
         throw new Error(
