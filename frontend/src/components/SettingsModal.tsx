@@ -20,6 +20,7 @@ interface LlmConfig {
   googleApiKeyPresent?: boolean;
   qwenTtsUrl?: string;
   qwenTtsApiKeyPresent?: boolean;
+  qwenTtsInstruction?: string;
 }
 
 interface Props {
@@ -107,6 +108,7 @@ export function SettingsModal({ open, onClose }: Props) {
         openaiModel: llmConfig.openaiModel ?? "",
         googleModel: llmConfig.googleModel ?? "",
         qwenTtsUrl: llmConfig.qwenTtsUrl ?? "",
+        qwenTtsInstruction: llmConfig.qwenTtsInstruction ?? "",
       };
       if (anthropicKeyInput.trim()) patch.anthropicApiKey = anthropicKeyInput.trim();
       if (openaiKeyInput.trim()) patch.openaiApiKey = openaiKeyInput.trim();
@@ -497,6 +499,26 @@ export function SettingsModal({ open, onClose }: Props) {
                   ? t("settings.tts.resetBusy")
                   : t("settings.tts.resetButton")}
               </Button>
+            </div>
+
+            <div className="pt-3 border-t border-border flex flex-col gap-1">
+              <label className="text-xs font-medium text-neutral-400">
+                {t("settings.tts.instructionLabel")}
+              </label>
+              <textarea
+                className="input min-h-[60px] resize-y"
+                value={llmConfig.qwenTtsInstruction ?? ""}
+                onChange={(e) =>
+                  setLlmConfig({
+                    ...llmConfig,
+                    qwenTtsInstruction: e.target.value,
+                  })
+                }
+                placeholder={t("settings.tts.instructionPlaceholder")}
+              />
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.tts.instructionHint")}
+              </p>
             </div>
           </div>
 

@@ -29,6 +29,11 @@ export interface LlmConfig {
    *  3090-PC (z. B. `http://192.168.1.50:8790`). */
   qwenTtsUrl?: string;
   qwenTtsApiKey?: string;
+  /** Freitext-Instruction-Prompt für Qwen3-TTS CustomVoice-Presets.
+   *  Wird bei JEDEM Request an den Sidecar weitergereicht und steuert
+   *  Tonfall / Tempo der Preset-Stimme. Leer = neutral.
+   *  Beispiel: "Calm audiobook narrator, slow and clear pacing." */
+  qwenTtsInstruction?: string;
 }
 
 let cached: LlmConfig | null = null;

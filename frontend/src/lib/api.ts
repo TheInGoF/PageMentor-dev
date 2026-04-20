@@ -611,6 +611,9 @@ export const api = {
           openaiApiKeyPresent: boolean;
           googleModel?: string;
           googleApiKeyPresent: boolean;
+          qwenTtsUrl?: string;
+          qwenTtsApiKeyPresent?: boolean;
+          qwenTtsInstruction?: string;
         };
         status: OllamaStatus;
       }>("/api/llm/config"),
@@ -625,6 +628,9 @@ export const api = {
       openaiModel?: string;
       googleApiKey?: string;
       googleModel?: string;
+      qwenTtsUrl?: string;
+      qwenTtsApiKey?: string;
+      qwenTtsInstruction?: string;
     }) =>
       request<{ config: unknown; status: OllamaStatus }>("/api/llm/config", {
         method: "PUT",

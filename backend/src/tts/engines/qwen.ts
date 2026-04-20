@@ -28,6 +28,7 @@ import {
   type VoiceSample,
 } from "../../services/voiceSamples";
 import { applyAtempo } from "../ffmpeg";
+import { listPresetVoices, speakerForPresetId } from "../presetVoices";
 import type {
   TtsEngine,
   Voice,
@@ -149,7 +150,23 @@ function resolveSample(voiceId: string): VoiceSample | null {
   return getVoiceSample(id);
 }
 
-async function callSpeech(params: {
+/** Deterministischer Seed pro Preset-Voice — gleicher Speaker → gleicher
+ *  Seed → kein RNG-Drift zwischen Chunks. Speaker-Name als stabiles
+ *  Identity-Token; Hash-Fold auf 32 Bit. */
+function seedForSpeaker(speaker: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < speaker.length; i++) {
+    h ^= speaker.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return Math.abs(h) % 2_147_483_647 || 42;
+}
+
+function qwenLanguageFor(lang: string): string {
+  return lang === "de" ? "German" : "English";
+}
+
+async function callSpeechClone(params: {
   text: string;
   sample: VoiceSample;
   speed: number;
@@ -173,7 +190,7 @@ async function callSpeech(params: {
       speed: params.speed,
       ref_audio_b64: refB64,
       ref_text: params.sample.refText ?? undefined,
-      language: params.sample.language === "de" ? "German" : "English",
+      language: qwenLanguageFor(params.sample.language),
       seed: params.sample.seed,
     }),
     signal: AbortSignal.timeout(params.timeoutMs),
@@ -182,6 +199,43 @@ async function callSpeech(params: {
     const detail = await res.text().catch(() => res.statusText);
     throw new Error(
       `Qwen-TTS ${res.status} (${url}/v1/audio/speech, voice=${params.sample.id}): ${detail.slice(0, 200)}`
+    );
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function callSpeechPreset(params: {
+  text: string;
+  speaker: string;
+  instruct: string | undefined;
+  language: string; // "de" | "en"
+  timeoutMs: number;
+}): Promise<Buffer> {
+  const url = baseUrl();
+
+  const res = await fetch(`${url}/v1/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      input: params.text,
+      voice: `preset:${params.speaker}`,
+      response_format: "mp3",
+      speed: 1.0,
+      speaker: params.speaker,
+      instruct: params.instruct || undefined,
+      language: qwenLanguageFor(params.language),
+      seed: seedForSpeaker(params.speaker),
+    }),
+    signal: AbortSignal.timeout(params.timeoutMs),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(
+      `Qwen-TTS ${res.status} (${url}/v1/audio/speech, preset=${params.speaker}): ${detail.slice(0, 200)}`
     );
   }
   return Buffer.from(await res.arrayBuffer());
@@ -200,39 +254,61 @@ export const qwenEngine: TtsEngine = {
 
   listVoices: () => {
     maybeRefresh();
+    // Preset-Voices kommen aus dem CustomVoice-Modell (9 Speaker,
+    // keine Stil-Drift zwischen Chunks) — immer anbieten, auch wenn
+    // der User noch keine eigenen Samples hochgeladen hat.
+    const presets = listPresetVoices();
     try {
-      return listVoiceSamples().map(sampleToVoice);
+      const customs = listVoiceSamples().map(sampleToVoice);
+      return [...presets, ...customs];
     } catch (err) {
       console.warn(`[qwen-tts] listVoiceSamples failed:`, err);
-      return [];
+      return presets;
     }
   },
 
   async synthesize(params: SynthesizeParams): Promise<SynthesizeResult> {
-    const sample = resolveSample(params.voice.id);
-    if (!sample) {
-      throw new Error(
-        `Qwen-TTS voice sample ${params.voice.id} not found in DB`
-      );
-    }
     const announce = params.announce ? `${params.announce}.\n\n` : "";
     const text = announce + params.segment.paragraphs.join("\n\n");
-
-    // Qwen-Base akzeptiert KEIN speed-Kwarg im generate_voice_clone —
-    // das Tempo zieht's aus dem Referenz-Audio. Wir senden die
-    // Rohausgabe und passen die Geschwindigkeit danach per ffmpeg
-    // atempo an (ändert Tempo ohne Tonhöhe zu verschieben).
     const speed = parseRate(params.rate);
     const t0 = Date.now();
-    console.log(
-      `[qwen-tts] synth request start voice=${params.voice.id} text=${text.length}c rate=${params.rate} out=${params.outPath}`
-    );
-    const buf = await callSpeech({
-      text,
-      sample,
-      speed: 1.0, // Info fürs Sidecar-Log, faktisch ignoriert
-      timeoutMs: SYNTH_TIMEOUT_MS,
-    });
+
+    const presetSpeaker = speakerForPresetId(params.voice.id);
+    let buf: Buffer;
+
+    if (presetSpeaker) {
+      const instruct = effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
+      console.log(
+        `[qwen-tts] synth preset=${presetSpeaker} text=${text.length}c rate=${params.rate} instruct=${instruct ? "yes" : "no"}`
+      );
+      buf = await callSpeechPreset({
+        text,
+        speaker: presetSpeaker,
+        instruct,
+        language: params.voice.language,
+        timeoutMs: SYNTH_TIMEOUT_MS,
+      });
+    } else {
+      const sample = resolveSample(params.voice.id);
+      if (!sample) {
+        throw new Error(
+          `Qwen-TTS voice sample ${params.voice.id} not found in DB`
+        );
+      }
+      // Qwen-Base akzeptiert KEIN speed-Kwarg im generate_voice_clone —
+      // das Tempo zieht's aus dem Referenz-Audio. Wir senden die
+      // Rohausgabe und passen die Geschwindigkeit danach per ffmpeg
+      // atempo an (ändert Tempo ohne Tonhöhe zu verschieben).
+      console.log(
+        `[qwen-tts] synth clone voice=${params.voice.id} text=${text.length}c rate=${params.rate}`
+      );
+      buf = await callSpeechClone({
+        text,
+        sample,
+        speed: 1.0, // Info fürs Sidecar-Log, faktisch ignoriert
+        timeoutMs: SYNTH_TIMEOUT_MS,
+      });
+    }
     console.log(
       `[qwen-tts] synth response voice=${params.voice.id} bytes=${buf.length} took=${((Date.now() - t0) / 1000).toFixed(1)}s`
     );
@@ -245,9 +321,6 @@ export const qwenEngine: TtsEngine = {
 
     if (Math.abs(speed - 1.0) < 1e-3) {
       await writeFile(params.outPath, buf);
-      console.log(
-        `[qwen-tts] wrote ${buf.length} bytes → ${params.outPath}`
-      );
     } else {
       const rawPath = `${params.outPath}.raw.mp3`;
       await writeFile(rawPath, buf);
@@ -265,26 +338,50 @@ export const qwenEngine: TtsEngine = {
       );
     }
 
-    // Benchmark aktualisieren: ms/Zeichen als EMA. Der Frontend-ETA-
-    // Rechner liest den Wert beim nächsten Book-Start und hat so
-    // sofort eine verlässliche Schätzung, statt bei 0 anzufangen.
-    try {
-      recordChunkTiming(sample.id, text.length, Date.now() - t0);
-    } catch (e) {
-      console.warn("[qwen-tts] benchmark update failed:", e);
+    // Benchmark aktualisieren nur für Custom-Samples (da ist die ID
+    // stabil in der DB). Preset-Voices teilen keinen Sample-Record —
+    // ETA rechnet sich dann aus den laufenden Chunk-Messungen des
+    // aktuellen Books neu zusammen.
+    if (!presetSpeaker) {
+      const sample = resolveSample(params.voice.id);
+      if (sample) {
+        try {
+          recordChunkTiming(sample.id, text.length, Date.now() - t0);
+        } catch (e) {
+          console.warn("[qwen-tts] benchmark update failed:", e);
+        }
+      }
     }
 
     return { path: params.outPath, bytes: buf.length };
   },
 
   async preview(params: PreviewParams): Promise<Buffer> {
+    const presetSpeaker = speakerForPresetId(params.voice.id);
+    if (presetSpeaker) {
+      const instruct = effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
+      const buf = await callSpeechPreset({
+        text: params.text,
+        speaker: presetSpeaker,
+        instruct,
+        language: params.voice.language,
+        timeoutMs: PREVIEW_TIMEOUT_MS,
+      });
+      if (buf.length === 0) {
+        throw new Error(
+          `Qwen-TTS preview returned empty audio for voice=${params.voice.id}`
+        );
+      }
+      return buf;
+    }
+
     const sample = resolveSample(params.voice.id);
     if (!sample) {
       throw new Error(
         `Qwen-TTS voice sample ${params.voice.id} not found in DB`
       );
     }
-    const buf = await callSpeech({
+    const buf = await callSpeechClone({
       text: params.text,
       sample,
       speed: 1.0,

@@ -632,6 +632,11 @@ const en: Record<string, string> = {
     "Stops the TTS container and unloads all Ollama models. Use when an Ollama ↔ TTS swap gets stuck.",
   "settings.tts.resetBusy": "Resetting …",
   "settings.tts.resetDone": "GPU reset done.",
+  "settings.tts.instructionLabel": "Preset voice instruction (CustomVoice)",
+  "settings.tts.instructionPlaceholder":
+    "Calm audiobook narrator, slow and clear pacing.",
+  "settings.tts.instructionHint":
+    "Free-text prompt sent with every preset-voice request. Controls tone and pace. Empty = neutral. Ignored for uploaded voice-clone samples.",
   "settings.voices.title": "Own reading voices",
   "settings.voices.subtitle":
     "Upload a 3–10 s sample of any voice (yours, a friend's, a public-domain audiobook snippet). Qwen3-TTS clones a reading voice from it. Each voice gets a fixed seed — it will always sound the same.",
@@ -1361,6 +1366,11 @@ const de: Record<string, string> = {
     "Stoppt den TTS-Container und entlädt alle Ollama-Modelle. Nutzen wenn ein Ollama-↔-TTS-Wechsel hängt.",
   "settings.tts.resetBusy": "Setze zurück …",
   "settings.tts.resetDone": "GPU zurückgesetzt.",
+  "settings.tts.instructionLabel": "Preset-Stimmen-Instruction (CustomVoice)",
+  "settings.tts.instructionPlaceholder":
+    "Ruhiger Hörbuch-Erzähler, gemächliches Tempo, klar artikuliert.",
+  "settings.tts.instructionHint":
+    "Freitext-Prompt, der bei jedem Preset-Stimmen-Request mitgeschickt wird. Steuert Tonfall und Tempo. Leer = neutral. Für hochgeladene Voice-Clone-Samples wirkungslos.",
   "settings.voices.title": "Eigene Lesestimmen",
   "settings.voices.subtitle":
     "Lade eine 3–10 s Referenz-Aufnahme einer beliebigen Stimme hoch (deine, die einer Freundin, ein Public-Domain-Hörbuch-Schnipsel). Qwen3-TTS klont daraus eine Lesestimme. Pro Voice wird ein fester Seed gewürfelt — sie klingt immer gleich.",

@@ -25,6 +25,7 @@ llmConfigRoutes.put("/", async (c) => {
     googleModel?: string;
     qwenTtsUrl?: string;
     qwenTtsApiKey?: string;
+    qwenTtsInstruction?: string;
   }>();
 
   // Only overwrite an API key when the client sends a non-empty string.
