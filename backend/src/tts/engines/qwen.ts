@@ -262,6 +262,27 @@ function readDials(): AdvancedDials {
   };
 }
 
+/** Baut den `instruct`-Prompt für Qwen-VoiceDesign. Prepend eines
+ *  Gender-Cues ist nötig, weil Qwen selbst kein Gender-Feld hat —
+ *  der UI-Dropdown hätte sonst keinen Effekt, und der User würde bei
+ *  einer Beschreibung wie „warmer Erzähler, Anfang 40" eine männliche
+ *  Stimme bekommen obwohl er „weiblich" ausgewählt hat.
+ *
+ *  Wir prüfen zuerst ob die Beschreibung bereits ein Gender-Wort
+ *  enthält (Erzähler/Erzählerin, female/male voice, woman/man).
+ *  Wenn ja, nicht doppelt taggen — der User weiß was er will. */
+function buildDesignInstruct(design: VoiceDesign): string {
+  const desc = design.description.trim();
+  const lower = desc.toLowerCase();
+  const hasGenderCue =
+    /\b(erzählerin|sprecherin|frau|weiblich|female|woman)\b/.test(lower) ||
+    /\b(erzähler|sprecher|mann|männlich|male voice|\bman\b)\b/.test(lower);
+  if (hasGenderCue) return desc;
+  const prefix =
+    design.gender === "female" ? "Female voice. " : "Male voice. ";
+  return prefix + desc;
+}
+
 async function callSpeechDesign(params: {
   text: string;
   design: VoiceDesign;
@@ -275,6 +296,8 @@ async function callSpeechDesign(params: {
       ? d.seedOverride
       : params.design.seed;
 
+  const instructForQwen = buildDesignInstruct(params.design);
+
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
     headers: {
@@ -287,7 +310,7 @@ async function callSpeechDesign(params: {
       voice: `design:${params.design.id}`,
       response_format: "mp3",
       speed: 1.0,
-      voice_description: params.design.description,
+      voice_description: instructForQwen,
       language: qwenLanguageFor(params.design.language),
       seed,
       temperature: d.temperature,

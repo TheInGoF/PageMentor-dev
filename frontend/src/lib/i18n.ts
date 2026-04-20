@@ -675,7 +675,7 @@ const en: Record<string, string> = {
   "settings.design.descriptionPlaceholder":
     "Warm German narrator, early 40s, calm and deliberate pacing, clear standard-German diction without any accent.",
   "settings.design.descriptionHint":
-    "The more specific, the more reproducible. Include: language, age, gender, tone, pace, timbre, any accent preferences.",
+    "The more specific, the more reproducible. Include: language, age, tone, pace, timbre, any accent preferences. Gender: the dropdown above is auto-prepended as a style cue (\"Female voice.\" / \"Male voice.\") unless your description already mentions it explicitly.",
   "settings.design.seed": "Seed",
   "settings.design.seedPlaceholder": "empty = random",
   "settings.design.create": "Create voice",
@@ -1458,7 +1458,7 @@ const de: Record<string, string> = {
   "settings.design.descriptionPlaceholder":
     "Warmer deutscher Erzähler, Anfang 40, ruhige gemächliche Sprechweise, klare Hochdeutsch-Aussprache ohne Akzent.",
   "settings.design.descriptionHint":
-    "Je konkreter, desto reproduzierbarer. Nenne: Sprache, Alter, Geschlecht, Tonfall, Tempo, Klangfarbe, Akzent-Präferenz.",
+    "Je konkreter, desto reproduzierbarer. Nenne: Sprache, Alter, Tonfall, Tempo, Klangfarbe, Akzent-Präferenz. Geschlecht: der Dropdown oben wird automatisch als Stil-Hinweis vorangestellt („Female voice.“ / „Male voice.“), außer deine Beschreibung nennt es schon explizit (z. B. „Erzählerin“).",
   "settings.design.seed": "Seed",
   "settings.design.seedPlaceholder": "leer = zufällig",
   "settings.design.create": "Stimme anlegen",
