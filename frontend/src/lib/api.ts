@@ -82,6 +82,18 @@ export interface CustomVoiceMeta {
   createdAt: string;
 }
 
+export interface VoiceDesignMeta {
+  id: string;
+  label: string;
+  gender: "female" | "male";
+  language: string;
+  description: string;
+  seed: number;
+  createdAt: string;
+  msPerChar?: number | null;
+  samplesCount?: number;
+}
+
 export interface AudioTrack {
   id: string;
   chapter_id: string;
@@ -681,6 +693,24 @@ export const api = {
       request<{ ok: true }>(`/api/voices/custom/${id}`, { method: "DELETE" }),
     previewUrl: (id: string, text?: string) =>
       `/api/voices/custom/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
+  },
+  voiceDesigns: {
+    list: () => request<{ voices: VoiceDesignMeta[] }>("/api/voices/design"),
+    create: (input: {
+      label: string;
+      gender: "female" | "male";
+      language?: string;
+      description: string;
+      seed?: number;
+    }) =>
+      request<{ voice: VoiceDesignMeta }>("/api/voices/design", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    remove: (id: string) =>
+      request<{ ok: true }>(`/api/voices/design/${id}`, { method: "DELETE" }),
+    previewUrl: (id: string, text?: string) =>
+      `/api/voices/design/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
   },
   summary: {
     status: () => request<OllamaStatus>("/api/summary/status"),

@@ -657,6 +657,30 @@ const en: Record<string, string> = {
   "settings.tts.advanced.seedAuto": "auto",
   "settings.tts.advanced.hint":
     "Lower temperature (0.3–0.5) keeps the voice closer to the instruction and reduces accent drift on long paragraphs, at the cost of slightly flatter prosody. Seed override: empty = deterministic per speaker, set an integer for a different variant of the same preset.",
+  "settings.design.title": "Designed voices (text-described)",
+  "settings.design.subtitle":
+    "Generate voices from a text description instead of picking a preset or uploading a reference. Uses the Qwen3-TTS VoiceDesign model — a separate ~4 GB model, lazy-loaded on first use.",
+  "settings.design.empty": "No designed voices yet. Create one below.",
+  "settings.design.createTitle": "Design a new voice",
+  "settings.design.label": "Voice name",
+  "settings.design.labelPlaceholder": "e.g. Hannah DE",
+  "settings.design.gender": "Gender",
+  "settings.design.language": "Language",
+  "settings.design.description": "Voice description",
+  "settings.design.descriptionPlaceholder":
+    "Warm German narrator, early 40s, calm and deliberate pacing, clear standard-German diction without any accent.",
+  "settings.design.descriptionHint":
+    "The more specific, the more reproducible. Include: language, age, gender, tone, pace, timbre, any accent preferences.",
+  "settings.design.seed": "Seed",
+  "settings.design.seedPlaceholder": "empty = random",
+  "settings.design.create": "Create voice",
+  "settings.design.creating": "Creating …",
+  "settings.design.created": "Voice created.",
+  "settings.design.deleted": "Voice deleted.",
+  "settings.design.deleteConfirm": "Delete designed voice \"{label}\"?",
+  "settings.design.previewFailed": "Voice preview failed.",
+  "settings.design.missingFields":
+    "Label and a description of at least 10 characters are required.",
   "settings.voices.title": "Own reading voices",
   "settings.voices.subtitle":
     "Upload a 3–10 s sample of any voice (yours, a friend's, a public-domain audiobook snippet). Qwen3-TTS clones a reading voice from it. Each voice gets a fixed seed — it will always sound the same.",
@@ -1411,6 +1435,30 @@ const de: Record<string, string> = {
   "settings.tts.advanced.seedAuto": "auto",
   "settings.tts.advanced.hint":
     "Niedrigere Temperature (0.3–0.5) hält die Stimme näher an der Instruction und reduziert Akzent-Drift in langen Absätzen — auf Kosten etwas flacherer Prosodie. Seed-Override leer = deterministisch pro Speaker; mit Integer bekommst du eine andere Variante desselben Presets.",
+  "settings.design.title": "Designte Stimmen (aus Textbeschreibung)",
+  "settings.design.subtitle":
+    "Erzeugt Stimmen aus einer Freitext-Beschreibung — statt Preset wählen oder Referenz-Audio hochladen. Nutzt das Qwen3-TTS-VoiceDesign-Modell (~4 GB, lazy-load beim ersten Einsatz).",
+  "settings.design.empty": "Noch keine designten Stimmen. Unten eine anlegen.",
+  "settings.design.createTitle": "Neue Stimme designen",
+  "settings.design.label": "Stimmen-Name",
+  "settings.design.labelPlaceholder": "z. B. Hannah DE",
+  "settings.design.gender": "Geschlecht",
+  "settings.design.language": "Sprache",
+  "settings.design.description": "Stimmen-Beschreibung",
+  "settings.design.descriptionPlaceholder":
+    "Warmer deutscher Erzähler, Anfang 40, ruhige gemächliche Sprechweise, klare Hochdeutsch-Aussprache ohne Akzent.",
+  "settings.design.descriptionHint":
+    "Je konkreter, desto reproduzierbarer. Nenne: Sprache, Alter, Geschlecht, Tonfall, Tempo, Klangfarbe, Akzent-Präferenz.",
+  "settings.design.seed": "Seed",
+  "settings.design.seedPlaceholder": "leer = zufällig",
+  "settings.design.create": "Stimme anlegen",
+  "settings.design.creating": "Wird angelegt …",
+  "settings.design.created": "Stimme angelegt.",
+  "settings.design.deleted": "Stimme gelöscht.",
+  "settings.design.deleteConfirm": "Designte Stimme „{label}“ löschen?",
+  "settings.design.previewFailed": "Stimm-Vorschau fehlgeschlagen.",
+  "settings.design.missingFields":
+    "Name und Beschreibung (mindestens 10 Zeichen) sind Pflicht.",
   "settings.voices.title": "Eigene Lesestimmen",
   "settings.voices.subtitle":
     "Lade eine 3–10 s Referenz-Aufnahme einer beliebigen Stimme hoch (deine, die einer Freundin, ein Public-Domain-Hörbuch-Schnipsel). Qwen3-TTS klont daraus eine Lesestimme. Pro Voice wird ein fester Seed gewürfelt — sie klingt immer gleich.",

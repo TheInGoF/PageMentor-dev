@@ -15,9 +15,104 @@ import {
   listVoiceSamples,
   type Gender,
 } from "../services/voiceSamples";
+import {
+  createVoiceDesign,
+  deleteVoiceDesign,
+  getVoiceDesign,
+  listVoiceDesigns,
+} from "../services/voiceDesigns";
 import { synthesizePreview } from "../tts/synth";
 
 export const voiceRoutes = new Hono();
+
+/* ------------------------------------------------------------------ */
+/* Voice-Designs: text-beschriebene Stimmen via Qwen3-TTS VoiceDesign. */
+/* ------------------------------------------------------------------ */
+
+voiceRoutes.get("/design", (c) => {
+  return c.json({
+    voices: listVoiceDesigns().map((d) => ({
+      id: d.id,
+      label: d.label,
+      gender: d.gender,
+      language: d.language,
+      description: d.description,
+      seed: d.seed,
+      createdAt: d.createdAt,
+      msPerChar: d.msPerChar,
+      samplesCount: d.samplesCount,
+    })),
+  });
+});
+
+voiceRoutes.post("/design", async (c) => {
+  const body = await c.req.json<{
+    label: string;
+    gender?: Gender;
+    language?: string;
+    description: string;
+    seed?: number;
+  }>();
+
+  try {
+    const { design } = createVoiceDesign({
+      label: body.label,
+      gender: body.gender === "male" ? "male" : "female",
+      language: body.language,
+      description: body.description,
+      seed: body.seed,
+    });
+    return c.json({
+      voice: {
+        id: design.id,
+        label: design.label,
+        gender: design.gender,
+        language: design.language,
+        description: design.description,
+        seed: design.seed,
+        createdAt: design.createdAt,
+        msPerChar: design.msPerChar,
+        samplesCount: design.samplesCount,
+      },
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+voiceRoutes.delete("/design/:id", (c) => {
+  const ok = deleteVoiceDesign(c.req.param("id"));
+  if (!ok) return c.json({ error: "not found" }, 404);
+  return c.json({ ok: true });
+});
+
+voiceRoutes.get("/design/:id/preview", async (c) => {
+  const id = c.req.param("id");
+  const design = getVoiceDesign(id);
+  if (!design) return c.json({ error: "not found" }, 404);
+
+  const text =
+    c.req.query("text") ||
+    (design.language === "de"
+      ? "Hallo, dies ist eine kurze Sprachprobe dieser Stimme."
+      : "Hello, this is a short voice preview.");
+
+  try {
+    const buf = await synthesizePreview({
+      voice: `design:${id}`,
+      locale: design.language === "de" ? "de-DE" : "en-US",
+      text,
+    });
+    return new Response(new Uint8Array(buf), {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Content-Length": String(buf.length),
+      },
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 voiceRoutes.get("/custom", (c) => {
   return c.json({

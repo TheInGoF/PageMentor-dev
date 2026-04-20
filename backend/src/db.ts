@@ -255,6 +255,25 @@ export function initDb() {
     );
   }
 
+  // voice_designs — Text-beschriebene Stimmen für das Qwen3-TTS
+  // VoiceDesign-Modell. Statt einer Referenz-Audio-Datei steht hier
+  // ein Freitext-Prompt ("Warmer deutscher Erzähler, Anfang 40, …").
+  // Der Seed friert die Stimme — gleicher Seed + gleiche Beschreibung
+  // soll empirisch dieselbe Stimme reproduzieren.
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS voice_designs (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      gender TEXT NOT NULL DEFAULT 'female',
+      language TEXT NOT NULL DEFAULT 'de',
+      description TEXT NOT NULL,
+      seed INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      ms_per_char REAL,
+      samples_count INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
   // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
   // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
   // während einer Docling-Extraktion — Task-ID war nur in-memory, ist

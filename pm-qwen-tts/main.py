@@ -75,6 +75,14 @@ MODEL_ID = os.environ.get("QWEN_TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
 CUSTOMVOICE_MODEL_ID = os.environ.get(
     "QWEN_TTS_CUSTOMVOICE_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
 )
+# VoiceDesign-Modell: erzeugt eine Stimme aus einer Freitext-Beschreibung
+# (statt aus 9 Presets oder einem ref.wav). Lazy-load analog zu
+# CustomVoice — erster Request mit `voice_description`-Feld triggert.
+# HF-Snapshot ist komplett (speech_tokenizer/ ist im Repo enthalten),
+# daher kein Symlink-Dance nötig.
+VOICEDESIGN_MODEL_ID = os.environ.get(
+    "QWEN_TTS_VOICEDESIGN_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+)
 # Audio-Tokenizer. Qwen hostet Base-Modell und Tokenizer als getrennte
 # HF-Repos, der qwen-tts-Loader erwartet aber einen speech_tokenizer/-
 # Unterordner im Base-Snapshot — wir laden beide und symlinken sie
@@ -154,6 +162,14 @@ _load_error: Optional[str] = None
 _custom_model = None
 _custom_load_error: Optional[str] = None
 _custom_load_lock = threading.Lock()
+
+# VoiceDesign analog lazy, getriggert beim ersten `voice_description`-
+# Request. Weitere ~4 GB VRAM — auf 24-GB-GPU mit Ollama eng, ohne
+# Ollama problemlos. Drei parallel geladene Modelle sind realistisch
+# nur auf 32 GB+ GPUs.
+_design_model = None
+_design_load_error: Optional[str] = None
+_design_load_lock = threading.Lock()
 
 
 def _prepare_model_path() -> str:
@@ -303,6 +319,61 @@ def _load_customvoice_model() -> None:
             return
 
         log.info("customvoice ready in %.1fs", time.time() - t0)
+
+
+def _load_voicedesign_model() -> None:
+    """Lazy-Load für VoiceDesign. Analog zu ``_load_customvoice_model``.
+
+    Wiederverwendet die Base- oder CustomVoice-Instanz, wenn der User
+    dasselbe Repo für mehrere Slots konfiguriert hat (spart 4 GB Download
+    + VRAM). Im Normalfall ist das Repo aber ein eigenes.
+    """
+    global _design_model, _design_load_error
+    if _design_model is not None or _design_load_error is not None:
+        return
+
+    with _design_load_lock:
+        if _design_model is not None or _design_load_error is not None:
+            return
+
+        if VOICEDESIGN_MODEL_ID == MODEL_ID and _model is not None:
+            log.info(
+                "voicedesign load: reusing base-slot instance (VOICEDESIGN_MODEL_ID == MODEL_ID)"
+            )
+            _design_model = _model
+            return
+        if VOICEDESIGN_MODEL_ID == CUSTOMVOICE_MODEL_ID and _custom_model is not None:
+            log.info(
+                "voicedesign load: reusing customvoice-slot instance (VOICEDESIGN_MODEL_ID == CUSTOMVOICE_MODEL_ID)"
+            )
+            _design_model = _custom_model
+            return
+
+        try:
+            from qwen_tts import Qwen3TTSModel  # noqa: WPS433
+        except Exception as e:  # noqa: BLE001
+            _design_load_error = f"qwen-tts package nicht importierbar: {e!r}"
+            log.error(_design_load_error)
+            return
+
+        log.info(
+            "loading %s on %s (dtype=%s, attn=%s) — voicedesign lazy trigger",
+            VOICEDESIGN_MODEL_ID, DEVICE, DTYPE_NAME, ATTN_IMPL,
+        )
+        t0 = time.time()
+        try:
+            _design_model = Qwen3TTSModel.from_pretrained(
+                VOICEDESIGN_MODEL_ID,
+                device_map=DEVICE,
+                dtype=_torch_dtype(DTYPE_NAME),
+                attn_implementation=ATTN_IMPL,
+            )
+        except Exception as e:  # noqa: BLE001
+            _design_load_error = f"VoiceDesign load failed: {e!r}"
+            log.exception("voicedesign load failed")
+            return
+
+        log.info("voicedesign ready in %.1fs", time.time() - t0)
 
 
 def _apply_seed(seed: int) -> None:
@@ -659,6 +730,97 @@ def _synth_custom(
     return samples, int(sr)
 
 
+def _synth_design(
+    text: str,
+    voice_description: str,
+    language: str,
+    seed: int,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    max_new_tokens_override: Optional[int] = None,
+) -> tuple[np.ndarray, int]:
+    """Synthese über das VoiceDesign-Modell. `voice_description` landet
+    im `instruct`-Parameter (das Modell hat keinen separaten Speaker-
+    Slot — die ganze Stimm-Spec steckt im Beschreibungstext).
+
+    Seed-Semantik ist in der Model-Card nicht garantiert, aber
+    ``torch.manual_seed(seed)`` vor dem Call greift empirisch — gleicher
+    Seed + gleiche Beschreibung reproduzieren dieselbe Stimme in den
+    meisten Fällen.
+    """
+    if not voice_description or not voice_description.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="voice_description darf nicht leer sein (VoiceDesign-Pfad)",
+        )
+
+    _load_voicedesign_model()
+    if _design_model is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"voicedesign not loaded ({_design_load_error or 'still initializing'})",
+        )
+
+    _apply_seed(seed)
+
+    effective_max = (
+        max_new_tokens_override
+        if max_new_tokens_override and max_new_tokens_override > 0
+        else MAX_NEW_TOKENS
+    )
+    gen_kwargs: dict[str, Any] = {
+        "text": text,
+        "language": language,
+        "instruct": voice_description.strip(),
+        "max_new_tokens": effective_max,
+    }
+    if temperature is not None and temperature >= 0:
+        gen_kwargs["temperature"] = float(temperature)
+    if top_p is not None and 0 < top_p <= 1:
+        gen_kwargs["top_p"] = float(top_p)
+
+    req_hash = hashlib.sha256(
+        f"{text}|{seed}|{voice_description}".encode("utf-8")
+    ).hexdigest()[:8]
+    log.info(
+        "voicedesign start [%s] text_len=%d seed=%d lang=%s desc_len=%d",
+        req_hash, len(text), seed, language, len(voice_description),
+    )
+    t0 = time.time()
+
+    def run() -> tuple[Any, Any]:
+        try:
+            with torch.inference_mode():
+                wavs, sr = _design_model.generate_voice_design(**gen_kwargs)
+            return wavs, sr
+        except Exception as e:  # noqa: BLE001
+            log.exception("generate_voice_design [%s] failed", req_hash)
+            raise HTTPException(
+                status_code=500, detail=f"generation failed: {e}"
+            ) from e
+
+    wavs, sr = _run_with_heartbeat_and_timeout(
+        run, label=f"voicedesign [{req_hash}]", timeout_s=GENERATION_TIMEOUT_S
+    )
+
+    elapsed = time.time() - t0
+    if wavs is None or len(wavs) == 0:
+        log.error(
+            "voicedesign [%s] returned empty waveform after %.1fs",
+            req_hash, elapsed,
+        )
+        raise HTTPException(status_code=500, detail="model returned empty waveform")
+
+    samples = _normalize_samples(np.asarray(wavs[0]))
+    audio_s = samples.shape[0] / float(sr) if sr else 0.0
+    log.info(
+        "voicedesign done  [%s] in %.1fs (audio=%.1fs, rt=%.2fx)",
+        req_hash, elapsed, audio_s,
+        elapsed / audio_s if audio_s > 0 else 0.0,
+    )
+    return samples, int(sr)
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -670,6 +832,7 @@ async def lifespan(app: FastAPI):
     log.info("pm-qwen-tts starting up")
     log.info("  base-slot model     : %s", MODEL_ID)
     log.info("  customvoice model   : %s (lazy)", CUSTOMVOICE_MODEL_ID)
+    log.info("  voicedesign model   : %s (lazy)", VOICEDESIGN_MODEL_ID)
     log.info("  device=%s dtype=%s attn=%s", DEVICE, DTYPE_NAME, ATTN_IMPL)
     if MODEL_ID == CUSTOMVOICE_MODEL_ID:
         log.warning(
@@ -709,6 +872,9 @@ async def health():
         "customvoice_model": CUSTOMVOICE_MODEL_ID,
         "customvoice_loaded": _custom_model is not None,
         "customvoice_error": _custom_load_error,
+        "voicedesign_model": VOICEDESIGN_MODEL_ID,
+        "voicedesign_loaded": _design_model is not None,
+        "voicedesign_error": _design_load_error,
     }
 
 
@@ -720,12 +886,15 @@ async def list_voices():
     return {
         "base_model": MODEL_ID,
         "customvoice_model": CUSTOMVOICE_MODEL_ID,
+        "voicedesign_model": VOICEDESIGN_MODEL_ID,
         "customvoice_presets": CUSTOMVOICE_PRESETS,
         "voices": [],
         "accepts_voice_clone": True,
         "accepts_customvoice": True,
+        "accepts_voicedesign": True,
         "required_fields_clone": ["input", "ref_audio_b64"],
         "required_fields_preset": ["input", "speaker"],
+        "required_fields_design": ["input", "voice_description"],
     }
 
 
@@ -749,6 +918,12 @@ class SpeechRequest(BaseModel):
     speaker: Optional[str] = None
     instruct: Optional[str] = None
 
+    # VoiceDesign-Feld — wenn gesetzt, überschreibt alle anderen Pfade
+    # und routet auf `generate_voice_design`. Die Beschreibung IST
+    # zugleich der Style-Prompt (kein separater instruct-Slot im
+    # VoiceDesign-Modell).
+    voice_description: Optional[str] = None
+
     language: str = DEFAULT_LANGUAGE
     seed: int = 0
 
@@ -771,8 +946,19 @@ class SpeechRequest(BaseModel):
 # automatisch im Threadpool aus; Event-Loop bleibt responsiv.
 @app.post("/v1/audio/speech")
 def speech(req: SpeechRequest):
+    use_design = bool(req.voice_description and req.voice_description.strip())
     use_custom = bool(req.speaker and req.speaker.strip())
-    if use_custom:
+    if use_design:
+        samples, sr = _synth_design(
+            text=req.input,
+            voice_description=req.voice_description,  # type: ignore[arg-type]
+            language=req.language,
+            seed=req.seed,
+            temperature=req.temperature,
+            top_p=req.top_p,
+            max_new_tokens_override=req.max_new_tokens_override,
+        )
+    elif use_custom:
         samples, sr = _synth_custom(
             text=req.input,
             speaker=req.speaker.strip(),  # type: ignore[union-attr]

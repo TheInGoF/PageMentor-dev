@@ -27,6 +27,12 @@ import {
   recordChunkTiming,
   type VoiceSample,
 } from "../../services/voiceSamples";
+import {
+  getVoiceDesign,
+  listVoiceDesigns,
+  recordDesignChunkTiming,
+  type VoiceDesign,
+} from "../../services/voiceDesigns";
 import { applyAtempo } from "../ffmpeg";
 import { listPresetVoices, speakerForPresetId } from "../presetVoices";
 import type {
@@ -38,6 +44,7 @@ import type {
 } from "./base";
 
 const CUSTOM_VOICE_PREFIX = "custom:";
+const DESIGN_VOICE_PREFIX = "design:";
 
 function baseUrl(): string {
   const u =
@@ -144,10 +151,33 @@ function sampleToVoice(s: VoiceSample, idx: number): Voice {
   };
 }
 
+function designToVoice(d: VoiceDesign): Voice {
+  const locale =
+    d.language === "de" ? "de-DE" : d.language === "en" ? "en-US" : d.language;
+  const hint = d.description.slice(0, 60).replace(/\s+/g, " ").trim();
+  return {
+    id: `${DESIGN_VOICE_PREFIX}${d.id}`,
+    label: `${d.label} · Design`,
+    language: d.language,
+    locale,
+    gender: d.gender,
+    engine: "qwen",
+    flagship: false,
+    note: `Qwen3-TTS VoiceDesign · "${hint}${hint.length === 60 ? "…" : ""}"`,
+    msPerChar: d.msPerChar,
+  };
+}
+
 function resolveSample(voiceId: string): VoiceSample | null {
   if (!voiceId.startsWith(CUSTOM_VOICE_PREFIX)) return null;
   const id = voiceId.slice(CUSTOM_VOICE_PREFIX.length);
   return getVoiceSample(id);
+}
+
+function resolveDesign(voiceId: string): VoiceDesign | null {
+  if (!voiceId.startsWith(DESIGN_VOICE_PREFIX)) return null;
+  const id = voiceId.slice(DESIGN_VOICE_PREFIX.length);
+  return getVoiceDesign(id);
 }
 
 /** Deterministischer Seed pro Preset-Voice — gleicher Speaker → gleicher
@@ -232,6 +262,49 @@ function readDials(): AdvancedDials {
   };
 }
 
+async function callSpeechDesign(params: {
+  text: string;
+  design: VoiceDesign;
+  timeoutMs: number;
+  dials?: AdvancedDials;
+}): Promise<Buffer> {
+  const url = baseUrl();
+  const d = params.dials ?? {};
+  const seed =
+    d.seedOverride !== undefined && Number.isFinite(d.seedOverride)
+      ? d.seedOverride
+      : params.design.seed;
+
+  const res = await fetch(`${url}/v1/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      input: params.text,
+      voice: `design:${params.design.id}`,
+      response_format: "mp3",
+      speed: 1.0,
+      voice_description: params.design.description,
+      language: qwenLanguageFor(params.design.language),
+      seed,
+      temperature: d.temperature,
+      top_p: d.topP,
+      max_new_tokens_override: d.maxNewTokens,
+    }),
+    signal: AbortSignal.timeout(params.timeoutMs),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(
+      `Qwen-TTS ${res.status} (${url}/v1/audio/speech, design=${params.design.id}): ${detail.slice(0, 200)}`
+    );
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 async function callSpeechPreset(params: {
   text: string;
   speaker: string;
@@ -295,12 +368,18 @@ export const qwenEngine: TtsEngine = {
     // keine Stil-Drift zwischen Chunks) — immer anbieten, auch wenn
     // der User noch keine eigenen Samples hochgeladen hat.
     const presets = listPresetVoices();
+    let designs: Voice[] = [];
+    try {
+      designs = listVoiceDesigns().map(designToVoice);
+    } catch (err) {
+      console.warn(`[qwen-tts] listVoiceDesigns failed:`, err);
+    }
     try {
       const customs = listVoiceSamples().map(sampleToVoice);
-      return [...presets, ...customs];
+      return [...presets, ...designs, ...customs];
     } catch (err) {
       console.warn(`[qwen-tts] listVoiceSamples failed:`, err);
-      return presets;
+      return [...presets, ...designs];
     }
   },
 
@@ -311,9 +390,22 @@ export const qwenEngine: TtsEngine = {
     const t0 = Date.now();
 
     const presetSpeaker = speakerForPresetId(params.voice.id);
+    const design = resolveDesign(params.voice.id);
     let buf: Buffer;
 
-    if (presetSpeaker) {
+    if (design) {
+      const dials = readDials();
+      console.log(
+        `[qwen-tts] synth design=${design.id} (${design.label}) text=${text.length}c rate=${params.rate} ` +
+          `seed=${dials.seedOverride ?? design.seed} temp=${dials.temperature ?? "def"}`
+      );
+      buf = await callSpeechDesign({
+        text,
+        design,
+        timeoutMs: SYNTH_TIMEOUT_MS,
+        dials,
+      });
+    } else if (presetSpeaker) {
       const instruct = effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
       const dials = readDials();
       console.log(
@@ -379,11 +471,16 @@ export const qwenEngine: TtsEngine = {
       );
     }
 
-    // Benchmark aktualisieren nur für Custom-Samples (da ist die ID
-    // stabil in der DB). Preset-Voices teilen keinen Sample-Record —
-    // ETA rechnet sich dann aus den laufenden Chunk-Messungen des
-    // aktuellen Books neu zusammen.
-    if (!presetSpeaker) {
+    // Benchmark-Updates: Preset-Voices teilen keinen DB-Record, darum
+    // überspringen. Custom-Samples und Designs haben je eigene ID-
+    // stabile Tabelle — ETA-EMA dort hochzählen.
+    if (design) {
+      try {
+        recordDesignChunkTiming(design.id, text.length, Date.now() - t0);
+      } catch (e) {
+        console.warn("[qwen-tts] design benchmark update failed:", e);
+      }
+    } else if (!presetSpeaker) {
       const sample = resolveSample(params.voice.id);
       if (sample) {
         try {
@@ -398,6 +495,39 @@ export const qwenEngine: TtsEngine = {
   },
 
   async preview(params: PreviewParams): Promise<Buffer> {
+    const design = resolveDesign(params.voice.id);
+    if (design) {
+      const base = readDials();
+      const dials: AdvancedDials = {
+        temperature:
+          params.temperatureOverride !== undefined
+            ? params.temperatureOverride
+            : base.temperature,
+        topP:
+          params.topPOverride !== undefined ? params.topPOverride : base.topP,
+        maxNewTokens:
+          params.maxNewTokensOverride !== undefined
+            ? params.maxNewTokensOverride
+            : base.maxNewTokens,
+        seedOverride:
+          params.seedOverride !== undefined
+            ? params.seedOverride
+            : base.seedOverride,
+      };
+      const buf = await callSpeechDesign({
+        text: params.text,
+        design,
+        timeoutMs: PREVIEW_TIMEOUT_MS,
+        dials,
+      });
+      if (buf.length === 0) {
+        throw new Error(
+          `Qwen-TTS preview returned empty audio for voice=${params.voice.id}`
+        );
+      }
+      return buf;
+    }
+
     const presetSpeaker = speakerForPresetId(params.voice.id);
     if (presetSpeaker) {
       const instruct =

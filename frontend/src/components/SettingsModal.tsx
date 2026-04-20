@@ -3,7 +3,13 @@ import { Modal } from "./ui/Modal";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { getSettings, setSettings, type Settings } from "../lib/settings";
-import { api, type CustomVoiceMeta, type OllamaStatus, type Voice } from "../lib/api";
+import {
+  api,
+  type CustomVoiceMeta,
+  type OllamaStatus,
+  type Voice,
+  type VoiceDesignMeta,
+} from "../lib/api";
 import { useToast } from "./ui/Toast";
 import { LOCALE_LABELS, t, useLocale, type Locale } from "../lib/i18n";
 
@@ -65,6 +71,21 @@ export function SettingsModal({ open, onClose }: Props) {
     refText: string;
     file: File | null;
   }>({ label: "", gender: "female", refText: "", file: null });
+  const [voiceDesigns, setVoiceDesigns] = useState<VoiceDesignMeta[]>([]);
+  const [designDraft, setDesignDraft] = useState<{
+    label: string;
+    gender: "female" | "male";
+    language: "de" | "en";
+    description: string;
+    seed: string;
+  }>({
+    label: "",
+    gender: "female",
+    language: "de",
+    description: "",
+    seed: "",
+  });
+  const [designBusy, setDesignBusy] = useState(false);
   const [llmBusy, setLlmBusy] = useState(false);
   const [gpuResetBusy, setGpuResetBusy] = useState(false);
   const [previewVoiceId, setPreviewVoiceId] = useState<string>("");
@@ -121,6 +142,10 @@ export function SettingsModal({ open, onClose }: Props) {
       .list()
       .then((r) => setCustomVoices(r.voices))
       .catch(() => setCustomVoices([]));
+    api.voiceDesigns
+      .list()
+      .then((r) => setVoiceDesigns(r.voices))
+      .catch(() => setVoiceDesigns([]));
   }, [open]);
 
   async function saveLlmConfig() {
@@ -301,6 +326,58 @@ export function SettingsModal({ open, onClose }: Props) {
     const audio = new Audio(url);
     audio.play().catch(() =>
       toast.show(t("settings.voices.previewFailed"), "error")
+    );
+  }
+
+  async function createDesign() {
+    if (!designDraft.label.trim() || designDraft.description.trim().length < 10) {
+      toast.show(t("settings.design.missingFields"), "error");
+      return;
+    }
+    setDesignBusy(true);
+    try {
+      const seedNum = designDraft.seed.trim()
+        ? parseInt(designDraft.seed.trim(), 10)
+        : undefined;
+      await api.voiceDesigns.create({
+        label: designDraft.label.trim(),
+        gender: designDraft.gender,
+        language: designDraft.language,
+        description: designDraft.description.trim(),
+        seed: Number.isFinite(seedNum) ? seedNum : undefined,
+      });
+      const r = await api.voiceDesigns.list();
+      setVoiceDesigns(r.voices);
+      setDesignDraft({
+        label: "",
+        gender: "female",
+        language: designDraft.language,
+        description: "",
+        seed: "",
+      });
+      toast.show(t("settings.design.created"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setDesignBusy(false);
+    }
+  }
+
+  async function deleteDesign(id: string, label: string) {
+    if (!confirm(t("settings.design.deleteConfirm", { label }))) return;
+    try {
+      await api.voiceDesigns.remove(id);
+      setVoiceDesigns((prev) => prev.filter((v) => v.id !== id));
+      toast.show(t("settings.design.deleted"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  function playDesignPreview(id: string) {
+    const audio = new Audio(api.voiceDesigns.previewUrl(id));
+    audio.play().catch(() =>
+      toast.show(t("settings.design.previewFailed"), "error")
     );
   }
 
@@ -896,6 +973,144 @@ export function SettingsModal({ open, onClose }: Props) {
               {voiceUploadBusy
                 ? t("settings.voices.uploading")
                 : t("settings.voices.upload")}
+            </Button>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs uppercase tracking-wide text-neutral-500">
+            {t("settings.design.title")}
+          </h3>
+          <p className="text-[11px] text-neutral-500">
+            {t("settings.design.subtitle")}
+          </p>
+
+          {voiceDesigns.length === 0 ? (
+            <p className="text-xs text-neutral-500 italic">
+              {t("settings.design.empty")}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {voiceDesigns.map((v) => (
+                <li
+                  key={v.id}
+                  className="flex items-center gap-3 card p-3 bg-bg-elevated"
+                >
+                  <span className="text-base leading-none">
+                    {v.gender === "female" ? "♀" : "♂"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-neutral-100 truncate">
+                      {v.label}
+                    </div>
+                    <div className="text-[10px] text-neutral-500 truncate">
+                      {v.description}
+                    </div>
+                    <div className="text-[10px] text-neutral-600 font-mono">
+                      {v.language} · seed {v.seed}
+                    </div>
+                  </div>
+                  <Button variant="ghost" onClick={() => playDesignPreview(v.id)}>
+                    {t("settings.voices.preview")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => deleteDesign(v.id, v.label)}
+                  >
+                    {t("common.delete")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="card p-3 flex flex-col gap-2 bg-bg-elevated">
+            <h4 className="text-xs font-semibold text-neutral-300">
+              {t("settings.design.createTitle")}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+              <Input
+                label={t("settings.design.label")}
+                value={designDraft.label}
+                onChange={(e) =>
+                  setDesignDraft({ ...designDraft, label: e.target.value })
+                }
+                placeholder={t("settings.design.labelPlaceholder")}
+              />
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-neutral-400">
+                  {t("settings.design.gender")}
+                </label>
+                <select
+                  className="input"
+                  value={designDraft.gender}
+                  onChange={(e) =>
+                    setDesignDraft({
+                      ...designDraft,
+                      gender: e.target.value as "female" | "male",
+                    })
+                  }
+                >
+                  <option value="female">♀</option>
+                  <option value="male">♂</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-neutral-400">
+                  {t("settings.design.language")}
+                </label>
+                <select
+                  className="input"
+                  value={designDraft.language}
+                  onChange={(e) =>
+                    setDesignDraft({
+                      ...designDraft,
+                      language: e.target.value as "de" | "en",
+                    })
+                  }
+                >
+                  <option value="de">Deutsch</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-neutral-400">
+                {t("settings.design.description")}
+              </label>
+              <textarea
+                className="input min-h-[80px] resize-y"
+                value={designDraft.description}
+                onChange={(e) =>
+                  setDesignDraft({ ...designDraft, description: e.target.value })
+                }
+                placeholder={t("settings.design.descriptionPlaceholder")}
+              />
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.design.descriptionHint")}
+              </p>
+            </div>
+            <Input
+              label={t("settings.design.seed")}
+              type="number"
+              step="1"
+              value={designDraft.seed}
+              onChange={(e) =>
+                setDesignDraft({ ...designDraft, seed: e.target.value })
+              }
+              placeholder={t("settings.design.seedPlaceholder")}
+            />
+            <Button
+              onClick={createDesign}
+              disabled={
+                designBusy ||
+                !designDraft.label.trim() ||
+                designDraft.description.trim().length < 10
+              }
+            >
+              {designBusy
+                ? t("settings.design.creating")
+                : t("settings.design.create")}
             </Button>
           </div>
         </section>
