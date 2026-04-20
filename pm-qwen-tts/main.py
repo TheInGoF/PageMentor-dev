@@ -789,10 +789,49 @@ def _synth_design(
     t0 = time.time()
 
     def run() -> tuple[Any, Any]:
+        # Seed im Worker-Thread erneut anwenden. `torch.manual_seed` ist
+        # zwar prozess-global, aber wenn zwischen Main-Thread-Seeding und
+        # Thread-Start entropy verbraucht wird (oder Qwen intern einen
+        # eigenen Generator anlegt), kommt beim Generate ein anderer RNG-
+        # State raus. Doppelt hält besser, und in der offiziellen Qwen-
+        # Doku gibt's sowieso keine Garantie fürs Seeding.
+        _apply_seed(seed)
+        # Expliziter Generator zusätzlich. Falls `generate_voice_design`
+        # ihn als kwarg akzeptiert (HF-generate-Stack), nutzt Qwen diesen
+        # Generator intern statt der globalen RNG. Akzeptiert das Modell
+        # den kwarg nicht, ignoriert es ihn oder wirft — wir fangen das
+        # ab und fallen auf reines manual_seed zurück.
+        final_kwargs = dict(gen_kwargs)
+        try:
+            gen_device = DEVICE if DEVICE.startswith("cuda") else "cpu"
+            final_kwargs["generator"] = torch.Generator(
+                device=gen_device
+            ).manual_seed(seed)
+        except Exception as e:  # noqa: BLE001
+            log.warning(
+                "voicedesign [%s]: konnte Generator nicht anlegen (%r), " +
+                "fahre nur mit manual_seed fort", req_hash, e,
+            )
+
         try:
             with torch.inference_mode():
-                wavs, sr = _design_model.generate_voice_design(**gen_kwargs)
+                try:
+                    wavs, sr = _design_model.generate_voice_design(**final_kwargs)
+                except TypeError as e:
+                    # Generator-kwarg wurde nicht akzeptiert — retry ohne.
+                    if "generator" in final_kwargs and "generator" in str(e):
+                        log.warning(
+                            "voicedesign [%s]: generator-kwarg rejected (%s), retrying without",
+                            req_hash, e,
+                        )
+                        final_kwargs.pop("generator", None)
+                        _apply_seed(seed)  # nochmal seeden vor Retry
+                        wavs, sr = _design_model.generate_voice_design(**final_kwargs)
+                    else:
+                        raise
             return wavs, sr
+        except HTTPException:
+            raise
         except Exception as e:  # noqa: BLE001
             log.exception("generate_voice_design [%s] failed", req_hash)
             raise HTTPException(
