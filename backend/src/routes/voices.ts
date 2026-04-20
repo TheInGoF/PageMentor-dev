@@ -27,6 +27,18 @@ import { previewDesignUnsaved } from "../tts/engines/qwen";
 
 export const voiceRoutes = new Hono();
 
+/** Repräsentativer Vorschau-Text (~380 Zeichen). Lang genug um Qwens
+ *  autoregressiven Drift sichtbar zu machen — kurzer 50-Zeichen-Text
+ *  klingt oft konsistent mit dem Instruction-Prompt, die Hörbuch-
+ *  Chunks mit 1000-1500 Zeichen aber nicht. Gemeinsam genutzt von
+ *  allen Preview-Endpoints (design saved/unsaved, custom voice). */
+function defaultPreviewText(language: string): string {
+  if (language === "de") {
+    return "Hallo, dies ist eine Sprachprobe dieser Stimme. Der Text geht bewusst über mehrere Sätze, damit Sie einschätzen können, wie die Stimme über einen längeren Absatz hinweg klingt. Gerade bei einem Hörbuch kommt es darauf an, dass die Aussprache stabil bleibt und der Klangcharakter sich nicht mitten im Absatz verändert.";
+  }
+  return "Hello, this is a voice sample. The text deliberately spans several sentences so you can judge how this voice sounds across a longer passage. Audiobook listening depends on the voice staying stable without shifting character mid-paragraph.";
+}
+
 /* ------------------------------------------------------------------ */
 /* Voice-Designs: text-beschriebene Stimmen via Qwen3-TTS VoiceDesign. */
 /* ------------------------------------------------------------------ */
@@ -56,10 +68,7 @@ voiceRoutes.post("/design/preview", async (c) => {
       ? Math.floor(body.seed)
       : randomInt(1, 2 ** 31 - 1);
   const text =
-    (body.text ?? "").trim() ||
-    (language === "de"
-      ? "Hallo, dies ist eine kurze Sprachprobe dieser Stimme."
-      : "Hello, this is a short voice preview.");
+    (body.text ?? "").trim() || defaultPreviewText(language);
 
   try {
     const buf = await previewDesignUnsaved({
@@ -146,11 +155,7 @@ voiceRoutes.get("/design/:id/preview", async (c) => {
   const design = getVoiceDesign(id);
   if (!design) return c.json({ error: "not found" }, 404);
 
-  const text =
-    c.req.query("text") ||
-    (design.language === "de"
-      ? "Hallo, dies ist eine kurze Sprachprobe dieser Stimme."
-      : "Hello, this is a short voice preview.");
+  const text = c.req.query("text") || defaultPreviewText(design.language);
 
   try {
     const buf = await synthesizePreview({
@@ -249,11 +254,7 @@ voiceRoutes.get("/custom/:id/preview", async (c) => {
   const sample = getVoiceSample(id);
   if (!sample) return c.json({ error: "not found" }, 404);
 
-  const text =
-    c.req.query("text") ||
-    (sample.language === "de"
-      ? "Hallo, dies ist eine kurze Sprachprobe."
-      : "Hello, this is a short voice preview.");
+  const text = c.req.query("text") || defaultPreviewText(sample.language);
 
   try {
     // Preview-ID-Konvention: `custom:<uuid>` wird von der qwen-Engine

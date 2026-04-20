@@ -57,11 +57,17 @@ audioRoutes.get("/preview", async (c) => {
     maxTokOverride !== undefined ||
     seedOverride !== undefined;
 
+  // Längerer Probe-Text: Qwen-TTS driftet autoregressiv — die ersten
+  // ~5 Sekunden klingen konsistent zum Instruction-Prompt, später kann
+  // die Stimme Richtung Trainings-Verteilung zurückfallen. Ein 50-
+  // Zeichen-Sample würde diesen Drift nicht zeigen; der Hörbuch-Chunk
+  // schon. Also geben wir hier einen ~380-Zeichen-Absatz, damit die
+  // Vorschau repräsentativ für die spätere Hörbuch-Ausgabe ist.
   const sample = textOverride
     ? textOverride
     : voice.language === "de"
-    ? "Willkommen bei PageMentor. So klingt dein Hörbuch."
-    : "Welcome to PageMentor. This is how your audiobook will sound.";
+    ? "Willkommen bei PageMentor. So klingt dein Hörbuch. Der Text geht bewusst über mehrere Sätze, damit Sie einschätzen können, wie die Stimme über einen längeren Absatz hinweg klingt. Gerade bei einem Hörbuch kommt es darauf an, dass die Aussprache stabil bleibt und der Klangcharakter sich nicht mitten im Absatz verändert."
+    : "Welcome to PageMentor. This is how your audiobook will sound. The text deliberately spans several sentences so you can judge how this voice sounds across a longer passage. Audiobook listening depends on the voice staying stable without shifting character mid-paragraph.";
 
   const parseOptFloat = (s: string | undefined): number | undefined => {
     if (s === undefined || s === "") return undefined;
