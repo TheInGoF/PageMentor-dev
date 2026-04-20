@@ -359,7 +359,10 @@ export const qwenEngine: TtsEngine = {
   async preview(params: PreviewParams): Promise<Buffer> {
     const presetSpeaker = speakerForPresetId(params.voice.id);
     if (presetSpeaker) {
-      const instruct = effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
+      const instruct =
+        params.instructOverride !== undefined
+          ? params.instructOverride
+          : effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
       const buf = await callSpeechPreset({
         text: params.text,
         speaker: presetSpeaker,

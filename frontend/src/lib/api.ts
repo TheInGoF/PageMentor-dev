@@ -770,8 +770,16 @@ export const api = {
   },
   audio: {
     voices: () => request<{ voices: Voice[] }>("/api/audio/voices"),
-    previewUrl: (voiceId: string) =>
-      `/api/audio/preview?voice=${encodeURIComponent(voiceId)}`,
+    previewUrl: (
+      voiceId: string,
+      opts?: { text?: string; instruct?: string }
+    ) => {
+      const parts = [`voice=${encodeURIComponent(voiceId)}`];
+      if (opts?.text != null) parts.push(`text=${encodeURIComponent(opts.text)}`);
+      if (opts?.instruct != null)
+        parts.push(`instruct=${encodeURIComponent(opts.instruct)}`);
+      return `/api/audio/preview?${parts.join("&")}`;
+    },
     get: (docId: string) => request<AudioDocument>(`/api/audio/document/${docId}`),
     generate: (docId: string, voice: string, rate: string, model?: string) =>
       request<{ status: string; voice: string }>(`/api/audio/generate/${docId}`, {

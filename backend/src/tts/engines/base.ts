@@ -44,6 +44,11 @@ export interface PreviewParams {
   voice: Voice;
   locale: string;
   text: string;
+  /** Pro-Request-Override des globalen Qwen-TTS-Instruction-Prompts.
+   *  Wird vom Settings-Preset-Tester genutzt, damit der User unsaved
+   *  Instruction-Änderungen anhören kann bevor er speichert. Nur für
+   *  CustomVoice-Presets relevant; Voice-Clone-Pfad ignoriert. */
+  instructOverride?: string;
 }
 
 export interface TtsEngine {

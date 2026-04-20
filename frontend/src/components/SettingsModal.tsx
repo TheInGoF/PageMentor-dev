@@ -63,6 +63,11 @@ export function SettingsModal({ open, onClose }: Props) {
   }>({ label: "", gender: "female", refText: "", file: null });
   const [llmBusy, setLlmBusy] = useState(false);
   const [gpuResetBusy, setGpuResetBusy] = useState(false);
+  const [previewVoiceId, setPreviewVoiceId] = useState<string>("");
+  const [previewLang, setPreviewLang] = useState<"de" | "en">("de");
+  const [previewText, setPreviewText] = useState<string>("");
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
   const [ragStatus, setRagStatus] = useState<{
     total: number;
     embedded: number;
@@ -74,7 +79,25 @@ export function SettingsModal({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     setS(getSettings());
-    api.audio.voices().then((r) => setVoices(r.voices)).catch(() => setVoices([]));
+    api.audio
+      .voices()
+      .then((r) => {
+        setVoices(r.voices);
+        // Default-Auswahl für den Preset-Tester: erste Preset-Voice der
+        // aktuellen Sprache, sonst erste Preset-Voice überhaupt. Nur
+        // setzen wenn noch leer — sonst überschreiben wir die User-Wahl.
+        setPreviewVoiceId((prev) => {
+          if (prev) return prev;
+          const presets = r.voices.filter((v) => v.id.startsWith("preset:"));
+          const lang = getSettings().defaultLanguage;
+          return (
+            presets.find((v) => v.language === lang)?.id ??
+            presets[0]?.id ??
+            ""
+          );
+        });
+      })
+      .catch(() => setVoices([]));
     api.search.status().then((r) => setMeiliEnabled(r.enabled)).catch(() => setMeiliEnabled(false));
     api.health().then((r) => setBackendVersion(r.version)).catch(() => setBackendVersion(null));
     api.documents.doclingStatus().then((r) => setDoclingAlive(r.alive)).catch(() => setDoclingAlive(false));
@@ -126,6 +149,55 @@ export function SettingsModal({ open, onClose }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
       setLlmBusy(false);
+    }
+  }
+
+  // Blob-URL beim Unmount / Modal-Close aufräumen, sonst leakt der
+  // Preview-Blob im Speicher.
+  useEffect(() => {
+    return () => {
+      if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
+    };
+  }, [previewAudioUrl]);
+
+  useEffect(() => {
+    // Default-Text pro Sprache, nur solange der User noch nichts
+    // Eigenes getippt hat.
+    if (previewText) return;
+    setPreviewText(
+      previewLang === "de"
+        ? "Dies ist eine kurze Hörprobe für die gewählte Stimme."
+        : "This is a short voice preview for the selected preset."
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewLang]);
+
+  async function runPresetPreview() {
+    if (!previewVoiceId || !previewText.trim()) return;
+    setPreviewBusy(true);
+    try {
+      const url = api.audio.previewUrl(previewVoiceId, {
+        text: previewText.trim(),
+        // Aktueller Form-State — inklusive unsaved Änderungen, damit
+        // der User sofort hört was er getippt hat ohne zuerst speichern
+        // zu müssen.
+        instruct: llmConfig.qwenTtsInstruction ?? "",
+      });
+      const res = await fetch(url);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`Preview ${res.status}: ${body.slice(0, 200)}`);
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewAudioUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return blobUrl;
+      });
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setPreviewBusy(false);
     }
   }
 
@@ -519,6 +591,107 @@ export function SettingsModal({ open, onClose }: Props) {
               <p className="text-[11px] text-neutral-500">
                 {t("settings.tts.instructionHint")}
               </p>
+            </div>
+
+            <div className="pt-3 border-t border-border flex flex-col gap-2">
+              <h4 className="text-xs font-semibold text-neutral-300">
+                {t("settings.tts.tester.title")}
+              </h4>
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.tts.tester.subtitle")}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <label className="text-xs font-medium text-neutral-400">
+                    {t("settings.tts.tester.voice")}
+                  </label>
+                  <select
+                    className="input"
+                    value={previewVoiceId}
+                    onChange={(e) => setPreviewVoiceId(e.target.value)}
+                  >
+                    {voices
+                      .filter(
+                        (v) =>
+                          v.id.startsWith("preset:") &&
+                          v.language === previewLang
+                      )
+                      .map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.label} {v.flagship ? "★" : ""}
+                        </option>
+                      ))}
+                    {voices.filter(
+                      (v) =>
+                        v.id.startsWith("preset:") && v.language === previewLang
+                    ).length === 0 && (
+                      <option value="">
+                        {t("settings.tts.tester.noVoices")}
+                      </option>
+                    )}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-neutral-400">
+                    {t("settings.tts.tester.language")}
+                  </label>
+                  <select
+                    className="input"
+                    value={previewLang}
+                    onChange={(e) => {
+                      const next = e.target.value as "de" | "en";
+                      setPreviewLang(next);
+                      // Voice an neue Sprache anpassen wenn die bisherige
+                      // für die neue Sprache nicht existiert (Preset-IDs
+                      // sind sprachübergreifend identisch, aber wir
+                      // filtern in der Dropdown nach Sprache).
+                      const stillOk = voices.some(
+                        (v) => v.id === previewVoiceId && v.language === next
+                      );
+                      if (!stillOk) {
+                        const fallback = voices.find(
+                          (v) =>
+                            v.id.startsWith("preset:") && v.language === next
+                        );
+                        if (fallback) setPreviewVoiceId(fallback.id);
+                      }
+                    }}
+                  >
+                    <option value="de">Deutsch</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+              </div>
+              <Input
+                label={t("settings.tts.tester.text")}
+                value={previewText}
+                onChange={(e) => setPreviewText(e.target.value)}
+                placeholder={t("settings.tts.tester.textPlaceholder")}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={runPresetPreview}
+                  disabled={
+                    previewBusy || !previewVoiceId || !previewText.trim()
+                  }
+                >
+                  {previewBusy
+                    ? t("settings.tts.tester.busy")
+                    : t("settings.tts.tester.run")}
+                </Button>
+                <span className="text-[11px] text-neutral-500">
+                  {t("settings.tts.tester.hint")}
+                </span>
+              </div>
+              {previewAudioUrl && (
+                <audio
+                  controls
+                  src={previewAudioUrl}
+                  className="w-full mt-1"
+                  autoPlay
+                />
+              )}
             </div>
           </div>
 

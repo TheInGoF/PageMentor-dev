@@ -112,10 +112,18 @@ export async function synthesizePreview(params: {
   voice: string;
   locale: string;
   text: string;
+  /** Override für Qwen-Instruction (Preset-Voices). Ermöglicht dem
+   *  Settings-Tester, unsaved Instruction-Text zu probieren. */
+  instructOverride?: string;
 }): Promise<Buffer> {
   const voice = findVoice(params.voice);
   if (!voice) throw new Error(`Unknown voice: ${params.voice}`);
   const engine = engineFor(voice.engine);
   if (!engine) throw new Error(`Unknown TTS engine: ${voice.engine}`);
-  return engine.preview({ voice, locale: params.locale, text: params.text });
+  return engine.preview({
+    voice,
+    locale: params.locale,
+    text: params.text,
+    instructOverride: params.instructOverride,
+  });
 }

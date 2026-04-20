@@ -637,6 +637,18 @@ const en: Record<string, string> = {
     "Calm audiobook narrator, slow and clear pacing.",
   "settings.tts.instructionHint":
     "Free-text prompt sent with every preset-voice request. Controls tone and pace. Empty = neutral. Ignored for uploaded voice-clone samples.",
+  "settings.tts.tester.title": "Preset-voice tester",
+  "settings.tts.tester.subtitle":
+    "Generate a short sample with the chosen preset, language, and current (unsaved) instruction. Use this to dial in the instruction text before saving.",
+  "settings.tts.tester.voice": "Preset voice",
+  "settings.tts.tester.language": "Target language",
+  "settings.tts.tester.text": "Sample text",
+  "settings.tts.tester.textPlaceholder": "Short phrase to synthesize",
+  "settings.tts.tester.run": "Play preview",
+  "settings.tts.tester.busy": "Synthesizing …",
+  "settings.tts.tester.hint":
+    "Uses the instruction field above — no save required.",
+  "settings.tts.tester.noVoices": "No preset voices for this language",
   "settings.voices.title": "Own reading voices",
   "settings.voices.subtitle":
     "Upload a 3–10 s sample of any voice (yours, a friend's, a public-domain audiobook snippet). Qwen3-TTS clones a reading voice from it. Each voice gets a fixed seed — it will always sound the same.",
@@ -1371,6 +1383,18 @@ const de: Record<string, string> = {
     "Ruhiger Hörbuch-Erzähler, gemächliches Tempo, klar artikuliert.",
   "settings.tts.instructionHint":
     "Freitext-Prompt, der bei jedem Preset-Stimmen-Request mitgeschickt wird. Steuert Tonfall und Tempo. Leer = neutral. Für hochgeladene Voice-Clone-Samples wirkungslos.",
+  "settings.tts.tester.title": "Preset-Stimmen-Tester",
+  "settings.tts.tester.subtitle":
+    "Erzeugt eine kurze Hörprobe mit dem gewählten Preset, der Zielsprache und der aktuellen (ungespeicherten) Instruction. So kannst du den Instruction-Text feinjustieren bevor du speicherst.",
+  "settings.tts.tester.voice": "Preset-Stimme",
+  "settings.tts.tester.language": "Zielsprache",
+  "settings.tts.tester.text": "Probe-Text",
+  "settings.tts.tester.textPlaceholder": "Kurzer Satz zum Synthetisieren",
+  "settings.tts.tester.run": "Vorschau abspielen",
+  "settings.tts.tester.busy": "Synthese läuft …",
+  "settings.tts.tester.hint":
+    "Nutzt das Instruction-Feld oben — kein Speichern nötig.",
+  "settings.tts.tester.noVoices": "Keine Preset-Stimmen für diese Sprache",
   "settings.voices.title": "Eigene Lesestimmen",
   "settings.voices.subtitle":
     "Lade eine 3–10 s Referenz-Aufnahme einer beliebigen Stimme hoch (deine, die einer Freundin, ein Public-Domain-Hörbuch-Schnipsel). Qwen3-TTS klont daraus eine Lesestimme. Pro Voice wird ein fester Seed gewürfelt — sie klingt immer gleich.",

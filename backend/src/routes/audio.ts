@@ -32,23 +32,40 @@ audioRoutes.get("/voices", (c) => {
 });
 
 // Short sample in the requested voice — played on picker click.
+// Optional query params ermöglichen dem Settings-Preset-Tester einen
+// maßgeschneiderten Preview mit eigenem Text und noch-nicht-gespeicherter
+// Instruction:
+//   /api/audio/preview?voice=preset:Ryan&text=...&instruct=...
+// Bei Overrides deaktivieren wir das 24h-Caching (sonst sieht der User
+// alte Tests wenn er den Text tweaked).
 audioRoutes.get("/preview", async (c) => {
   const voiceId = c.req.query("voice") || "";
   const voice = findVoice(voiceId);
   if (!voice) return c.json({ error: tt(c, "err.invalidVoice") }, 400);
 
-  const sample = voice.language === "de"
+  const textOverride = c.req.query("text");
+  const instructOverride = c.req.query("instruct");
+  const hasOverrides = textOverride !== undefined || instructOverride !== undefined;
+
+  const sample = textOverride
+    ? textOverride
+    : voice.language === "de"
     ? "Willkommen bei PageMentor. So klingt dein Hörbuch."
     : "Welcome to PageMentor. This is how your audiobook will sound.";
 
   try {
-    const buf = await synthesizePreview({ voice: voiceId, locale: voice.locale, text: sample });
+    const buf = await synthesizePreview({
+      voice: voiceId,
+      locale: voice.locale,
+      text: sample,
+      instructOverride,
+    });
     // Use the underlying ArrayBuffer so Response accepts it cleanly under both Bun and Node types.
     const body = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) as unknown as BodyInit;
     return new Response(body, {
       headers: {
         "Content-Type": "audio/mpeg",
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": hasOverrides ? "no-store" : "public, max-age=86400",
       },
     });
   } catch (err) {
