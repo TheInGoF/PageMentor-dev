@@ -40,6 +40,14 @@ interface Props {
 
 type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "ai";
 
+/** Event-Name für "Voice-Liste hat sich geändert" — andere Komponenten
+ *  (Audiobook-Picker) hören darauf und laden Voices nach. */
+const VOICES_CHANGED_EVENT = "pm:voices-changed";
+
+function notifyVoicesChanged(): void {
+  window.dispatchEvent(new Event(VOICES_CHANGED_EVENT));
+}
+
 const TABS: Array<{ id: SettingsTab; labelKey: string }> = [
   { id: "general", labelKey: "settings.tab.general" },
   { id: "audiobook", labelKey: "settings.tab.audiobook" },
@@ -321,6 +329,7 @@ export function SettingsModal({ open, onClose }: Props) {
       const r = await api.customVoices.list();
       setCustomVoices(r.voices);
       setVoiceDraft({ label: "", gender: "female", refText: "", file: null });
+      notifyVoicesChanged();
       toast.show(t("settings.voices.uploaded"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -334,6 +343,7 @@ export function SettingsModal({ open, onClose }: Props) {
     try {
       await api.customVoices.remove(id);
       setCustomVoices((prev) => prev.filter((v) => v.id !== id));
+      notifyVoicesChanged();
       toast.show(t("settings.voices.deleted"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -412,6 +422,7 @@ export function SettingsModal({ open, onClose }: Props) {
       if (designPreviewUrl) URL.revokeObjectURL(designPreviewUrl);
       setDesignPreviewUrl(null);
       setDesignPreviewSeed(null);
+      notifyVoicesChanged();
       toast.show(t("settings.design.created"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -425,6 +436,7 @@ export function SettingsModal({ open, onClose }: Props) {
     try {
       await api.voiceDesigns.remove(id);
       setVoiceDesigns((prev) => prev.filter((v) => v.id !== id));
+      notifyVoicesChanged();
       toast.show(t("settings.design.deleted"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -1151,8 +1163,8 @@ export function SettingsModal({ open, onClose }: Props) {
                     })
                   }
                 >
-                  <option value="female">♀</option>
-                  <option value="male">♂</option>
+                  <option value="female">♀ {t("settings.voices.female")}</option>
+                  <option value="male">♂ {t("settings.voices.male")}</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1">

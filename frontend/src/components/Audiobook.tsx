@@ -100,32 +100,51 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     loadChapterStatus();
   }, [loadChapterStatus]);
   useEffect(() => {
-    Promise.all([api.audio.voices(), api.audio.get(docId)])
-      .then(([v, a]) => {
-        setVoices(v.voices);
-        setState(a);
-        const settings = getSettings();
-        const langVoices = v.voices.filter((vc) => vc.language === documentLanguage);
-        const fromSettings =
-          settings.defaultVoice && v.voices.find((vc) => vc.id === settings.defaultVoice)
-            ? settings.defaultVoice
-            : null;
-        const preferred =
-          fromSettings ??
-          langVoices.find((vc) => vc.flagship)?.id ??
-          langVoices[0]?.id ??
-          v.voices[0]?.id ??
-          "";
-        // User-Wahl nicht überschreiben — nur initial setzen (wenn leer)
-        // oder wenn die bisherige Wahl gar nicht mehr in der Liste ist
-        // (Voice wurde gelöscht). Verhindert, dass der Picker bei
-        // Re-Rendern (Toast-Show, State-Update) auf Default zurückspringt.
-        setVoiceId((prev) => {
-          if (prev && v.voices.some((vc) => vc.id === prev)) return prev;
-          return preferred;
-        });
-      })
-      .catch((err) => toast.show(err instanceof Error ? err.message : t("common.error"), "error"));
+    const loadVoicesAndState = () => {
+      Promise.all([api.audio.voices(), api.audio.get(docId)])
+        .then(([v, a]) => {
+          setVoices(v.voices);
+          setState(a);
+          const settings = getSettings();
+          const langVoices = v.voices.filter(
+            (vc) => vc.language === documentLanguage
+          );
+          const fromSettings =
+            settings.defaultVoice &&
+            v.voices.find((vc) => vc.id === settings.defaultVoice)
+              ? settings.defaultVoice
+              : null;
+          const preferred =
+            fromSettings ??
+            langVoices.find((vc) => vc.flagship)?.id ??
+            langVoices[0]?.id ??
+            v.voices[0]?.id ??
+            "";
+          // User-Wahl nicht überschreiben — nur initial setzen (wenn leer)
+          // oder wenn die bisherige Wahl gar nicht mehr in der Liste ist
+          // (Voice wurde gelöscht). Verhindert, dass der Picker bei
+          // Re-Rendern (Toast-Show, State-Update) auf Default zurückspringt.
+          setVoiceId((prev) => {
+            if (prev && v.voices.some((vc) => vc.id === prev)) return prev;
+            return preferred;
+          });
+        })
+        .catch((err) =>
+          toast.show(err instanceof Error ? err.message : t("common.error"), "error")
+        );
+    };
+    loadVoicesAndState();
+    // Voice-Liste neu laden wenn in Settings eine Stimme angelegt/
+    // gelöscht wurde. SettingsModal feuert `pm:voices-changed`; ohne
+    // diesen Listener zeigt der Audiobook-Picker nur die Voices die
+    // beim Tab-Öffnen existierten.
+    const voicesChangedHandler = () => {
+      api.audio.voices().then((v) => setVoices(v.voices)).catch(() => {});
+    };
+    window.addEventListener("pm:voices-changed", voicesChangedHandler);
+    return () => {
+      window.removeEventListener("pm:voices-changed", voicesChangedHandler);
+    };
     // `toast` bewusst nicht in Deps — die Fehlermeldung ist nur ein Side-Effect,
     // braucht den Effect nicht zu triggern. Voice-Load hängt an Doc + Sprache.
     // eslint-disable-next-line react-hooks/exhaustive-deps
