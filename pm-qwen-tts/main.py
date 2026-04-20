@@ -295,8 +295,30 @@ def _apply_seed(seed: int) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Decode-Cache für Referenz-Audio. Bei einem 100-Kapitel-Hörbuch mit
+# immer demselben User-Sample sparen wir N-mal das base64-decode +
+# soundfile-parse + mono-izen (~50-200 ms pro Chunk). Key = SHA-256 des
+# Rohstrings; LRU-ähnliches Verhalten via OrderedDict + Max-Size.
+from collections import OrderedDict  # noqa: E402
+
+_REF_AUDIO_CACHE_MAX = int(os.environ.get("QWEN_TTS_REF_CACHE_SIZE", "16"))
+_ref_audio_cache: OrderedDict[str, tuple[np.ndarray, int]] = OrderedDict()
+_ref_audio_cache_lock = threading.Lock()
+
+
 def _decode_ref_audio(b64: str) -> tuple[np.ndarray, int]:
-    """base64 (WAV/MP3/FLAC) → (mono float32 numpy, sample_rate)."""
+    """base64 (WAV/MP3/FLAC) → (mono float32 numpy, sample_rate).
+
+    Cached auf dem Roh-b64-String (SHA-256). Identischer Upload bei
+    Chunk N+1 trifft den Cache und überspringt das Parsen komplett.
+    """
+    cache_key = hashlib.sha256(b64.encode("utf-8", errors="ignore")).hexdigest()
+    with _ref_audio_cache_lock:
+        cached = _ref_audio_cache.get(cache_key)
+        if cached is not None:
+            _ref_audio_cache.move_to_end(cache_key)
+            return cached
+
     try:
         raw = base64.b64decode(b64)
     except Exception as e:  # noqa: BLE001
@@ -328,7 +350,14 @@ def _decode_ref_audio(b64: str) -> tuple[np.ndarray, int]:
         arr = arr.mean(axis=1)
     if arr.size == 0:
         raise HTTPException(status_code=400, detail="ref_audio is empty")
-    return arr.astype(np.float32), int(sr)
+
+    result = (arr.astype(np.float32), int(sr))
+    with _ref_audio_cache_lock:
+        _ref_audio_cache[cache_key] = result
+        _ref_audio_cache.move_to_end(cache_key)
+        while len(_ref_audio_cache) > _REF_AUDIO_CACHE_MAX:
+            _ref_audio_cache.popitem(last=False)
+    return result
 
 
 def _encode_audio(samples: np.ndarray, sample_rate: int, fmt: str) -> tuple[bytes, str]:
