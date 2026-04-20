@@ -286,7 +286,12 @@ function buildDesignInstruct(design: VoiceDesign): string {
 /** Preview-Synthese für eine NOCH-NICHT-gespeicherte Voice-Design —
  *  wird vom Settings-Form genutzt bevor die Design-Zeile in die DB
  *  persistiert wird. Ermöglicht Seed-Reroll ohne Insert-Delete-Dance.
- *  Das Ergebnis wird NICHT benchmarkt (kein DB-Row zum Aktualisieren). */
+ *  Das Ergebnis wird NICHT benchmarkt (kein DB-Row zum Aktualisieren).
+ *
+ *  Dials-Default = llm-config. Damit klingt die Wizard-Vorschau
+ *  identisch zur späteren Hörbuch-Synthese (beide lesen denselben
+ *  temperature/top_p/seed-Override aus der Config). Bei Caller-
+ *  supplied `dials` haben diese Vorrang — für Live-UI-Tuning. */
 export async function previewDesignUnsaved(params: {
   text: string;
   description: string;
@@ -296,9 +301,6 @@ export async function previewDesignUnsaved(params: {
   timeoutMs: number;
   dials?: AdvancedDials;
 }): Promise<Buffer> {
-  // Reuse buildDesignInstruct-Logik via ephemerem VoiceDesign-Objekt,
-  // sonst müssten wir die Gender-Prefix-Regel duplizieren und bei
-  // Änderungen drift-anfällig machen.
   const ephemeral: VoiceDesign = {
     id: "ephemeral-preview",
     label: "preview",
@@ -314,7 +316,7 @@ export async function previewDesignUnsaved(params: {
     text: params.text,
     design: ephemeral,
     timeoutMs: params.timeoutMs,
-    dials: params.dials,
+    dials: params.dials ?? readDials(),
   });
 }
 
