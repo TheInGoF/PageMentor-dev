@@ -116,10 +116,20 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           langVoices[0]?.id ??
           v.voices[0]?.id ??
           "";
-        setVoiceId(preferred);
+        // User-Wahl nicht überschreiben — nur initial setzen (wenn leer)
+        // oder wenn die bisherige Wahl gar nicht mehr in der Liste ist
+        // (Voice wurde gelöscht). Verhindert, dass der Picker bei
+        // Re-Rendern (Toast-Show, State-Update) auf Default zurückspringt.
+        setVoiceId((prev) => {
+          if (prev && v.voices.some((vc) => vc.id === prev)) return prev;
+          return preferred;
+        });
       })
       .catch((err) => toast.show(err instanceof Error ? err.message : t("common.error"), "error"));
-  }, [docId, documentLanguage, toast]);
+    // `toast` bewusst nicht in Deps — die Fehlermeldung ist nur ein Side-Effect,
+    // braucht den Effect nicht zu triggern. Voice-Load hängt an Doc + Sprache.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docId, documentLanguage]);
 
   // SSE-Subscription
   useEffect(() => {
