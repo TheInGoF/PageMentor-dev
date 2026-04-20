@@ -633,6 +633,15 @@ export const api = {
     removeKey: (provider: "anthropic" | "openai" | "google" | "qwenTts") =>
       request<{ config: unknown }>(`/api/llm/config/${provider}`, { method: "DELETE" }),
   },
+  admin: {
+    /** Hard-Reset des GPU-Swaps: Arbiter stoppt den TTS-Container und
+     *  entlädt alle Ollama-Modelle. Nutzen wenn der Wechsel hängt. */
+    gpuReset: () =>
+      request<{ ok: true; result: Record<string, unknown> }>(
+        "/api/admin/gpu/reset",
+        { method: "POST" }
+      ),
+  },
   customVoices: {
     list: () =>
       request<{ voices: CustomVoiceMeta[] }>("/api/voices/custom"),

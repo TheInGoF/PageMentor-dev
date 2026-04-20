@@ -365,6 +365,45 @@ def _tts_headers() -> dict[str, str]:
     return {"X-API-Key": TTS_API_KEY} if TTS_API_KEY else {}
 
 
+@app.post("/admin/gpu/reset")
+async def gpu_reset():
+    """Hard-Reset: stoppt den TTS-Container, entlädt alle Ollama-Modelle,
+    verwirft einen geplanten Idle-Stop. Gedacht als UI-Button wenn der
+    Ollama/Qwen-Swap hängt.
+
+    Wir greifen bewusst NICHT in den state.lock — wenn gerade ein
+    Request läuft, soll der crashen (Button-Druck = User-Intent, dass
+    was kaputt ist). Die `own_gpu()`-State-Machine räumt sich im
+    ``finally``-Block selbst auf.
+    """
+    assert http_client is not None and docker_client is not None
+    start = time.time()
+    result: dict[str, Any] = {}
+
+    _cancel_pending_tts_stop()
+
+    try:
+        prev = await asyncio.to_thread(_container_status, TTS_CONTAINER)
+        await _stop_tts()
+        now = await asyncio.to_thread(_container_status, TTS_CONTAINER)
+        result["tts_container"] = {"before": prev, "after": now}
+    except Exception as e:  # noqa: BLE001
+        result["tts_container"] = {"error": repr(e)}
+        log.warning("gpu-reset: tts stop failed: %r", e)
+
+    try:
+        await _unload_all_ollama_models()
+        result["ollama_unload"] = "ok"
+    except Exception as e:  # noqa: BLE001
+        result["ollama_unload"] = {"error": repr(e)}
+        log.warning("gpu-reset: ollama unload failed: %r", e)
+
+    result["elapsed_s"] = round(time.time() - start, 2)
+    result["snapshot"] = state.snapshot()
+    log.info("gpu reset done in %.2fs", result["elapsed_s"])
+    return result
+
+
 @app.api_route(
     "/api/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],

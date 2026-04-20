@@ -627,6 +627,11 @@ const en: Record<string, string> = {
   "settings.tts.qwenTtsUrl": "Arbiter URL",
   "settings.tts.qwenTtsApiKey": "Arbiter API key (optional)",
   "settings.tts.qwenTtsKeyPlaceholder": "Bearer token",
+  "settings.tts.resetButton": "Reset GPU swap",
+  "settings.tts.resetHint":
+    "Stops the TTS container and unloads all Ollama models. Use when an Ollama ↔ TTS swap gets stuck.",
+  "settings.tts.resetBusy": "Resetting …",
+  "settings.tts.resetDone": "GPU reset done.",
   "settings.voices.title": "Own reading voices",
   "settings.voices.subtitle":
     "Upload a 3–10 s sample of any voice (yours, a friend's, a public-domain audiobook snippet). Qwen3-TTS clones a reading voice from it. Each voice gets a fixed seed — it will always sound the same.",
@@ -1351,6 +1356,11 @@ const de: Record<string, string> = {
   "settings.tts.qwenTtsUrl": "Arbiter-URL",
   "settings.tts.qwenTtsApiKey": "Arbiter-API-Key (optional)",
   "settings.tts.qwenTtsKeyPlaceholder": "Bearer-Token",
+  "settings.tts.resetButton": "GPU-Swap zurücksetzen",
+  "settings.tts.resetHint":
+    "Stoppt den TTS-Container und entlädt alle Ollama-Modelle. Nutzen wenn ein Ollama-↔-TTS-Wechsel hängt.",
+  "settings.tts.resetBusy": "Setze zurück …",
+  "settings.tts.resetDone": "GPU zurückgesetzt.",
   "settings.voices.title": "Eigene Lesestimmen",
   "settings.voices.subtitle":
     "Lade eine 3–10 s Referenz-Aufnahme einer beliebigen Stimme hoch (deine, die einer Freundin, ein Public-Domain-Hörbuch-Schnipsel). Qwen3-TTS klont daraus eine Lesestimme. Pro Voice wird ein fester Seed gewürfelt — sie klingt immer gleich.",

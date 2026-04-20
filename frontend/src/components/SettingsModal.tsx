@@ -61,6 +61,7 @@ export function SettingsModal({ open, onClose }: Props) {
     file: File | null;
   }>({ label: "", gender: "female", refText: "", file: null });
   const [llmBusy, setLlmBusy] = useState(false);
+  const [gpuResetBusy, setGpuResetBusy] = useState(false);
   const [ragStatus, setRagStatus] = useState<{
     total: number;
     embedded: number;
@@ -123,6 +124,18 @@ export function SettingsModal({ open, onClose }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
       setLlmBusy(false);
+    }
+  }
+
+  async function resetGpu() {
+    setGpuResetBusy(true);
+    try {
+      await api.admin.gpuReset();
+      toast.show(t("settings.tts.resetDone"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setGpuResetBusy(false);
     }
   }
 
@@ -469,6 +482,21 @@ export function SettingsModal({ open, onClose }: Props) {
                   {t("settings.llm.removeKey")}
                 </Button>
               )}
+            </div>
+
+            <div className="flex items-start justify-between gap-3 pt-2">
+              <p className="text-[11px] text-neutral-500 flex-1">
+                {t("settings.tts.resetHint")}
+              </p>
+              <Button
+                variant="outline"
+                onClick={resetGpu}
+                disabled={gpuResetBusy}
+              >
+                {gpuResetBusy
+                  ? t("settings.tts.resetBusy")
+                  : t("settings.tts.resetButton")}
+              </Button>
             </div>
           </div>
 

@@ -14,6 +14,7 @@ import { llmConfigRoutes } from "./routes/llmConfig";
 import { moduleRoutes } from "./routes/modules";
 import { ragRoutes } from "./routes/rag";
 import { voiceRoutes } from "./routes/voices";
+import { adminRoutes } from "./routes/admin";
 import { ensureReady as ensureSearchReady } from "./services/search";
 import { initDb } from "./db";
 import { readFileSync } from "fs";
@@ -79,6 +80,7 @@ app.route("/api/llm/config", llmConfigRoutes);
 app.route("/api/modules", moduleRoutes);
 app.route("/api/rag", ragRoutes);
 app.route("/api/voices", voiceRoutes);
+app.route("/api/admin", adminRoutes);
 
 // Static frontend (production)
 app.use("/*", serveStatic({ root: "./public" }));
