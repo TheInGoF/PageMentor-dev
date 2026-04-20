@@ -88,6 +88,107 @@ export async function concatMp3(inputs: string[], output: string): Promise<void>
 }
 
 /**
+ * Concat wie `concatMp3`, aber mit Silence-Pads zwischen den Inputs
+ * (`interChunkMs`) und/oder am Ende (`trailingMs`).
+ *
+ * Zweck: Qwen3-TTS-Base ignoriert `\n\n` und rattert Absatzgrenzen
+ * durch. Kurze Pause zwischen Chunks = Denk-Pause zwischen Absätzen.
+ * Trailing-Pause am Kapitel-Ende = Absatz vor dem nächsten Kapitel
+ * bzw. vor M4B-Konkatenation.
+ *
+ * Silence-MP3 wird mit der Sample-Rate des ersten Inputs erzeugt, damit
+ * der stream-copy-Concat ohne Codec-Mismatch durchläuft.
+ */
+export async function concatMp3WithGaps(
+  inputs: string[],
+  output: string,
+  opts: { interChunkMs?: number; trailingMs?: number } = {}
+): Promise<void> {
+  if (inputs.length === 0) {
+    throw new Error("concatMp3WithGaps: inputs is empty");
+  }
+  const interMs = Math.max(0, opts.interChunkMs ?? 0);
+  const trailMs = Math.max(0, opts.trailingMs ?? 0);
+
+  if (interMs === 0 && trailMs === 0) {
+    return concatMp3(inputs, output);
+  }
+
+  const sr = (await probeSampleRate(inputs[0])) ?? 24000;
+  const dir = dirname(output);
+  const silenceByMs = new Map<number, string>();
+
+  const ensureSilence = async (ms: number): Promise<string> => {
+    const cached = silenceByMs.get(ms);
+    if (cached) return cached;
+    const p = join(dir, `.silence-${sr}Hz-${ms}ms.mp3`);
+    await run("ffmpeg", [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      `anullsrc=r=${sr}:cl=mono`,
+      "-t",
+      (ms / 1000).toFixed(3),
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "96k",
+      p,
+    ]);
+    silenceByMs.set(ms, p);
+    return p;
+  };
+
+  const seq: string[] = [];
+  for (let i = 0; i < inputs.length; i++) {
+    seq.push(inputs[i]);
+    if (interMs > 0 && i < inputs.length - 1) {
+      seq.push(await ensureSilence(interMs));
+    }
+  }
+  if (trailMs > 0) {
+    seq.push(await ensureSilence(trailMs));
+  }
+
+  try {
+    await concatMp3(seq, output);
+  } finally {
+    const { unlink } = await import("fs/promises");
+    for (const p of silenceByMs.values()) {
+      try {
+        await unlink(p);
+      } catch {
+        // best effort
+      }
+    }
+  }
+}
+
+async function probeSampleRate(file: string): Promise<number | null> {
+  try {
+    const { stdout } = await run("ffprobe", [
+      "-v",
+      "error",
+      "-select_streams",
+      "a:0",
+      "-show_entries",
+      "stream=sample_rate",
+      "-of",
+      "default=nokey=1:noprint_wrappers=1",
+      file,
+    ]);
+    const n = parseInt(stdout.trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Loudnorm (EBU R128 → Podcast-Standard -16 LUFS) + Re-Encode auf
  * 128kbps MP3 mit ID3-Tags. Gibt die Laufzeit in Millisekunden zurück.
  */

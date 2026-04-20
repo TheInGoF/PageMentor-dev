@@ -6,7 +6,7 @@ import { join as pathJoin } from "path";
 import { db } from "../db";
 import { segmentText } from "../tts/segment";
 import { synthesizeChunk, interChunkPause } from "../tts/synth";
-import { concatMp3, normalizeAndTag, buildM4B } from "../tts/ffmpeg";
+import { concatMp3WithGaps, normalizeAndTag, buildM4B } from "../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../tts/voices";
 import type { EngineId } from "../tts/engines/base";
 import {
@@ -711,14 +711,15 @@ async function synthesizeChapter(params: {
     );
 
     const mergedPath = join(tmpDir, "merged.mp3");
-    if (chunkFiles.length === 1) {
-      // Kein Concat nötig — aber kopieren statt renamen, damit die
-      // Quelle im Cache bleibt.
-      const { copyFile } = await import("fs/promises");
-      await copyFile(chunkFiles[0], mergedPath);
-    } else {
-      await concatMp3(chunkFiles, mergedPath);
-    }
+    // Silence-Pads: ~250 ms zwischen Chunks geben Qwen eine "Denk-Pause"
+    // zwischen Absatzgruppen (das Modell ignoriert \n\n und rattert sonst
+    // durch). ~900 ms am Kapitel-Ende liefert die Trennung vor dem
+    // nächsten Kapitel — auch bei Intros (Intro-Text fließt sonst
+    // nahtlos in Kapitel 1).
+    await concatMp3WithGaps(chunkFiles, mergedPath, {
+      interChunkMs: 250,
+      trailingMs: 900,
+    });
 
     const cover = coverPathFor(chapter.document_id);
     const { durationMs } = await normalizeAndTag({
