@@ -442,13 +442,41 @@ audioRoutes.get("/file/:audioId", (c) => {
   return serveFileWithRange(c, fullPath, "audio/mpeg");
 });
 
-// Download the full book as M4B.
+// Download the full book as M4B. Der Dateiname, den der Browser dem
+// User beim Download anbietet, wird aus dem Dokument-Titel abgeleitet
+// — sonst hätte der User nach dem Speichern X anonyme "book.m4b" in
+// seinem Download-Ordner. Auf Disk bleibt der Pfad trotzdem stabil.
 audioRoutes.get("/book/:docId", (c) => {
   const docId = c.req.param("docId");
   const fullPath = join(DATA_DIR, "audio", docId, "book.m4b");
   if (!existsSync(fullPath)) return c.json({ error: tt(c, "err.notReady") }, 404);
-  return serveFileWithRange(c, fullPath, "audio/mp4", "book.m4b");
+  const doc = db()
+    .prepare("SELECT title, doc_title FROM documents WHERE id = ?")
+    .get(docId) as { title: string; doc_title: string | null } | undefined;
+  const baseTitle = doc?.doc_title?.trim() || doc?.title || "audiobook";
+  const downloadName = `${safeFilename(baseTitle)}.m4b`;
+  return serveFileWithRange(c, fullPath, "audio/mp4", downloadName);
 });
+
+/** Macht einen beliebigen Doc-Titel filesystem-/header-safe:
+ *  - Deutsche Umlaute + ß ausschreiben (Safari/IE mögen rohe Bytes im
+ *    Content-Disposition nicht)
+ *  - alles außer Buchstaben/Zahlen/Bindestrich/Leer durch _ ersetzen
+ *  - Mehrfach-Leerzeichen zu einem, trim
+ *  - auf 120 Zeichen kürzen (manche FS haben 255-Byte-Limits und
+ *    UTF-8-Expansion frisst Puffer)
+ */
+function safeFilename(s: string): string {
+  return s
+    .replace(/ä/g, "ae").replace(/Ä/g, "Ae")
+    .replace(/ö/g, "oe").replace(/Ö/g, "Oe")
+    .replace(/ü/g, "ue").replace(/Ü/g, "Ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^\p{L}\p{N}\- ]/gu, "_")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120) || "audiobook";
+}
 
 // SSE: progress stream for pipeline + audiobook generation.
 audioRoutes.get("/stream/:docId", (c) => {
