@@ -8,6 +8,7 @@
  */
 
 import { Hono } from "hono";
+import { randomInt } from "node:crypto";
 import {
   createVoiceSample,
   deleteVoiceSample,
@@ -22,12 +23,66 @@ import {
   listVoiceDesigns,
 } from "../services/voiceDesigns";
 import { synthesizePreview } from "../tts/synth";
+import { previewDesignUnsaved } from "../tts/engines/qwen";
 
 export const voiceRoutes = new Hono();
 
 /* ------------------------------------------------------------------ */
 /* Voice-Designs: text-beschriebene Stimmen via Qwen3-TTS VoiceDesign. */
 /* ------------------------------------------------------------------ */
+
+/** Unsaved-Preview für den Design-Wizard: rollt Seed (oder nimmt den
+ *  übergebenen) und liefert MP3 + den Seed via `X-Voice-Seed`-Header
+ *  zurück. Anders als `/design/:id/preview` wird hier NICHTS in der DB
+ *  angelegt — der User kann so lange rollen bis eine Stimme gefällt,
+ *  dann POST /design mit dem gemerkten Seed zum endgültigen Speichern. */
+voiceRoutes.post("/design/preview", async (c) => {
+  const body = await c.req.json<{
+    description: string;
+    gender?: Gender;
+    language?: string;
+    seed?: number;
+    text?: string;
+  }>();
+
+  const description = (body.description ?? "").trim();
+  if (description.length < 10) {
+    return c.json({ error: "description zu kurz (mindestens 10 Zeichen)" }, 400);
+  }
+  const gender: Gender = body.gender === "male" ? "male" : "female";
+  const language = body.language === "en" ? "en" : "de";
+  const seed =
+    body.seed && Number.isFinite(body.seed) && body.seed > 0
+      ? Math.floor(body.seed)
+      : randomInt(1, 2 ** 31 - 1);
+  const text =
+    (body.text ?? "").trim() ||
+    (language === "de"
+      ? "Hallo, dies ist eine kurze Sprachprobe dieser Stimme."
+      : "Hello, this is a short voice preview.");
+
+  try {
+    const buf = await previewDesignUnsaved({
+      text,
+      description,
+      gender,
+      language,
+      seed,
+      timeoutMs: 3 * 60_000,
+    });
+    return new Response(new Uint8Array(buf), {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Content-Length": String(buf.length),
+        "X-Voice-Seed": String(seed),
+        "Access-Control-Expose-Headers": "X-Voice-Seed",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
 
 voiceRoutes.get("/design", (c) => {
   return c.json({

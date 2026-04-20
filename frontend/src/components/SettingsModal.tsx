@@ -96,6 +96,8 @@ export function SettingsModal({ open, onClose }: Props) {
     seed: "",
   });
   const [designBusy, setDesignBusy] = useState(false);
+  const [designPreviewUrl, setDesignPreviewUrl] = useState<string | null>(null);
+  const [designPreviewSeed, setDesignPreviewSeed] = useState<number | null>(null);
   const [tab, setTab] = useState<SettingsTab>("general");
   const [llmBusy, setLlmBusy] = useState(false);
   const [gpuResetBusy, setGpuResetBusy] = useState(false);
@@ -203,6 +205,12 @@ export function SettingsModal({ open, onClose }: Props) {
       if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
     };
   }, [previewAudioUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (designPreviewUrl) URL.revokeObjectURL(designPreviewUrl);
+    };
+  }, [designPreviewUrl]);
 
   useEffect(() => {
     // Default-Text pro Sprache, nur solange der User noch nichts
@@ -340,22 +348,57 @@ export function SettingsModal({ open, onClose }: Props) {
     );
   }
 
-  async function createDesign() {
-    if (!designDraft.label.trim() || designDraft.description.trim().length < 10) {
-      toast.show(t("settings.design.missingFields"), "error");
+  /** Rollt einen neuen Preview mit zufälligem Seed (oder dem im Input
+   *  gesetzten, falls einer drinsteht). Setzt designPreviewSeed auf den
+   *  tatsächlich verwendeten Seed — davon liest dann saveDesign(). */
+  async function previewDesign(mode: "fresh" | "useInputSeed") {
+    if (designDraft.description.trim().length < 10) {
+      toast.show(t("settings.design.descTooShort"), "error");
       return;
     }
     setDesignBusy(true);
     try {
-      const seedNum = designDraft.seed.trim()
-        ? parseInt(designDraft.seed.trim(), 10)
-        : undefined;
+      const inputSeed =
+        mode === "useInputSeed" && designDraft.seed.trim()
+          ? parseInt(designDraft.seed.trim(), 10)
+          : undefined;
+      const { blob, seed } = await api.voiceDesigns.previewUnsaved({
+        description: designDraft.description.trim(),
+        gender: designDraft.gender,
+        language: designDraft.language,
+        seed: Number.isFinite(inputSeed) ? inputSeed : undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      setDesignPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+      setDesignPreviewSeed(seed);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setDesignBusy(false);
+    }
+  }
+
+  /** Persistiert die aktuelle Voice mit dem zuletzt gepreviewten Seed. */
+  async function saveDesign() {
+    if (!designDraft.label.trim() || designDraft.description.trim().length < 10) {
+      toast.show(t("settings.design.missingFields"), "error");
+      return;
+    }
+    if (designPreviewSeed === null) {
+      toast.show(t("settings.design.previewFirst"), "error");
+      return;
+    }
+    setDesignBusy(true);
+    try {
       await api.voiceDesigns.create({
         label: designDraft.label.trim(),
         gender: designDraft.gender,
         language: designDraft.language,
         description: designDraft.description.trim(),
-        seed: Number.isFinite(seedNum) ? seedNum : undefined,
+        seed: designPreviewSeed,
       });
       const r = await api.voiceDesigns.list();
       setVoiceDesigns(r.voices);
@@ -366,6 +409,9 @@ export function SettingsModal({ open, onClose }: Props) {
         description: "",
         seed: "",
       });
+      if (designPreviewUrl) URL.revokeObjectURL(designPreviewUrl);
+      setDesignPreviewUrl(null);
+      setDesignPreviewSeed(null);
       toast.show(t("settings.design.created"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -1154,17 +1200,60 @@ export function SettingsModal({ open, onClose }: Props) {
               }
               placeholder={t("settings.design.seedPlaceholder")}
             />
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => previewDesign("fresh")}
+                disabled={
+                  designBusy || designDraft.description.trim().length < 10
+                }
+              >
+                {designBusy
+                  ? t("settings.design.previewBusy")
+                  : designPreviewSeed === null
+                  ? t("settings.design.previewFirst.button")
+                  : t("settings.design.reroll")}
+              </Button>
+              {designDraft.seed.trim() && (
+                <Button
+                  variant="ghost"
+                  onClick={() => previewDesign("useInputSeed")}
+                  disabled={designBusy}
+                >
+                  {t("settings.design.previewInputSeed")}
+                </Button>
+              )}
+              {designPreviewSeed !== null && (
+                <span className="text-[11px] text-neutral-500 font-mono">
+                  {t("settings.design.currentSeed", {
+                    seed: String(designPreviewSeed),
+                  })}
+                </span>
+              )}
+            </div>
+
+            {designPreviewUrl && (
+              <audio
+                controls
+                src={designPreviewUrl}
+                className="w-full mt-1"
+                autoPlay
+              />
+            )}
+
             <Button
-              onClick={createDesign}
+              onClick={saveDesign}
               disabled={
                 designBusy ||
                 !designDraft.label.trim() ||
-                designDraft.description.trim().length < 10
+                designDraft.description.trim().length < 10 ||
+                designPreviewSeed === null
               }
             >
               {designBusy
                 ? t("settings.design.creating")
-                : t("settings.design.create")}
+                : t("settings.design.saveThisVoice")}
             </Button>
           </div>
         </section>

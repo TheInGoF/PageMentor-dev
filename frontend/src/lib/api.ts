@@ -711,6 +711,32 @@ export const api = {
       request<{ ok: true }>(`/api/voices/design/${id}`, { method: "DELETE" }),
     previewUrl: (id: string, text?: string) =>
       `/api/voices/design/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
+    /** Unsaved-Preview: rollt einen Seed (oder nimmt den übergebenen)
+     *  und liefert MP3 + Seed via X-Voice-Seed-Header. Gibt das Pair
+     *  zurück damit der Caller einen Save mit dem gerollten Seed
+     *  anstoßen kann. */
+    previewUnsaved: async (input: {
+      description: string;
+      gender: "female" | "male";
+      language: "de" | "en";
+      seed?: number;
+      text?: string;
+    }): Promise<{ blob: Blob; seed: number }> => {
+      const res = await fetch("/api/voices/design/preview", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => res.statusText);
+        throw new Error(`Preview ${res.status}: ${t.slice(0, 200)}`);
+      }
+      const seedHeader = res.headers.get("X-Voice-Seed");
+      const seed = seedHeader ? parseInt(seedHeader, 10) : 0;
+      const blob = await res.blob();
+      return { blob, seed };
+    },
   },
   summary: {
     status: () => request<OllamaStatus>("/api/summary/status"),

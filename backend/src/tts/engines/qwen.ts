@@ -283,6 +283,41 @@ function buildDesignInstruct(design: VoiceDesign): string {
   return prefix + desc;
 }
 
+/** Preview-Synthese für eine NOCH-NICHT-gespeicherte Voice-Design —
+ *  wird vom Settings-Form genutzt bevor die Design-Zeile in die DB
+ *  persistiert wird. Ermöglicht Seed-Reroll ohne Insert-Delete-Dance.
+ *  Das Ergebnis wird NICHT benchmarkt (kein DB-Row zum Aktualisieren). */
+export async function previewDesignUnsaved(params: {
+  text: string;
+  description: string;
+  gender: "female" | "male";
+  language: string;
+  seed: number;
+  timeoutMs: number;
+  dials?: AdvancedDials;
+}): Promise<Buffer> {
+  // Reuse buildDesignInstruct-Logik via ephemerem VoiceDesign-Objekt,
+  // sonst müssten wir die Gender-Prefix-Regel duplizieren und bei
+  // Änderungen drift-anfällig machen.
+  const ephemeral: VoiceDesign = {
+    id: "ephemeral-preview",
+    label: "preview",
+    gender: params.gender,
+    language: params.language,
+    description: params.description,
+    seed: params.seed,
+    createdAt: "",
+    msPerChar: null,
+    samplesCount: 0,
+  };
+  return callSpeechDesign({
+    text: params.text,
+    design: ephemeral,
+    timeoutMs: params.timeoutMs,
+    dials: params.dials,
+  });
+}
+
 async function callSpeechDesign(params: {
   text: string;
   design: VoiceDesign;
