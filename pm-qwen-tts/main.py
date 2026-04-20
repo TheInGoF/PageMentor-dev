@@ -241,6 +241,14 @@ def _load_customvoice_model() -> None:
     (mehrere parallele ``/v1/audio/speech``-Calls mit Preset können den
     Load gleichzeitig triggern, nur einer lädt tatsächlich).
 
+    Wenn der User `QWEN_TTS_MODEL` selbst schon auf den CustomVoice-Repo
+    gesetzt hat (statt den Default Base-Repo zu lassen), teilen sich
+    Base- und CustomVoice-Pfad dieselbe geladene Modell-Instanz — sonst
+    hätten wir zwei identische ~4 GB-Downloads und doppelten VRAM-
+    Verbrauch. Die ``Qwen3TTSModel``-Klasse exponiert beide
+    ``generate_voice_clone`` und ``generate_custom_voice`` — welche
+    davon sinnvoll antwortet hängt von den Weights ab.
+
     Nutzt kein Audio-Tokenizer-Symlink — CustomVoice-Repo enthält den
     speech_tokenizer/ bereits oder braucht ihn nicht (der qwen-tts-
     Loader holt ihn bei Bedarf). Falls der Load fehlschlägt, landet der
@@ -253,6 +261,21 @@ def _load_customvoice_model() -> None:
     with _custom_load_lock:
         # Double-check nach Lock-Acquire.
         if _custom_model is not None or _custom_load_error is not None:
+            return
+
+        # Fall: MODEL_ID und CUSTOMVOICE_MODEL_ID zeigen auf dasselbe
+        # Repo (z. B. weil User `QWEN_TTS_MODEL=…CustomVoice` override
+        # hat). Wiederverwenden statt nochmal laden.
+        if (
+            MODEL_ID == CUSTOMVOICE_MODEL_ID
+            and _model is not None
+        ):
+            log.info(
+                "customvoice load: reusing base-slot model instance "
+                "(MODEL_ID == CUSTOMVOICE_MODEL_ID == %s) — no second download",
+                CUSTOMVOICE_MODEL_ID,
+            )
+            _custom_model = _model
             return
 
         try:
@@ -622,6 +645,21 @@ def _synth_custom(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    log.info("=" * 64)
+    log.info("pm-qwen-tts starting up")
+    log.info("  base-slot model     : %s", MODEL_ID)
+    log.info("  customvoice model   : %s (lazy)", CUSTOMVOICE_MODEL_ID)
+    log.info("  device=%s dtype=%s attn=%s", DEVICE, DTYPE_NAME, ATTN_IMPL)
+    if MODEL_ID == CUSTOMVOICE_MODEL_ID:
+        log.warning(
+            "MODEL_ID == CUSTOMVOICE_MODEL_ID — "
+            "du lädst CustomVoice in beide Slots. Voice-Clone-Pfad "
+            "(ref_audio_b64) wird dann auf CustomVoice-Weights aufgerufen "
+            "und kann unerwartet ausfallen. Wenn du nur Presets nutzt, ist "
+            "das OK; wenn du auch eigene Samples hochlädst, setze "
+            "QWEN_TTS_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-Base (oder unset)."
+        )
+    log.info("=" * 64)
     _load_model()  # blockiert Startup bis Modell (oder Load-Error) da ist
     yield
 
