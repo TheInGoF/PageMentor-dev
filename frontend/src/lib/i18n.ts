@@ -649,6 +649,14 @@ const en: Record<string, string> = {
   "settings.tts.tester.hint":
     "Uses the instruction field above — no save required.",
   "settings.tts.tester.noVoices": "No preset voices for this language",
+  "settings.tts.tester.advanced": "Advanced Qwen parameters ▾",
+  "settings.tts.advanced.temperature": "Temperature",
+  "settings.tts.advanced.topP": "Top-P",
+  "settings.tts.advanced.maxTokens": "Max new tokens",
+  "settings.tts.advanced.seed": "Seed override",
+  "settings.tts.advanced.seedAuto": "auto",
+  "settings.tts.advanced.hint":
+    "Lower temperature (0.3–0.5) keeps the voice closer to the instruction and reduces accent drift on long paragraphs, at the cost of slightly flatter prosody. Seed override: empty = deterministic per speaker, set an integer for a different variant of the same preset.",
   "settings.voices.title": "Own reading voices",
   "settings.voices.subtitle":
     "Upload a 3–10 s sample of any voice (yours, a friend's, a public-domain audiobook snippet). Qwen3-TTS clones a reading voice from it. Each voice gets a fixed seed — it will always sound the same.",
@@ -1395,6 +1403,14 @@ const de: Record<string, string> = {
   "settings.tts.tester.hint":
     "Nutzt das Instruction-Feld oben — kein Speichern nötig.",
   "settings.tts.tester.noVoices": "Keine Preset-Stimmen für diese Sprache",
+  "settings.tts.tester.advanced": "Erweiterte Qwen-Parameter ▾",
+  "settings.tts.advanced.temperature": "Temperature",
+  "settings.tts.advanced.topP": "Top-P",
+  "settings.tts.advanced.maxTokens": "Max. neue Tokens",
+  "settings.tts.advanced.seed": "Seed-Override",
+  "settings.tts.advanced.seedAuto": "auto",
+  "settings.tts.advanced.hint":
+    "Niedrigere Temperature (0.3–0.5) hält die Stimme näher an der Instruction und reduziert Akzent-Drift in langen Absätzen — auf Kosten etwas flacherer Prosodie. Seed-Override leer = deterministisch pro Speaker; mit Integer bekommst du eine andere Variante desselben Presets.",
   "settings.voices.title": "Eigene Lesestimmen",
   "settings.voices.subtitle":
     "Lade eine 3–10 s Referenz-Aufnahme einer beliebigen Stimme hoch (deine, die einer Freundin, ein Public-Domain-Hörbuch-Schnipsel). Qwen3-TTS klont daraus eine Lesestimme. Pro Voice wird ein fester Seed gewürfelt — sie klingt immer gleich.",

@@ -45,7 +45,17 @@ audioRoutes.get("/preview", async (c) => {
 
   const textOverride = c.req.query("text");
   const instructOverride = c.req.query("instruct");
-  const hasOverrides = textOverride !== undefined || instructOverride !== undefined;
+  const tempOverride = c.req.query("temperature");
+  const topPOverride = c.req.query("top_p");
+  const maxTokOverride = c.req.query("max_new_tokens");
+  const seedOverride = c.req.query("seed");
+  const hasOverrides =
+    textOverride !== undefined ||
+    instructOverride !== undefined ||
+    tempOverride !== undefined ||
+    topPOverride !== undefined ||
+    maxTokOverride !== undefined ||
+    seedOverride !== undefined;
 
   const sample = textOverride
     ? textOverride
@@ -53,12 +63,27 @@ audioRoutes.get("/preview", async (c) => {
     ? "Willkommen bei PageMentor. So klingt dein Hörbuch."
     : "Welcome to PageMentor. This is how your audiobook will sound.";
 
+  const parseOptFloat = (s: string | undefined): number | undefined => {
+    if (s === undefined || s === "") return undefined;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const parseOptInt = (s: string | undefined): number | undefined => {
+    if (s === undefined || s === "") return undefined;
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
   try {
     const buf = await synthesizePreview({
       voice: voiceId,
       locale: voice.locale,
       text: sample,
       instructOverride,
+      temperatureOverride: parseOptFloat(tempOverride),
+      topPOverride: parseOptFloat(topPOverride),
+      maxNewTokensOverride: parseOptInt(maxTokOverride),
+      seedOverride: parseOptInt(seedOverride),
     });
     // Use the underlying ArrayBuffer so Response accepts it cleanly under both Bun and Node types.
     const body = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) as unknown as BodyInit;

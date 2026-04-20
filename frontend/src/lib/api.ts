@@ -614,6 +614,10 @@ export const api = {
           qwenTtsUrl?: string;
           qwenTtsApiKeyPresent?: boolean;
           qwenTtsInstruction?: string;
+          qwenTtsTemperature?: string;
+          qwenTtsTopP?: string;
+          qwenTtsMaxNewTokens?: string;
+          qwenTtsSeedOverride?: string;
         };
         status: OllamaStatus;
       }>("/api/llm/config"),
@@ -631,6 +635,10 @@ export const api = {
       qwenTtsUrl?: string;
       qwenTtsApiKey?: string;
       qwenTtsInstruction?: string;
+      qwenTtsTemperature?: string;
+      qwenTtsTopP?: string;
+      qwenTtsMaxNewTokens?: string;
+      qwenTtsSeedOverride?: string;
     }) =>
       request<{ config: unknown; status: OllamaStatus }>("/api/llm/config", {
         method: "PUT",
@@ -772,12 +780,25 @@ export const api = {
     voices: () => request<{ voices: Voice[] }>("/api/audio/voices"),
     previewUrl: (
       voiceId: string,
-      opts?: { text?: string; instruct?: string }
+      opts?: {
+        text?: string;
+        instruct?: string;
+        temperature?: string;
+        topP?: string;
+        maxNewTokens?: string;
+        seed?: string;
+      }
     ) => {
       const parts = [`voice=${encodeURIComponent(voiceId)}`];
       if (opts?.text != null) parts.push(`text=${encodeURIComponent(opts.text)}`);
       if (opts?.instruct != null)
         parts.push(`instruct=${encodeURIComponent(opts.instruct)}`);
+      if (opts?.temperature)
+        parts.push(`temperature=${encodeURIComponent(opts.temperature)}`);
+      if (opts?.topP) parts.push(`top_p=${encodeURIComponent(opts.topP)}`);
+      if (opts?.maxNewTokens)
+        parts.push(`max_new_tokens=${encodeURIComponent(opts.maxNewTokens)}`);
+      if (opts?.seed) parts.push(`seed=${encodeURIComponent(opts.seed)}`);
       return `/api/audio/preview?${parts.join("&")}`;
     },
     get: (docId: string) => request<AudioDocument>(`/api/audio/document/${docId}`),

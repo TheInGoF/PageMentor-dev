@@ -21,6 +21,10 @@ interface LlmConfig {
   qwenTtsUrl?: string;
   qwenTtsApiKeyPresent?: boolean;
   qwenTtsInstruction?: string;
+  qwenTtsTemperature?: string;
+  qwenTtsTopP?: string;
+  qwenTtsMaxNewTokens?: string;
+  qwenTtsSeedOverride?: string;
 }
 
 interface Props {
@@ -132,6 +136,10 @@ export function SettingsModal({ open, onClose }: Props) {
         googleModel: llmConfig.googleModel ?? "",
         qwenTtsUrl: llmConfig.qwenTtsUrl ?? "",
         qwenTtsInstruction: llmConfig.qwenTtsInstruction ?? "",
+        qwenTtsTemperature: llmConfig.qwenTtsTemperature ?? "",
+        qwenTtsTopP: llmConfig.qwenTtsTopP ?? "",
+        qwenTtsMaxNewTokens: llmConfig.qwenTtsMaxNewTokens ?? "",
+        qwenTtsSeedOverride: llmConfig.qwenTtsSeedOverride ?? "",
       };
       if (anthropicKeyInput.trim()) patch.anthropicApiKey = anthropicKeyInput.trim();
       if (openaiKeyInput.trim()) patch.openaiApiKey = openaiKeyInput.trim();
@@ -182,6 +190,10 @@ export function SettingsModal({ open, onClose }: Props) {
         // der User sofort hört was er getippt hat ohne zuerst speichern
         // zu müssen.
         instruct: llmConfig.qwenTtsInstruction ?? "",
+        temperature: llmConfig.qwenTtsTemperature || undefined,
+        topP: llmConfig.qwenTtsTopP || undefined,
+        maxNewTokens: llmConfig.qwenTtsMaxNewTokens || undefined,
+        seed: llmConfig.qwenTtsSeedOverride || undefined,
       });
       const res = await fetch(url);
       if (!res.ok) {
@@ -668,6 +680,76 @@ export function SettingsModal({ open, onClose }: Props) {
                 onChange={(e) => setPreviewText(e.target.value)}
                 placeholder={t("settings.tts.tester.textPlaceholder")}
               />
+
+              <details className="text-xs text-neutral-400">
+                <summary className="cursor-pointer select-none py-1 hover:text-neutral-200">
+                  {t("settings.tts.tester.advanced")}
+                </summary>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
+                  <Input
+                    label={t("settings.tts.advanced.temperature")}
+                    type="number"
+                    step="0.05"
+                    min={0}
+                    max={2}
+                    value={llmConfig.qwenTtsTemperature ?? ""}
+                    onChange={(e) =>
+                      setLlmConfig({
+                        ...llmConfig,
+                        qwenTtsTemperature: e.target.value,
+                      })
+                    }
+                    placeholder="0.5"
+                  />
+                  <Input
+                    label={t("settings.tts.advanced.topP")}
+                    type="number"
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    value={llmConfig.qwenTtsTopP ?? ""}
+                    onChange={(e) =>
+                      setLlmConfig({
+                        ...llmConfig,
+                        qwenTtsTopP: e.target.value,
+                      })
+                    }
+                    placeholder="0.9"
+                  />
+                  <Input
+                    label={t("settings.tts.advanced.maxTokens")}
+                    type="number"
+                    step="256"
+                    min={256}
+                    max={16384}
+                    value={llmConfig.qwenTtsMaxNewTokens ?? ""}
+                    onChange={(e) =>
+                      setLlmConfig({
+                        ...llmConfig,
+                        qwenTtsMaxNewTokens: e.target.value,
+                      })
+                    }
+                    placeholder="4096"
+                  />
+                  <Input
+                    label={t("settings.tts.advanced.seed")}
+                    type="number"
+                    step="1"
+                    value={llmConfig.qwenTtsSeedOverride ?? ""}
+                    onChange={(e) =>
+                      setLlmConfig({
+                        ...llmConfig,
+                        qwenTtsSeedOverride: e.target.value,
+                      })
+                    }
+                    placeholder={t("settings.tts.advanced.seedAuto")}
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-500 pt-2">
+                  {t("settings.tts.advanced.hint")}
+                </p>
+              </details>
+
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"

@@ -34,6 +34,23 @@ export interface LlmConfig {
    *  Tonfall / Tempo der Preset-Stimme. Leer = neutral.
    *  Beispiel: "Calm audiobook narrator, slow and clear pacing." */
   qwenTtsInstruction?: string;
+  /** Sampling-Temperature für CustomVoice-Generate (0.0-1.5). Niedrig
+   *  = deterministischer, straffer an Instruction; hoch = mehr
+   *  Varianz/Emotion. Leer = Qwen-Default. Bei Akzent-Drift-Problemen
+   *  (Vivian/ZH-Speaker driften zurück zu Chinese) lohnt ~0.3-0.5. */
+  qwenTtsTemperature?: string;
+  /** Top-P Sampling (0.0-1.0). Leer = Qwen-Default. */
+  qwenTtsTopP?: string;
+  /** Override für max_new_tokens des Qwen-Generate. Leer = Sidecar-
+   *  Default (MAX_NEW_TOKENS, derzeit 4096). Hochsetzen nur bei
+   *  extrem langen Chunks; meistens irrelevant weil wir zuvor auf
+   *  ~1500 chars splitten. */
+  qwenTtsMaxNewTokens?: string;
+  /** Seed-Override (Int-String). Leer = Sidecar berechnet einen
+   *  deterministischen Seed aus dem Speaker-Namen (FNV-Hash) —
+   *  gleicher Speaker → gleiche Stimme über alle Sessions. Explizit
+   *  gesetzt ermöglicht andere Varianten desselben Presets. */
+  qwenTtsSeedOverride?: string;
 }
 
 let cached: LlmConfig | null = null;

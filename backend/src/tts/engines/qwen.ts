@@ -204,14 +204,48 @@ async function callSpeechClone(params: {
   return Buffer.from(await res.arrayBuffer());
 }
 
+function parseNumConfig(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function parseIntConfig(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+interface AdvancedDials {
+  temperature?: number;
+  topP?: number;
+  maxNewTokens?: number;
+  seedOverride?: number;
+}
+
+function readDials(): AdvancedDials {
+  return {
+    temperature: parseNumConfig(effective("qwenTtsTemperature", "PM_QWEN_TTS_TEMPERATURE")),
+    topP: parseNumConfig(effective("qwenTtsTopP", "PM_QWEN_TTS_TOP_P")),
+    maxNewTokens: parseIntConfig(effective("qwenTtsMaxNewTokens", "PM_QWEN_TTS_MAX_NEW_TOKENS")),
+    seedOverride: parseIntConfig(effective("qwenTtsSeedOverride", "PM_QWEN_TTS_SEED_OVERRIDE")),
+  };
+}
+
 async function callSpeechPreset(params: {
   text: string;
   speaker: string;
   instruct: string | undefined;
   language: string; // "de" | "en"
   timeoutMs: number;
+  dials?: AdvancedDials;
 }): Promise<Buffer> {
   const url = baseUrl();
+  const d = params.dials ?? {};
+  const seed =
+    d.seedOverride !== undefined && Number.isFinite(d.seedOverride)
+      ? d.seedOverride
+      : seedForSpeaker(params.speaker);
 
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
@@ -228,7 +262,10 @@ async function callSpeechPreset(params: {
       speaker: params.speaker,
       instruct: params.instruct || undefined,
       language: qwenLanguageFor(params.language),
-      seed: seedForSpeaker(params.speaker),
+      seed,
+      temperature: d.temperature,
+      top_p: d.topP,
+      max_new_tokens_override: d.maxNewTokens,
     }),
     signal: AbortSignal.timeout(params.timeoutMs),
   });
@@ -278,8 +315,11 @@ export const qwenEngine: TtsEngine = {
 
     if (presetSpeaker) {
       const instruct = effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
+      const dials = readDials();
       console.log(
-        `[qwen-tts] synth preset=${presetSpeaker} text=${text.length}c rate=${params.rate} instruct=${instruct ? "yes" : "no"}`
+        `[qwen-tts] synth preset=${presetSpeaker} text=${text.length}c rate=${params.rate} ` +
+          `instruct=${instruct ? "yes" : "no"} temp=${dials.temperature ?? "def"} ` +
+          `top_p=${dials.topP ?? "def"} seedOverride=${dials.seedOverride ?? "auto"}`
       );
       buf = await callSpeechPreset({
         text,
@@ -287,6 +327,7 @@ export const qwenEngine: TtsEngine = {
         instruct,
         language: params.voice.language,
         timeoutMs: SYNTH_TIMEOUT_MS,
+        dials,
       });
     } else {
       const sample = resolveSample(params.voice.id);
@@ -363,12 +404,35 @@ export const qwenEngine: TtsEngine = {
         params.instructOverride !== undefined
           ? params.instructOverride
           : effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
+      // Preview nutzt dieselben Dials wie Produktiv-Synthese — User
+      // hört direkt was er bei der Generierung kriegen wird. Pro-Request-
+      // Overrides (Tester-UI) haben Vorrang vor Config-Defaults.
+      const base = readDials();
+      const dials: AdvancedDials = {
+        temperature:
+          params.temperatureOverride !== undefined
+            ? params.temperatureOverride
+            : base.temperature,
+        topP:
+          params.topPOverride !== undefined
+            ? params.topPOverride
+            : base.topP,
+        maxNewTokens:
+          params.maxNewTokensOverride !== undefined
+            ? params.maxNewTokensOverride
+            : base.maxNewTokens,
+        seedOverride:
+          params.seedOverride !== undefined
+            ? params.seedOverride
+            : base.seedOverride,
+      };
       const buf = await callSpeechPreset({
         text: params.text,
         speaker: presetSpeaker,
         instruct,
         language: params.voice.language,
         timeoutMs: PREVIEW_TIMEOUT_MS,
+        dials,
       });
       if (buf.length === 0) {
         throw new Error(

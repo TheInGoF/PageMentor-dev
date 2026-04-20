@@ -562,12 +562,24 @@ def _synth_custom(
     instruct: Optional[str],
     language: str,
     seed: int,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    max_new_tokens_override: Optional[int] = None,
 ) -> tuple[np.ndarray, int]:
     """Synthese über das CustomVoice-Modell. `speaker` muss einer der
     9 Presets sein; `instruct` ist Freitext ("Calm narrator, slow pace")
-    oder leer. Keine Stil-Drift zwischen Chunks weil die Preset-Stimme
-    im Modell verankert ist (Base-Voice-Clone ist das nicht — dort
-    drifted sie wegen autoregressiver Sampling-Pfade)."""
+    oder leer.
+
+    Advanced-Sampling-Dials werden 1:1 an Qwen durchgereicht wenn nicht
+    ``None`` — sonst nimmt Qwen seine internen Defaults. Niedrigere
+    ``temperature`` (~0.3-0.5) kann Akzent-Drift im Body-Text reduzieren
+    (straffer am Instruction-Prompt), auf Kosten etwas monotonerer
+    Prosodie.
+
+    Keine Stil-Drift zwischen Chunks weil die Preset-Stimme im Modell
+    verankert ist — aber innerhalb eines langen Chunks kann die Stimme
+    autoregressiv Richtung Sprecher-Muttersprache zurückfallen (z. B.
+    Vivian→Chinese). Niedrige temperature mildert das."""
     if speaker not in CUSTOMVOICE_PRESETS:
         raise HTTPException(
             status_code=400,
@@ -586,14 +598,23 @@ def _synth_custom(
 
     _apply_seed(seed)
 
+    effective_max = (
+        max_new_tokens_override
+        if max_new_tokens_override and max_new_tokens_override > 0
+        else MAX_NEW_TOKENS
+    )
     gen_kwargs: dict[str, Any] = {
         "text": text,
         "language": language,
         "speaker": speaker,
-        "max_new_tokens": MAX_NEW_TOKENS,
+        "max_new_tokens": effective_max,
     }
     if instruct and instruct.strip():
         gen_kwargs["instruct"] = instruct.strip()
+    if temperature is not None and temperature >= 0:
+        gen_kwargs["temperature"] = float(temperature)
+    if top_p is not None and 0 < top_p <= 1:
+        gen_kwargs["top_p"] = float(top_p)
 
     req_hash = hashlib.sha256(
         f"{text}|{seed}|{speaker}|{instruct or ''}".encode("utf-8")
@@ -731,6 +752,16 @@ class SpeechRequest(BaseModel):
     language: str = DEFAULT_LANGUAGE
     seed: int = 0
 
+    # Advanced-Sampling-Parameter — alle optional. ``None`` bedeutet
+    # Qwen-Default nutzen. Werden 1:1 an ``generate_custom_voice``
+    # durchgereicht. Grund für die explizite Exposition: User kann bei
+    # Akzent-Drift-Problemen temperature runter schrauben (strafft das
+    # Sampling Richtung Instruction-Vorgabe), oder mit einem abweichenden
+    # Seed eine andere Stimm-Variante desselben Presets bekommen.
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    max_new_tokens_override: Optional[int] = None
+
 
 # WICHTIG: `def` statt `async def`. Der Synth-Call blockiert Minuten-
 # lang (threading.Event.wait im Heartbeat-Wrapper). Ein `async def`-
@@ -748,6 +779,9 @@ def speech(req: SpeechRequest):
             instruct=req.instruct,
             language=req.language,
             seed=req.seed,
+            temperature=req.temperature,
+            top_p=req.top_p,
+            max_new_tokens_override=req.max_new_tokens_override,
         )
     else:
         if not req.ref_audio_b64 or not req.ref_audio_b64.strip():

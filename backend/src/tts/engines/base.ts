@@ -49,6 +49,13 @@ export interface PreviewParams {
    *  Instruction-Änderungen anhören kann bevor er speichert. Nur für
    *  CustomVoice-Presets relevant; Voice-Clone-Pfad ignoriert. */
   instructOverride?: string;
+  /** Sampling-Dial-Overrides für den Tester — erlaubt das Probieren
+   *  verschiedener temperature/top_p/seed-Werte ohne sie vorher in
+   *  llm-config zu persistieren. `undefined` = Config-Default benutzen. */
+  temperatureOverride?: number;
+  topPOverride?: number;
+  maxNewTokensOverride?: number;
+  seedOverride?: number;
 }
 
 export interface TtsEngine {

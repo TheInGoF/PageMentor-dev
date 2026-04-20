@@ -115,6 +115,11 @@ export async function synthesizePreview(params: {
   /** Override für Qwen-Instruction (Preset-Voices). Ermöglicht dem
    *  Settings-Tester, unsaved Instruction-Text zu probieren. */
   instructOverride?: string;
+  /** Advanced-Dial-Overrides — analog zu instructOverride. */
+  temperatureOverride?: number;
+  topPOverride?: number;
+  maxNewTokensOverride?: number;
+  seedOverride?: number;
 }): Promise<Buffer> {
   const voice = findVoice(params.voice);
   if (!voice) throw new Error(`Unknown voice: ${params.voice}`);
@@ -125,5 +130,9 @@ export async function synthesizePreview(params: {
     locale: params.locale,
     text: params.text,
     instructOverride: params.instructOverride,
+    temperatureOverride: params.temperatureOverride,
+    topPOverride: params.topPOverride,
+    maxNewTokensOverride: params.maxNewTokensOverride,
+    seedOverride: params.seedOverride,
   });
 }
