@@ -152,16 +152,23 @@ voiceRoutes.post("/design", async (c) => {
       }
       refText = form.ref_text ? String(form.ref_text) : null;
       const blob = form.ref_blob;
-      // Hono gibt Upload-Files unter Bun/Node als File-Objekt zurück
-      // (File extends Blob). Duck-typing statt instanceof — vermeidet
-      // Typ-Probleme wenn Node-Globals nicht verfügbar sind.
-      if (
-        blob &&
-        typeof blob === "object" &&
-        typeof (blob as { arrayBuffer?: unknown }).arrayBuffer === "function"
-      ) {
-        refBlob = await (blob as Blob).arrayBuffer();
+      // Dieselbe Pattern wie /custom-Route: Multipart-Files kommen als
+      // File-Instanz (File extends Blob). Vorher hatten wir Duck-Typing,
+      // das in der Praxis fehlgeschlagen ist → refBlob blieb null →
+      // silent Fall-through zu Server-Regen, der eine andere Voice
+      // generiert. User: "Vorschau sauber, nach Save kaputt".
+      if (blob instanceof File) {
+        refBlob = await blob.arrayBuffer();
       }
+      console.log(
+        `[voices] POST /design multipart received: label=${JSON.stringify(label)} ` +
+          `desc_len=${description.length} seed=${seed ?? "auto"} gender=${gender} ` +
+          `ref_blob=${
+            blob instanceof File
+              ? `${blob.size}B "${blob.name}" type=${blob.type}`
+              : `MISSING (type=${typeof blob})`
+          }`
+      );
     } else {
       const body = await c.req.json<{
         label: string;
@@ -202,6 +209,9 @@ voiceRoutes.post("/design", async (c) => {
           : "Hello, this is a voice sample. The text spans several sentences so the voice character becomes clear.");
       setDesignReference(design.id, path, effectiveRefText);
       finalDesign = { ...design, refPath: path, refText: effectiveRefText };
+      console.log(
+        `[voices] design ${design.id} reference saved from upload: ${refBlob.byteLength}B → ${path}`
+      );
     } else {
       // Server-seitige Generierung. Das ist der Fallback-Pfad (JSON-
       // Clients ohne Blob). Kann ~30-60 s dauern.
