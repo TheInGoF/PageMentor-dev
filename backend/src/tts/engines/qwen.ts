@@ -266,23 +266,22 @@ function readDials(): AdvancedDials {
 }
 
 /** Baut den `instruct`-Prompt für Qwen-VoiceDesign. Prepend eines
- *  Gender-Cues ist nötig, weil Qwen selbst kein Gender-Feld hat —
- *  der UI-Dropdown hätte sonst keinen Effekt, und der User würde bei
- *  einer Beschreibung wie „warmer Erzähler, Anfang 40" eine männliche
- *  Stimme bekommen obwohl er „weiblich" ausgewählt hat.
+ *  Gender-Cues ist nötig, weil Qwen selbst kein Gender-Feld hat — der
+ *  UI-Dropdown hätte sonst keinen Effekt.
  *
- *  Wir prüfen zuerst ob die Beschreibung bereits ein Gender-Wort
- *  enthält (Erzähler/Erzählerin, female/male voice, woman/man).
- *  Wenn ja, nicht doppelt taggen — der User weiß was er will. */
+ *  Früher gab es einen Skip wenn die Beschreibung schon ein Gender-Wort
+ *  enthielt — die Heuristik war zu fragil (DE „Erzähler" matched auch
+ *  in „Hörbuch-Erzähler" und unterdrückte das female-Prefix obwohl
+ *  female ausgewählt war). Jetzt: IMMER prefixen, Dropdown ist
+ *  authoritative. Falls die Beschreibung redundant Gender mitnennt
+ *  („Erzählerin"), schadet das nichts — Qwen reagiert auf die ersten
+ *  Tokens stärker als auf wiederholte Cues weiter hinten. */
 function buildDesignInstruct(design: VoiceDesign): string {
   const desc = design.description.trim();
-  const lower = desc.toLowerCase();
-  const hasGenderCue =
-    /\b(erzählerin|sprecherin|frau|weiblich|female|woman)\b/.test(lower) ||
-    /\b(erzähler|sprecher|mann|männlich|male voice|\bman\b)\b/.test(lower);
-  if (hasGenderCue) return desc;
   const prefix =
-    design.gender === "female" ? "Female voice. " : "Male voice. ";
+    design.gender === "female"
+      ? "Female voice, soft feminine woman's speaking voice. "
+      : "Male voice, deep masculine man's speaking voice. ";
   return prefix + desc;
 }
 
