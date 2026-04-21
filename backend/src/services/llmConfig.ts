@@ -51,6 +51,12 @@ export interface LlmConfig {
    *  gleicher Speaker → gleiche Stimme über alle Sessions. Explizit
    *  gesetzt ermöglicht andere Varianten desselben Presets. */
   qwenTtsSeedOverride?: string;
+  /** Max. Zeichen pro TTS-Chunk (500-8000). Leer = 4000-Default bzw.
+   *  ENV PM_TTS_MAX_CHUNK. Kleinere Werte = schnelleres Fail-Fast
+   *  bei Problemen, größere Werte = bessere Prosodie-Kohärenz aber
+   *  höheres OOM-/Timeout-Risiko je nach GPU. Auf 3090 hat 4000
+   *  experimentell nicht stabil funktioniert — 2000-2500 ist safer. */
+  ttsMaxChunk?: string;
 }
 
 let cached: LlmConfig | null = null;

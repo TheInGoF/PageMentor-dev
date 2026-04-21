@@ -30,6 +30,7 @@ llmConfigRoutes.put("/", async (c) => {
     qwenTtsTopP?: string;
     qwenTtsMaxNewTokens?: string;
     qwenTtsSeedOverride?: string;
+    ttsMaxChunk?: string;
   }>();
 
   // Only overwrite an API key when the client sends a non-empty string.

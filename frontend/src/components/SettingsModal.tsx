@@ -31,6 +31,7 @@ interface LlmConfig {
   qwenTtsTopP?: string;
   qwenTtsMaxNewTokens?: string;
   qwenTtsSeedOverride?: string;
+  ttsMaxChunk?: string;
 }
 
 interface Props {
@@ -187,6 +188,7 @@ export function SettingsModal({ open, onClose }: Props) {
         qwenTtsTopP: llmConfig.qwenTtsTopP ?? "",
         qwenTtsMaxNewTokens: llmConfig.qwenTtsMaxNewTokens ?? "",
         qwenTtsSeedOverride: llmConfig.qwenTtsSeedOverride ?? "",
+        ttsMaxChunk: llmConfig.ttsMaxChunk ?? "",
       };
       if (anthropicKeyInput.trim()) patch.anthropicApiKey = anthropicKeyInput.trim();
       if (openaiKeyInput.trim()) patch.openaiApiKey = openaiKeyInput.trim();
@@ -938,6 +940,21 @@ export function SettingsModal({ open, onClose }: Props) {
                       })
                     }
                     placeholder={t("settings.tts.advanced.seedAuto")}
+                  />
+                  <Input
+                    label={t("settings.tts.advanced.chunkSize")}
+                    type="number"
+                    step="250"
+                    min={500}
+                    max={8000}
+                    value={llmConfig.ttsMaxChunk ?? ""}
+                    onChange={(e) =>
+                      setLlmConfig({
+                        ...llmConfig,
+                        ttsMaxChunk: e.target.value,
+                      })
+                    }
+                    placeholder="2500"
                   />
                 </div>
                 <p className="text-[11px] text-neutral-500 pt-2">

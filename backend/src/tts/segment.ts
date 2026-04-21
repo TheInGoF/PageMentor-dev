@@ -1,26 +1,27 @@
 /**
  * Text-Segmentierung für TTS.
  *
- * Wir schneiden den Kapiteltext in Chunks von max ~4000 Zeichen —
- * bevorzugt an Absatz-, sekundär an Satzgrenzen. 4000 ist der Sweet-
- * Spot für Qwen3-TTS mit voice_clone_prompt-Cache:
+ * Chunk-Größe ist zur Laufzeit konfigurierbar:
+ *   1. Settings → Qwen TTS → Advanced (llm-config `ttsMaxChunk`)
+ *   2. ENV `PM_TTS_MAX_CHUNK` als Fallback
+ *   3. Default 2500 — konservativ nach v1.18.041-Experiment, wo 4000
+ *      auf 3090 zu Timeouts/Retries bei manchen Chunks führte.
  *
- *   - Lang genug, dass die Prosodie über einen größeren Bogen kohärent
- *     bleibt und der Clone-Prompt-Cache voll ausgespielt wird (erster
- *     Chunk compiled, alle weiteren hitten den Cache).
- *   - Kurz genug dass 3090 mit bf16+sdpa in ~4-5 min durchläuft — liegt
- *     komfortabel in den 20-min-Timeouts (siehe qwen.ts/main.py).
- *   - Vorher 2500 (v1.00) → 1500 (v1.18.009, Fail-Fast-Kompromiss) →
- *     4000 (v1.18.041, nach voice_clone_prompt-Cache).
- *
- * Override per ENV `PM_TTS_MAX_CHUNK` — akzeptiert 500-8000.
+ * Akzeptiert 500-8000. Kleinere Werte = schnelleres Fail-Fast, größere
+ * = bessere Prosodie-Kohärenz aber höheres GPU-Risiko.
  */
 
-const MAX_CHUNK = (() => {
-  const raw = parseInt(process.env.PM_TTS_MAX_CHUNK ?? "", 10);
-  if (!Number.isFinite(raw) || raw < 500 || raw > 8000) return 4000;
-  return raw;
-})();
+import { effective } from "../services/llmConfig";
+
+const DEFAULT_MAX_CHUNK = 2500;
+
+function getMaxChunk(): number {
+  const raw = effective("ttsMaxChunk", "PM_TTS_MAX_CHUNK");
+  if (!raw) return DEFAULT_MAX_CHUNK;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 500 || n > 8000) return DEFAULT_MAX_CHUNK;
+  return n;
+}
 
 export interface Segment {
   /** Absätze innerhalb dieses Segments (mit Satz-Trennungen) */
@@ -28,6 +29,9 @@ export interface Segment {
 }
 
 export function segmentText(text: string): Segment[] {
+  // Per-call lookup, damit User-Setting-Änderungen sofort greifen
+  // ohne Backend-Restart.
+  const maxChunk = getMaxChunk();
   const paragraphs = splitParagraphs(text);
   const segments: Segment[] = [];
   let buf: string[] = [];
@@ -35,19 +39,19 @@ export function segmentText(text: string): Segment[] {
 
   for (const p of paragraphs) {
     // Ein einzelner Absatz ist zu lang → hart an Satzgrenzen splitten
-    if (p.length > MAX_CHUNK) {
+    if (p.length > maxChunk) {
       if (buf.length) {
         segments.push({ paragraphs: buf });
         buf = [];
         size = 0;
       }
-      for (const sub of splitLongParagraph(p, MAX_CHUNK)) {
+      for (const sub of splitLongParagraph(p, maxChunk)) {
         segments.push({ paragraphs: [sub] });
       }
       continue;
     }
 
-    if (size + p.length + 2 > MAX_CHUNK && buf.length) {
+    if (size + p.length + 2 > maxChunk && buf.length) {
       segments.push({ paragraphs: buf });
       buf = [];
       size = 0;

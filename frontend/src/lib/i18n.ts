@@ -660,6 +660,7 @@ const en: Record<string, string> = {
   "settings.tts.advanced.maxTokens": "Max new tokens",
   "settings.tts.advanced.seed": "Seed override",
   "settings.tts.advanced.seedAuto": "auto",
+  "settings.tts.advanced.chunkSize": "Chunk size (chars)",
   "settings.tts.advanced.hint":
     "Lower temperature (0.3–0.5) keeps the voice closer to the instruction and reduces accent drift on long paragraphs, at the cost of slightly flatter prosody. Seed override: empty = deterministic per speaker, set an integer for a different variant of the same preset.",
   "settings.design.title": "Designed voices (text-described)",
@@ -1451,6 +1452,7 @@ const de: Record<string, string> = {
   "settings.tts.advanced.maxTokens": "Max. neue Tokens",
   "settings.tts.advanced.seed": "Seed-Override",
   "settings.tts.advanced.seedAuto": "auto",
+  "settings.tts.advanced.chunkSize": "Chunk-Größe (Zeichen)",
   "settings.tts.advanced.hint":
     "Niedrigere Temperature (0.3–0.5) hält die Stimme näher an der Instruction und reduziert Akzent-Drift in langen Absätzen — auf Kosten etwas flacherer Prosodie. Seed-Override leer = deterministisch pro Speaker; mit Integer bekommst du eine andere Variante desselben Presets.",
   "settings.design.title": "Designte Stimmen (aus Textbeschreibung)",

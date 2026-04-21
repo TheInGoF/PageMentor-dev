@@ -630,6 +630,7 @@ export const api = {
           qwenTtsTopP?: string;
           qwenTtsMaxNewTokens?: string;
           qwenTtsSeedOverride?: string;
+          ttsMaxChunk?: string;
         };
         status: OllamaStatus;
       }>("/api/llm/config"),
@@ -651,6 +652,7 @@ export const api = {
       qwenTtsTopP?: string;
       qwenTtsMaxNewTokens?: string;
       qwenTtsSeedOverride?: string;
+      ttsMaxChunk?: string;
     }) =>
       request<{ config: unknown; status: OllamaStatus }>("/api/llm/config", {
         method: "PUT",
