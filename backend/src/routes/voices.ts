@@ -29,16 +29,20 @@ import { designRefPath, setDesignReference } from "../services/voiceDesigns";
 
 export const voiceRoutes = new Hono();
 
-/** Repräsentativer Vorschau-Text (~380 Zeichen). Lang genug um Qwens
- *  autoregressiven Drift sichtbar zu machen — kurzer 50-Zeichen-Text
- *  klingt oft konsistent mit dem Instruction-Prompt, die Hörbuch-
- *  Chunks mit 1000-1500 Zeichen aber nicht. Gemeinsam genutzt von
- *  allen Preview-Endpoints (design saved/unsaved, custom voice). */
+/** Default-Vorschau-Text — bewusst **kurz** (~5-7 s Audio @ 12Hz-Rate).
+ *  Qwen-Base-Clone erwartet eine Referenz von 3-10 s; längere Audios
+ *  verwirren das Modell und führen zu Kauderwelsch-Synthese („Kinder-
+ *  Sprache rückwärts" war ein konkreter User-Report mit ~25 s Ref).
+ *  voiceSamples enforced denselben Limit via MAX_BYTES für Uploads.
+ *
+ *  Wer Qwens Langtext-Drift hören will, gibt im Tester-Text-Feld
+ *  einen eigenen längeren Probe-Text ein — die Preview-UI erlaubt das.
+ *  Der Default ist nur für die gespeicherte Ref-Audio-Datei relevant. */
 function defaultPreviewText(language: string): string {
   if (language === "de") {
-    return "Hallo, dies ist eine Sprachprobe dieser Stimme. Der Text geht bewusst über mehrere Sätze, damit Sie einschätzen können, wie die Stimme über einen längeren Absatz hinweg klingt. Gerade bei einem Hörbuch kommt es darauf an, dass die Aussprache stabil bleibt und der Klangcharakter sich nicht mitten im Absatz verändert.";
+    return "Hallo, dies ist eine Sprachprobe dieser Stimme. So klingt sie beim Vorlesen eines Textes.";
   }
-  return "Hello, this is a voice sample. The text deliberately spans several sentences so you can judge how this voice sounds across a longer passage. Audiobook listening depends on the voice staying stable without shifting character mid-paragraph.";
+  return "Hello, this is a voice sample. This is how it sounds when reading a book.";
 }
 
 /* ------------------------------------------------------------------ */
@@ -202,11 +206,7 @@ voiceRoutes.post("/design", async (c) => {
     if (refBlob) {
       const path = designRefPath(design.id);
       writeFileSync(path, Buffer.from(refBlob));
-      const effectiveRefText =
-        refText ||
-        (language === "de"
-          ? "Hallo, dies ist eine Sprachprobe. Der Text geht über mehrere Sätze, damit die Stimm-Charakteristik sichtbar wird."
-          : "Hello, this is a voice sample. The text spans several sentences so the voice character becomes clear.");
+      const effectiveRefText = refText || defaultPreviewText(language);
       setDesignReference(design.id, path, effectiveRefText);
       finalDesign = { ...design, refPath: path, refText: effectiveRefText };
       console.log(

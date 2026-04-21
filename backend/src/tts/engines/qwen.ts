@@ -349,10 +349,12 @@ export async function ensureDesignReference(
 ): Promise<VoiceDesign> {
   if (design.refPath && existsSync(design.refPath)) return design;
 
+  // Kurzer Ref-Text (~5-7 s Audio) — Qwen-Base-Clone erwartet 3-10 s.
+  // Längere Referenzen produzieren Kauderwelsch bei der Synthese.
   const refText =
     design.language === "de"
-      ? "Hallo, dies ist eine Sprachprobe. Der Text geht über mehrere Sätze, damit die Stimm-Charakteristik sichtbar wird."
-      : "Hello, this is a voice sample. The text spans several sentences so the voice character becomes clear.";
+      ? "Hallo, dies ist eine Sprachprobe dieser Stimme. So klingt sie beim Vorlesen eines Textes."
+      : "Hello, this is a voice sample. This is how it sounds when reading a book.";
 
   console.log(
     `[qwen-tts] ensuring reference audio for design ${design.id} — generating via VoiceDesign (one-time)`
