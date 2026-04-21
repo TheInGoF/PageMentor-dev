@@ -25,11 +25,16 @@ import { db } from "../db";
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const DESIGN_DIR = join(DATA_DIR, "voice-designs");
 
-function ensureDesignDir(): void {
+export function ensureDesignDir(): void {
   if (!existsSync(DESIGN_DIR)) mkdirSync(DESIGN_DIR, { recursive: true });
 }
 
+/** Liefert den Disk-Pfad für die Referenz-Audio-Datei und stellt
+ *  zugleich sicher dass das Verzeichnis existiert — Caller können
+ *  direkt `writeFileSync(designRefPath(id), buf)` machen ohne ENOENT
+ *  auf frischen Installationen zu riskieren. */
 export function designRefPath(id: string): string {
+  ensureDesignDir();
   return join(DESIGN_DIR, `${id}.mp3`);
 }
 
