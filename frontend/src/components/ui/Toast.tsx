@@ -33,7 +33,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={ctxValue}>
       {children}
-      <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none">
+      {/* Toasts sitzen UNTERHALB des Sticky-Headers (h-14 + Search-Zeile
+          ~90 px total). Vorher top-4 → Toasts überdeckten den Header,
+          User musste warten bis sie wegfaden bevor er Nav-Buttons
+          anklicken konnte. */}
+      <div className="fixed top-24 right-4 z-[60] flex flex-col gap-2 pointer-events-none">
         {items.map((t) => (
           <div
             key={t.id}

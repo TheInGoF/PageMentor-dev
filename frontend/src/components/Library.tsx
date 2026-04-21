@@ -36,7 +36,6 @@ const TYPE_FILTERS: Array<"all" | DocType> = [
 export function Library({ onLogout, onOpen, onGoDashboard, onGoModules }: Props) {
   const [docs, setDocs] = useState<Document[] | null>(null);
   const [modules, setModules] = useState<ModuleListItem[]>([]);
-  const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | DocType>("all");
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>("all");
   const [activeTags, setActiveTags] = useState<string[]>([]);
@@ -147,14 +146,9 @@ export function Library({ onLogout, onOpen, onGoDashboard, onGoModules }: Props)
       if (moduleFilter === "unassigned" && d.module_id) return false;
       if (moduleFilter !== "all" && moduleFilter !== "unassigned" && d.module_id !== moduleFilter) return false;
       if (activeTags.length && !activeTags.every((tg) => d.tags.includes(tg))) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        const hay = [d.title, d.filename, ...d.tags].join(" ").toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
       return true;
     });
-  }, [docs, typeFilter, moduleFilter, activeTags, search]);
+  }, [docs, typeFilter, moduleFilter, activeTags]);
 
   function toggleTag(tg: string) {
     setActiveTags((xs) => (xs.includes(tg) ? xs.filter((x) => x !== tg) : [...xs, tg]));
@@ -182,8 +176,6 @@ export function Library({ onLogout, onOpen, onGoDashboard, onGoModules }: Props)
   return (
     <div className="min-h-full flex flex-col">
       <TopBar
-        search={search}
-        onSearch={setSearch}
         onLogout={handleLogout}
         onUpload={() => setUploadOpen(true)}
         onOpenDocument={onOpen}
