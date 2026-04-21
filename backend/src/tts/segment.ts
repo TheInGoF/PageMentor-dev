@@ -1,23 +1,24 @@
 /**
  * Text-Segmentierung für TTS.
  *
- * Wir schneiden den Kapiteltext in Chunks von max ~1500 Zeichen —
- * bevorzugt an Absatz-, sekundär an Satzgrenzen. 1500 ist ein Kompromiss
- * für Qwen3-TTS:
- *   - kurz genug, um einen hängenden Chunk schnell zu bemerken (~2-3 min
- *     auf der 3090 statt 4-6 min bei 2500-Zeichen-Chunks)
- *   - groß genug, dass die Qwen-Prosodie kohärent bleibt (bei zu kurzen
- *     Chunks wird das Tempo weniger stabil; siehe Intro-"überhastet"-
- *     Symptom)
- *   - Cache-Granularität: ein fehlgeschlagener Chunk bedeutet kleineren
- *     Retry-Verlust.
+ * Wir schneiden den Kapiteltext in Chunks von max ~4000 Zeichen —
+ * bevorzugt an Absatz-, sekundär an Satzgrenzen. 4000 ist der Sweet-
+ * Spot für Qwen3-TTS mit voice_clone_prompt-Cache:
  *
- * Override per ENV `PM_TTS_MAX_CHUNK` — akzeptiert 500-5000.
+ *   - Lang genug, dass die Prosodie über einen größeren Bogen kohärent
+ *     bleibt und der Clone-Prompt-Cache voll ausgespielt wird (erster
+ *     Chunk compiled, alle weiteren hitten den Cache).
+ *   - Kurz genug dass 3090 mit bf16+sdpa in ~4-5 min durchläuft — liegt
+ *     komfortabel in den 20-min-Timeouts (siehe qwen.ts/main.py).
+ *   - Vorher 2500 (v1.00) → 1500 (v1.18.009, Fail-Fast-Kompromiss) →
+ *     4000 (v1.18.041, nach voice_clone_prompt-Cache).
+ *
+ * Override per ENV `PM_TTS_MAX_CHUNK` — akzeptiert 500-8000.
  */
 
 const MAX_CHUNK = (() => {
   const raw = parseInt(process.env.PM_TTS_MAX_CHUNK ?? "", 10);
-  if (!Number.isFinite(raw) || raw < 500 || raw > 5000) return 1500;
+  if (!Number.isFinite(raw) || raw < 500 || raw > 8000) return 4000;
   return raw;
 })();
 
