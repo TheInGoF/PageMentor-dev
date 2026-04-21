@@ -49,6 +49,25 @@ const PKG_VERSION = ((): string => {
   }
 })();
 
+// Timestamp-Prefix für alle console.*-Ausgaben. Docker-Log-Driver
+// prefixt die Zeilen zwar schon in Portainer, aber wer Logs per
+// `docker logs` ohne -t zieht oder sie in einer Text-Datei parst,
+// hat sonst nackte Zeilen ohne Zeitbezug — und wenn man mehrere
+// Container-Logs vergleicht wird's mühsam. Ein zusätzlicher ISO-
+// Timestamp am Zeilenanfang hilft auch der Frontend-Log-Ansicht
+// (falls wir mal eine bauen).
+(() => {
+  const origLog = console.log.bind(console);
+  const origWarn = console.warn.bind(console);
+  const origError = console.error.bind(console);
+  const origInfo = console.info.bind(console);
+  const ts = (): string => new Date().toISOString();
+  console.log = (...args: unknown[]) => origLog(`[${ts()}]`, ...args);
+  console.info = (...args: unknown[]) => origInfo(`[${ts()}]`, ...args);
+  console.warn = (...args: unknown[]) => origWarn(`[${ts()}] WARN`, ...args);
+  console.error = (...args: unknown[]) => origError(`[${ts()}] ERROR`, ...args);
+})();
+
 // Auffälliger Startup-Banner — macht im Portainer-Log sofort sichtbar
 // dass der neue Build auch wirklich läuft (Portainer zeigt Container-
 // Recreates oft ohne klares Signal, auch wenn's still durchging).
