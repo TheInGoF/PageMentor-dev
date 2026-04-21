@@ -123,11 +123,12 @@ MAX_NEW_TOKENS = int(os.environ.get("QWEN_TTS_MAX_NEW_TOKENS", "4096"))
 # Container neu hochfahren kann. Arbiter `restart: "no"` heißt: Arbiter
 # entscheidet den Re-Start beim nächsten TTS-Call.
 #
-# 360 s = 6 min: reguläre Chunks auf einer 3090 laufen um die 4:30
-# — 6 min gibt Puffer für den gelegentlich langsamen Chunk ohne
-# direkt abzuschießen, aber ein echter Zombie (Infinite-Loop)
-# braucht nicht mehr als 6 min zum Entdecken.
-GENERATION_TIMEOUT_S = int(os.environ.get("QWEN_TTS_GENERATION_TIMEOUT", "360"))
+# 1200 s = 20 min: Default großzügig damit 4000-Zeichen-Chunks (per
+# PM_TTS_MAX_CHUNK backend-seitig erhöht) durchgehen. Backend-Timeout
+# SYNTH_TIMEOUT_MS sollte ≤ diesem Wert sein, sonst schießt der
+# Sidecar sich selbst ab bevor der Client das 504 sieht. Override
+# für striktere Fail-Fast-Setups über QWEN_TTS_GENERATION_TIMEOUT.
+GENERATION_TIMEOUT_S = int(os.environ.get("QWEN_TTS_GENERATION_TIMEOUT", "1200"))
 
 # Heartbeat-Log-Intervall während aktiver Generation (nur in den Logs,
 # nicht am Client). Hilft zu sehen, dass der Prozess nicht hängt.
