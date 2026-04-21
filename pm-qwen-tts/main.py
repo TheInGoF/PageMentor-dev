@@ -943,6 +943,10 @@ async def lifespan(app: FastAPI):
     log.info("  customvoice model   : %s (lazy)", CUSTOMVOICE_MODEL_ID)
     log.info("  voicedesign model   : %s (lazy)", VOICEDESIGN_MODEL_ID)
     log.info("  device=%s dtype=%s attn=%s", DEVICE, DTYPE_NAME, ATTN_IMPL)
+    log.info(
+        "  generation_timeout=%ds ref_cache=%d",
+        GENERATION_TIMEOUT_S, _REF_AUDIO_CACHE_MAX,
+    )
     if MODEL_ID == CUSTOMVOICE_MODEL_ID:
         log.warning(
             "MODEL_ID == CUSTOMVOICE_MODEL_ID — "
