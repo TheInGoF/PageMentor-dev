@@ -558,6 +558,69 @@ def _run_with_heartbeat_and_timeout(
     return result.get("value")
 
 
+# --- Clone-Prompt-Cache -----------------------------------------------
+# Qwens offizielle Longform-Empfehlung: `create_voice_clone_prompt()`
+# einmal pro Voice ausführen, dann den resultierenden Prompt bei JEDEM
+# Chunk via `voice_clone_prompt=` kwarg reingeben — statt jedes mal
+# ref_audio neu extrahieren zu lassen. Speaker-Vektor bleibt identisch
+# → konsistente Stimm-Färbung über alle Chunks.
+# Siehe Qwen-README "Voice Design then Clone"-Abschnitt.
+_CLONE_PROMPT_CACHE_MAX = int(os.environ.get("QWEN_TTS_CLONE_PROMPT_CACHE_SIZE", "8"))
+_clone_prompt_cache: OrderedDict[str, Any] = OrderedDict()
+_clone_prompt_cache_lock = threading.Lock()
+
+
+def _clone_prompt_key(ref_audio: tuple[np.ndarray, int], ref_text: Optional[str]) -> str:
+    arr, sr = ref_audio
+    h = hashlib.sha256()
+    # arr.tobytes() deckt Shape + Values ab, sr und ref_text sind Style-
+    # relevant, alle zusammen identifizieren den Clone-Prompt eindeutig.
+    h.update(arr.tobytes())
+    h.update(str(sr).encode())
+    h.update((ref_text or "").encode("utf-8"))
+    return h.hexdigest()
+
+
+def _get_clone_prompt(
+    ref_audio: tuple[np.ndarray, int],
+    ref_text: Optional[str],
+) -> Any:
+    key = _clone_prompt_key(ref_audio, ref_text)
+    with _clone_prompt_cache_lock:
+        cached = _clone_prompt_cache.get(key)
+        if cached is not None:
+            _clone_prompt_cache.move_to_end(key)
+            return cached
+
+    if _model is None:
+        raise HTTPException(status_code=503, detail="base model not loaded")
+
+    build_kwargs: dict[str, Any] = {"ref_audio": ref_audio}
+    if ref_text and ref_text.strip():
+        build_kwargs["ref_text"] = ref_text.strip()
+    elif X_VECTOR_ONLY_FALLBACK:
+        build_kwargs["x_vector_only_mode"] = True
+
+    log.info(
+        "clone-prompt compile: ref_samples=%d sr=%d ref_text_len=%d key=%s",
+        len(ref_audio[0]), ref_audio[1], len(ref_text or ""), key[:8],
+    )
+    t0 = time.time()
+    with torch.inference_mode():
+        prompt = _model.create_voice_clone_prompt(**build_kwargs)
+    log.info(
+        "clone-prompt compile done in %.2fs (key=%s)",
+        time.time() - t0, key[:8],
+    )
+
+    with _clone_prompt_cache_lock:
+        _clone_prompt_cache[key] = prompt
+        _clone_prompt_cache.move_to_end(key)
+        while len(_clone_prompt_cache) > _CLONE_PROMPT_CACHE_MAX:
+            _clone_prompt_cache.popitem(last=False)
+    return prompt
+
+
 def _synth_clone(
     text: str,
     ref_audio: tuple[np.ndarray, int],
@@ -574,16 +637,17 @@ def _synth_clone(
 
     _apply_seed(seed)
 
+    # Pre-compiled Clone-Prompt holen (aus Cache oder frisch bauen).
+    # Dasselbe Prompt-Objekt wird bei allen Chunks derselben Voice
+    # genutzt → kein Speaker-Drift zwischen Chunks.
+    clone_prompt = _get_clone_prompt(ref_audio, ref_text)
+
     gen_kwargs: dict[str, Any] = {
         "text": text,
         "language": language,
-        "ref_audio": ref_audio,
+        "voice_clone_prompt": clone_prompt,
         "max_new_tokens": MAX_NEW_TOKENS,
     }
-    if ref_text and ref_text.strip():
-        gen_kwargs["ref_text"] = ref_text.strip()
-    elif X_VECTOR_ONLY_FALLBACK:
-        gen_kwargs["x_vector_only_mode"] = True
     _ = speed  # speed lässt sich über diesen Pfad nicht setzen (siehe alter Kommentar)
 
     # Request-Identifier fürs Log-Grepping: 8-stelliger Hash aus Text +
