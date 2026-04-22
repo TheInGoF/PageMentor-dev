@@ -42,6 +42,9 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [state, setState] = useState<AudioDocument | null>(null);
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [chapterProgress, setChapterProgress] = useState<Map<string, ProgressEvent>>(new Map());
+  const [m4bProgress, setM4bProgress] = useState<
+    { currentMs: number; totalMs: number } | null
+  >(null);
   const [bookProgress, setBookProgress] = useState<{
     totalChapters: number;
     currentChapter: number;
@@ -220,6 +223,20 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         ev.phase === "audiobook.canceled"
       ) {
         setBookProgress(null);
+      }
+      // M4B-Encode-Progress-Events (SSE vom Backend beim Book-Build
+      // oder Rebuild). current = aktuelle Audio-Position in ms,
+      // total = gemergte MP3-Dauer in ms. Damit der User sieht wie
+      // weit ffmpeg wirklich ist statt nur "builds …" zu lesen.
+      if (ev.phase === "audiobook.m4b.start") {
+        setM4bProgress({ currentMs: 0, totalMs: ev.total ?? 0 });
+      } else if (ev.phase === "audiobook.m4b.progress") {
+        setM4bProgress({
+          currentMs: ev.current ?? 0,
+          totalMs: ev.total ?? 0,
+        });
+      } else if (ev.phase === "audiobook.m4b.done") {
+        setM4bProgress(null);
       }
       if (
         ev.phase === "audiobook.done" ||
@@ -633,8 +650,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             <h2 className="text-lg font-semibold">{t("audiobook.title")}</h2>
             <p className="text-xs text-neutral-500 mt-1">{t("audiobook.subtitle")}</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {state?.book && (
+          <div className="flex gap-2 flex-wrap items-center">
+            {state?.book && !m4bProgress && (
               <a href={state.book.url} className="btn-outline" download>
                 {t("audiobook.download.m4b")}
               </a>
@@ -643,19 +660,41 @@ export function Audiobook({ docId, documentLanguage }: Props) {
               <Button
                 variant="outline"
                 onClick={rebuildM4B}
-                disabled={m4bBusy}
+                disabled={m4bBusy || !!m4bProgress}
                 title={
                   state?.book
                     ? t("audiobook.m4b.rebuildTooltip")
                     : t("audiobook.m4b.buildTooltip")
                 }
               >
-                {m4bBusy
+                {m4bBusy || m4bProgress
                   ? t("audiobook.m4b.building")
                   : state?.book
                   ? t("audiobook.m4b.rebuild")
                   : t("audiobook.m4b.build")}
               </Button>
+            )}
+            {m4bProgress && m4bProgress.totalMs > 0 && (
+              <div className="flex items-center gap-2 min-w-[220px]">
+                <div className="flex-1 h-2 bg-bg-elevated rounded overflow-hidden">
+                  <div
+                    className="h-full bg-accent transition-[width] duration-300"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        (m4bProgress.currentMs / m4bProgress.totalMs) * 100
+                      ).toFixed(1)}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-xs text-neutral-400 font-mono tabular-nums">
+                  {(
+                    (m4bProgress.currentMs / m4bProgress.totalMs) *
+                    100
+                  ).toFixed(0)}
+                  %
+                </span>
+              </div>
             )}
             {(state?.audio.length ?? 0) > 0 && (
               <Button variant="danger" onClick={clearAll}>

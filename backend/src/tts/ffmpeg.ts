@@ -10,7 +10,15 @@ import { join, dirname, basename } from "path";
 export async function run(
   bin: string,
   args: string[],
-  opts?: { liveStderr?: boolean; logPrefix?: string }
+  opts?: {
+    liveStderr?: boolean;
+    logPrefix?: string;
+    /** Wird pro ganzer stderr-Zeile aufgerufen. ffmpeg emittiert
+     *  Progress als `\r`-getrennte Einzeiler — wir splitten auf
+     *  beide `\r` und `\n` damit der Callback auch bei Live-Progress
+     *  jede Zeile einzeln sieht. */
+    onStderrLine?: (line: string) => void;
+  }
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args);
@@ -21,17 +29,12 @@ export async function run(
     child.stderr.on("data", (b) => {
       const chunk = b.toString();
       stderr += chunk;
-      if (opts?.liveStderr) {
-        // Progressive Log-Ausgabe für langlaufende Prozesse — ffmpeg-
-        // M4B-Encodes auf großem Merged-Input können 5-10 min still
-        // laufen, ohne Live-Stream weiß man nicht ob's hängt oder
-        // fortschreitet. Pro Zeile ein eigener Log-Eintrag.
-        const lines = chunk
-          .split(/\r?\n/)
-          .filter((l: string) => l.trim().length > 0);
-        for (const line of lines) {
-          console.log(`${prefix} ${line}`);
-        }
+      const lines = chunk
+        .split(/[\r\n]+/)
+        .filter((l: string) => l.trim().length > 0);
+      for (const line of lines) {
+        if (opts?.liveStderr) console.log(`${prefix} ${line}`);
+        opts?.onStderrLine?.(line);
       }
     });
     child.on("error", reject);
@@ -313,6 +316,11 @@ export async function buildM4B(params: {
    *  nicht zuverlässig extrahiert, also lassen wir's weg. */
   series?: string;
   coverPath?: string;
+  /** Optional: Progress-Callback während des ffmpeg-Encodes.
+   *  `currentMs` = aktuelle Audio-Position laut ffmpeg, `totalMs` =
+   *  Gesamt-Dauer des gemergten MP3 laut ffprobe. Wird pro stderr-
+   *  Zeile mit `time=...` aufgerufen (im Schnitt 1-2× pro Sekunde). */
+  onProgress?: (currentMs: number, totalMs: number) => void;
 }): Promise<void> {
   const buildStart = Date.now();
   // Stale-Zwischendateien aus einem früheren abgebrochenen Build
@@ -406,9 +414,27 @@ export async function buildM4B(params: {
   }
   args.push(params.output);
   const encodeStart = Date.now();
+  // Gesamt-Dauer einmalig probe'n — brauchen wir für die Progress-
+  // Berechnung. ffmpeg selbst gibt time= als Zähler aus, aber kein
+  // Total; das rechnen wir selbst zusammen.
+  const totalMs = params.onProgress
+    ? await probeDurationMs(merged).catch(() => 0)
+    : 0;
+  if (params.onProgress && totalMs > 0) {
+    params.onProgress(0, totalMs);
+  }
+  const timeRegex = /\btime=(\d+):(\d+):(\d+)\.(\d+)/;
   const { stderr } = await run("ffmpeg", args, {
     liveStderr: true,
     logPrefix: "[ffmpeg:m4b]",
+    onStderrLine: (line) => {
+      if (!params.onProgress || totalMs <= 0) return;
+      const m = timeRegex.exec(line);
+      if (!m) return;
+      const currentMs =
+        (+m[1] * 3600 + +m[2] * 60 + +m[3]) * 1000 + +m[4] * 10;
+      params.onProgress(currentMs, totalMs);
+    },
   });
   const outSize = existsSync(params.output)
     ? statSync(params.output).size

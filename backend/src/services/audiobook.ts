@@ -336,6 +336,7 @@ export async function generateAudiobook(params: {
 
         const bookPath = join(audioDir, "book.m4b");
         try {
+          let lastM4bEmit = 0;
           await buildM4B({
             inputs,
             chapters: m4bChapters,
@@ -345,6 +346,26 @@ export async function generateAudiobook(params: {
             shortCode: doc.short_code ?? undefined,
             series: doc.module_name ?? undefined,
             coverPath: await ensureCover(doc.id),
+            onProgress: (currentMs, totalMs) => {
+              const now = Date.now();
+              if (now - lastM4bEmit < 500 && currentMs < totalMs) return;
+              lastM4bEmit = now;
+              emit({
+                phase:
+                  currentMs === 0
+                    ? "audiobook.m4b.start"
+                    : "audiobook.m4b.progress",
+                docId: doc.id,
+                current: currentMs,
+                total: totalMs,
+              });
+            },
+          });
+          emit({
+            phase: "audiobook.m4b.done",
+            docId: doc.id,
+            current: 1,
+            total: 1,
           });
         } catch (err) {
           console.error(`[tts] M4B build failed:`, err);
@@ -984,6 +1005,7 @@ export async function rebuildM4B(docId: string): Promise<{
   }
 
   const bookPath = join(audioDir, "book.m4b");
+  let lastRebuildEmit = 0;
   await buildM4B({
     inputs,
     chapters: m4bChapters,
@@ -993,6 +1015,26 @@ export async function rebuildM4B(docId: string): Promise<{
     shortCode: doc.short_code ?? undefined,
     series: doc.module_name ?? undefined,
     coverPath: await ensureCover(doc.id),
+    onProgress: (currentMs, totalMs) => {
+      const now = Date.now();
+      if (now - lastRebuildEmit < 500 && currentMs < totalMs) return;
+      lastRebuildEmit = now;
+      emit({
+        phase:
+          currentMs === 0
+            ? "audiobook.m4b.start"
+            : "audiobook.m4b.progress",
+        docId,
+        current: currentMs,
+        total: totalMs,
+      });
+    },
+  });
+  emit({
+    phase: "audiobook.m4b.done",
+    docId,
+    current: 1,
+    total: 1,
   });
 
   return { path: bookPath, chapters: m4bChapters.length };
