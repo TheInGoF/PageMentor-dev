@@ -487,7 +487,7 @@ function buildFfMetadata(params: {
   lines.push(`album_artist=${params.artist}`);
   const seriesName = params.series?.trim();
   if (seriesName && seriesName.length > 0) {
-    // Primär: album = Serie (ABS-Convention)
+    // Primär: album = Serie (ABS-Convention im Audiobook-Modus)
     lines.push(`album=${seriesName}`);
     // Zusätzlich: movement_name + show als Fallbacks — beide mappen
     // auf echte MP4-Atoms (©mvn, tvsh). ABS und einige andere Player
@@ -495,9 +495,10 @@ function buildFfMetadata(params: {
     // immer der Fall ist).
     lines.push(`movement_name=${seriesName}`);
     lines.push(`show=${seriesName}`);
-  } else {
-    lines.push(`album=${params.title}`);
   }
+  // Kein Serien-/Modul-Name → album/movement_name/show bleiben leer.
+  // User-Vorgabe: lieber keine Metadaten-Falschbefüllung als den Titel
+  // in ein Series-Feld zu stopfen.
   lines.push(`genre=Audiobook`);
   if (params.shortCode && params.shortCode.trim().length > 0) {
     // Nur `grouping` — das ist ein echtes iTunes-Atom (©grp) und
