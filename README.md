@@ -1,73 +1,112 @@
 # PageMentor
 
-A self-hosted study companion. Upload your lecture PDFs and get **audiobooks,
-flashcards, exam-trainer sessions and summaries** — locally, on your own
-hardware, with no cloud account or API credit attached.
+> **Self-hosted study companion.** Drop in a lecture PDF and get an
+> **audiobook, flashcards, exam-trainer sessions, summaries and full-text
+> search** — 100 % local, on your own hardware, no cloud account and no
+> API credit required.
 
-> **Note:** This is a personal hobby project for data-obsessed self-hosters.
-> It is not intended for commercial use and comes with no warranties or
-> support guarantees.
+![PageMentor library](docs/screenshots/library.png)
+
+*Tags: self-hosted · audiobook generator · PDF to M4B · Qwen3-TTS · Docker ·
+Synology · Audiobookshelf · spaced repetition · local LLM · Ollama*
+
+> **Note:** Personal hobby project for data-obsessed self-hosters. Not
+> intended for commercial use, no warranties, no support guarantees.
+
+## Screenshots
+
+| Library (grid + filters)                            | Learning menu (doc overview)                         |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| ![Library](docs/screenshots/library.png)            | ![Learning menu](docs/screenshots/learning-menu.png) |
+
+| Audiobook panel (Qwen3-TTS)                         | Summaries (three detail levels)                      |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| ![Audiobook](docs/screenshots/audiobook.png)        | ![Summaries](docs/screenshots/summary.png)           |
+
+| Flashcards + SM-2 review                            | Exam trainer                                         |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| ![Flashcards](docs/screenshots/cards.png)           | ![Exam trainer](docs/screenshots/exam.png)           |
+
+| Full-text search overlay                            | Settings (LLM + TTS + ABS)                           |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| ![Search](docs/screenshots/search.png)              | ![Settings](docs/screenshots/settings.png)           |
 
 ## Architecture
 
-```text
-PDF upload                                              Browser (React 19 + Vite)
-   │                                                        ▲
-   ▼                                                        │ /api
-SQLite ◀───── Bun + Hono backend ────────────────────────── ┘
-   │             │
-   │             ├─── Docling-Serve (sidecar) → markdown + chapter sections
-   │             │
-   │             ├─── Ollama → audio-text preprocessor (cached per chapter)
-   │             │      └── Qwen3-TTS-Flash via vLLM (GPU-host sidecar,
-   │             │             Apache 2.0, default) behind pm-gpu-arbiter,
-   │             │             or Microsoft Edge Neural TTS (cloud fallback)
-   │             │             └── ffmpeg loudnorm → MP3 per chapter → M4B
-   │             │
-   │             ├─── Meilisearch  (full-text over titles, chapters, OCR text)
-   │             │
-   │             └─── Ollama (optional) → summaries + AI flashcards
-   │
-   └─── data/
-         uploads/        original PDFs
-         audio/          chapter MP3s, book.m4b
-         pagementor.db   SQLite (documents, chapters, cards, progress, …)
-```
+![Architecture diagram](docs/screenshots/architecture.png)
+
+Source: [`docs/diagrams/architecture.puml`](docs/diagrams/architecture.puml).
+Render with `plantuml -tpng docs/diagrams/architecture.puml -o ../screenshots`.
+
+### Document processing pipeline
+
+![Pipeline diagram](docs/screenshots/pipeline.png)
+
+Source: [`docs/diagrams/pipeline.puml`](docs/diagrams/pipeline.puml).
+
+### GPU arbitration (Ollama ↔ Qwen3-TTS on one card)
+
+![GPU arbiter sequence](docs/screenshots/gpu-arbiter.png)
+
+Source: [`docs/diagrams/gpu-arbiter.puml`](docs/diagrams/gpu-arbiter.puml).
 
 ## Features
 
-- **Library** — card grid with type/tag filters, pipeline-dot dashboard per
-  document (text → chapters → audio → cards → summary), live SSE status
-- **PDF viewer** — continuous scroll, zoom, page jump, text-selection → card
-- **Chapter detection** — heading heuristic + fallback page slicing, with
-  in-line editor (rename, merge, delete)
-- **Audio cleanup** — runs in two stages. First, the extractor strips
-  watermarks, running heads, figure/table captions and inline references.
-  Then a local LLM (Ollama) rewrites the chapter for narration:
-  expanding abbreviations, verbalising formulas and Greek letters,
-  stripping citations, removing bullet markers. Result is cached per
-  chapter so re-generation is free.
-- **Audiobook** — defaults to **Qwen3-TTS-Flash via vLLM** (Apache 2.0,
-  runs on a GPU host behind pm-gpu-arbiter — no cloud dependency,
-  recommendable for universities and companies). Four curated German
-  voices (Anna/Emma/Klaus/Max) with fixed seeds → each voice always
-  sounds identical. **Edge** stays available as a no-setup cloud
-  fallback.
-  EBU R128 loudness normalisation, MP3 per chapter and a complete M4B
-  with chapter markers.
-- **Send to Apple** — M4B download for Apple Books, private RSS feed for
-  Apple Podcasts / Overcast / Pocket Casts (token derived from password)
+- **Library** — card grid with type/tag/module filters, pipeline-dot
+  dashboard per document (text → chapters → audio → cards → summary),
+  live SSE status, cover rendered from any page you choose.
+- **Modules & tags** — organise by module (series) + free-form tags,
+  instead of a folder tree.
+- **PDF viewer** — continuous scroll, zoom, page jump, text-selection →
+  flashcard.
+- **Chapter detection** — heading heuristic + page-slice fallback, long
+  chapters auto-split, inline editor (rename, merge, delete).
+- **Audio cleanup** — two-stage. Extractor strips watermarks, running
+  heads, figure/table captions and inline references. Then a local LLM
+  (Ollama) rewrites for narration: expands abbreviations, verbalises
+  formulas and Greek letters, strips citations, removes bullet markers.
+  Cached per chapter (`chapters.audio_text`) — regeneration is free.
+- **Audiobook (Qwen3-TTS)** — default engine is
+  [Qwen3-TTS-Flash](https://huggingface.co/Qwen/Qwen3-TTS-Flash) served
+  via vLLM behind `pm-gpu-arbiter` (Apache 2.0, fully local,
+  university-/company-safe). Four curated German presets
+  (Anna / Emma / Klaus / Max) with fixed per-voice seeds — same voice
+  always sounds identical across runs. Additional preset-voice slots
+  (CustomVoice) and text-described voices (VoiceDesign) are editable
+  from the Settings modal.
+- **Voice cloning (optional)** — upload a 3–10 s reference clip and the
+  Qwen-Base path clones the voice; cached in the sidecar for stable
+  narrator quality across chapters.
+- **Audiobook (Edge fallback)** — Microsoft Edge Neural TTS via
+  `msedge-tts`, no GPU required, works immediately for quick tests.
+- **Audio output** — EBU R128 loudness normalisation, MP3 per chapter
+  and a complete M4B with chapter markers, cover, ID3 tags
+  (title / author / album = series / grouping = short code).
+- **Audiobookshelf integration** — one-click upload of the finished
+  M4B (with cover) to a configured
+  [Audiobookshelf](https://www.audiobookshelf.org/) library; backend
+  resolves the freshly scanned item via `/search` and `PATCH`es
+  subtitle / series / description cleanly — no reliance on MP4
+  iTunes-atom mapping.
+- **Send to Apple** — M4B download for Apple Books, private RSS feed
+  for Apple Podcasts / Overcast / Pocket Casts (token derived from
+  `PM_PASSWORD`).
 - **Flashcards** — task extraction from chapter text, AI generator via
   local Ollama, SM-2 spaced repetition with hints, CSV export/import
-  (Anki-compatible)
-- **Exam trainer** — timed sessions with self-assessment and score history
-  (sparkline chart)
+  (Anki-compatible).
+- **Exam trainer** — timed sessions with self-assessment, side-by-side
+  review and a sparkline-chart score history.
 - **Summaries** — Ollama-powered, three detail levels per chapter,
-  streaming output
+  streaming output, document-language aware.
 - **Full-text search** — Meilisearch over documents and chapters with
-  in-place highlights
-- **i18n** — English and German UI, auto-detects the browser language and
-  remembers the override in settings
+  in-place highlights.
+- **RAG (experimental)** — embedding auto-detection on the Ollama
+  server (prefers `jina/jina-embeddings-v2-base-de`), chunk-based
+  per-document retrieval, feeds Q&A and AI cards.
+- **GPU manager** — a `GPU reset` button flushes all Ollama models
+  and restarts the TTS container to reclaim VRAM between long runs.
+- **i18n** — English + German UI, auto-detects browser language,
+  override persists in settings.
 
 ## Quickstart (Docker)
 
@@ -274,12 +313,6 @@ Microsoft product; PageMentor only calls the same public Edge Read-Aloud
 endpoint a browser would, and routes the audio through local ffmpeg.
 
 PageMentor is a fresh build and does not fork any existing project.
-
-## Development
-
-This project was built in a human-in-the-loop workflow with AI assistance.
-Architecture, code and configuration were created in dialogue — all
-decisions were made by the human.
 
 ## License
 

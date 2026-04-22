@@ -1,0 +1,90 @@
+@startuml pipeline
+' Render: plantuml -tpng docs/diagrams/pipeline.puml -o ../screenshots
+' Output file expected by README: docs/screenshots/pipeline.png
+
+!theme plain
+skinparam backgroundColor #0a0a0a
+skinparam defaultFontColor #e5e5e5
+skinparam activityBackgroundColor #141414
+skinparam activityBorderColor #ef4444
+skinparam activityFontColor #e5e5e5
+skinparam activityDiamondBackgroundColor #141414
+skinparam activityDiamondBorderColor #ef4444
+skinparam activityDiamondFontColor #e5e5e5
+skinparam arrowColor #ef4444
+skinparam noteBackgroundColor #1a1a1a
+skinparam noteFontColor #e5e5e5
+
+title PageMentor — Document Processing Pipeline
+
+start
+
+:User uploads PDF
+(type, language, tags, module);
+
+:Docling-Serve extracts
+text + markdown structure;
+note right
+  Runs async via /v1/convert/file/async,
+  SSE progress events bubble to the UI.
+end note
+
+:Boilerplate cleanup;
+note right
+  Watermarks, running heads,
+  figure/table captions, inline refs,
+  soft-hyphen line breaks
+end note
+
+:Chapter detection;
+note right
+  Heading-regex first,
+  page-slice fallback.
+  Long chapters are split.
+end note
+
+fork
+  :Meilisearch indexing
+  (documents + chapters);
+fork again
+  :Audio-text cleanup via Ollama
+  (abbreviations, formulas, citations);
+  note right
+    Cached in chapters.audio_text —
+    regeneration is free.
+  end note
+fork again
+  :AI flashcards via Ollama
+  (SM-2 spaced repetition);
+fork again
+  :Summaries via Ollama
+  (bullets / paragraph / detailed);
+end fork
+
+:Qwen3-TTS-Flash per chapter
+(fixed per-voice seed);
+note right
+  4 curated German voices.
+  Fallback: Edge Neural TTS.
+end note
+
+:FFmpeg concat + EBU R128 loudnorm
+→ MP3 per chapter;
+
+:FFmpeg mux → M4B
+(chapter markers, cover,
+ID3: title / series / grouping);
+
+split
+  :Browser player + M4B download;
+split again
+  :Optional: upload to Audiobookshelf
+  (multipart + metadata PATCH);
+split again
+  :Optional: Apple Podcasts RSS feed
+  (token from PM_PASSWORD);
+end split
+
+stop
+
+@enduml

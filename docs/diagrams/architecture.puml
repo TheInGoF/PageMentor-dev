@@ -1,0 +1,67 @@
+@startuml architecture
+' Render: plantuml -tpng docs/diagrams/architecture.puml -o ../screenshots
+' Output file expected by README: docs/screenshots/architecture.png
+
+!theme plain
+skinparam backgroundColor #0a0a0a
+skinparam defaultFontColor #e5e5e5
+skinparam componentFontColor #e5e5e5
+skinparam noteBackgroundColor #1a1a1a
+skinparam noteFontColor #e5e5e5
+skinparam componentBackgroundColor #141414
+skinparam componentBorderColor #ef4444
+skinparam databaseBackgroundColor #141414
+skinparam databaseBorderColor #ef4444
+skinparam cloudBackgroundColor #141414
+skinparam cloudBorderColor #ef4444
+skinparam arrowColor #ef4444
+skinparam arrowFontColor #e5e5e5
+skinparam rectangleBackgroundColor #141414
+skinparam rectangleBorderColor #ef4444
+
+title PageMentor — Architecture
+
+actor User as user #white
+
+rectangle "Browser\n(React 19 + Vite + Tailwind)" as FE
+
+rectangle "PageMentor Container" as app {
+  component "Bun + Hono\nbackend" as BE
+  database "SQLite\n(better-sqlite3)" as DB
+  component "FFmpeg\nsubprocess" as FF
+}
+
+rectangle "NAS sidecars" as nas {
+  component "Meilisearch\n(full-text)" as MEILI
+  component "Docling-Serve\n(PDF → markdown)" as DOC
+}
+
+rectangle "GPU host\n(pm-gpu-arbiter 8790)" as gpu {
+  component "Ollama\n(LLM + embeddings)" as OLLAMA
+  component "pm-qwen-tts\n(vLLM + Qwen3-TTS-Flash)" as QWEN
+}
+
+cloud "Audiobookshelf\n(optional upload target)" as ABS
+cloud "Microsoft Edge\nNeural TTS (fallback)" as EDGE
+
+user -right-> FE : HTTPS
+FE -down-> BE : /api (cookie auth)
+BE -> DB
+BE -right-> MEILI
+BE -right-> DOC : PDF extraction
+BE -down-> OLLAMA : summaries,\nAI cards,\naudio-text cleanup,\nembeddings
+BE -down-> QWEN : TTS synthesis
+BE ..> EDGE : optional fallback
+BE -up-> ABS : M4B upload + PATCH metadata
+BE -> FF : concat + loudnorm + M4B mux
+
+note right of app
+  Bind-mount volume:
+  data/uploads/      original PDFs
+  data/audio/        MP3 + book.m4b
+  data/covers/       rendered JPGs
+  data/pagementor.db SQLite
+  data/llm-config.json
+end note
+
+@enduml
