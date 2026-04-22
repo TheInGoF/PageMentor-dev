@@ -31,7 +31,7 @@ export async function isOcrAvailable(): Promise<boolean> {
   return poppler && tess;
 }
 
-async function which(cmd: string): Promise<boolean> {
+export async function which(cmd: string): Promise<boolean> {
   return new Promise((resolve) => {
     const child = spawn("which", [cmd]);
     child.on("close", (code) => resolve(code === 0));

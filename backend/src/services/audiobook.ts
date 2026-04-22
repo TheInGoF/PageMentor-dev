@@ -13,6 +13,7 @@ import {
   preprocessChapterForAudio,
   preprocessAvailable,
 } from "./audioPreprocess";
+import { ensureCover } from "./covers";
 import { emit } from "./events";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
@@ -343,7 +344,7 @@ export async function generateAudiobook(params: {
             artist: doc.author ?? undefined,
             shortCode: doc.short_code ?? undefined,
             series: doc.module_name ?? undefined,
-            coverPath: coverPathFor(doc.id),
+            coverPath: await ensureCover(doc.id),
           });
         } catch (err) {
           console.error(`[tts] M4B build failed:`, err);
@@ -991,7 +992,7 @@ export async function rebuildM4B(docId: string): Promise<{
     artist: doc.author ?? undefined,
     shortCode: doc.short_code ?? undefined,
     series: doc.module_name ?? undefined,
-    coverPath: coverPathFor(doc.id),
+    coverPath: await ensureCover(doc.id),
   });
 
   return { path: bookPath, chapters: m4bChapters.length };
