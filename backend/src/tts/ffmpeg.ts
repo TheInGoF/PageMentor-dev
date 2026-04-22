@@ -473,29 +473,39 @@ function buildFfMetadata(params: {
   series?: string;
   chapters: Array<{ title: string; durationMs: number }>;
 }): string {
+  // Mapping-Realität bei ffmpeg/MP4: nur Keys die auf bekannte
+  // iTunes-Atoms abbilden (©nam, ©ART, ©alb, ©cmt, ©grp, aART,
+  // ©mvn/©mvi, tvsh, …) überleben den Muxer. `series` und `subtitle`
+  // werden verworfen. Audiobookshelf liest `album` als Series-Name
+  // im Audiobook-Modus — deshalb packen wir die Series dort rein,
+  // und nur wenn keine da ist fällt album auf den Titel zurück.
   const lines: string[] = [";FFMETADATA1"];
   lines.push(`title=${params.title}`);
   lines.push(`artist=${params.artist}`);
-  lines.push(`album=${params.title}`);
+  // Audiobookshelf nimmt artist als Autor, aber album_artist ist
+  // der offiziellere Pfad — doppelt hält.
+  lines.push(`album_artist=${params.artist}`);
+  const seriesName = params.series?.trim();
+  if (seriesName && seriesName.length > 0) {
+    // Primär: album = Serie (ABS-Convention)
+    lines.push(`album=${seriesName}`);
+    // Zusätzlich: movement_name + show als Fallbacks — beide mappen
+    // auf echte MP4-Atoms (©mvn, tvsh). ABS und einige andere Player
+    // lesen einen davon wenn `series` fehlt (was bei ffmpeg-Output
+    // immer der Fall ist).
+    lines.push(`movement_name=${seriesName}`);
+    lines.push(`show=${seriesName}`);
+  } else {
+    lines.push(`album=${params.title}`);
+  }
   lines.push(`genre=Audiobook`);
   if (params.shortCode && params.shortCode.trim().length > 0) {
-    const s = params.shortCode.trim();
-    // Triple-Mapping für maximale Player-Kompatibilität:
-    //   - `subtitle` → iTunes/Apple-Books + Audiobookshelf lesen das
-    //     als Untertitel des Hörbuchs (primäre Audiobookshelf-Semantik)
-    //   - `grouping` → iTunes-Grouping-Spalte, von vielen Tag-Editoren
-    //     genutzt
-    //   - `comment` → Fallback für Player die weder subtitle noch
-    //     grouping anzeigen
-    lines.push(`subtitle=${s}`);
-    lines.push(`grouping=${s}`);
-    lines.push(`comment=${s}`);
-  }
-  if (params.series && params.series.trim().length > 0) {
-    // Audiobookshelf liest den `series`-Tag per ffprobe (case-
-    // insensitive). Der dokumentierte Fallback `mvnm` wird von
-    // ffprobe nicht zuverlässig extrahiert — also lassen wir den weg.
-    lines.push(`series=${params.series.trim()}`);
+    // Nur `grouping` — das ist ein echtes iTunes-Atom (©grp) und
+    // überlebt den Muxer garantiert. `comment` hatten wir vorher auch
+    // beschrieben, das liest ABS aber als Description (semantisch
+    // falsch für ein Kürzel). `subtitle` ist im MP4-Standard kein
+    // Atom, ffmpeg verwirft es — deshalb lassen wir's weg.
+    lines.push(`grouping=${params.shortCode.trim()}`);
   }
   let start = 0;
   for (const ch of params.chapters) {
