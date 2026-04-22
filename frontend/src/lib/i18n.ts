@@ -288,6 +288,9 @@ const en: Record<string, string> = {
   "audiobook.m4b.building": "Building M4B …",
   "audiobook.m4b.built": "M4B built",
   "audiobook.m4b.buildTooltip": "Assemble all finished chapters into one M4B audiobook.",
+  "audiobook.m4b.rebuild": "Rebuild M4B",
+  "audiobook.m4b.rebuildTooltip":
+    "Rebuild the M4B from existing chapter MP3s — picks up the latest metadata (subtitle, series, cover, etc.) and overwrites the old file.",
   "audiobook.m4b.noChaptersYet": "Generate at least one chapter first.",
   "audiobook.voice.top": "Top",
   "audiobook.rate": "Speed",
@@ -1080,6 +1083,9 @@ const de: Record<string, string> = {
   "audiobook.m4b.building": "Baue M4B …",
   "audiobook.m4b.built": "M4B erzeugt",
   "audiobook.m4b.buildTooltip": "Alle fertigen Kapitel zu einem M4B-Hörbuch zusammenbauen.",
+  "audiobook.m4b.rebuild": "M4B neu bauen",
+  "audiobook.m4b.rebuildTooltip":
+    "M4B aus den vorhandenen Kapitel-MP3s neu bauen — übernimmt aktuelle Metadaten (Untertitel, Serie, Cover, …) und überschreibt die alte Datei.",
   "audiobook.m4b.noChaptersYet": "Erst ein Kapitel generieren.",
   "audiobook.voice.top": "Top",
   "audiobook.rate": "Geschwindigkeit",

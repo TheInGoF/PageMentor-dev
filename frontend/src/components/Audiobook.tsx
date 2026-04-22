@@ -627,25 +627,27 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             <p className="text-xs text-neutral-500 mt-1">{t("audiobook.subtitle")}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {state?.book ? (
+            {state?.book && (
               <a href={state.book.url} className="btn-outline" download>
                 {t("audiobook.download.m4b")}
               </a>
-            ) : (
+            )}
+            {(state?.audio.filter((a) => a.status === "done").length ?? 0) > 0 && (
               <Button
                 variant="outline"
                 onClick={rebuildM4B}
-                disabled={
-                  m4bBusy ||
-                  (state?.audio.filter((a) => a.status === "done").length ?? 0) === 0
-                }
+                disabled={m4bBusy}
                 title={
-                  (state?.audio.filter((a) => a.status === "done").length ?? 0) === 0
-                    ? t("audiobook.m4b.noChaptersYet")
+                  state?.book
+                    ? t("audiobook.m4b.rebuildTooltip")
                     : t("audiobook.m4b.buildTooltip")
                 }
               >
-                {m4bBusy ? t("audiobook.m4b.building") : t("audiobook.m4b.build")}
+                {m4bBusy
+                  ? t("audiobook.m4b.building")
+                  : state?.book
+                  ? t("audiobook.m4b.rebuild")
+                  : t("audiobook.m4b.build")}
               </Button>
             )}
             {(state?.audio.length ?? 0) > 0 && (
