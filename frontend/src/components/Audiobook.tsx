@@ -586,7 +586,27 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     !!bookProgress &&
     progress?.phase.startsWith("audiobook.") === true &&
     !progressIsTerminal;
-  const generating = (state?.generating ?? false) || progressIsInFlight;
+  // Auch Single-Chapter- und Intro-Generates zählen als „läuft was" —
+  // sonst sieht der User keinen Cancel-Button wenn er ein einzelnes
+  // Kapitel generiert hat und das jetzt hängen bleibt. Wir leiten
+  // „aktives Kapitel" aus den SSE-chapter.*-Events ab: solange ein
+  // Kapitel in start/progress-Phase steckt (also nicht done/failed/
+  // canceled), läuft da was im Backend.
+  const anyChapterSynthRunning = Array.from(chapterProgress.values()).some(
+    (ev) =>
+      ev.phase === "audiobook.chapter.start" ||
+      ev.phase === "audiobook.chapter.progress" ||
+      ev.phase === "audiobook.chapter.preprocess"
+  );
+  const anyChapterBusy = Object.values(busyChapter).some(
+    (s) => s === "generate"
+  );
+  const generating =
+    (state?.generating ?? false) ||
+    progressIsInFlight ||
+    anyChapterSynthRunning ||
+    anyChapterBusy ||
+    introBusy;
   const phaseMessage = progress ? describePhase(progress) : null;
 
   // Tick 1× pro Sekunde, damit Laufzeit + Restzeit sichtbar weiterzählen
