@@ -499,10 +499,28 @@ audioRoutes.get("/book/:docId", (c) => {
   const fullPath = join(DATA_DIR, "audio", docId, "book.m4b");
   if (!existsSync(fullPath)) return c.json({ error: tt(c, "err.notReady") }, 404);
   const doc = db()
-    .prepare("SELECT title, doc_title FROM documents WHERE id = ?")
-    .get(docId) as { title: string; doc_title: string | null } | undefined;
+    .prepare(
+      "SELECT title, doc_title, author, short_code FROM documents WHERE id = ?"
+    )
+    .get(docId) as
+    | {
+        title: string;
+        doc_title: string | null;
+        author: string | null;
+        short_code: string | null;
+      }
+    | undefined;
   const baseTitle = doc?.doc_title?.trim() || doc?.title || "audiobook";
-  const downloadName = `${safeFilename(baseTitle)}.m4b`;
+  // Filename-Segmente: kürzel_autor_titel — leere Segmente werden
+  // ausgelassen, damit keine doppelten Unterstriche entstehen.
+  const parts = [
+    doc?.short_code?.trim(),
+    doc?.author?.trim(),
+    baseTitle,
+  ]
+    .map((s) => (s ? safeFilename(s) : ""))
+    .filter((s) => s.length > 0);
+  const downloadName = `${parts.join("_")}.m4b`;
   return serveFileWithRange(c, fullPath, "audio/mp4", downloadName);
 });
 

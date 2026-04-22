@@ -47,6 +47,7 @@ interface Document {
   title: string;
   doc_title: string | null;
   author: string | null;
+  short_code: string | null;
   language: string;
 }
 
@@ -89,7 +90,7 @@ export async function generateAudiobook(params: {
   const d = db();
   const doc = d
     .prepare(
-      "SELECT id, title, doc_title, author, language FROM documents WHERE id = ?"
+      "SELECT id, title, doc_title, author, short_code, language FROM documents WHERE id = ?"
     )
     .get(params.docId) as Document | undefined;
   if (!doc) {
@@ -335,6 +336,7 @@ export async function generateAudiobook(params: {
             output: bookPath,
             title: doc.doc_title || doc.title,
             artist: doc.author ?? undefined,
+            shortCode: doc.short_code ?? undefined,
             coverPath: coverPathFor(doc.id),
           });
         } catch (err) {
@@ -913,7 +915,7 @@ export async function rebuildM4B(docId: string): Promise<{
   const d = db();
   const doc = d
     .prepare(
-      "SELECT id, title, doc_title, author, language FROM documents WHERE id = ?"
+      "SELECT id, title, doc_title, author, short_code, language FROM documents WHERE id = ?"
     )
     .get(docId) as Document | undefined;
   if (!doc) throw new Error("Document not found");
@@ -977,6 +979,7 @@ export async function rebuildM4B(docId: string): Promise<{
     output: bookPath,
     title: doc.doc_title || doc.title,
     artist: doc.author ?? undefined,
+    shortCode: doc.short_code ?? undefined,
     coverPath: coverPathFor(doc.id),
   });
 

@@ -27,6 +27,7 @@ const TYPES: DocType[] = ["studienheft", "script", "klausur", "uebung", "sonstig
 export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
+  const [shortCode, setShortCode] = useState("");
   const [type, setType] = useState<DocType>("studienheft");
   const [tags, setTags] = useState("");
   const [moduleId, setModuleId] = useState<string>("");
@@ -39,6 +40,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
     if (open && doc) {
       setTitle(doc.title);
       setAuthor(doc.author ?? "");
+      setShortCode(doc.short_code ?? "");
       setType(doc.type);
       setTags(doc.tags.join(", "));
       setModuleId(doc.module_id ?? "");
@@ -63,6 +65,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
         module_id: moduleId || null,
         thumb_page: thumbPage,
         author: author.trim() ? author.trim() : null,
+        short_code: shortCode.trim() ? shortCode.trim() : null,
       });
       onSaved();
       onClose();
@@ -99,12 +102,21 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
             />
-            <Input
-              label={t("doc.field.author")}
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder={t("doc.field.authorPlaceholder")}
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+              <Input
+                label={t("doc.field.author")}
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                placeholder={t("doc.field.authorPlaceholder")}
+              />
+              <Input
+                label={t("doc.field.shortCode")}
+                value={shortCode}
+                onChange={(e) => setShortCode(e.target.value)}
+                placeholder={t("doc.field.shortCodePlaceholder")}
+                className="sm:w-28"
+              />
+            </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-neutral-400">
                 {t("upload.type")}

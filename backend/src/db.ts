@@ -190,6 +190,12 @@ export function initDb() {
     // und exakte Bibliografie.
     d.exec("ALTER TABLE documents ADD COLUMN doc_title TEXT");
   }
+  if (!docCols.some((c) => c.name === "short_code")) {
+    // User-Kürzel für die Bibliothek — z. B. „SE12k" für Studienhefte
+    // oder „1", „2", „3" für Serien-Bände. Fließt in den M4B-
+    // Dateinamen + Metadaten (iTunes-Feld `grouping`) ein.
+    d.exec("ALTER TABLE documents ADD COLUMN short_code TEXT");
+  }
   if (!docCols.some((c) => c.name === "audio_intro_text")) {
     // Optionaler Intro-Text der vor dem ersten Kapitel ins Hörbuch
     // eingeführt wird ("Hörbuch: ..., Verfasst von ..., ..."). NULL

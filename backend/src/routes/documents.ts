@@ -237,6 +237,7 @@ documentRoutes.patch("/:id", async (c) => {
     module_id?: string | null;
     thumb_page?: number;
     author?: string | null;
+    short_code?: string | null;
   }>();
 
   const doc = db().prepare("SELECT id, page_count FROM documents WHERE id = ?").get(id) as
@@ -267,6 +268,13 @@ documentRoutes.patch("/:id", async (c) => {
         ? null
         : body.author.trim();
     db().prepare("UPDATE documents SET author = ? WHERE id = ?").run(value, id);
+  }
+  if (body.short_code !== undefined) {
+    const value =
+      body.short_code === null || body.short_code.trim().length === 0
+        ? null
+        : body.short_code.trim();
+    db().prepare("UPDATE documents SET short_code = ? WHERE id = ?").run(value, id);
   }
   if (body.tags !== undefined) {
     const d = db();

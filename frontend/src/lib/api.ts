@@ -22,6 +22,10 @@ export interface Document {
   doc_title?: string | null;
   /** Autor aus Docling-Metadata. Wird in ID3-Tags + M4B-Header genutzt. */
   author?: string | null;
+  /** User-Kürzel (z. B. Studienheft-Code „SE12k" oder Bandnummer „1",
+   *  „2", …). Fließt in den M4B-Download-Filename und in die Metadaten
+   *  (iTunes-grouping-Feld). */
+  short_code?: string | null;
   chapter_count?: number;
   card_count?: number;
   audio_done?: number;
@@ -505,6 +509,7 @@ export const api = {
         module_id?: string | null;
         thumb_page?: number;
         author?: string | null;
+        short_code?: string | null;
       }
     ) =>
       request<Document>(`/api/documents/${id}`, {

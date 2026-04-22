@@ -1,5 +1,5 @@
 import { spawn } from "child_process";
-import { writeFileSync, statSync } from "fs";
+import { writeFileSync, statSync, existsSync } from "fs";
 import { join, dirname, basename } from "path";
 
 /**
@@ -270,8 +270,15 @@ export async function probeDurationMs(file: string): Promise<number> {
 }
 
 /**
- * Baut ein M4B (AAC in MP4) mit Kapitelmarken.
+ * Baut ein M4B (AAC in MP4) mit Kapitelmarken + Metadaten + Cover.
  * `chapters` wird als FFMETADATA-File an ffmpeg übergeben.
+ *
+ * Metadaten-Layout:
+ * - title  = Doc-Titel (was der User im UI sieht)
+ * - artist = Author aus der PDF-Metadata (oder "PageMentor" fallback)
+ * - album  = Titel (iTunes zeigt M4B-Hörbücher gruppiert nach Album)
+ * - grouping = shortCode (User-Kürzel, z. B. „SE12k" / „1" / „2")
+ * - genre  = Audiobook
  */
 export async function buildM4B(params: {
   inputs: string[];
@@ -279,6 +286,7 @@ export async function buildM4B(params: {
   output: string;
   title: string;
   artist?: string;
+  shortCode?: string;
   coverPath?: string;
 }): Promise<void> {
   // 1. Concat inputs to a single MP3 first (stream copy).
@@ -290,9 +298,19 @@ export async function buildM4B(params: {
   const meta = buildFfMetadata({
     title: params.title,
     artist: params.artist ?? "PageMentor",
+    shortCode: params.shortCode,
     chapters: params.chapters,
   });
   writeFileSync(metaPath, meta);
+
+  const coverExists =
+    params.coverPath !== undefined && existsSync(params.coverPath);
+  console.log(
+    `[m4b] build ${params.output} title=${JSON.stringify(params.title)} ` +
+      `artist=${JSON.stringify(params.artist ?? "PageMentor")} ` +
+      `shortCode=${JSON.stringify(params.shortCode ?? "")} ` +
+      `cover=${coverExists ? params.coverPath : "(keine Datei gefunden)"}`
+  );
 
   // 3. Encode to AAC/M4B with chapter metadata (and optional cover).
   const args = [
@@ -305,7 +323,7 @@ export async function buildM4B(params: {
     "-i",
     metaPath,
   ];
-  if (params.coverPath) args.push("-i", params.coverPath);
+  if (coverExists) args.push("-i", params.coverPath!);
   args.push(
     "-map_metadata",
     "1",
@@ -318,7 +336,7 @@ export async function buildM4B(params: {
     "-movflags",
     "+faststart"
   );
-  if (params.coverPath) {
+  if (coverExists) {
     args.push(
       "-map",
       "0:a",
@@ -344,6 +362,7 @@ export async function buildM4B(params: {
 function buildFfMetadata(params: {
   title: string;
   artist: string;
+  shortCode?: string;
   chapters: Array<{ title: string; durationMs: number }>;
 }): string {
   const lines: string[] = [";FFMETADATA1"];
@@ -351,6 +370,13 @@ function buildFfMetadata(params: {
   lines.push(`artist=${params.artist}`);
   lines.push(`album=${params.title}`);
   lines.push(`genre=Audiobook`);
+  if (params.shortCode && params.shortCode.trim().length > 0) {
+    lines.push(`grouping=${params.shortCode.trim()}`);
+    // Dublette als comment, damit auch Player die kein grouping
+    // anzeigen (Apple Books zeigt, manche Android-Player nicht) den
+    // Kürzel sehen.
+    lines.push(`comment=${params.shortCode.trim()}`);
+  }
   let start = 0;
   for (const ch of params.chapters) {
     const end = start + ch.durationMs;
