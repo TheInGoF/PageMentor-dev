@@ -31,6 +31,9 @@ llmConfigRoutes.put("/", async (c) => {
     qwenTtsMaxNewTokens?: string;
     qwenTtsSeedOverride?: string;
     ttsMaxChunk?: string;
+    absUrl?: string;
+    absApiKey?: string;
+    absLibraryId?: string;
   }>();
 
   // Only overwrite an API key when the client sends a non-empty string.
@@ -41,6 +44,7 @@ llmConfigRoutes.put("/", async (c) => {
     "openaiApiKey",
     "googleApiKey",
     "qwenTtsApiKey",
+    "absApiKey",
   ] as const) {
     const v = patch[keyField];
     if (v === undefined || v === "" || v === "•••") {
@@ -63,6 +67,7 @@ llmConfigRoutes.delete("/:provider", (c) => {
   else if (provider === "openai") patch.openaiApiKey = "";
   else if (provider === "google") patch.googleApiKey = "";
   else if (provider === "qwenTts") patch.qwenTtsApiKey = "";
+  else if (provider === "abs") patch.absApiKey = "";
   else return c.json({ error: "Unknown provider" }, 400);
   setLlmConfig(patch);
   reloadCandidates();

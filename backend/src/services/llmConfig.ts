@@ -57,6 +57,15 @@ export interface LlmConfig {
    *  höheres OOM-/Timeout-Risiko je nach GPU. Auf 3090 hat 4000
    *  experimentell nicht stabil funktioniert — 2000-2500 ist safer. */
   ttsMaxChunk?: string;
+  /** Audiobookshelf-Server-URL (z. B. http://192.168.188.5:13378).
+   *  Leer = ABS-Integration deaktiviert. */
+  absUrl?: string;
+  /** Audiobookshelf-API-Token. In ABS generierbar unter Settings →
+   *  Users → <dein User> → API-Token. Bearer-Auth. */
+  absApiKey?: string;
+  /** ZieI-Library-ID in Audiobookshelf (UUID). Wird über /api/libraries
+   *  gelistet und vom User ausgewählt. Uploads gehen immer dorthin. */
+  absLibraryId?: string;
 }
 
 let cached: LlmConfig | null = null;
@@ -109,6 +118,7 @@ export function publicConfig() {
     openaiApiKey,
     googleApiKey,
     qwenTtsApiKey,
+    absApiKey,
     ...rest
   } = cfg;
   return {
@@ -117,5 +127,6 @@ export function publicConfig() {
     openaiApiKeyPresent: !!openaiApiKey,
     googleApiKeyPresent: !!googleApiKey,
     qwenTtsApiKeyPresent: !!qwenTtsApiKey,
+    absApiKeyPresent: !!absApiKey,
   };
 }

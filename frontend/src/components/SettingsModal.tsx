@@ -27,6 +27,9 @@ interface LlmConfig {
   qwenTtsUrl?: string;
   qwenTtsApiKeyPresent?: boolean;
   qwenTtsInstruction?: string;
+  absUrl?: string;
+  absApiKeyPresent?: boolean;
+  absLibraryId?: string;
   qwenTtsTemperature?: string;
   qwenTtsTopP?: string;
   qwenTtsMaxNewTokens?: string;
@@ -82,6 +85,15 @@ export function SettingsModal({ open, onClose }: Props) {
   const [openaiKeyInput, setOpenaiKeyInput] = useState("");
   const [googleKeyInput, setGoogleKeyInput] = useState("");
   const [qwenTtsKeyInput, setQwenTtsKeyInput] = useState("");
+  const [absKeyInput, setAbsKeyInput] = useState("");
+  const [absLibraries, setAbsLibraries] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  const [absTestResult, setAbsTestResult] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
+  const [absBusy, setAbsBusy] = useState(false);
   const [customVoices, setCustomVoices] = useState<CustomVoiceMeta[]>([]);
   const [voiceUploadBusy, setVoiceUploadBusy] = useState(false);
   const [voiceDraft, setVoiceDraft] = useState<{
@@ -189,11 +201,14 @@ export function SettingsModal({ open, onClose }: Props) {
         qwenTtsMaxNewTokens: llmConfig.qwenTtsMaxNewTokens ?? "",
         qwenTtsSeedOverride: llmConfig.qwenTtsSeedOverride ?? "",
         ttsMaxChunk: llmConfig.ttsMaxChunk ?? "",
+        absUrl: llmConfig.absUrl ?? "",
+        absLibraryId: llmConfig.absLibraryId ?? "",
       };
       if (anthropicKeyInput.trim()) patch.anthropicApiKey = anthropicKeyInput.trim();
       if (openaiKeyInput.trim()) patch.openaiApiKey = openaiKeyInput.trim();
       if (googleKeyInput.trim()) patch.googleApiKey = googleKeyInput.trim();
       if (qwenTtsKeyInput.trim()) patch.qwenTtsApiKey = qwenTtsKeyInput.trim();
+      if (absKeyInput.trim()) patch.absApiKey = absKeyInput.trim();
       const res = await api.llmConfig.put(patch);
       setLlmConfig(res.config as LlmConfig);
       setOllama(res.status);
@@ -201,6 +216,7 @@ export function SettingsModal({ open, onClose }: Props) {
       setOpenaiKeyInput("");
       setGoogleKeyInput("");
       setQwenTtsKeyInput("");
+      setAbsKeyInput("");
       toast.show(t("settings.llm.saved"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -268,6 +284,38 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   }
 
+  async function absTest() {
+    setAbsBusy(true);
+    setAbsTestResult(null);
+    try {
+      const r = await api.abs.test();
+      setAbsTestResult({
+        ok: r.ok,
+        text: r.ok
+          ? t("settings.abs.testOk", {
+              user: r.username ?? "?",
+              version: r.serverVersion ?? "?",
+            })
+          : r.message ?? t("common.error"),
+      });
+      if (r.ok) {
+        try {
+          const libs = await api.abs.libraries();
+          setAbsLibraries(libs.libraries.map((l) => ({ id: l.id, name: l.name })));
+        } catch {
+          setAbsLibraries([]);
+        }
+      }
+    } catch (err) {
+      setAbsTestResult({
+        ok: false,
+        text: err instanceof Error ? err.message : t("common.error"),
+      });
+    } finally {
+      setAbsBusy(false);
+    }
+  }
+
   async function resetGpu() {
     setGpuResetBusy(true);
     try {
@@ -304,7 +352,7 @@ export function SettingsModal({ open, onClose }: Props) {
   }
 
   async function removeApiKey(
-    provider: "anthropic" | "openai" | "google" | "qwenTts"
+    provider: "anthropic" | "openai" | "google" | "qwenTts" | "abs"
   ) {
     try {
       await api.llmConfig.removeKey(provider);
@@ -593,6 +641,96 @@ export function SettingsModal({ open, onClose }: Props) {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div className="pt-4 mt-2 border-t border-border flex flex-col gap-2">
+            <h4 className="text-xs font-semibold text-neutral-300">
+              {t("settings.abs.title")}
+            </h4>
+            <p className="text-[11px] text-neutral-500">
+              {t("settings.abs.subtitle")}
+            </p>
+            <Input
+              label={t("settings.abs.url")}
+              type="url"
+              value={llmConfig.absUrl ?? ""}
+              onChange={(e) =>
+                setLlmConfig({ ...llmConfig, absUrl: e.target.value })
+              }
+              placeholder="http://192.168.188.5:13378"
+            />
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Input
+                  label={t("settings.abs.apiKey")}
+                  type="password"
+                  value={absKeyInput}
+                  onChange={(e) => setAbsKeyInput(e.target.value)}
+                  placeholder={
+                    llmConfig.absApiKeyPresent
+                      ? "•••"
+                      : t("settings.abs.apiKeyPlaceholder")
+                  }
+                />
+              </div>
+              {llmConfig.absApiKeyPresent && (
+                <Button variant="ghost" onClick={() => removeApiKey("abs")}>
+                  {t("settings.llm.removeKey")}
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={absTest}
+                disabled={absBusy || !llmConfig.absUrl || !llmConfig.absApiKeyPresent}
+              >
+                {absBusy ? t("settings.abs.testing") : t("settings.abs.test")}
+              </Button>
+              {absTestResult && (
+                <span
+                  className={
+                    "text-xs " +
+                    (absTestResult.ok ? "text-emerald-400" : "text-accent")
+                  }
+                >
+                  {absTestResult.ok ? "✓" : "✗"} {absTestResult.text}
+                </span>
+              )}
+            </div>
+
+            {absLibraries.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-neutral-400">
+                  {t("settings.abs.library")}
+                </label>
+                <select
+                  className="input"
+                  value={llmConfig.absLibraryId ?? ""}
+                  onChange={(e) =>
+                    setLlmConfig({
+                      ...llmConfig,
+                      absLibraryId: e.target.value,
+                    })
+                  }
+                >
+                  <option value="">{t("settings.abs.libraryNone")}</option>
+                  {absLibraries.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <p className="text-[11px] text-neutral-500">
+              {t("settings.abs.hint")}
+            </p>
+
+            <Button onClick={saveLlmConfig} disabled={llmBusy}>
+              {llmBusy ? t("common.saving") : t("settings.llm.save")}
+            </Button>
           </div>
         </section>
         )}

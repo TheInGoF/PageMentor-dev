@@ -77,6 +77,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [m4bBusy, setM4bBusy] = useState(false);
+  const [absBusy, setAbsBusy] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   // Snapshot für den SSE-Handler, der sonst stale chapterStatus sieht
   // (useEffect-Deps halten es nicht frisch). Beim `audiobook.start`-
@@ -274,6 +275,28 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function uploadToAbs() {
+    setAbsBusy(true);
+    try {
+      const r = await api.abs.upload(docId);
+      const url = r.url;
+      toast.show(
+        url
+          ? t("audiobook.abs.uploaded.withLink")
+          : t("audiobook.abs.uploaded"),
+        "success"
+      );
+      if (url) {
+        // In neuem Tab öffnen damit der User das Item direkt sieht.
+        window.open(url, "_blank", "noopener");
+      }
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setAbsBusy(false);
     }
   }
 
@@ -672,6 +695,18 @@ export function Audiobook({ docId, documentLanguage }: Props) {
                   : state?.book
                   ? t("audiobook.m4b.rebuild")
                   : t("audiobook.m4b.build")}
+              </Button>
+            )}
+            {state?.book && !m4bProgress && (
+              <Button
+                variant="outline"
+                onClick={uploadToAbs}
+                disabled={absBusy}
+                title={t("audiobook.abs.uploadTooltip")}
+              >
+                {absBusy
+                  ? t("audiobook.abs.uploading")
+                  : t("audiobook.abs.upload")}
               </Button>
             )}
             {m4bProgress && m4bProgress.totalMs > 0 && (

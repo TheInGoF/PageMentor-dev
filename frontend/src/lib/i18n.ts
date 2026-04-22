@@ -292,6 +292,25 @@ const en: Record<string, string> = {
   "audiobook.m4b.rebuildTooltip":
     "Rebuild the M4B from existing chapter MP3s — picks up the latest metadata (subtitle, series, cover, etc.) and overwrites the old file.",
   "audiobook.m4b.noChaptersYet": "Generate at least one chapter first.",
+  "audiobook.abs.upload": "→ Audiobookshelf",
+  "audiobook.abs.uploading": "Uploading to ABS …",
+  "audiobook.abs.uploadTooltip":
+    "Upload the M4B to the configured Audiobookshelf library and trigger a rescan. Metadata is pushed via the ABS API (bypasses iTunes-atom mapping).",
+  "audiobook.abs.uploaded": "Uploaded to Audiobookshelf.",
+  "audiobook.abs.uploaded.withLink": "Uploaded. Opening ABS in new tab …",
+  "settings.abs.title": "Audiobookshelf",
+  "settings.abs.subtitle":
+    "Upload finished M4B books directly to an Audiobookshelf server. Metadata is set via ABS API — no iTunes-atom guessing.",
+  "settings.abs.url": "Server URL",
+  "settings.abs.apiKey": "API key",
+  "settings.abs.apiKeyPlaceholder": "Generated in ABS → User → API tokens",
+  "settings.abs.test": "Test connection",
+  "settings.abs.testing": "Testing …",
+  "settings.abs.testOk": "connected as {user} (v{version})",
+  "settings.abs.library": "Target library",
+  "settings.abs.libraryNone": "(select after testing connection)",
+  "settings.abs.hint":
+    "Save after entering URL + key, then click Test to load libraries and pick the target.",
   "audiobook.voice.top": "Top",
   "audiobook.rate": "Speed",
   "audiobook.preview": "▶ Preview",
@@ -1087,6 +1106,25 @@ const de: Record<string, string> = {
   "audiobook.m4b.rebuildTooltip":
     "M4B aus den vorhandenen Kapitel-MP3s neu bauen — übernimmt aktuelle Metadaten (Untertitel, Serie, Cover, …) und überschreibt die alte Datei.",
   "audiobook.m4b.noChaptersYet": "Erst ein Kapitel generieren.",
+  "audiobook.abs.upload": "→ Audiobookshelf",
+  "audiobook.abs.uploading": "Lade zu ABS hoch …",
+  "audiobook.abs.uploadTooltip":
+    "M4B an den konfigurierten Audiobookshelf-Server schicken und Rescan auslösen. Metadaten gehen über die ABS-API (umgeht iTunes-Atom-Mapping).",
+  "audiobook.abs.uploaded": "An Audiobookshelf übergeben.",
+  "audiobook.abs.uploaded.withLink": "Hochgeladen. ABS wird in neuem Tab geöffnet …",
+  "settings.abs.title": "Audiobookshelf",
+  "settings.abs.subtitle":
+    "Fertige M4B-Hörbücher direkt in einen Audiobookshelf-Server laden. Metadaten werden per ABS-API gesetzt — keine iTunes-Atom-Rätselraterei.",
+  "settings.abs.url": "Server-URL",
+  "settings.abs.apiKey": "API-Key",
+  "settings.abs.apiKeyPlaceholder": "In ABS erstellbar unter User → API-Token",
+  "settings.abs.test": "Verbindung testen",
+  "settings.abs.testing": "Teste …",
+  "settings.abs.testOk": "verbunden als {user} (v{version})",
+  "settings.abs.library": "Ziel-Library",
+  "settings.abs.libraryNone": "(nach Verbindungstest auswählen)",
+  "settings.abs.hint":
+    "URL + Key eingeben → Save → „Verbindung testen“ → Library wählen → noch mal Save.",
   "audiobook.voice.top": "Top",
   "audiobook.rate": "Geschwindigkeit",
   "audiobook.preview": "▶ Preview",

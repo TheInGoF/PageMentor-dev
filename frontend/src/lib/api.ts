@@ -639,6 +639,9 @@ export const api = {
           qwenTtsMaxNewTokens?: string;
           qwenTtsSeedOverride?: string;
           ttsMaxChunk?: string;
+          absUrl?: string;
+          absApiKeyPresent?: boolean;
+          absLibraryId?: string;
         };
         status: OllamaStatus;
       }>("/api/llm/config"),
@@ -661,12 +664,17 @@ export const api = {
       qwenTtsMaxNewTokens?: string;
       qwenTtsSeedOverride?: string;
       ttsMaxChunk?: string;
+      absUrl?: string;
+      absApiKey?: string;
+      absLibraryId?: string;
     }) =>
       request<{ config: unknown; status: OllamaStatus }>("/api/llm/config", {
         method: "PUT",
         body: JSON.stringify(body),
       }),
-    removeKey: (provider: "anthropic" | "openai" | "google" | "qwenTts") =>
+    removeKey: (
+      provider: "anthropic" | "openai" | "google" | "qwenTts" | "abs"
+    ) =>
       request<{ config: unknown }>(`/api/llm/config/${provider}`, { method: "DELETE" }),
   },
   admin: {
@@ -677,6 +685,30 @@ export const api = {
         "/api/admin/gpu/reset",
         { method: "POST" }
       ),
+  },
+  abs: {
+    /** Pingt den ABS-Server, verifiziert Token. */
+    test: () =>
+      request<{
+        ok: boolean;
+        url?: string;
+        username?: string;
+        serverVersion?: string;
+        message?: string;
+      }>("/api/admin/abs/test"),
+    /** Listet alle Libraries (für den Dropdown in Settings). */
+    libraries: () =>
+      request<{
+        libraries: Array<{ id: string; name: string; mediaType: string }>;
+      }>("/api/admin/abs/libraries"),
+    /** Lädt ein bereits gebautes M4B in die konfigurierte Library hoch. */
+    upload: (docId: string) =>
+      request<{
+        ok: true;
+        libraryItemId?: string;
+        uploadedBytes: number;
+        url?: string;
+      }>(`/api/admin/abs/upload/${docId}`, { method: "POST" }),
   },
   customVoices: {
     list: () =>

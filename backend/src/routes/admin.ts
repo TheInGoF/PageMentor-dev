@@ -8,6 +8,11 @@
 
 import { Hono } from "hono";
 import { effective } from "../services/llmConfig";
+import {
+  listLibraries as absListLibraries,
+  testConnection as absTestConnection,
+  uploadBook as absUploadBook,
+} from "../services/audiobookshelf";
 
 export const adminRoutes = new Hono();
 
@@ -23,6 +28,39 @@ function arbiterAuthHeaders(): Record<string, string> {
   const k = effective("qwenTtsApiKey", "PM_QWEN_TTS_API_KEY");
   return k ? { Authorization: `Bearer ${k}` } : {};
 }
+
+// =====================================================================
+// Audiobookshelf-Integration
+// =====================================================================
+
+adminRoutes.get("/abs/test", async (c) => {
+  const res = await absTestConnection();
+  return c.json(res);
+});
+
+adminRoutes.get("/abs/libraries", async (c) => {
+  try {
+    const libraries = await absListLibraries();
+    return c.json({ libraries });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+adminRoutes.post("/abs/upload/:docId", async (c) => {
+  const docId = c.req.param("docId");
+  try {
+    const result = await absUploadBook(docId);
+    return c.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(`[abs] upload ${docId} failed:`, e);
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+// =====================================================================
+// GPU-Reset (bestehend)
+// =====================================================================
 
 adminRoutes.post("/gpu/reset", async (c) => {
   const url = `${arbiterBaseUrl()}/admin/gpu/reset`;
