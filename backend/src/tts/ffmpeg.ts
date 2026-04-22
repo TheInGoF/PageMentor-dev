@@ -371,11 +371,17 @@ function buildFfMetadata(params: {
   lines.push(`album=${params.title}`);
   lines.push(`genre=Audiobook`);
   if (params.shortCode && params.shortCode.trim().length > 0) {
-    lines.push(`grouping=${params.shortCode.trim()}`);
-    // Dublette als comment, damit auch Player die kein grouping
-    // anzeigen (Apple Books zeigt, manche Android-Player nicht) den
-    // Kürzel sehen.
-    lines.push(`comment=${params.shortCode.trim()}`);
+    const s = params.shortCode.trim();
+    // Triple-Mapping für maximale Player-Kompatibilität:
+    //   - `subtitle` → iTunes/Apple-Books + Audiobookshelf lesen das
+    //     als Untertitel des Hörbuchs (primäre Audiobookshelf-Semantik)
+    //   - `grouping` → iTunes-Grouping-Spalte, von vielen Tag-Editoren
+    //     genutzt
+    //   - `comment` → Fallback für Player die weder subtitle noch
+    //     grouping anzeigen
+    lines.push(`subtitle=${s}`);
+    lines.push(`grouping=${s}`);
+    lines.push(`comment=${s}`);
   }
   let start = 0;
   for (const ch of params.chapters) {

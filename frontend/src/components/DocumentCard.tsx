@@ -174,6 +174,11 @@ export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit }: Props
           >
             {doc.title}
           </h3>
+          {doc.short_code && (
+            <p className="text-xs text-neutral-400 mt-0.5 truncate font-mono">
+              {doc.short_code}
+            </p>
+          )}
           <p className="text-xs text-neutral-500 mt-1 truncate">
             {doc.page_count > 0 ? `${doc.page_count} ${t("library.pagesShort")} · ` : ""}
             {(doc.size_bytes / 1024 / 1024).toFixed(1)} MB
