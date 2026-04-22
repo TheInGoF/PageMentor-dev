@@ -342,10 +342,14 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   // umgeht iTunes-Atom-Mapping komplett.
   if (uploadData.libraryItemId) {
     try {
+      // description explizit leeren — ABS parst grouping/©grp aus der
+      // M4B sonst manchmal in die Description, und das Kürzel soll
+      // ausschließlich im Subtitle landen.
       const metaBody: Record<string, unknown> = {
         metadata: {
           title: bookTitle,
-          subtitle: doc.short_code?.trim() || undefined,
+          subtitle: doc.short_code?.trim() || "",
+          description: "",
           authors: authorName ? [{ name: authorName }] : undefined,
           series: seriesName ? [{ name: seriesName }] : undefined,
           genres: ["Audiobook"],
