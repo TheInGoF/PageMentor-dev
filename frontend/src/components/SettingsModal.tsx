@@ -167,6 +167,32 @@ export function SettingsModal({ open, onClose }: Props) {
       .then((r) => {
         setLlmConfig(r.config);
         setOllama(r.status);
+        // Library-Liste automatisch nachladen wenn ABS konfiguriert ist,
+        // damit das Dropdown nach Neustart die gespeicherte Auswahl anzeigt.
+        if (r.config.absUrl && r.config.absApiKeyPresent) {
+          api.abs
+            .libraries()
+            .then((libs) =>
+              setAbsLibraries(
+                libs.libraries.map((l) => ({ id: l.id, name: l.name }))
+              )
+            )
+            .catch(() => setAbsLibraries([]));
+          api.abs
+            .test()
+            .then((tr) =>
+              setAbsTestResult({
+                ok: tr.ok,
+                text: tr.ok
+                  ? t("settings.abs.testOk", {
+                      user: tr.username ?? "?",
+                      version: tr.serverVersion ?? "?",
+                    })
+                  : tr.message ?? t("common.error"),
+              })
+            )
+            .catch(() => {});
+        }
       })
       .catch(() => setOllama(null));
     setAnthropicKeyInput("");
