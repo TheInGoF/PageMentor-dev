@@ -287,6 +287,11 @@ export async function buildM4B(params: {
   title: string;
   artist?: string;
   shortCode?: string;
+  /** Serien-Name (z. B. Modul-Name). Landet als `series`-Metadata-Tag
+   *  — das ist der primäre Tag den Audiobookshelf per ffprobe liest.
+   *  `mvnm` wäre der dokumentierte Fallback, wird aber von ffprobe
+   *  nicht zuverlässig extrahiert, also lassen wir's weg. */
+  series?: string;
   coverPath?: string;
 }): Promise<void> {
   // 1. Concat inputs to a single MP3 first (stream copy).
@@ -299,6 +304,7 @@ export async function buildM4B(params: {
     title: params.title,
     artist: params.artist ?? "PageMentor",
     shortCode: params.shortCode,
+    series: params.series,
     chapters: params.chapters,
   });
   writeFileSync(metaPath, meta);
@@ -308,7 +314,8 @@ export async function buildM4B(params: {
   console.log(
     `[m4b] build ${params.output} title=${JSON.stringify(params.title)} ` +
       `artist=${JSON.stringify(params.artist ?? "PageMentor")} ` +
-      `shortCode=${JSON.stringify(params.shortCode ?? "")} ` +
+      `subtitle=${JSON.stringify(params.shortCode ?? "")} ` +
+      `series=${JSON.stringify(params.series ?? "")} ` +
       `cover=${coverExists ? params.coverPath : "(keine Datei gefunden)"}`
   );
 
@@ -363,6 +370,7 @@ function buildFfMetadata(params: {
   title: string;
   artist: string;
   shortCode?: string;
+  series?: string;
   chapters: Array<{ title: string; durationMs: number }>;
 }): string {
   const lines: string[] = [";FFMETADATA1"];
@@ -382,6 +390,12 @@ function buildFfMetadata(params: {
     lines.push(`subtitle=${s}`);
     lines.push(`grouping=${s}`);
     lines.push(`comment=${s}`);
+  }
+  if (params.series && params.series.trim().length > 0) {
+    // Audiobookshelf liest den `series`-Tag per ffprobe (case-
+    // insensitive). Der dokumentierte Fallback `mvnm` wird von
+    // ffprobe nicht zuverlässig extrahiert — also lassen wir den weg.
+    lines.push(`series=${params.series.trim()}`);
   }
   let start = 0;
   for (const ch of params.chapters) {

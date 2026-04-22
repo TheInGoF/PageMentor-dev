@@ -48,6 +48,7 @@ interface Document {
   doc_title: string | null;
   author: string | null;
   short_code: string | null;
+  module_name: string | null;
   language: string;
 }
 
@@ -90,7 +91,11 @@ export async function generateAudiobook(params: {
   const d = db();
   const doc = d
     .prepare(
-      "SELECT id, title, doc_title, author, short_code, language FROM documents WHERE id = ?"
+      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.language,
+              m.name AS module_name
+       FROM documents d
+       LEFT JOIN modules m ON m.id = d.module_id
+       WHERE d.id = ?`
     )
     .get(params.docId) as Document | undefined;
   if (!doc) {
@@ -337,6 +342,7 @@ export async function generateAudiobook(params: {
             title: doc.doc_title || doc.title,
             artist: doc.author ?? undefined,
             shortCode: doc.short_code ?? undefined,
+            series: doc.module_name ?? undefined,
             coverPath: coverPathFor(doc.id),
           });
         } catch (err) {
@@ -915,7 +921,11 @@ export async function rebuildM4B(docId: string): Promise<{
   const d = db();
   const doc = d
     .prepare(
-      "SELECT id, title, doc_title, author, short_code, language FROM documents WHERE id = ?"
+      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.language,
+              m.name AS module_name
+       FROM documents d
+       LEFT JOIN modules m ON m.id = d.module_id
+       WHERE d.id = ?`
     )
     .get(docId) as Document | undefined;
   if (!doc) throw new Error("Document not found");
@@ -980,6 +990,7 @@ export async function rebuildM4B(docId: string): Promise<{
     title: doc.doc_title || doc.title,
     artist: doc.author ?? undefined,
     shortCode: doc.short_code ?? undefined,
+    series: doc.module_name ?? undefined,
     coverPath: coverPathFor(doc.id),
   });
 
