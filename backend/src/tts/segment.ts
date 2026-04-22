@@ -23,6 +23,18 @@ function getMaxChunk(): number {
   return n;
 }
 
+/** Diagnose: zeigt welche Quelle den aktuellen maxChunk liefert. */
+function sourceOfMaxChunk(): string {
+  const cfg = effective("ttsMaxChunk", "PM_TTS_MAX_CHUNK");
+  if (!cfg) return `default=${DEFAULT_MAX_CHUNK}`;
+  // effective() präferiert DB-Config über ENV. Wir prüfen hier grob
+  // ob's aus der Config oder ENV kam, damit der User im Log sofort
+  // sieht ob sein Settings-Save wirklich persistiert hat.
+  const fromEnv = process.env.PM_TTS_MAX_CHUNK;
+  if (fromEnv && fromEnv === cfg) return `env=${cfg}`;
+  return `config=${cfg}`;
+}
+
 export interface Segment {
   /** Absätze innerhalb dieses Segments (mit Satz-Trennungen) */
   paragraphs: string[];
@@ -32,6 +44,9 @@ export function segmentText(text: string): Segment[] {
   // Per-call lookup, damit User-Setting-Änderungen sofort greifen
   // ohne Backend-Restart.
   const maxChunk = getMaxChunk();
+  console.log(
+    `[segment] text=${text.length}c maxChunk=${maxChunk} (src=${sourceOfMaxChunk()})`
+  );
   const paragraphs = splitParagraphs(text);
   const segments: Segment[] = [];
   let buf: string[] = [];
