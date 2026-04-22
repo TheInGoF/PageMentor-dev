@@ -78,6 +78,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [m4bBusy, setM4bBusy] = useState(false);
   const [absBusy, setAbsBusy] = useState(false);
+  const [absConfigured, setAbsConfigured] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   // Snapshot für den SSE-Handler, der sonst stale chapterStatus sieht
   // (useEffect-Deps halten es nicht frisch). Beim `audiobook.start`-
@@ -146,6 +147,17 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       api.audio.voices().then((v) => setVoices(v.voices)).catch(() => {});
     };
     window.addEventListener("pm:voices-changed", voicesChangedHandler);
+    // ABS-Config-Check: Upload-Button erscheint nur wenn URL + Key +
+    // Library gesetzt sind. Single-fire beim Mount, Reload nach
+    // Settings-Save hat der User selbst in der Hand.
+    api.llmConfig
+      .get()
+      .then((r) => {
+        setAbsConfigured(
+          !!(r.config.absUrl && r.config.absApiKeyPresent && r.config.absLibraryId)
+        );
+      })
+      .catch(() => setAbsConfigured(false));
     return () => {
       window.removeEventListener("pm:voices-changed", voicesChangedHandler);
     };
@@ -697,7 +709,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
                   : t("audiobook.m4b.build")}
               </Button>
             )}
-            {state?.book && !m4bProgress && (
+            {state?.book && !m4bProgress && absConfigured && (
               <Button
                 variant="outline"
                 onClick={uploadToAbs}

@@ -288,6 +288,18 @@ export function SettingsModal({ open, onClose }: Props) {
     setAbsBusy(true);
     setAbsTestResult(null);
     try {
+      if (absKeyInput.trim() || !llmConfig.absApiKeyPresent) {
+        const patch: Record<string, string> = {
+          absUrl: llmConfig.absUrl ?? "",
+        };
+        if (absKeyInput.trim()) patch.absApiKey = absKeyInput.trim();
+        const res = await api.llmConfig.put(patch);
+        setLlmConfig(res.config as LlmConfig);
+        setAbsKeyInput("");
+      } else if ((llmConfig.absUrl ?? "") !== "") {
+        const res = await api.llmConfig.put({ absUrl: llmConfig.absUrl ?? "" });
+        setLlmConfig(res.config as LlmConfig);
+      }
       const r = await api.abs.test();
       setAbsTestResult({
         ok: r.ok,
@@ -684,7 +696,11 @@ export function SettingsModal({ open, onClose }: Props) {
               <Button
                 variant="outline"
                 onClick={absTest}
-                disabled={absBusy || !llmConfig.absUrl || !llmConfig.absApiKeyPresent}
+                disabled={
+                  absBusy ||
+                  !llmConfig.absUrl ||
+                  (!llmConfig.absApiKeyPresent && !absKeyInput.trim())
+                }
               >
                 {absBusy ? t("settings.abs.testing") : t("settings.abs.test")}
               </Button>
