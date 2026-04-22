@@ -294,12 +294,26 @@ export async function buildM4B(params: {
   series?: string;
   coverPath?: string;
 }): Promise<void> {
-  // 1. Concat inputs to a single MP3 first (stream copy).
+  // Stale-Zwischendateien aus einem früheren abgebrochenen Build
+  // aufräumen, sonst führt das zu Inkonsistenzen (kaputte M4B neben
+  // einer 120-MB-merged.mp3, kein Weg das vom User aus zu heilen).
+  // Auch die Ziel-M4B killen, falls sie truncated liegen geblieben ist.
   const merged = params.output.replace(/\.m4b$/i, ".merged.mp3");
+  const metaPath = params.output.replace(/\.m4b$/i, ".ffmeta");
+  for (const stale of [merged, metaPath, params.output]) {
+    if (existsSync(stale)) {
+      try {
+        await run("rm", ["-f", stale]);
+      } catch {
+        // best effort; ffmpeg wird gleich den Pfad sowieso überschreiben
+      }
+    }
+  }
+
+  // 1. Concat inputs to a single MP3 first (stream copy).
   await concatMp3(params.inputs, merged);
 
   // 2. Build FFMETADATA with chapter markers
-  const metaPath = params.output.replace(/\.m4b$/i, ".ffmeta");
   const meta = buildFfMetadata({
     title: params.title,
     artist: params.artist ?? "PageMentor",

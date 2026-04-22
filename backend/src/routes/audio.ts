@@ -469,11 +469,16 @@ audioRoutes.post("/cancel/:docId", (c) => {
 // benötigt, wenn der User per-chapter generiert hat und nachträglich
 // ein Komplett-Download möchte (ein Full-Book-Run baut das M4B automatisch).
 audioRoutes.post("/rebuild-m4b/:docId", async (c) => {
+  const docId = c.req.param("docId");
   try {
-    const res = await rebuildM4B(c.req.param("docId"));
+    const res = await rebuildM4B(docId);
     return c.json({ ok: true, chapters: res.chapters });
   } catch (e) {
-    return c.json({ error: (e as Error).message }, 400);
+    const msg = (e as Error).message || "rebuildM4B failed (empty error)";
+    // Server-seitig vollständig loggen — sonst sieht man im NAS-Log nur
+    // die `[m4b] build ...`-Start-Zeile und die Exception war stumm.
+    console.error(`[rebuild-m4b] ${docId} failed:`, e);
+    return c.json({ error: msg }, 400);
   }
 });
 
