@@ -185,9 +185,33 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   }
   const libData = (await folderRes.json()) as {
     library?: { folders?: Array<{ id: string }> };
+    folders?: Array<{ id: string }>;
   };
-  const folders = libData.library?.folders ?? [];
+  let folders = libData.library?.folders ?? libData.folders ?? [];
   if (folders.length === 0) {
+    // Fallback: /api/libraries (Liste) liefert oft die Folders mit.
+    try {
+      const listRes = await fetch(`${url}/api/libraries`, {
+        headers: absHeaders(),
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (listRes.ok) {
+        const listData = (await listRes.json()) as {
+          libraries?: Array<{ id: string; folders?: Array<{ id: string }> }>;
+        };
+        const hit = (listData.libraries ?? []).find((l) => l.id === libraryId);
+        folders = hit?.folders ?? [];
+      }
+    } catch {
+      // best effort
+    }
+  }
+  if (folders.length === 0) {
+    console.warn(
+      `[abs] keine Folders in Library-Response — raw keys: ${Object.keys(
+        libData
+      ).join(",")}`
+    );
     throw new Error(
       `ABS-Library ${libraryId} hat keinen Ordner — in ABS-Settings hinzufügen`
     );
