@@ -7,13 +7,33 @@ import { join, dirname, basename } from "path";
  * (im Docker-Image via apk add ffmpeg; lokal via brew install ffmpeg).
  */
 
-export async function run(bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+export async function run(
+  bin: string,
+  args: string[],
+  opts?: { liveStderr?: boolean; logPrefix?: string }
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args);
     let stdout = "";
     let stderr = "";
+    const prefix = opts?.logPrefix ?? `[${bin}]`;
     child.stdout.on("data", (b) => (stdout += b.toString()));
-    child.stderr.on("data", (b) => (stderr += b.toString()));
+    child.stderr.on("data", (b) => {
+      const chunk = b.toString();
+      stderr += chunk;
+      if (opts?.liveStderr) {
+        // Progressive Log-Ausgabe für langlaufende Prozesse — ffmpeg-
+        // M4B-Encodes auf großem Merged-Input können 5-10 min still
+        // laufen, ohne Live-Stream weiß man nicht ob's hängt oder
+        // fortschreitet. Pro Zeile ein eigener Log-Eintrag.
+        const lines = chunk
+          .split(/\r?\n/)
+          .filter((l: string) => l.trim().length > 0);
+        for (const line of lines) {
+          console.log(`${prefix} ${line}`);
+        }
+      }
+    });
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) resolve({ stdout, stderr });
@@ -344,11 +364,16 @@ export async function buildM4B(params: {
   );
 
   // 3. Encode to AAC/M4B with chapter metadata (and optional cover).
+  // `-loglevel info` + liveStderr: sehen wir pro 5-s-Intervall eine
+  // Progress-Zeile („size=... time=... bitrate=...") im Backend-Log,
+  // damit der User bei langen Builds Feedback hat UND wir im Fehlerfall
+  // sofort sehen wo's riss.
   const args = [
     "-y",
     "-hide_banner",
     "-loglevel",
-    "error",
+    "info",
+    "-stats",
     "-i",
     merged,
     "-i",
@@ -381,7 +406,10 @@ export async function buildM4B(params: {
   }
   args.push(params.output);
   const encodeStart = Date.now();
-  const { stderr } = await run("ffmpeg", args);
+  const { stderr } = await run("ffmpeg", args, {
+    liveStderr: true,
+    logPrefix: "[ffmpeg:m4b]",
+  });
   const outSize = existsSync(params.output)
     ? statSync(params.output).size
     : 0;

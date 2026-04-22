@@ -111,11 +111,15 @@ ensureSearchReady();
 export default {
   port: 3000,
   fetch: app.fetch,
-  // Bun's default idleTimeout of 10 s kills audio range fetches and LLM
-  // summary streams. 255 s is Bun's documented maximum — enough, because
-  // the idle timer resets on every chunk and LLM streaming emits tokens
-  // far more frequently than that.
-  idleTimeout: 255,
+  // Bun's default idleTimeout of 10 s kills audio range fetches und
+  // LLM streaming. 255 s war lange genug bis M4B-Rebuilds dazukamen —
+  // ein großer Book-Re-Encode (14+ Kapitel, 130 min Audio → AAC) kann
+  // 5-10 min am Stück CPU-bound laufen ohne Bytes zum Client zu senden,
+  // und Bun würde den Request mittendrin schließen.
+  // 0 = kein Timeout (per Bun-Docs). Macht das Backend robust gegen
+  // langsame Long-Polling-/Encode-Pfade. LLM-Streaming und Ranges
+  // sind aktive Streams und brauchen den Timer sowieso nicht.
+  idleTimeout: 0,
 };
 
 console.log(`PageMentor API v${PKG_VERSION} running on :3000`);
