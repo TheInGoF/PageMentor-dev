@@ -268,7 +268,14 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       setState(refreshed);
       toast.show(t("audiobook.m4b.built"), "success");
     } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+      // Leere Error-Messages (z. B. wenn Backend nur Status 4xx ohne
+      // Body liefert oder Fetch abbricht) → Fallback auf Übersetzung,
+      // sonst sieht der User einen roten Toast ohne Text.
+      const msg =
+        err instanceof Error && err.message.trim().length > 0
+          ? err.message
+          : t("common.error");
+      toast.show(msg, "error");
     } finally {
       setM4bBusy(false);
     }

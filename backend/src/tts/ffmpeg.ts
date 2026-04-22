@@ -294,24 +294,34 @@ export async function buildM4B(params: {
   series?: string;
   coverPath?: string;
 }): Promise<void> {
+  const buildStart = Date.now();
   // Stale-Zwischendateien aus einem früheren abgebrochenen Build
   // aufräumen, sonst führt das zu Inkonsistenzen (kaputte M4B neben
   // einer 120-MB-merged.mp3, kein Weg das vom User aus zu heilen).
   // Auch die Ziel-M4B killen, falls sie truncated liegen geblieben ist.
   const merged = params.output.replace(/\.m4b$/i, ".merged.mp3");
   const metaPath = params.output.replace(/\.m4b$/i, ".ffmeta");
+  const { unlinkSync } = await import("fs");
+  let cleaned = 0;
   for (const stale of [merged, metaPath, params.output]) {
     if (existsSync(stale)) {
       try {
-        await run("rm", ["-f", stale]);
+        unlinkSync(stale);
+        cleaned++;
       } catch {
-        // best effort; ffmpeg wird gleich den Pfad sowieso überschreiben
+        // best effort
       }
     }
   }
+  console.log(`[m4b] stale-cleanup removed ${cleaned} leftover files`);
 
   // 1. Concat inputs to a single MP3 first (stream copy).
+  const concatStart = Date.now();
   await concatMp3(params.inputs, merged);
+  const mergedSize = existsSync(merged) ? statSync(merged).size : 0;
+  console.log(
+    `[m4b] concat ${params.inputs.length} chunks → ${merged} (${(mergedSize / 1024 / 1024).toFixed(1)} MB) in ${((Date.now() - concatStart) / 1000).toFixed(1)}s`
+  );
 
   // 2. Build FFMETADATA with chapter markers
   const meta = buildFfMetadata({
@@ -370,14 +380,36 @@ export async function buildM4B(params: {
     );
   }
   args.push(params.output);
-  await run("ffmpeg", args);
-
-  // Cleanup
-  try {
-    statSync(merged) && (await run("rm", ["-f", merged, metaPath]));
-  } catch {
-    // best effort
+  const encodeStart = Date.now();
+  const { stderr } = await run("ffmpeg", args);
+  const outSize = existsSync(params.output)
+    ? statSync(params.output).size
+    : 0;
+  console.log(
+    `[m4b] encode ${params.output} (${(outSize / 1024 / 1024).toFixed(1)} MB) in ${((Date.now() - encodeStart) / 1000).toFixed(1)}s`
+  );
+  // ffmpeg emittiert viele Progress-Zeilen auf stderr auch bei Erfolg —
+  // wenn M4B unerwartet klein ist, helfen die letzten Zeilen beim
+  // Diagnostizieren (z. B. "moov atom not found" oder "Conversion
+  // failed!" trotz exit 0).
+  const tailLines = stderr.trim().split(/\r?\n/).slice(-8).join(" | ");
+  if (tailLines) {
+    console.log(`[m4b] ffmpeg tail: ${tailLines}`);
   }
+
+  // Cleanup — mit fs.unlink statt shell-rm (weniger Moving-Parts).
+  for (const stale of [merged, metaPath]) {
+    if (existsSync(stale)) {
+      try {
+        unlinkSync(stale);
+      } catch {
+        // best effort
+      }
+    }
+  }
+  console.log(
+    `[m4b] build done in ${((Date.now() - buildStart) / 1000).toFixed(1)}s total`
+  );
 }
 
 function buildFfMetadata(params: {
