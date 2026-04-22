@@ -286,13 +286,61 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
     console.warn(`[abs] scan trigger fehlgeschlagen:`, e);
   }
 
-  // === Metadaten-PATCH (optional, wenn wir eine ItemId haben) ===
+  // === Library-Item-ID auflösen ===
+  // /api/upload liefert in aktuellen ABS-Versionen keine ItemId zurück.
+  // Damit der nachgelagerte Metadaten-PATCH trotzdem greift, suchen wir
+  // das frisch gescannte Item via /search (Titel + Autor als Query) und
+  // pollen bis zu 8 Sekunden — der Scan ist bei Single-File-Uploads
+  // praktisch sofort durch.
+  if (!uploadData.libraryItemId) {
+    const searchUrl = `${url}/api/libraries/${libraryId}/search?q=${encodeURIComponent(
+      bookTitle
+    )}&limit=5`;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const sr = await fetch(searchUrl, {
+          headers: absHeaders(),
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (!sr.ok) continue;
+        const sdata = (await sr.json()) as {
+          book?: Array<{
+            libraryItem?: {
+              id?: string;
+              media?: { metadata?: { title?: string } };
+            };
+          }>;
+        };
+        const hit = (sdata.book ?? []).find(
+          (b) =>
+            b.libraryItem?.media?.metadata?.title?.trim().toLowerCase() ===
+            bookTitle.trim().toLowerCase()
+        );
+        if (hit?.libraryItem?.id) {
+          uploadData.libraryItemId = hit.libraryItem.id;
+          console.log(
+            `[abs] item nach scan gefunden: ${uploadData.libraryItemId} (versuch ${i + 1})`
+          );
+          break;
+        }
+      } catch (e) {
+        console.warn(`[abs] search versuch ${i + 1} fehlgeschlagen:`, e);
+      }
+    }
+    if (!uploadData.libraryItemId) {
+      console.warn(
+        `[abs] konnte Library-Item nach Upload nicht finden — Metadaten-PATCH übersprungen`
+      );
+    }
+  }
+
+  // === Metadaten-PATCH ===
   // ABS /api/upload erzeugt das LibraryItem aus den Upload-Metadaten
-  // und den M4B-Tags. Wenn wir die ItemId bekommen, können wir sauber
-  // via PATCH die Felder setzen die wir präzise haben wollen (Subtitle,
-  // Series-Reihenfolge, Description etc.) — umgeht iTunes-Atom-Mapping
-  // komplett.
-  if (uploadData.libraryItemId && (doc.short_code || seriesName)) {
+  // und den M4B-Tags. Mit der ItemId können wir sauber via PATCH die
+  // Felder setzen die wir präzise haben wollen (Subtitle, Series) —
+  // umgeht iTunes-Atom-Mapping komplett.
+  if (uploadData.libraryItemId) {
     try {
       const metaBody: Record<string, unknown> = {
         metadata: {
@@ -317,8 +365,13 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
         }
       );
       if (!patchRes.ok) {
+        const pt = await patchRes.text().catch(() => "");
         console.warn(
-          `[abs] metadata PATCH fehlgeschlagen ${patchRes.status}: ${patchRes.statusText}`
+          `[abs] metadata PATCH fehlgeschlagen ${patchRes.status}: ${pt.slice(0, 300)}`
+        );
+      } else {
+        console.log(
+          `[abs] metadata PATCH ok — series=${JSON.stringify(seriesName)} subtitle=${JSON.stringify(doc.short_code ?? "")}`
         );
       }
     } catch (e) {
