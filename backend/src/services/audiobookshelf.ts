@@ -252,16 +252,26 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
     body: form,
     signal: AbortSignal.timeout(10 * 60_000),
   });
+  const uploadText = await uploadRes.text().catch(() => "");
   if (!uploadRes.ok) {
-    const detail = await uploadRes.text().catch(() => uploadRes.statusText);
     throw new Error(
-      `ABS upload ${uploadRes.status}: ${detail.slice(0, 400)}`
+      `ABS upload ${uploadRes.status}: ${uploadText.slice(0, 400)}`
     );
   }
-  const uploadData = (await uploadRes.json()) as {
-    libraryItemId?: string;
-    success?: boolean;
-  };
+  let uploadData: { libraryItemId?: string; success?: boolean } = {};
+  if (uploadText.trim()) {
+    try {
+      uploadData = JSON.parse(uploadText);
+    } catch {
+      console.warn(
+        `[abs] upload response kein JSON (${uploadRes.status}): ${uploadText.slice(0, 200)}`
+      );
+    }
+  } else {
+    console.log(
+      `[abs] upload response leer (${uploadRes.status}) — Scan triggert Import`
+    );
+  }
 
   // === Library-Scan triggern ===
   // ABS indexiert Uploads normalerweise automatisch, aber ein expliziter
