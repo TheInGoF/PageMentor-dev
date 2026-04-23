@@ -1,34 +1,34 @@
-# GPU-Override für NVIDIA-Systeme.
+# GPU override for NVIDIA hosts.
 #
-# Voraussetzung auf dem Host:
-#   - NVIDIA-GPU (RTX 20xx / 30xx / 40xx)
-#   - NVIDIA-Treiber (>= 535)
+# Host prerequisites:
+#   - NVIDIA GPU (RTX 20xx / 30xx / 40xx / 50xx)
+#   - NVIDIA driver >= 535
 #   - nvidia-container-toolkit:
 #       https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
-#     Kurz: `sudo apt install nvidia-container-toolkit` + daemon reload
+#     Short: `sudo apt install nvidia-container-toolkit` + daemon reload
 #
 # Deploy:
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 #
-# Hängt Docling (einziger GPU-Service im Haupt-Stack) an die NVIDIA-
-# Runtime. TTS läuft NICHT hier — dafür liegt auf dem GPU-Host eine
-# separate Compose mit Ollama + vllm-Qwen-TTS + pm-gpu-arbiter, siehe
-# eigene_windows-sidecars-compose.yaml.
+# Attaches Docling (the only GPU-capable service in the main stack) to
+# the NVIDIA runtime. TTS does NOT run here — the GPU host carries a
+# separate stack with Ollama + vLLM-Qwen-TTS + pm-gpu-arbiter, see
+# docker-compose.gpu-host.example.yaml.
 #
-# Erwartete Beschleunigung durch GPU: Docling 10-30x (100-Seiten-PDF
-# in ~30-60 s statt 25-70 min auf Synology-CPU).
+# Expected GPU speedup: Docling 10-30x (100-page PDF in ~30-60 s
+# instead of 25-70 min on a Synology CPU).
 
 services:
   docling:
     image: quay.io/docling-project/docling-serve:v1.16.1
     environment:
       DOCLING_DEVICE: cuda
-      # Mehr Parallelität macht mit GPU Sinn — RAM ist jetzt VRAM-
-      # begrenzt, nicht mehr Host-RAM.
+      # More parallelism makes sense on GPU — the bottleneck shifts
+      # from host RAM to VRAM.
       DOCLING_SERVE_ENG_LOC_NUM_WORKERS: "2"
       DOCLING_PERF_PAGE_BATCH_SIZE: "4"
-      # NNPACK ist CPU-only, auf GPU-Systemen irrelevant — Variable
-      # bewusst unset lassen (Default bleibt aktiv aber harmlos).
+      # NNPACK is CPU-only, so on GPU hosts it's irrelevant — leaving
+      # PYTORCH_NNPACK_DISABLE unset on purpose (default is harmless).
     deploy:
       resources:
         reservations:

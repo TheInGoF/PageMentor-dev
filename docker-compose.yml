@@ -5,18 +5,21 @@
 #   /volume1/docker/pagementor/meili
 #   /volume1/docker/pagementor/docling-cache
 #
-# (Der Docling-Container läuft als root — Red Hat UBI startet sonst als
-# UID 1001, was mit Synology-Bind-Mounts Permission-Probleme macht. Die
-# Modelle im docling-cache sind dadurch auf dem Host root-owned. Zum
-# Löschen via SSH: `sudo rm -rf /volume1/docker/pagementor/docling-cache`.)
+# (The Docling container runs as root — the Red Hat UBI base image
+# defaults to UID 1001 which collides with Synology bind-mount ownership.
+# Side effect: the model files in docling-cache are root-owned on the
+# host. To wipe them, SSH in and run
+# `sudo rm -rf /volume1/docker/pagementor/docling-cache`.)
 #
 # Then either:
 #   A) CLI:       docker compose up -d
 #   B) Portainer: paste this file into "Stacks > Add Stack > Web editor".
 #
-# All LLM endpoints (Ollama URLs, API keys, models) are configured
-# live in the Settings modal — they persist to data/llm-config.json
-# and survive container rebuilds. No ENV juggling needed.
+# All tunables (Ollama URLs, cloud-LLM API keys, models, Qwen-TTS
+# URL + API key, TTS chunk size, Audiobookshelf URL + API key +
+# target library) are configured live from the Settings modal — they
+# persist to data/llm-config.json and survive container rebuilds.
+# No ENV juggling needed.
 
 name: pagementor
 
@@ -38,10 +41,10 @@ services:
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-pm-dev-key}
       PM_DOCLING_URL: http://docling:5001
       PM_DOCLING_API_KEY: ${DOCLING_API_KEY:-pm-docling-internal}
-      # TTS: der Qwen-Sidecar läuft auf dem GPU-Host (z. B. 3090-PC)
-      # hinter dem pm-gpu-arbiter. URL wird üblicherweise im Settings-
-      # Modal eingetragen (persistiert in data/llm-config.json). Diese
-      # ENV dient nur als Default wenn Settings leer ist.
+      # TTS: the Qwen sidecar lives on the GPU host (e.g. RTX 3090 box)
+      # behind pm-gpu-arbiter. URL is normally set once via the Settings
+      # modal (persisted in data/llm-config.json). This ENV only acts as
+      # a fallback default when the Settings field is empty.
       PM_QWEN_TTS_URL: ${PM_QWEN_TTS_URL:-}
     volumes:
       - /volume1/docker/pagementor/data:/data
@@ -65,18 +68,18 @@ services:
       timeout: 5s
       retries: 5
 
-  # Docling als einzige Text-Extraktion. CPU-Image (keine GPU auf dem
-  # DS920+). Erste Runs laden ~1-2 GB Modelle nach ~/.cache in den
-  # Container — sichtbar auf der NAS unter docling-cache/, damit man
-  # den Plattenverbrauch sieht und bei Bedarf löschen kann.
+  # Docling is the only text extractor. CPU image here (the DS920+
+  # has no GPU). First runs download ~1-2 GB of models into the
+  # container cache, surfaced on the NAS as docling-cache/ so disk
+  # usage is visible and can be wiped if needed.
   #
-  # user: "0:0" damit der Container auch auf Synology-Bind-Mounts
-  # schreiben darf (UBI-Base läuft sonst als UID 1001, was mit NAS-
-  # Ownership kollidiert).
+  # user: "0:0" so the container can write into Synology bind mounts
+  # (the UBI base image otherwise runs as UID 1001 which collides
+  # with NAS ownership).
   #
-  # CPU-Timing für ~100 Seiten auf J4125: 25-70 min. Darum ruft das
-  # Backend ausschließlich den /v1/convert/file/async-Endpoint auf und
-  # polled den Status über die interne SSE-Bus-Progress-Pipeline.
+  # CPU timing for ~100 pages on a Celeron J4125: 25-70 min. That's
+  # why the backend always calls /v1/convert/file/async and streams
+  # progress through the internal SSE bus — no blocking requests.
   docling:
     image: quay.io/docling-project/docling-serve-cpu:v1.16.1
     container_name: pm-docling
@@ -93,21 +96,20 @@ services:
       DOCLING_NUM_THREADS: "4"
       DOCLING_DEVICE: cpu
       DOCLING_PERF_PAGE_BATCH_SIZE: "2"
-      # Schaltet die "Could not initialize NNPACK! Reason: Unsupported
-      # hardware."-Flut ab. NNPACK braucht AVX-512, das hat der Celeron
-      # nicht — PyTorch nimmt still den BLAS-Pfad, Ergebnis identisch.
+      # Silences the "Could not initialize NNPACK! Reason: Unsupported
+      # hardware." log flood. NNPACK needs AVX-512 which the Celeron
+      # lacks — PyTorch falls back to BLAS with identical output.
       PYTORCH_NNPACK_DISABLE: "1"
     volumes:
       - /volume1/docker/pagementor/docling-cache:/opt/app-root/src/.cache
 
-  # Hinweis: TTS läuft NICHT in diesem Compose-Stack.
+  # Note: TTS does NOT run in this stack.
   #
-  # Qwen3-TTS-Flash braucht eine CUDA-GPU und koexistiert mit einem
-  # Ollama-Server auf derselben Karte. Beide liegen deshalb auf einem
-  # separaten GPU-Host (z. B. Windows+WSL2 oder Linux-Workstation mit
-  # 3090) hinter dem pm-gpu-arbiter. Siehe:
-  #   eigene_windows-sidecars-compose.yaml  bzw.
+  # Qwen3-TTS-Flash needs a CUDA GPU and shares the card with Ollama.
+  # Both therefore live on a separate GPU host (e.g. Windows+WSL2 or
+  # a Linux workstation with a 3090) behind pm-gpu-arbiter. See:
+  #   docker-compose.gpu-host.example.yaml
   #   pm-gpu-arbiter/README.md
   #
-  # PageMentor spricht den Arbiter per URL an, konfigurierbar im
-  # Settings-Modal (oder via PM_QWEN_TTS_URL oben).
+  # PageMentor only talks to the arbiter — URL is configured in the
+  # Settings modal (or via the PM_QWEN_TTS_URL default above).
