@@ -2,18 +2,34 @@
 ' Render: plantuml -tpng docs/diagrams/gpu-arbiter.puml -o ../screenshots
 ' Output file expected by README: docs/screenshots/gpu-arbiter.png
 
-!theme plain
 skinparam backgroundColor #0a0a0a
 skinparam defaultFontColor #e5e5e5
 skinparam sequenceArrowColor #ef4444
+skinparam sequenceArrowFontColor #e5e5e5
 skinparam sequenceLifeLineBorderColor #ef4444
+skinparam sequenceLifeLineBackgroundColor #0a0a0a
 skinparam sequenceGroupBackgroundColor #1a1a1a
+skinparam sequenceGroupBodyBackgroundColor #0a0a0a
 skinparam sequenceGroupFontColor #e5e5e5
+skinparam sequenceGroupBorderColor #ef4444
+skinparam sequenceDividerBackgroundColor #1a1a1a
+skinparam sequenceDividerFontColor #e5e5e5
+skinparam sequenceDividerBorderColor #ef4444
+skinparam sequenceReferenceBackgroundColor #1a1a1a
+skinparam sequenceReferenceHeaderBackgroundColor #1a1a1a
+skinparam sequenceReferenceFontColor #e5e5e5
+skinparam sequenceReferenceBorderColor #ef4444
+skinparam sequenceTitleFontColor #e5e5e5
 skinparam participantBackgroundColor #141414
 skinparam participantBorderColor #ef4444
 skinparam participantFontColor #e5e5e5
+skinparam actorBackgroundColor #141414
+skinparam actorBorderColor #ef4444
+skinparam actorFontColor #e5e5e5
 skinparam noteBackgroundColor #1a1a1a
 skinparam noteFontColor #e5e5e5
+skinparam noteBorderColor #ef4444
+skinparam titleFontColor #e5e5e5
 
 title GPU arbitration — Ollama and Qwen3-TTS share one GPU
 
