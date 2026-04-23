@@ -56,6 +56,46 @@ versus the reference — and plots the trend as a sparkline.
 
 ---
 
+## Why this exists
+
+Built alongside a job with a lot of time behind the wheel. Instead of
+letting those commuting hours go to waste, PageMentor turns lecture
+scripts into audiobooks that keep the studies moving — plus flashcards
+and exam prep for the evenings. If you're in the same bucket (long
+drives, open-university study, limited quiet desk time), the tool was
+designed for exactly that.
+
+### What you need
+
+- **Server know-how.** This is Docker-Compose + Portainer territory. If
+  you've never bind-mounted a NAS volume or opened a stack file, expect
+  a learning curve.
+- **A decent GPU** on the host that runs Ollama and Qwen3-TTS. A used
+  RTX 3090 (24 GB) handles the full stack comfortably; smaller cards
+  work if you scale the models down.
+
+### Tuning for your hardware
+
+Every heavy component is swappable from the **Settings** modal, so the
+stack scales from a laptop to a 24 GB workstation:
+
+- **Ollama model** — swap `llama3.2:3b` for `qwen2.5:7b`, `gemma3:27b`
+  or whatever your VRAM budget allows; models pulled on the Ollama box
+  show up automatically.
+- **Qwen3-TTS model variant** — pick between Qwen-Base (voice-clone),
+  CustomVoice (preset slots) and VoiceDesign (text-described). Lower
+  the `max_new_tokens` if your GPU OOMs.
+- **TTS chunk size** — max characters per synthesis request. Smaller
+  chunks (1500–2500) are safer on a 12 GB card, larger chunks
+  (3500–4000) give better prosody continuity on a 24 GB card.
+- **Embedding model** — auto-detected, but you can pin any model the
+  Ollama server has pulled.
+
+None of this requires rebuilding the container — all of it persists
+in `data/llm-config.json` and survives restarts.
+
+---
+
 ## More screenshots
 
 | Learning menu (sub-tabs per document)                      | Modules overview (series view)                             |
