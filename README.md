@@ -354,6 +354,13 @@ endpoint a browser would, and routes the audio through local ffmpeg.
 
 PageMentor is a fresh build and does not fork any existing project.
 
+## Development
+
+Built in a human-in-the-loop workflow: architecture, design decisions
+and scope were made by the author; an LLM coding assistant was used as
+a pair-programmer for implementation. Every change was reviewed before
+merging.
+
 ## License
 
 **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE).
