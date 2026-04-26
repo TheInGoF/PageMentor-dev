@@ -46,7 +46,7 @@ export function detectChapters(pages: string[]): DetectedChapter[] {
     });
   }
 
-  // Fallback: gleichmäßige Slices
+  // Fallback: even slices
   const slices = Math.max(1, Math.min(12, Math.ceil(pages.length / 10)));
   const size = Math.max(1, Math.ceil(pages.length / slices));
   const chapters: DetectedChapter[] = [];

@@ -22,10 +22,10 @@ interface NavState {
 
 const NAV_STORAGE_KEY = "pm_nav";
 
-// Reload landet sonst immer auf Dashboard — wir persistieren den
-// obersten Navigation-Layer in localStorage. Sub-Tabs (z. B. Hörbuch
-// in LearningMenu) leben weiter in ihrem eigenen State; das kann
-// später ergänzt werden wenn nötig.
+// Reload would otherwise always land on Dashboard — we persist the
+// top navigation layer in localStorage. Sub-tabs (e.g. Audiobook
+// inside LearningMenu) keep their own state; that can be added
+// later if needed.
 function loadNav(): NavState | null {
   try {
     const raw = localStorage.getItem(NAV_STORAGE_KEY);

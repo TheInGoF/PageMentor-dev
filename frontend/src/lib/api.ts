@@ -16,15 +16,15 @@ export interface Document {
   tags: string[];
   module_id?: string | null;
   thumb_page?: number;
-  /** Echter Doc-Titel aus Docling-Metadata (PDF-Metadata-Feld). Kann
-   *  null sein wenn die PDF keine Metadaten hat — dann nutzt die UI
-   *  weiterhin `title` (filename-derived). */
+  /** Real doc title from Docling metadata (PDF metadata field). May
+   *  be null when the PDF has no metadata — the UI then keeps using
+   *  `title` (filename-derived). */
   doc_title?: string | null;
-  /** Autor aus Docling-Metadata. Wird in ID3-Tags + M4B-Header genutzt. */
+  /** Author from Docling metadata. Used in ID3 tags + M4B header. */
   author?: string | null;
-  /** User-Kürzel (z. B. Studienheft-Code „SE12k" oder Bandnummer „1",
-   *  „2", …). Fließt in den M4B-Download-Filename und in die Metadaten
-   *  (iTunes-grouping-Feld). */
+  /** User shortcode (e.g. course-booklet code "SE12k" or volume
+   *  number "1", "2", …). Feeds into the M4B download filename and
+   *  the metadata (iTunes `grouping` field). */
   short_code?: string | null;
   chapter_count?: number;
   card_count?: number;
@@ -69,9 +69,9 @@ export interface Voice {
   engine: TtsEngine;
   flagship?: boolean;
   note?: string;
-  /** Gleitender Durchschnitt der Synthese-Dauer in ms/Zeichen.
-   *  Wird nach jedem erfolgreichen Chunk vom Backend per EMA
-   *  aktualisiert. Null heißt: noch nie erfolgreich synthetisiert. */
+  /** Rolling average of synthesis duration in ms per character.
+   *  Updated by the backend via EMA after each successful chunk.
+   *  Null means: never synthesized successfully. */
   msPerChar?: number | null;
 }
 
@@ -678,8 +678,9 @@ export const api = {
       request<{ config: unknown }>(`/api/llm/config/${provider}`, { method: "DELETE" }),
   },
   admin: {
-    /** Hard-Reset des GPU-Swaps: Arbiter stoppt den TTS-Container und
-     *  entlädt alle Ollama-Modelle. Nutzen wenn der Wechsel hängt. */
+    /** Hard reset of the GPU swap: the arbiter stops the TTS
+     *  container and unloads all Ollama models. Use when the swap
+     *  hangs. */
     gpuReset: () =>
       request<{ ok: true; result: Record<string, unknown> }>(
         "/api/admin/gpu/reset",
@@ -687,7 +688,7 @@ export const api = {
       ),
   },
   abs: {
-    /** Pingt den ABS-Server, verifiziert Token. */
+    /** Pings the ABS server, verifies the token. */
     test: () =>
       request<{
         ok: boolean;
@@ -696,12 +697,12 @@ export const api = {
         serverVersion?: string;
         message?: string;
       }>("/api/admin/abs/test"),
-    /** Listet alle Libraries (für den Dropdown in Settings). */
+    /** Lists all libraries (for the Settings dropdown). */
     libraries: () =>
       request<{
         libraries: Array<{ id: string; name: string; mediaType: string }>;
       }>("/api/admin/abs/libraries"),
-    /** Lädt ein bereits gebautes M4B in die konfigurierte Library hoch. */
+    /** Uploads an already-built M4B to the configured library. */
     upload: (docId: string) =>
       request<{
         ok: true;
@@ -738,13 +739,14 @@ export const api = {
   },
   voiceDesigns: {
     list: () => request<{ voices: VoiceDesignMeta[] }>("/api/voices/design"),
-    /** Legt eine Design-Voice an. `refBlob` ist optional aber stark
-     *  empfohlen: enthält das Audio aus dem Preview-Wizard. Backend
-     *  speichert es als Referenz und nutzt es für alle zukünftigen
-     *  Synthese-Calls (via Base-Clone) — damit klingt die Stimme im
-     *  Hörbuch EXAKT wie das, was der User im Preview gutgeheißen hat.
-     *  Ohne Blob generiert der Server selbst eine Referenz, was
-     *  wegen Qwens Non-Determinismus vom Preview abweichen kann. */
+    /** Creates a design voice. `refBlob` is optional but strongly
+     *  recommended: it contains the audio from the preview wizard.
+     *  Backend stores it as the reference and uses it for all
+     *  future synthesis calls (via base clone) — so the voice in
+     *  the audiobook sounds EXACTLY like what the user approved in
+     *  the preview. Without a blob, the server generates its own
+     *  reference, which may diverge from the preview due to Qwen's
+     *  non-determinism. */
     create: (input: {
       label: string;
       gender: "female" | "male";
@@ -771,10 +773,9 @@ export const api = {
       request<{ ok: true }>(`/api/voices/design/${id}`, { method: "DELETE" }),
     previewUrl: (id: string, text?: string) =>
       `/api/voices/design/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
-    /** Unsaved-Preview: rollt einen Seed (oder nimmt den übergebenen)
-     *  und liefert MP3 + Seed via X-Voice-Seed-Header. Gibt das Pair
-     *  zurück damit der Caller einen Save mit dem gerollten Seed
-     *  anstoßen kann. */
+    /** Unsaved preview: rolls a seed (or uses the supplied one) and
+     *  returns MP3 + seed via the X-Voice-Seed header. Returns the
+     *  pair so the caller can trigger a save with the rolled seed. */
     previewUnsaved: async (input: {
       description: string;
       gender: "female" | "male";

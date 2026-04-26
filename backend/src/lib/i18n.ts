@@ -1,6 +1,10 @@
 /**
- * Minimales Backend-i18n. Liest Accept-Language aus dem Request und
- * übersetzt User-sichtbare Fehlermeldungen.
+ * Minimal backend i18n. Reads Accept-Language from the request and
+ * translates user-visible error messages.
+ *
+ * For service-layer code that has no Hono Context (audiobook, pipeline,
+ * docling), use {@link pickLang} with the document's stored language and
+ * {@link tLang} to pick a string from the dictionary directly.
  */
 
 import type { Context } from "hono";
@@ -36,6 +40,27 @@ const dict: Record<Locale, Record<string, string>> = {
     "err.invalidToken": "Invalid token",
     "err.wrongPassword": "Wrong password",
     "err.unauthorized": "Unauthorized",
+    "err.noSegments": "No segments from chapter text.",
+    "err.noFinishedAudio": "No finished chapter audio found — generate chapters first.",
+    "err.allAudioMissing": "All chapter file references point nowhere — please regenerate chapters.",
+    "err.absUrlMissing": "ABS URL not configured",
+    "err.absKeyMissing": "ABS API key not configured",
+    "err.absLibraryMissing": "No ABS library selected",
+    "err.absM4bMissing": "book.m4b does not exist — generate chapters and build the M4B first",
+    "err.absLibraryNoFolder": "ABS library {libraryId} has no folder — add one in ABS settings",
+    "err.doclingUnreachable": "docling-serve unreachable. Is the docling container running?",
+    // SSE / progress messages — visible in the UI status line
+    "label.chapter": "Chapter",
+    "label.intro": "Intro",
+    "msg.audiobookStart": "Generating {count} chapters with {voice}",
+    "msg.buildingM4B": "Building M4B with chapter markers …",
+    "msg.doclingChecking": "Checking Docling connection …",
+    "msg.doclingUploading": "Docling: uploading PDF …",
+    "msg.doclingFetchResult": "Docling: fetching result …",
+    "msg.chaptersCount": "{count} chapters",
+    "msg.pagesAndChapters": "{pages} pages, {count} chapters",
+    "msg.audioPreprocessUnavailable":
+      "[audiobook] LLM preprocessor not available — using original text. Audiobook may sound rough (abbreviations, citations, formulas).",
   },
   de: {
     "err.notFound": "Nicht gefunden",
@@ -65,6 +90,26 @@ const dict: Record<Locale, Record<string, string>> = {
     "err.invalidToken": "Ungültiges Token",
     "err.wrongPassword": "Falsches Passwort",
     "err.unauthorized": "Nicht autorisiert",
+    "err.noSegments": "Keine Segmente aus Kapiteltext.",
+    "err.noFinishedAudio": "Keine fertigen Kapitel-Audios gefunden — zuerst Kapitel generieren.",
+    "err.allAudioMissing": "Alle Kapitel-Datei-Referenzen zeigen ins Leere — bitte Kapitel neu generieren.",
+    "err.absUrlMissing": "ABS-URL nicht konfiguriert",
+    "err.absKeyMissing": "ABS-API-Key nicht konfiguriert",
+    "err.absLibraryMissing": "Keine ABS-Library ausgewählt",
+    "err.absM4bMissing": "book.m4b existiert nicht — zuerst Kapitel generieren + M4B bauen",
+    "err.absLibraryNoFolder": "ABS-Library {libraryId} hat keinen Ordner — in ABS-Settings hinzufügen",
+    "err.doclingUnreachable": "docling-serve nicht erreichbar. Läuft der docling-Container?",
+    "label.chapter": "Kapitel",
+    "label.intro": "Einleitung",
+    "msg.audiobookStart": "Generiere {count} Kapitel mit {voice}",
+    "msg.buildingM4B": "Baue M4B mit Kapitelmarken …",
+    "msg.doclingChecking": "Docling-Verbindung prüfen …",
+    "msg.doclingUploading": "Docling: PDF hochladen …",
+    "msg.doclingFetchResult": "Docling: Ergebnis abholen …",
+    "msg.chaptersCount": "{count} Kapitel",
+    "msg.pagesAndChapters": "{pages} Seiten, {count} Kapitel",
+    "msg.audioPreprocessUnavailable":
+      "[audiobook] LLM-Preprocessor nicht verfügbar — verwende Original-Text. Hörbuch klingt evtl. holprig (Abkürzungen, Zitate, Formeln).",
   },
 };
 
@@ -76,6 +121,22 @@ export function resolveLocale(c: Pick<Context, "req">): Locale {
   return "en";
 }
 
+/**
+ * Service-layer locale picker. Maps a stored document language code
+ * (from `documents.language`, e.g. `de`, `en`, `de-DE`) onto our
+ * supported locales. Anything starting with "de" → "de", everything
+ * else → "en".
+ */
+export function pickLang(documentLanguage: string | null | undefined): Locale {
+  const v = (documentLanguage ?? "").toLowerCase();
+  return v.startsWith("de") ? "de" : "en";
+}
+
+function applyParams(s: string, params?: Record<string, string | number>): string {
+  if (!params) return s;
+  return s.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
+}
+
 export function tt(
   c: Pick<Context, "req">,
   key: string,
@@ -83,6 +144,26 @@ export function tt(
 ): string {
   const locale = resolveLocale(c);
   const s = dict[locale][key] ?? dict.en[key] ?? key;
-  if (!params) return s;
-  return s.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ""));
+  return applyParams(s, params);
+}
+
+/**
+ * Service-layer translator. Use when there is no request Context
+ * (background pipelines, audiobook synthesis) but a known document
+ * language. Falls back to English if the key is missing.
+ */
+export function tLang(
+  locale: Locale,
+  key: string,
+  params?: Record<string, string | number>
+): string {
+  const s = dict[locale][key] ?? dict.en[key] ?? key;
+  return applyParams(s, params);
+}
+
+/**
+ * Convenience: chapter label fallback ("Kapitel 3" / "Chapter 3").
+ */
+export function chapterLabel(locale: Locale, number: number): string {
+  return `${tLang(locale, "label.chapter")} ${number}`;
 }

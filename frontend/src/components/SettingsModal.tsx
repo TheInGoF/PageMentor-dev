@@ -44,8 +44,8 @@ interface Props {
 
 type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "ai";
 
-/** Event-Name für "Voice-Liste hat sich geändert" — andere Komponenten
- *  (Audiobook-Picker) hören darauf und laden Voices nach. */
+/** Event name for "voice list has changed" — other components
+ *  (audiobook picker) listen for it and reload voices. */
 const VOICES_CHANGED_EVENT = "pm:voices-changed";
 
 function notifyVoicesChanged(): void {
@@ -143,9 +143,10 @@ export function SettingsModal({ open, onClose }: Props) {
       .voices()
       .then((r) => {
         setVoices(r.voices);
-        // Default-Auswahl für den Preset-Tester: erste Preset-Voice der
-        // aktuellen Sprache, sonst erste Preset-Voice überhaupt. Nur
-        // setzen wenn noch leer — sonst überschreiben wir die User-Wahl.
+        // Default selection for the preset tester: first preset voice
+        // of the current language, otherwise the first preset voice
+        // at all. Only set when still empty — otherwise we'd overwrite
+        // the user's choice.
         setPreviewVoiceId((prev) => {
           if (prev) return prev;
           const presets = r.voices.filter((v) => v.id.startsWith("preset:"));
@@ -251,8 +252,8 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   }
 
-  // Blob-URL beim Unmount / Modal-Close aufräumen, sonst leakt der
-  // Preview-Blob im Speicher.
+  // Clean up the blob URL on unmount / modal close, otherwise the
+  // preview blob leaks in memory.
   useEffect(() => {
     return () => {
       if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
@@ -266,8 +267,8 @@ export function SettingsModal({ open, onClose }: Props) {
   }, [designPreviewUrl]);
 
   useEffect(() => {
-    // Default-Text pro Sprache, nur solange der User noch nichts
-    // Eigenes getippt hat.
+    // Default text per language, only while the user hasn't typed
+    // anything of their own yet.
     if (previewText) return;
     setPreviewText(
       previewLang === "de"
@@ -283,9 +284,9 @@ export function SettingsModal({ open, onClose }: Props) {
     try {
       const url = api.audio.previewUrl(previewVoiceId, {
         text: previewText.trim(),
-        // Aktueller Form-State — inklusive unsaved Änderungen, damit
-        // der User sofort hört was er getippt hat ohne zuerst speichern
-        // zu müssen.
+        // Current form state — including unsaved changes, so the
+        // user immediately hears what they typed without having to
+        // save first.
         instruct: llmConfig.qwenTtsInstruction ?? "",
         temperature: llmConfig.qwenTtsTemperature || undefined,
         topP: llmConfig.qwenTtsTopP || undefined,
@@ -447,9 +448,9 @@ export function SettingsModal({ open, onClose }: Props) {
     );
   }
 
-  /** Rollt einen neuen Preview mit zufälligem Seed (oder dem im Input
-   *  gesetzten, falls einer drinsteht). Setzt designPreviewSeed auf den
-   *  tatsächlich verwendeten Seed — davon liest dann saveDesign(). */
+  /** Rolls a new preview with a random seed (or the one entered in
+   *  the input field, if any). Sets designPreviewSeed to the seed
+   *  actually used — saveDesign() then reads from it. */
   async function previewDesign(mode: "fresh" | "useInputSeed") {
     if (designDraft.description.trim().length < 10) {
       toast.show(t("settings.design.descTooShort"), "error");
@@ -473,9 +474,9 @@ export function SettingsModal({ open, onClose }: Props) {
         return url;
       });
       setDesignPreviewSeed(seed);
-      // Blob für Save merken — damit die gespeicherte Voice EXAKT so
-      // klingt wie das gerade angehörte Preview (Qwen VoiceDesign ist
-      // nicht deterministisch, Re-Generate würde abweichen).
+      // Remember the blob for save — so the saved voice sounds
+      // EXACTLY like the preview just heard (Qwen VoiceDesign is
+      // not deterministic, regen would diverge).
       setDesignPreviewBlob(blob);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -484,7 +485,7 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   }
 
-  /** Persistiert die aktuelle Voice mit dem zuletzt gepreviewten Seed. */
+  /** Persists the current voice with the last-previewed seed. */
   async function saveDesign() {
     if (!designDraft.label.trim() || designDraft.description.trim().length < 10) {
       toast.show(t("settings.design.missingFields"), "error");
@@ -502,9 +503,9 @@ export function SettingsModal({ open, onClose }: Props) {
         language: designDraft.language,
         description: designDraft.description.trim(),
         seed: designPreviewSeed,
-        // Blob mitsenden — Backend speichert ihn als Referenz-Audio
-        // und nutzt ihn ab jetzt für alle Synthese-Calls über Base-
-        // Clone (stabile Stimme über alle Hörbuch-Chunks).
+        // Send the blob along — backend stores it as reference
+        // audio and uses it from now on for all synthesis calls via
+        // base clone (stable voice across all audiobook chunks).
         refBlob: designPreviewBlob ?? undefined,
       });
       const r = await api.voiceDesigns.list();
@@ -1030,10 +1031,10 @@ export function SettingsModal({ open, onClose }: Props) {
                     onChange={(e) => {
                       const next = e.target.value as "de" | "en";
                       setPreviewLang(next);
-                      // Voice an neue Sprache anpassen wenn die bisherige
-                      // für die neue Sprache nicht existiert (Preset-IDs
-                      // sind sprachübergreifend identisch, aber wir
-                      // filtern in der Dropdown nach Sprache).
+                      // Adapt the voice to the new language when the
+                      // current one doesn't exist for the new language
+                      // (preset IDs are identical across languages, but
+                      // we filter by language in the dropdown).
                       const stillOk = voices.some(
                         (v) => v.id === previewVoiceId && v.language === next
                       );

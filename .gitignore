@@ -1,14 +1,40 @@
 node_modules/
 dist/
+build/
 data/
 .env
+.env.*
+!.env.example
 *.db
 *.tsbuildinfo
 eigene_*
 .DS_Store
 **/.DS_Store
+Thumbs.db
+*.swp
+*~
 
-# Tooling-only, not shipped
+# Tooling / planning — not shipped
 CLAUDE.md
 .claude/
 ICON-SETUP.md
+PLAN.md
+01-To-Do.md
+
+# Python caches (sidecar containers)
+__pycache__/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# Archives / backups
+*.tar.gz
+*.zip
+backup/
+
+# Secrets / certs
+*.pem
+*.key
+*.crt

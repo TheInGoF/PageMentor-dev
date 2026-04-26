@@ -25,7 +25,7 @@ name: pagementor
 
 services:
   app:
-    image: ghcr.io/lordvonbaum/pagementor:latest
+    image: ghcr.io/theingof/pagementor:latest
     # Only used when you run `docker compose build` locally.
     # `compose up` pulls the pre-built image from ghcr.io.
     build:

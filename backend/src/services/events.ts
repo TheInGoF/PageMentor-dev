@@ -1,12 +1,12 @@
 /**
- * In-memory Progress-Bus pro Dokument für SSE-Streams.
+ * In-memory progress bus per document for SSE streams.
  *
- * Konsumenten abonnieren per `subscribe(docId, handler)` und erhalten
- * alle Events, die via `emit(docId, event)` veröffentlicht werden, bis
- * sie mit dem zurückgegebenen Unsubscribe-Funktion aufhören.
+ * Consumers subscribe via `subscribe(docId, handler)` and receive
+ * all events published through `emit(docId, event)` until they call
+ * the returned unsubscribe function.
  *
- * Events werden außerdem in einem kurzen Ring-Buffer pro docId gehalten,
- * damit ein später verbundener Client den letzten Stand sofort sieht.
+ * Events are also kept in a short ring buffer per docId so a
+ * late-joining client immediately sees the latest state.
  */
 
 export type ProgressPhase =

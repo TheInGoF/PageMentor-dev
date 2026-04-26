@@ -125,7 +125,7 @@ services:
   # The sidecar image handles all three; swap the model tag below if
   # you want Instruct-tuned or a quantised build.
   qwen-tts:
-    image: ghcr.io/lordvonbaum/pm-qwen-tts:latest
+    image: ghcr.io/theingof/pm-qwen-tts:latest
     container_name: pm-qwen-tts
     restart: "no"
     ports:
@@ -160,7 +160,7 @@ services:
   #   /admin/gpu/reset → flushes Ollama models + restarts qwen-tts
   #                      (exposed via the "GPU reset" button in the UI)
   pm-gpu-arbiter:
-    image: ghcr.io/lordvonbaum/pm-gpu-arbiter:latest
+    image: ghcr.io/theingof/pm-gpu-arbiter:latest
     container_name: pm-gpu-arbiter
     restart: unless-stopped
     ports:

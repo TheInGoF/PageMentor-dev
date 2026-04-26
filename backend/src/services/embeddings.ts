@@ -1,37 +1,37 @@
 /**
- * Embedding-Erzeugung via Ollama und Cosine-Similarity für den
- * brute-force RAG-Pfad.
+ * Embedding generation via Ollama and cosine similarity for the
+ * brute-force RAG path.
  *
- * Wir nutzen Ollama's `/api/embeddings`-Endpoint. Default-Modell ist
- * `nomic-embed-text` (137 MB, 768 Dimensionen, CPU-freundlich). Kann
- * per ENV `PM_EMBED_MODEL` überschrieben werden.
+ * We use Ollama's `/api/embeddings` endpoint. Default model is
+ * `nomic-embed-text` (137 MB, 768 dimensions, CPU-friendly). Can be
+ * overridden via the `PM_EMBED_MODEL` env var.
  *
- * Speicherung im SQLite als BLOB: Float32-Array binary. 768 * 4 Byte =
- * 3 KB pro Chunk — für 10 k Chunks macht das 30 MB, in JS 100 ms
- * Brute-Force-Cosine über alles. Völlig OK bis wir Vector-DB
- * tatsächlich brauchen.
+ * Storage in SQLite as BLOB: Float32 array binary. 768 * 4 bytes =
+ * 3 KB per chunk — for 10 k chunks that's 30 MB, brute-force cosine
+ * over all of it in ~100 ms in JS. Perfectly fine until we actually
+ * need a vector DB.
  */
 
 import { getLlmConfig } from "./llmConfig";
 
 const ENV_DEFAULT = process.env.PM_EMBED_MODEL || "";
 
-/** Embedding-Modelle nach Präferenz. Reihenfolge spiegelt die
- *  Eignung für deutsche Forschungs-/Studientexte wider:
+/** Embedding models in order of preference. Order reflects suitability
+ *  for German research/study texts:
  *
- *  1. jina/jina-embeddings-v2-base-de  — bilingual DE+EN, explizit
- *     auf deutschen Korpora trainiert. ~440 MB, 768 dim, 8k Kontext.
- *     Schlägt bge-m3 und multilingual-e5-large auf MTEB-DE bei
- *     einem Bruchteil der Größe.
- *  2. bge-m3  — multilingual (100+ Sprachen), 2.3 GB, 1024 dim,
- *     8k Kontext. Solide Allrounder, DE im oberen Mittelfeld aber
- *     nicht spezialisiert. Backup wenn der User mehrsprachige
- *     Bibliothek hat (DE + EN + andere).
- *  3. nomic-embed-text  — englisch-zentriert, 137 MB, 768 dim,
- *     letzter Fallback wenn nichts spezialisiertes da ist.
+ *  1. jina/jina-embeddings-v2-base-de  — bilingual DE+EN, explicitly
+ *     trained on German corpora. ~440 MB, 768 dim, 8k context.
+ *     Beats bge-m3 and multilingual-e5-large on MTEB-DE at a
+ *     fraction of the size.
+ *  2. bge-m3  — multilingual (100+ languages), 2.3 GB, 1024 dim,
+ *     8k context. Solid all-rounder, DE upper-mid tier but not
+ *     specialized. Backup when the user has a multilingual library
+ *     (DE + EN + other).
+ *  3. nomic-embed-text  — English-centric, 137 MB, 768 dim,
+ *     last fallback when nothing specialized is available.
  *
- *  Wenn der User PM_EMBED_MODEL hart setzt, gewinnt das. Ansonsten
- *  nehmen wir das erste installierte Modell aus dieser Liste.
+ *  When the user hard-sets PM_EMBED_MODEL, that wins. Otherwise we
+ *  take the first installed model from this list.
  */
 const PREFERRED_EMBED_MODELS = [
   "jina/jina-embeddings-v2-base-de",
@@ -39,9 +39,9 @@ const PREFERRED_EMBED_MODELS = [
   "nomic-embed-text",
 ];
 
-/** Letzter Fallback wenn weder ENV-Override noch ein präferiertes
- *  Modell installiert ist — embedText wirft dann 404 und der Caller
- *  weiß dass er was pullen muss. */
+/** Final fallback when neither an ENV override nor a preferred model
+ *  is installed — embedText then throws 404 and the caller knows
+ *  they need to pull something. */
 const FALLBACK_MODEL = "nomic-embed-text";
 
 export interface EmbedderConfig {
@@ -49,7 +49,7 @@ export interface EmbedderConfig {
   model: string;
 }
 
-/** Holt die Liste der gepullten Modelle vom Ollama-Server. */
+/** Fetches the list of pulled models from the Ollama server. */
 async function ollamaTagNames(url: string): Promise<string[]> {
   try {
     const res = await fetch(`${url}/api/tags`, {
@@ -63,8 +63,8 @@ async function ollamaTagNames(url: string): Promise<string[]> {
   }
 }
 
-/** Findet das beste passende Modell in der installierten Liste.
- *  Toleriert Tag-Suffixe (`bge-m3` matcht auch `bge-m3:latest`). */
+/** Finds the best matching model in the installed list. Tolerates
+ *  tag suffixes (`bge-m3` also matches `bge-m3:latest`). */
 function matchInstalled(wanted: string, installed: string[]): string | null {
   if (installed.includes(wanted)) return wanted;
   const tagged = installed.find((n) => n === wanted || n.startsWith(wanted + ":"));
@@ -75,8 +75,8 @@ function pickEmbedModel(installed: string[]): string {
   if (ENV_DEFAULT) {
     const found = matchInstalled(ENV_DEFAULT, installed);
     if (found) return found;
-    // ENV gesetzt aber nicht gepullt — wir nehmen ihn trotzdem,
-    // damit der embedText-404 dem User zeigt was zu pullen ist.
+    // ENV set but not pulled — we still use it so the embedText 404
+    // shows the user what to pull.
     return ENV_DEFAULT;
   }
   for (const model of PREFERRED_EMBED_MODELS) {
@@ -86,9 +86,9 @@ function pickEmbedModel(installed: string[]): string {
   return FALLBACK_MODEL;
 }
 
-/** Ermittelt welche Ollama-Instanz und welches Modell wir nutzen.
- *  Probiert die LLM-Chain-Endpoints in der konfigurierten Reihenfolge
- *  durch und wählt pro Server das beste verfügbare Embed-Modell. */
+/** Determines which Ollama instance and which model we use. Tries
+ *  the LLM chain endpoints in the configured order and picks the
+ *  best available embed model on each server. */
 export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
   try {
     const cfg = getLlmConfig();
@@ -102,7 +102,7 @@ export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
 
     for (const url of candidates) {
       const installed = await ollamaTagNames(url);
-      if (installed.length === 0) continue; // server nicht erreichbar
+      if (installed.length === 0) continue; // server unreachable
       const model = pickEmbedModel(installed);
       console.log(
         `[embeddings] using ${model} on ${url}` +
@@ -116,8 +116,8 @@ export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
   return null;
 }
 
-/** Holt das Embedding für einen Text von Ollama. Wirft wenn der
- *  Endpoint nicht erreichbar oder das Modell nicht installiert ist. */
+/** Fetches the embedding for a text from Ollama. Throws if the
+ *  endpoint is unreachable or the model isn't installed. */
 export async function embedText(
   text: string,
   embedder: EmbedderConfig
@@ -138,8 +138,8 @@ export async function embedText(
   return new Float32Array(data.embedding);
 }
 
-/** Float32Array ↔ Buffer (Node/Bun). Wir speichern die Bytes als BLOB
- *  im SQLite, 768 floats = 3072 bytes für nomic-embed-text. */
+/** Float32Array ↔ Buffer (Node/Bun). We store the bytes as BLOB in
+ *  SQLite, 768 floats = 3072 bytes for nomic-embed-text. */
 export function embeddingToBuffer(emb: Float32Array): Buffer {
   return Buffer.from(emb.buffer, emb.byteOffset, emb.byteLength);
 }
@@ -151,8 +151,8 @@ export function embeddingFromBuffer(buf: Buffer | Uint8Array): Float32Array {
   );
 }
 
-/** Cosine-Similarity zweier gleichlanger Vektoren. Score zwischen
- *  -1 und 1, wir klammern nur pragmatisch für Score-Display. */
+/** Cosine similarity of two equal-length vectors. Score between
+ *  -1 and 1; we clamp only pragmatically for score display. */
 export function cosineSim(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) return 0;
   let dot = 0;

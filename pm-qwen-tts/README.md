@@ -1,75 +1,74 @@
 # pm-qwen-tts
 
-Voice-Clone-TTS-Sidecar auf Basis von
+Voice-clone TTS sidecar built on
 [Qwen3-TTS-12Hz-1.7B-Base](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)
-(Apache 2.0). Klont aus einem 3-10 s Referenz-Audio eine Lesestimme
-und spricht beliebigen Text in dieser Stimme — deterministisch wenn
-derselbe Seed + dieselbe Referenz verwendet werden.
+(Apache 2.0). Clones a reading voice from a 3-10 s reference clip and
+speaks arbitrary text in that voice — deterministic when the same seed
+and the same reference are used.
 
-Läuft hinter dem [`pm-gpu-arbiter`](../pm-gpu-arbiter/), teilt sich die
-GPU mit Ollama, wird vom Arbiter on-demand gestartet und nach TTS-Jobs
-wieder gestoppt.
+Runs behind [`pm-gpu-arbiter`](../pm-gpu-arbiter/), shares the GPU with
+Ollama, is started on demand by the arbiter and stopped again after
+each TTS job.
 
 ## Endpoints
 
-| Endpoint | Zweck |
+| Endpoint | Purpose |
 |---|---|
-| `GET /health` | 200 wenn Modell geladen, 503 mit Grund im Body |
-| `GET /v1/audio/voices` | Metadaten — Voice-Verwaltung sitzt im PageMentor-Backend |
-| `POST /v1/audio/speech` | Voice-Clone: Text + Referenz-Audio (base64) → Audio-Bytes |
+| `GET /health` | 200 when the model is loaded, 503 with reason in the body |
+| `GET /v1/audio/voices` | Metadata — voice management lives in the PageMentor backend |
+| `POST /v1/audio/speech` | Voice clone: text + reference audio (base64) → audio bytes |
 
 ## POST /v1/audio/speech
 
 ```json
 {
   "input": "Guten Tag, hier spricht Anna.",
-  "ref_audio_b64": "<base64 eines 3-10 s WAV/MP3/FLAC>",
-  "ref_text": "Das ist ein Testsatz zur Referenz.",
+  "ref_audio_b64": "<base64 of a 3-10 s WAV/MP3/FLAC>",
+  "ref_text": "This is a sample sentence used as the reference.",
   "language": "German",
   "seed": 12345,
   "response_format": "mp3"
 }
 ```
 
-- **`input`**: der zu sprechende Text
-- **`ref_audio_b64`**: Base64-Codierung eines 3-10 s Audioclips der Zielstimme
-  (WAV/MP3/FLAC akzeptiert)
-- **`ref_text`** (optional): Transkript der Referenz — wenn gesetzt, nutzt
-  das Modell den vollen Voice-Clone-Pfad (beste Qualität). Wenn leer, geht
-  es in den `x_vector_only_mode` (Stimmprofil ohne Transkript) — schneller,
-  Qualität leicht reduziert
-- **`language`**: `German` / `English` / `Chinese` / … (10 Sprachen, siehe
-  [Qwen3-TTS Doku](https://github.com/QwenLM/Qwen3-TTS)). Default `German`
-- **`seed`**: Integer, wird vor der Generation als `torch.manual_seed`
-  gesetzt — gleicher Seed + gleiche Referenz + gleicher Text = identisches
-  Audio
+- **`input`**: the text to be spoken
+- **`ref_audio_b64`**: base64 encoding of a 3-10 s clip of the target voice
+  (WAV/MP3/FLAC accepted)
+- **`ref_text`** (optional): transcript of the reference. When set, the model
+  uses the full voice-clone path (best quality). When empty it falls back to
+  `x_vector_only_mode` (voice profile without transcript) — faster but
+  slightly lower quality
+- **`language`**: `German` / `English` / `Chinese` / … (10 languages, see
+  [Qwen3-TTS docs](https://github.com/QwenLM/Qwen3-TTS)). Default `German`
+- **`seed`**: integer, applied as `torch.manual_seed` before generation —
+  same seed + same reference + same text = identical audio
 - **`response_format`**: `mp3` | `wav` | `flac`
 
 ## Environment
 
-| Variable | Default | Zweck |
+| Variable | Default | Purpose |
 |---|---|---|
-| `QWEN_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | HF-Repo |
-| `QWEN_TTS_DEVICE` | `cuda` (wenn verfügbar) | `cpu` zum Debug |
-| `QWEN_TTS_DTYPE` | `bfloat16` | `float16` falls bf16 instabil |
-| `QWEN_TTS_ATTN_IMPL` | `flash_attention_2` | Das Image wird mit flash-attn 2 kompiliert. Auf Turing oder älter (RTX 20xx) per ENV auf `sdpa` stellen — flash-attn 2 braucht Ampere+. |
-| `QWEN_TTS_DEFAULT_LANGUAGE` | `German` | wenn Request kein `language` mitsendet |
-| `QWEN_TTS_MAX_NEW_TOKENS` | `4096` | Obergrenze pro Generation |
-| `QWEN_TTS_X_VECTOR_ONLY` | `true` | Fallback wenn kein `ref_text` im Request |
+| `QWEN_TTS_MODEL` | `Qwen/Qwen3-TTS-12Hz-1.7B-Base` | HF repo |
+| `QWEN_TTS_DEVICE` | `cuda` (when available) | `cpu` for debugging |
+| `QWEN_TTS_DTYPE` | `bfloat16` | `float16` if bf16 is unstable |
+| `QWEN_TTS_ATTN_IMPL` | `flash_attention_2` | Image is built with flash-attn 2. On Turing or older (RTX 20xx) set this to `sdpa` — flash-attn 2 needs Ampere+. |
+| `QWEN_TTS_DEFAULT_LANGUAGE` | `German` | Used when a request omits `language` |
+| `QWEN_TTS_MAX_NEW_TOKENS` | `4096` | Hard ceiling per generation |
+| `QWEN_TTS_X_VECTOR_ONLY` | `true` | Fallback when no `ref_text` is provided |
 
-## Pre-built Image (empfohlen)
+## Pre-built image (recommended)
 
 ```bash
-docker pull ghcr.io/lordvonbaum/pm-qwen-tts:latest
+docker pull ghcr.io/theingof/pm-qwen-tts:latest
 ```
 
-In der Compose:
+In compose:
 
 ```yaml
 qwen-tts:
-  image: ghcr.io/lordvonbaum/pm-qwen-tts:latest
+  image: ghcr.io/theingof/pm-qwen-tts:latest
   container_name: pm-qwen-tts
-  restart: "no"              # Arbiter kontrolliert Start/Stop
+  restart: "no"              # arbiter controls start/stop
   ports:
     - "8880:8880"
   volumes:
@@ -83,7 +82,7 @@ qwen-tts:
             capabilities: [gpu]
 ```
 
-## Lokal bauen (Dev/Contrib)
+## Build locally (dev / contrib)
 
 ```bash
 docker build -t pm-qwen-tts:dev ./pm-qwen-tts
@@ -92,10 +91,10 @@ docker run --rm --gpus all -p 8880:8880 \
   pm-qwen-tts:dev
 ```
 
-## curl-Beispiel (standalone test)
+## curl example (standalone test)
 
 ```bash
-# 3 s WAV-Sample als base64 kodieren
+# encode a 3 s WAV sample as base64
 REF_B64=$(base64 -w0 alice-3s.wav)
 
 curl -X POST http://localhost:8880/v1/audio/speech \
@@ -113,21 +112,21 @@ curl -X POST http://localhost:8880/v1/audio/speech \
 
 ## Troubleshooting
 
-**503 von `/health`** — Modell noch nicht geladen oder Load-Error. Response-
-Body (`{"reason":"..."}`) zeigt den Grund. Typisch: HF-Download läuft
-(~3-4 GB einmalig), dauert beim ersten Start 2-5 min.
+**503 from `/health`** — model not yet loaded or load error. Response body
+(`{"reason":"..."}`) shows the cause. Typical: HF download in progress
+(~3-4 GB one-off), takes 2-5 min on the first start.
 
-**OOM beim Generate** — `QWEN_TTS_DTYPE=float16` setzen oder
-`QWEN_TTS_ATTN_IMPL=flash_attention_2` (braucht Downstream-Rebuild).
+**OOM during generate** — set `QWEN_TTS_DTYPE=float16` or
+`QWEN_TTS_ATTN_IMPL=flash_attention_2` (needs a downstream rebuild).
 
-**Klone klingt brüchig** — schlechtes Referenzsample. Qwen will klare,
-ruhige 3-10 s ohne Musik/Hintergrundlärm. `ref_text` mitsenden verbessert
-die Qualität spürbar.
+**Clone sounds brittle** — bad reference sample. Qwen wants a clean,
+quiet 3-10 s clip without music or background noise. Sending `ref_text`
+along noticeably improves quality.
 
-## Lizenz + Attribution
+## License + attribution
 
-Wrapper-Code: MIT.
+Wrapper code: MIT.
 
-Die Qwen3-TTS-Modelle (`Qwen/Qwen3-TTS-12Hz-*`) sind © Alibaba, Apache 2.0.
-Das Modell wird zur Laufzeit aus dem HuggingFace-Hub geladen und ist
-**nicht** Teil dieses Images. Siehe [NOTICE](../NOTICE) im Repo-Root.
+The Qwen3-TTS models (`Qwen/Qwen3-TTS-12Hz-*`) are © Alibaba, Apache 2.0.
+The model is loaded from the HuggingFace Hub at runtime and is **not**
+part of this image. See [NOTICE](../NOTICE) at the repo root.

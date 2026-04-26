@@ -133,9 +133,9 @@ async function ollamaTags(url: string): Promise<string[]> {
   }
 }
 
-/** Embedding-only-Modelle dürfen wir NICHT als Generation-Default
- *  ziehen — Ollama wirft dann 400 "does not support generate". Match
- *  ist string-basiert, weil Ollama-Tags keine task-Capability melden. */
+/** Embedding-only models must NOT be picked as a generation default —
+ *  Ollama then throws 400 "does not support generate". Matching is
+ *  string-based because Ollama tags don't report task capability. */
 const EMBEDDING_MODEL_PATTERNS = [
   /(^|[\/_-])embed/i,        // nomic-embed-text, mxbai-embed-large, …
   /(^|[\/_-])minilm/i,       // all-minilm
@@ -160,11 +160,10 @@ async function resolveOllamaModel(
   const available = await ollamaTags(url);
   if (requested && available.includes(requested)) return requested;
 
-  // Fallback — der User hat was konkretes angefragt, aber Ollama kennt
-  // es nicht (Tag-Mismatch, Modell noch nicht gepullt, `/api/tags`
-  // lieferte gerade ein inkonsistentes Listing während Arbiter-Unload,
-  // …). LAUT loggen damit der User sieht warum sein Modell nicht
-  // verwendet wurde.
+  // Fallback — the user requested something specific but Ollama
+  // doesn't know it (tag mismatch, model not pulled, `/api/tags`
+  // returned an inconsistent listing during an arbiter unload, …).
+  // Log LOUDLY so the user sees why their model wasn't used.
   const generative = available.filter((n) => !isEmbeddingModel(n));
   if (generative.length > 0) {
     if (requested) {
@@ -241,9 +240,9 @@ export async function listModels(): Promise<string[]> {
       });
       if (!res.ok) return [];
       const data = (await res.json()) as { models?: Array<{ name: string }> };
-      // Embedding-Modelle ausfiltern — die kann der User in der LLM-
-      // Modell-Auswahl (Summaries, Cards, Audio-Preprocess) nicht
-      // sinnvoll nutzen, sonst kommt 400 "does not support generate".
+      // Filter out embedding models — the user can't sensibly pick
+      // them in the LLM model selector (summaries, cards, audio
+      // preprocess); otherwise 400 "does not support generate".
       return (data.models ?? [])
         .map((m) => m.name)
         .filter((n) => !isEmbeddingModel(n));
@@ -301,9 +300,9 @@ export async function generate(params: {
 
   if (p.type === "ollama" && p.url) {
     model = await resolveOllamaModel(p.url, model);
-    // 15 min Hard-Timeout. Ohne das wartet Node's fetch unbegrenzt —
-    // wenn Ollama wegen zu großem Context hängt oder der Modell-
-    // Wechsel stecken bleibt, friert der ganze Audiobook-Run ein.
+    // 15 min hard timeout. Without it Node's fetch waits forever —
+    // if Ollama hangs because of too-large context or a model
+    // switch gets stuck, the whole audiobook run freezes.
     const res = await fetch(`${p.url}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

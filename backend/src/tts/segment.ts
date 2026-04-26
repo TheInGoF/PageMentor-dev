@@ -1,14 +1,14 @@
 /**
- * Text-Segmentierung für TTS.
+ * Text segmentation for TTS.
  *
- * Chunk-Größe ist zur Laufzeit konfigurierbar:
+ * Chunk size is configurable at runtime:
  *   1. Settings → Qwen TTS → Advanced (llm-config `ttsMaxChunk`)
- *   2. ENV `PM_TTS_MAX_CHUNK` als Fallback
- *   3. Default 2500 — konservativ nach v1.18.041-Experiment, wo 4000
- *      auf 3090 zu Timeouts/Retries bei manchen Chunks führte.
+ *   2. ENV `PM_TTS_MAX_CHUNK` as fallback
+ *   3. Default 2500 — conservative after the v1.18.041 experiment, where
+ *      4000 on the 3090 caused timeouts/retries for some chunks.
  *
- * Akzeptiert 500-8000. Kleinere Werte = schnelleres Fail-Fast, größere
- * = bessere Prosodie-Kohärenz aber höheres GPU-Risiko.
+ * Accepts 500-8000. Smaller values = faster fail-fast, larger
+ * = better prosody coherence but higher GPU risk.
  */
 
 import { effective } from "../services/llmConfig";
@@ -23,26 +23,26 @@ function getMaxChunk(): number {
   return n;
 }
 
-/** Diagnose: zeigt welche Quelle den aktuellen maxChunk liefert. */
+/** Diagnostic: shows which source provides the current maxChunk. */
 function sourceOfMaxChunk(): string {
   const cfg = effective("ttsMaxChunk", "PM_TTS_MAX_CHUNK");
   if (!cfg) return `default=${DEFAULT_MAX_CHUNK}`;
-  // effective() präferiert DB-Config über ENV. Wir prüfen hier grob
-  // ob's aus der Config oder ENV kam, damit der User im Log sofort
-  // sieht ob sein Settings-Save wirklich persistiert hat.
+  // effective() prefers DB config over ENV. We do a rough check here
+  // for whether it came from config or ENV, so the user immediately
+  // sees in the log whether their Settings save actually persisted.
   const fromEnv = process.env.PM_TTS_MAX_CHUNK;
   if (fromEnv && fromEnv === cfg) return `env=${cfg}`;
   return `config=${cfg}`;
 }
 
 export interface Segment {
-  /** Absätze innerhalb dieses Segments (mit Satz-Trennungen) */
+  /** Paragraphs within this segment (with sentence splits) */
   paragraphs: string[];
 }
 
 export function segmentText(text: string): Segment[] {
-  // Per-call lookup, damit User-Setting-Änderungen sofort greifen
-  // ohne Backend-Restart.
+  // Per-call lookup so user setting changes take effect immediately
+  // without a backend restart.
   const maxChunk = getMaxChunk();
   console.log(
     `[segment] text=${text.length}c maxChunk=${maxChunk} (src=${sourceOfMaxChunk()})`
@@ -53,7 +53,7 @@ export function segmentText(text: string): Segment[] {
   let size = 0;
 
   for (const p of paragraphs) {
-    // Ein einzelner Absatz ist zu lang → hart an Satzgrenzen splitten
+    // A single paragraph is too long → hard-split at sentence boundaries
     if (p.length > maxChunk) {
       if (buf.length) {
         segments.push({ paragraphs: buf });
@@ -96,7 +96,7 @@ function splitLongParagraph(p: string, max: number): string[] {
       buf = "";
     }
     if (s.length > max) {
-      // Satz selbst zu lang (unwahrscheinlich bei normalen Texten): harter Cut.
+      // Sentence itself too long (unlikely for normal texts): hard cut.
       for (let i = 0; i < s.length; i += max) out.push(s.slice(i, i + max).trim());
     } else {
       buf += s;

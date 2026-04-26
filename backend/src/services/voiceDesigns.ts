@@ -1,20 +1,20 @@
 /**
- * Voice-Design-Service — text-beschriebene Stimmen für Qwen3-TTS
- * VoiceDesign-Modell.
+ * Voice design service — text-described voices for the Qwen3-TTS
+ * VoiceDesign model.
  *
- * Anders als `voice_samples` (User lädt ref.wav hoch) steht hier ein
- * Freitext-Prompt im DB-Feld `description`, z. B.:
+ * Unlike `voice_samples` (user uploads ref.wav), this stores a
+ * free-text prompt in the `description` DB field, e.g.:
  *
- *   "Warmer deutscher Hörbuch-Erzähler, Anfang 40, ruhige gemächliche
- *    Sprechweise, klare deutsche Aussprache ohne Akzent."
+ *   "Warm German audiobook narrator, early 40s, calm unhurried
+ *    delivery, clear German pronunciation without accent."
  *
- * Der Sidecar übergibt diese Beschreibung als `instruct`-Parameter an
- * `generate_voice_design()`; das Modell erzeugt die passende Stimme.
+ * The sidecar passes this description as the `instruct` parameter to
+ * `generate_voice_design()`; the model produces the matching voice.
  *
- * Seed: beim Create einmalig gewürfelt, konstant. Gleicher Seed +
- * gleiche Beschreibung reproduzieren empirisch dieselbe Stimme (Qwen
- * dokumentiert Determinismus hier nicht offiziell, aber `torch.manual_seed`
- * im Sidecar greift).
+ * Seed: rolled once on create, constant afterwards. Same seed + same
+ * description empirically reproduces the same voice (Qwen doesn't
+ * officially document determinism here, but `torch.manual_seed` in
+ * the sidecar takes effect).
  */
 
 import { randomUUID, randomInt } from "node:crypto";
@@ -29,10 +29,10 @@ export function ensureDesignDir(): void {
   if (!existsSync(DESIGN_DIR)) mkdirSync(DESIGN_DIR, { recursive: true });
 }
 
-/** Liefert den Disk-Pfad für die Referenz-Audio-Datei und stellt
- *  zugleich sicher dass das Verzeichnis existiert — Caller können
- *  direkt `writeFileSync(designRefPath(id), buf)` machen ohne ENOENT
- *  auf frischen Installationen zu riskieren. */
+/** Returns the disk path for the reference audio file and ensures
+ *  the directory exists — callers can directly do
+ *  `writeFileSync(designRefPath(id), buf)` without risking ENOENT on
+ *  fresh installs. */
 export function designRefPath(id: string): string {
   ensureDesignDir();
   return join(DESIGN_DIR, `${id}.mp3`);
@@ -50,12 +50,12 @@ export interface VoiceDesign {
   createdAt: string;
   msPerChar: number | null;
   samplesCount: number;
-  /** Pfad zum Referenz-Audio auf Disk. Leer wenn noch nie generiert —
-   *  dann muss der Caller `ensureDesignReference` aufrufen bevor die
-   *  Voice für Clone-basierte Synthese genutzt werden kann. */
+  /** Path to the reference audio on disk. Empty when never
+   *  generated — the caller must then invoke `ensureDesignReference`
+   *  before the voice can be used for clone-based synthesis. */
   refPath: string | null;
-  /** Transkript des Referenz-Audios (wird als ref_text an Base-Clone
-   *  gereicht, verbessert Clone-Qualität). */
+  /** Transcript of the reference audio (passed as ref_text to base
+   *  clone, improves clone quality). */
   refText: string | null;
 }
 
@@ -108,9 +108,9 @@ export interface CreateVoiceDesignInput {
   gender: Gender;
   language?: string;
   description: string;
-  /** Optional: Seed vom User vorgegeben (für "gib mir genau dieselbe
-   *  Stimme die ich schon mal hatte, ich weiß noch den Seed").
-   *  Leer = random. */
+  /** Optional: seed supplied by the user (for "give me the same
+   *  voice I had before, I remember the seed").
+   *  Empty = random. */
   seed?: number;
 }
 
@@ -121,10 +121,10 @@ export function createVoiceDesign(
   if (!label) throw new Error("label required");
   const description = input.description.trim();
   if (description.length < 10) {
-    throw new Error("description zu kurz (mindestens 10 Zeichen)");
+    throw new Error("description too short (at least 10 characters)");
   }
   if (description.length > 2000) {
-    throw new Error("description zu lang (maximal 2000 Zeichen)");
+    throw new Error("description too long (maximum 2000 characters)");
   }
 
   const id = randomUUID();
@@ -148,8 +148,8 @@ export function createVoiceDesign(
 export function deleteVoiceDesign(id: string): boolean {
   const design = getVoiceDesign(id);
   if (!design) return false;
-  // Referenz-Audio auch löschen, sonst hinterlassen wir verwaiste
-  // MP3-Dateien auf Disk.
+  // Also delete the reference audio, otherwise we leave orphan
+  // MP3 files on disk.
   if (design.refPath && existsSync(design.refPath)) {
     try {
       unlinkSync(design.refPath);
@@ -161,9 +161,9 @@ export function deleteVoiceDesign(id: string): boolean {
   return r.changes > 0;
 }
 
-/** Persistiert einen frisch generierten Referenz-Audio-Pfad + Transkript
- *  zur Design-Row. Wird nach dem erfolgreichen VoiceDesign-Generate-Call
- *  aufgerufen (im Create-Flow, oder lazy beim ersten Audiobook-Use). */
+/** Persists a freshly generated reference audio path + transcript
+ *  on the design row. Called after a successful VoiceDesign generate
+ *  call (in the create flow, or lazily on first audiobook use). */
 export function setDesignReference(
   id: string,
   refPath: string,
@@ -177,8 +177,9 @@ export function setDesignReference(
     .run(refPath, refText, id);
 }
 
-/** EMA-Update analog zu voiceSamples.recordChunkTiming — Frontend nutzt
- *  ms_per_char als Startwert für die Hörbuch-ETA. */
+/** EMA update analogous to voiceSamples.recordChunkTiming — the
+ *  frontend uses ms_per_char as the starting value for the audiobook
+ *  ETA. */
 export function recordDesignChunkTiming(
   designId: string,
   chars: number,

@@ -13,6 +13,7 @@ import {
   embedText,
   embeddingToBuffer,
 } from "./embeddings";
+import { pickLang, tLang } from "../lib/i18n";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
@@ -30,10 +31,10 @@ export function cancelProcessing(docId: string): boolean {
 }
 
 /**
- * Extrahiert die PDF via docling-serve, schreibt Kapitel in die DB und
- * stößt die Meilisearch-Indexierung an. Wird manuell vom User über
- * /api/documents/:id/reprocess ausgelöst — der Upload legt das Dokument
- * nur mit Status `awaiting-extraction` an, ohne Pipeline zu starten.
+ * Extracts the PDF via docling-serve, writes chapters to the DB and
+ * kicks off Meilisearch indexing. Triggered manually by the user via
+ * /api/documents/:id/reprocess — upload only creates the document
+ * with status `awaiting-extraction` without starting the pipeline.
  */
 export async function processDocument(docId: string): Promise<void> {
   if (running.has(docId)) return;
@@ -51,6 +52,8 @@ export async function processDocument(docId: string): Promise<void> {
     return;
   }
 
+  const lang = pickLang(doc.language);
+
   d.prepare(
     "UPDATE documents SET ocr_status = 'running', extraction_started_at = ? WHERE id = ?"
   ).run(Date.now(), docId);
@@ -59,14 +62,12 @@ export async function processDocument(docId: string): Promise<void> {
   try {
     const fullPath = join(DATA_DIR, doc.stored_path);
 
-    emit({ phase: "pipeline.extraction", docId, message: "Docling-Verbindung prüfen …" });
+    emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
     if (!(await doclingAlive())) {
-      throw new Error(
-        "docling-serve nicht erreichbar. Läuft der docling-Container?"
-      );
+      throw new Error(tLang(lang, "err.doclingUnreachable"));
     }
 
-    emit({ phase: "pipeline.extraction", docId, message: "Docling: PDF hochladen …" });
+    emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingUploading") });
     const extraction = await extractPdfViaDocling({
       pdfPath: fullPath,
       language: doc.language,
@@ -75,15 +76,15 @@ export async function processDocument(docId: string): Promise<void> {
         emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
     });
 
-    // Cover-Thumb (erste Seite als JPG) im Hintergrund rendern —
-    // nutzt poppler, nicht docling, weil docling kein Bild liefert.
+    // Render cover thumb (first page as JPG) in the background —
+    // uses poppler, not docling, because docling doesn't return an image.
     renderCover(fullPath, join(DATA_DIR, "covers"), docId).catch((err) =>
       console.warn("[pipeline] cover render failed:", err)
     );
 
-    // Paranoid-Post-Pass: Docling macht das meiste schon, aber ein
-    // Edge-Case-XML-Steuerzeichen oder Ligatur durch die Hintertür
-    // lassen wir nicht im Kapiteltext landen.
+    // Paranoid post-pass: Docling does most of the work, but we don't
+    // want an edge-case XML control character or ligature sneaking
+    // through the back door into the chapter text.
     const cleanedSections = extraction.sections.map((s) => ({
       ...s,
       text: cleanForReading(s.text),
@@ -91,10 +92,10 @@ export async function processDocument(docId: string): Promise<void> {
 
     const fullText = cleanedSections.map((s) => s.text).join("\n\n");
 
-    // Titel + Autor aus Docling-Metadaten persistieren. `title` (UI-
-    // sichtbar) überschreiben wir nur wenn der aktuelle Wert noch der
-    // automatisch-aus-Filename-abgeleitete ist — sobald der User in
-    // der UI editiert hat, lassen wir's stehen.
+    // Persist title + author from Docling metadata. We only overwrite
+    // `title` (UI-visible) if the current value is still the
+    // auto-derived-from-filename one — once the user has edited it
+    // in the UI, we leave it alone.
     const docMetaTitle = extraction.metadata.title;
     const docMetaAuthor = extraction.metadata.author;
     if (docMetaTitle || docMetaAuthor) {
@@ -116,7 +117,7 @@ export async function processDocument(docId: string): Promise<void> {
     emit({
       phase: "pipeline.chapters",
       docId,
-      message: `${cleanedSections.length} Kapitel`,
+      message: tLang(lang, "msg.chaptersCount", { count: cleanedSections.length }),
     });
 
     const tx = d.transaction(() => {
@@ -135,9 +136,9 @@ export async function processDocument(docId: string): Promise<void> {
           ch.text,
           idx,
           ch.kind,
-          // Default: content + summary kommen ins Hörbuch, alles andere
-          // (Beispiele, Übungen, Verzeichnisse, Lösungen, …) erstmal
-          // raus. User kann pro Kapitel einzeln umschalten.
+          // Default: content + summary go into the audiobook,
+          // everything else (examples, exercises, indexes, solutions,
+          // …) is excluded. User can toggle per chapter.
           ch.kind === "content" || ch.kind === "summary" ? 1 : 0
         );
       });
@@ -148,25 +149,25 @@ export async function processDocument(docId: string): Promise<void> {
       "UPDATE documents SET ocr_status = 'done', extraction_started_at = NULL WHERE id = ?"
     ).run(docId);
 
-    // Artefakt-Dump: komplettes Markdown + DoclingDocument-JSON auf Disk,
-    // damit man bei Bedarf reinschauen kann und spätere RAG-/Layout-
-    // Features direkt darauf arbeiten können.
+    // Artifact dump: full Markdown + DoclingDocument JSON to disk so
+    // we can inspect on demand and future RAG/layout features can
+    // work directly on it.
     try {
       writeDoclingArtifacts(docId, extraction.markdown, extraction.docJson);
     } catch (err) {
       console.warn("[pipeline] artifact dump failed:", err);
     }
 
-    // Chunking + DB-Insert + Embedding. Embedding-Fehler blockieren den
-    // Extraktions-Abschluss nicht — Chunks stehen dann ohne Vektoren da
-    // und können später nachembedded werden wenn Ollama wieder online ist.
+    // Chunking + DB insert + embedding. Embedding errors don't block
+    // extraction completion — chunks then sit without vectors and can
+    // be re-embedded later when Ollama is online again.
     try {
       await buildChunksForDocument(docId);
     } catch (err) {
       console.warn("[pipeline] chunking failed:", err);
     }
 
-    // Fire-and-forget: Meilisearch-Indexierung.
+    // Fire-and-forget: Meilisearch indexing.
     try {
       const fullDoc = d
         .prepare(
@@ -217,7 +218,10 @@ export async function processDocument(docId: string): Promise<void> {
       phase: "pipeline.done",
       docId,
       total: cleanedSections.length,
-      message: `${extraction.pageCount} Seiten, ${cleanedSections.length} Kapitel`,
+      message: tLang(lang, "msg.pagesAndChapters", {
+        pages: extraction.pageCount,
+        count: cleanedSections.length,
+      }),
     });
     console.log(
       `[pipeline] ${docId}: docling → ${extraction.pageCount} pages, ${cleanedSections.length} chapters`
@@ -237,9 +241,9 @@ export async function processDocument(docId: string): Promise<void> {
   }
 }
 
-/** Schreibt das rohe Markdown + die DoclingDocument-JSON in das
- *  Upload-Verzeichnis des Dokuments. Nur für Debug/Inspection +
- *  zukünftige Re-Processing-Szenarien — wird nicht weiterverwendet. */
+/** Writes the raw Markdown + DoclingDocument JSON to the document's
+ *  upload directory. Only for debug/inspection + future re-processing
+ *  scenarios — not consumed elsewhere. */
 function writeDoclingArtifacts(
   docId: string,
   markdown: string,
@@ -254,9 +258,9 @@ function writeDoclingArtifacts(
   }
 }
 
-/** Chunked die aktuellen Kapitel eines Dokuments, schreibt sie als
- *  JSON-Files auf Disk, persistiert sie in der chunks-Tabelle und
- *  generiert (best-effort) Embeddings via Ollama. */
+/** Chunks the current chapters of a document, writes them as JSON
+ *  files to disk, persists them in the chunks table and generates
+ *  (best-effort) embeddings via Ollama. */
 async function buildChunksForDocument(docId: string): Promise<void> {
   const d = db();
   const chapters = d
@@ -291,7 +295,7 @@ async function buildChunksForDocument(docId: string): Promise<void> {
   const chunksDir = join(DATA_DIR, "uploads", docId, "docling", "chunks");
   mkdirSync(chunksDir, { recursive: true });
 
-  // DB: vorhandene Chunks für das Dokument wegräumen, dann neu einfügen.
+  // DB: clear existing chunks for the document, then re-insert.
   const insertChunk = d.prepare(
     `INSERT INTO chunks (id, document_id, chapter_id, chunk_index, text, start_page, end_page, embedding, embedding_model)
      VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
@@ -314,7 +318,7 @@ async function buildChunksForDocument(docId: string): Promise<void> {
   const withIds = chunks.map((chunk) => ({ chunk, id: randomUUID() }));
   tx(withIds);
 
-  // Chunks auf Disk — ein File pro Chunk, numerisch sortiert.
+  // Chunks on disk — one file per chunk, numerically sorted.
   for (const { chunk, id } of withIds) {
     const name = String(chunk.chunk_index).padStart(4, "0") + ".json";
     const payload = {
@@ -329,14 +333,13 @@ async function buildChunksForDocument(docId: string): Promise<void> {
     `[pipeline] ${docId}: ${chunks.length} chunks written to disk + DB`
   );
 
-  // Embeddings — best-effort. Ollama kann offline sein, Modell nicht
-  // installiert, etc. In beiden Fällen bleiben die Chunks als Text in
-  // der DB stehen, nur ohne Vektoren; der RAG-Query fällt dann zurück
-  // auf Text-only.
+  // Embeddings — best-effort. Ollama can be offline, model not
+  // installed, etc. In both cases chunks stay in the DB as text only,
+  // without vectors; the RAG query then falls back to text-only.
   const embedder = await resolveEmbedder();
   if (!embedder) {
     console.log(
-      `[pipeline] ${docId}: kein Ollama für Embeddings erreichbar — Chunks ohne Vektoren.`
+      `[pipeline] ${docId}: no Ollama reachable for embeddings — chunks without vectors.`
     );
     return;
   }
@@ -355,7 +358,7 @@ async function buildChunksForDocument(docId: string): Promise<void> {
       failCount++;
       if (failCount === 1) {
         console.warn(
-          `[pipeline] ${docId}: erstes Embedding fehlgeschlagen — ${(err as Error).message}`
+          `[pipeline] ${docId}: first embedding failed — ${(err as Error).message}`
         );
       }
     }

@@ -1,15 +1,15 @@
 /**
- * Cover-Management — bei Bedarf das User-gewählte thumb_page als JPG
- * rendern. Wird vor dem M4B-Build aufgerufen, damit das Titelbild der
- * MP4-Datei zum aktuell in Settings eingestellten Thumbnail passt.
+ * Cover management — renders the user-selected thumb_page as JPG on
+ * demand. Called before the M4B build so the cover art of the MP4
+ * file matches the thumbnail currently set in Settings.
  *
  *   covers/<docId>-p<page>.jpg
  *
- * Page-Suffix macht die Datei selbst-dokumentierend (kein Stamp-File
- * nötig um zu wissen welches Page gerendert wurde) und verhindert
- * Stale-Cache-Probleme wenn der User thumb_page ändert — die neue
- * Datei wird unter anderem Namen gespeichert, alte bleibt harmlos
- * liegen (lässt sich bei Doc-Delete mit rm -rf aufräumen).
+ * The page suffix makes the file self-documenting (no stamp file
+ * needed to know which page was rendered) and prevents stale-cache
+ * issues when the user changes thumb_page — the new file is stored
+ * under a different name, the old one stays around harmlessly
+ * (cleaned up via rm -rf on doc delete).
  */
 
 import { existsSync, mkdirSync, renameSync } from "node:fs";
@@ -34,9 +34,9 @@ function findRenderedJpg(base: string, page: number): string | undefined {
   return undefined;
 }
 
-/** Stellt sicher dass für ein Doc ein JPG-Cover auf Disk liegt, das
- *  der aktuellen `thumb_page`-Auswahl entspricht. Bei Fehler/Missing-
- *  Tooling wird undefined zurückgegeben (M4B-Build ohne Cover). */
+/** Ensures a doc has a JPG cover on disk that matches the current
+ *  `thumb_page` selection. On error/missing tooling, returns
+ *  undefined (M4B build without cover). */
 export async function ensureCover(
   docId: string
 ): Promise<string | undefined> {
@@ -52,13 +52,13 @@ export async function ensureCover(
 
   if (!(await which("pdftoppm"))) {
     console.warn(
-      `[cover] pdftoppm nicht im PATH — cover für ${docId} (p${page}) kann nicht gerendert werden`
+      `[cover] pdftoppm not on PATH — cover for ${docId} (p${page}) cannot be rendered`
     );
     return undefined;
   }
 
   mkdirSync(dirname(target), { recursive: true });
-  // stored_path ist relativ zu DATA_DIR (siehe Upload-Pipeline).
+  // stored_path is relative to DATA_DIR (see upload pipeline).
   const pdfFullPath = doc.stored_path.startsWith("/")
     ? doc.stored_path
     : join(DATA_DIR, doc.stored_path);
@@ -78,7 +78,7 @@ export async function ensureCover(
     const rendered = findRenderedJpg(tmpBase, page);
     if (!rendered) {
       console.warn(
-        `[cover] pdftoppm output nicht gefunden für ${docId} p${page} (base=${tmpBase})`
+        `[cover] pdftoppm output not found for ${docId} p${page} (base=${tmpBase})`
       );
       return undefined;
     }

@@ -1,11 +1,11 @@
 /**
- * RAG-Query-Endpoint. User schickt eine Frage, wir embedden die per
- * Ollama, vergleichen mit den gespeicherten Chunk-Vektoren via
- * Cosine-Similarity und liefern die Top-N relevantesten Schnipsel.
+ * RAG query endpoint. The user sends a question, we embed it via
+ * Ollama, compare against stored chunk vectors via cosine similarity,
+ * and return the top-N most relevant snippets.
  *
- * Keine Vector-DB, keine Approximate-Search — bei < 10 k Chunks
- * macht Brute-Force in Node-/Bun-Prozess in < 100 ms keinen Unterschied.
- * Kann später ersetzt werden durch sqlite-vec wenn's eng wird.
+ * No vector DB, no approximate search — under 10 k chunks brute force
+ * in the Node/Bun process makes no difference at < 100 ms. Can be
+ * swapped for sqlite-vec later if it gets tight.
  */
 
 import { Hono } from "hono";
@@ -35,9 +35,9 @@ interface RetrievalHit {
   text: string;
 }
 
-/** Embedded die Query, holt Top-K Chunks via Cosine über alle Chunks
- *  des Dokuments. Wirft, wenn kein Embedder erreichbar oder das Doc
- *  keine embedded Chunks hat. */
+/** Embeds the query, fetches top-K chunks via cosine over all chunks
+ *  of the document. Throws if no embedder is reachable or the doc
+ *  has no embedded chunks. */
 async function retrieveTopK(params: {
   docId?: string;
   query: string;
@@ -200,12 +200,12 @@ interface AnswerBody {
   model?: string;
 }
 
-/** Streaming RAG-Antwort. NDJSON-Events:
+/** Streaming RAG answer. NDJSON events:
  *    { "type": "sources", "sources": [...] }
  *    { "type": "token",   "data": "..." }
  *    { "type": "done",    "model": "...", "content": "..." }
  *    { "type": "error",   "message": "..." }
- *  Sources werden zuerst gestreamt, dann beginnt der LLM zu tokenisieren. */
+ *  Sources are streamed first, then the LLM begins tokenizing. */
 ragRoutes.post("/answer/stream", async (c) => {
   let body: AnswerBody;
   try {
@@ -217,8 +217,8 @@ ragRoutes.post("/answer/stream", async (c) => {
   if (!query) return c.json({ error: tt(c, "err.missingFields") }, 400);
   const topK = Math.max(1, Math.min(10, body.topK ?? 6));
 
-  // Sprache am Dokument festmachen — wenn docId fehlt, default DE
-  // (Sidekick wird sowieso meistens pro Dokument gefragt).
+  // Anchor language to the document — if docId is missing, default
+  // to DE (sidekick is asked per-document most of the time anyway).
   let language = "de";
   if (body.docId) {
     const doc = db()
@@ -292,9 +292,9 @@ ragRoutes.post("/answer/stream", async (c) => {
   });
 });
 
-/** Re-embed-all: holt alle Chunks ohne Embedding (oder mit falscher
- *  Dimension) und embedded sie. Hilfreich wenn Ollama beim initialen
- *  Extraction-Lauf offline war. */
+/** Re-embed-all: fetches all chunks without an embedding (or with the
+ *  wrong dimension) and embeds them. Useful when Ollama was offline
+ *  during the initial extraction run. */
 ragRoutes.post("/reembed", async (c) => {
   const embedder = await resolveEmbedder();
   if (!embedder) {
@@ -330,7 +330,7 @@ ragRoutes.post("/reembed", async (c) => {
   return c.json({ status: "ok", embedded: ok, failed: fail, total: rows.length });
 });
 
-/** Info-Endpoint: wie viele Chunks + wie viele haben Embeddings? */
+/** Info endpoint: how many chunks + how many have embeddings? */
 ragRoutes.get("/status", (c) => {
   const totals = db()
     .prepare(

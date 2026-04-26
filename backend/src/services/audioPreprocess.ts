@@ -1,26 +1,26 @@
 /**
- * Audio-Preprocessor.
+ * Audio preprocessor.
  *
- * Bereitet einen Kapiteltext für TTS vor — alles raus, was gesprochen
- * keinen Sinn ergibt oder Hörer beim Autofahren wegrutschen lässt:
+ * Prepares a chapter text for TTS — strips everything that doesn't
+ * make sense spoken or that would lose listeners while driving:
  *
- *   - Abkürzungen ausschreiben (z. B. → "zum Beispiel", vgl. → "vergleiche")
- *   - Zahlen und Einheiten verbalisieren (§ 12 → "Paragraph zwölf",
+ *   - Expand abbreviations (z. B. → "zum Beispiel", vgl. → "vergleiche")
+ *   - Verbalize numbers and units (§ 12 → "Paragraph zwölf",
  *     5 kg/m² → "fünf Kilogramm pro Quadratmeter")
- *   - Formeln in sprechbare Form (f(x) = x² → "f von x gleich x Quadrat")
- *   - Inline-Citations entfernen oder umformulieren ((Müller 2023, S. 42)
- *     → entweder weg oder "laut Müller")
- *   - Aufzählungs-Marker raus (• – * 1. 2. 3.) — gesprochen nervt das,
- *     besser durch natürliche Sprachübergänge ersetzen
- *   - Code-Blöcke und URLs sinnvoll ankündigen
- *   - Griechische Buchstaben und Sonderzeichen ausschreiben
+ *   - Formulas in speakable form (f(x) = x² → "f von x gleich x Quadrat")
+ *   - Remove or reformulate inline citations ((Müller 2023, S. 42)
+ *     → either drop or "laut Müller")
+ *   - Strip list markers (• – * 1. 2. 3.) — they're annoying spoken,
+ *     better replaced with natural transitions
+ *   - Announce code blocks and URLs sensibly
+ *   - Spell out Greek letters and special characters
  *
- * Wichtig: der Inhalt darf NICHT verändert werden. Keine Auslassungen,
- * keine Umformulierungen, keine Vereinfachungen — nur Form.
+ * Important: the content must NOT change. No omissions, no
+ * rephrasing, no simplifications — only form.
  *
- * Pro Kapitel einmal, dann gecached in `chapters.audio_text`. Bei
- * Re-Extraktion via Docling werden alle Kapitel-Rows ersetzt → Cache
- * fällt natürlich raus.
+ * Once per chapter, then cached in `chapters.audio_text`. On
+ * re-extraction via Docling all chapter rows are replaced → cache
+ * naturally falls out.
  */
 
 import { db } from "../db";
@@ -445,17 +445,18 @@ export interface PreprocessResult {
 }
 
 /**
- * Liefert den TTS-tauglichen Text eines Kapitels. Cache-Hit returnt
- * sofort, sonst LLM-Call und Persist. Wenn kein LLM verfügbar ist,
- * fällt der Caller auf den Original-`text` zurück (Caller entscheidet).
+ * Returns the TTS-ready text for a chapter. Cache hit returns
+ * immediately, otherwise LLM call + persist. When no LLM is
+ * available, the caller falls back to the original `text` (caller
+ * decides).
  */
 export async function preprocessChapterForAudio(params: {
   chapterId: string;
   language: string;
-  /** Optional: Modell-Override. Sonst wird das Default-Modell des aktuellen
-   *  Providers genutzt. */
+  /** Optional: model override. Otherwise the current provider's
+   *  default model is used. */
   model?: string;
-  /** Cache ignorieren und neu generieren (z. B. nach Modell-Wechsel). */
+  /** Ignore cache and regenerate (e.g. after a model change). */
   force?: boolean;
 }): Promise<PreprocessResult> {
   const d = db();
@@ -482,25 +483,24 @@ export async function preprocessChapterForAudio(params: {
     throw new Error("Chapter text too short to preprocess");
   }
 
-  // Deterministische Pre-Pass: Standard-Abkürzungen, Einheiten,
-  // Symbole, Datum/Uhrzeit. Spart dem LLM ~150 Regex-Regeln die er
-  // sonst selbst anwenden müsste. Der Prompt wurde angepasst — er
-  // weiß jetzt dass diese Transformationen schon durch sind und soll
-  // sie nicht rückgängig machen (z. B. „zum Beispiel" NICHT wieder
-  // zu „z. B." verkürzen).
+  // Deterministic pre-pass: standard abbreviations, units, symbols,
+  // dates/times. Saves the LLM ~150 regex rules it would otherwise
+  // have to apply. The prompt was adjusted — it now knows these
+  // transformations are already done and shouldn't undo them
+  // (e.g. don't shorten "zum Beispiel" back to "z. B.").
   const pretreated = expandAbbreviations(row.text, params.language);
 
   const system = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
 
-  // num_ctx großzügig bemessen — der System-Prompt ist lang (~6k
-  // Tokens), dazu kommt der Kapitel-Text (bis ~4k Tokens) und die
-  // Ausgabe (~4k). Der Ollama-Default von 2048 reicht bei weitem
-  // nicht und führt zu sofortigem EOS → leere Response. 32k ist
-  // sicher und nahezu alle Modelle akzeptieren das.
+  // num_ctx sized generously — the system prompt is long (~6k
+  // tokens), plus the chapter text (up to ~4k tokens) and the
+  // output (~4k). The Ollama default of 2048 is nowhere near enough
+  // and leads to immediate EOS → empty response. 32k is safe and
+  // nearly every model accepts it.
   //
-  // num_predict = -1: unbegrenzt generieren bis das Modell selbst
-  // EOS sagt. Sonst würde der Text-Output an irgendeiner Token-Grenze
-  // abgeschnitten.
+  // num_predict = -1: generate without limit until the model itself
+  // says EOS. Otherwise the text output would be clipped at some
+  // token boundary.
   const ollamaOptions = {
     temperature: 0.1,
     top_p: 0.9,
@@ -508,16 +508,16 @@ export async function preprocessChapterForAudio(params: {
     num_predict: -1,
   };
 
-  // Lange Kapitel aufspalten. Ein 80k-Zeichen-Kapitel sprengt jedes
-  // realistische Context-Fenster — 25k Tokens Input + 6k Prompt +
-  // 25k Output > 32k num_ctx-Limit der meisten Modelle. Wir splitten
-  // an Absatzgrenzen (sekundär Satz) zu Stücken à ~3500 Zeichen und
-  // konkatenieren die Ergebnisse.
+  // Split long chapters. An 80k-char chapter blows every realistic
+  // context window — 25k tokens input + 6k prompt + 25k output >
+  // 32k num_ctx limit on most models. We split at paragraph
+  // boundaries (sentence as fallback) into ~3500-char pieces and
+  // concatenate the results.
   const subChunks = splitForPreprocess(pretreated, 3500);
   if (subChunks.length > 1) {
     console.log(
       `[audio-preprocess] chapter ${row.id} (${pretreated.length} chars) → ` +
-        `${subChunks.length} sub-chunks für LLM (je ~${Math.round(pretreated.length / subChunks.length)} chars)`
+        `${subChunks.length} sub-chunks for LLM (~${Math.round(pretreated.length / subChunks.length)} chars each)`
     );
   }
 
@@ -537,8 +537,8 @@ export async function preprocessChapterForAudio(params: {
 
     if (!result.response || result.response.trim().length < 20) {
       console.warn(
-        `[audio-preprocess]${label} leere/kurze Antwort von ${result.model} ` +
-          `(${result.response.length} chars), Input ${chunk.length} chars — Retry nach 2s`
+        `[audio-preprocess]${label} empty/short response from ${result.model} ` +
+          `(${result.response.length} chars), input ${chunk.length} chars — retrying after 2s`
       );
       await new Promise((r) => setTimeout(r, 2000));
       result = await generate({
@@ -556,7 +556,7 @@ export async function preprocessChapterForAudio(params: {
           `(input ${chunk.length} chars, model=${result.model}, raw=${JSON.stringify(
             result.response.slice(0, 120)
           )}). Context overfull? Ollama still loading? Retry later ` +
-          `oder anderes Modell in Settings wählen.`
+          `or pick another model in Settings.`
       );
     }
 
@@ -568,8 +568,8 @@ export async function preprocessChapterForAudio(params: {
     );
   }
 
-  // Sub-Chunk-Outputs mit doppelter Newline zusammenfügen — entspricht
-  // der Absatz-Konvention im Rest des Systems.
+  // Join sub-chunk outputs with double newline — matches the
+  // paragraph convention used elsewhere in the system.
   const combined = responses.join("\n\n");
   const cleaned = stripProblematicCharsForTts(
     restoreHeadingParagraphs(stripWrappers(combined))
@@ -588,16 +588,15 @@ export async function preprocessChapterForAudio(params: {
   return { text: cleaned, model: lastModel, cached: false };
 }
 
-/** Teilt einen Text auf ≤ `maxChars`-Stücke an bevorzugt Absatz-,
- *  sekundär Satzgrenzen. Ein einzelner überlanger Absatz wird an
- *  Satzzeichen (. ! ?) gesplittet; wenn sogar ein einzelner Satz
- *  noch zu lang ist, Hart-Cut an Zeichengrenze.
+/** Splits a text into ≤ `maxChars` pieces preferring paragraph and
+ *  secondarily sentence boundaries. A single oversize paragraph is
+ *  split on sentence punctuation (. ! ?); if even a single sentence
+ *  is too long, hard cut at a character boundary.
  *
- *  Zweck: der Audio-Preprocessor kann keinen 80k-Zeichen-Chapter auf
- *  einmal verarbeiten (Context-Limit der LLMs). Wir fahren ihn in
- *  Stücken durch und konkatenieren die Ergebnisse. Absatzgrenzen als
- *  Split-Punkt sind semantisch klean — der LLM sieht nie einen Satz
- *  halbiert.
+ *  Purpose: the audio preprocessor can't handle an 80k-char chapter
+ *  in one shot (LLM context limit). We feed it piece by piece and
+ *  concatenate the results. Paragraph boundaries as split points
+ *  are semantically clean — the LLM never sees a sentence halved.
  */
 function splitForPreprocess(text: string, maxChars: number): string[] {
   if (text.length <= maxChars) return [text];
@@ -614,13 +613,13 @@ function splitForPreprocess(text: string, maxChars: number): string[] {
 
   for (const p of paragraphs) {
     if (p.length > maxChars) {
-      // Einzelner Absatz zu groß — Satzweise nachsplitten.
+      // Single paragraph too big — split it sentence by sentence.
       if (buf) flush();
       const sentences = p.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) ?? [p];
       let subBuf = "";
       for (const s of sentences) {
         if (s.length > maxChars) {
-          // Ein einzelner Satz zu lang — hart durchschneiden.
+          // Single sentence too long — hard cut.
           if (subBuf.trim()) out.push(subBuf.trim());
           subBuf = "";
           for (let i = 0; i < s.length; i += maxChars) {
@@ -651,38 +650,38 @@ function splitForPreprocess(text: string, maxChars: number): string[] {
   return out;
 }
 
-/** Kleinere LLMs halten sich trotz expliziter Anweisung nicht immer
- *  an "nur den Text, keine Meta-Kommentare" — sie packen gerne:
- *    - Code-Fences um den Output
- *    - "Hier ist der bereinigte Text:"-Vorwort
- *    - Am Ende eine "Änderungsliste" / "Edit summary" / "Ich habe
- *      folgendes gemacht: …" mit Bullet-Aufzählung
+/** Smaller LLMs don't always honor the "only the text, no
+ *  meta-commentary" rule despite explicit instructions — they like
+ *  to add:
+ *    - code fences around the output
+ *    - "Here is the cleaned text:" preface
+ *    - a trailing "change list" / "edit summary" / "I made the
+ *      following …" bullet list
  *
- *  Das schneidet das deterministisch wieder weg. Der System-Prompt
- *  verbietet es auch explizit — beides zusammen fängt ~99% der Fälle
- *  ab. */
+ *  This strips that deterministically. The system prompt also
+ *  forbids it — together this catches ~99% of cases. */
 function stripWrappers(s: string): string {
   let t = s.trim();
-  // Code-Fences entfernen.
+  // Strip code fences.
   t = t.replace(/^```(?:[a-zA-Z]+)?\n/, "").replace(/\n```$/, "");
-  // Häufige Vorworte abschneiden, falls sie auf eigener Zeile stehen.
+  // Strip common prefaces if they sit on their own line.
   t = t.replace(
     /^(here is|hier ist|hier folgt|der überarbeitete text|the cleaned text|cleaned text|bereinigter text)[^\n]*\n+/i,
     ""
   );
-  // Trailing Edit-Listen / Meta-Kommentare am Ende abschneiden.
-  // Match ab der ersten Zeile die wie Meta-Header aussieht bis EOF.
-  // Typische Trigger:
-  //   "---" als Trenner vor einer Erklärung
+  // Cut trailing edit lists / meta commentary at the end.
+  // Match from the first line that looks like a meta header to EOF.
+  // Typical triggers:
+  //   "---" as a separator before an explanation
   //   "### Änderungen", "**Hinweis:**", "Änderungen:", "Changes:" …
   //   "Ich habe folgendes / die folgenden …"
   //   "Note:", "Notes:", "Anmerkung:"
   const metaHeaderRe = new RegExp(
-    // optional: horizontale Trennlinie auf eigener Zeile
+    // optional: horizontal rule on its own line
     "\\n+(?:-{3,}\\s*\\n+)?" +
-      // optional Markdown-Heading/Bold-Marker
+      // optional Markdown heading/bold marker
       "(?:#{1,6}\\s*|\\*\\*\\s*)?" +
-      // das eigentliche Signalwort (case-insensitive)
+      // the actual signal word (case-insensitive)
       "(?:" +
       [
         "Änderungen",
@@ -704,9 +703,9 @@ function stripWrappers(s: string): string {
         "I\\s+(?:made|have\\s+made|performed)\\s+the\\s+following",
       ].join("|") +
       ")" +
-      // Doppelpunkt oder Stern oder Newline nach dem Signalwort
+      // colon or asterisk or newline after the signal word
       "(?:\\*?\\s*:|\\s*\\n|\\s*\\*\\*)" +
-      // Alles bis EOF
+      // everything up to EOF
       "[\\s\\S]*$",
     "i"
   );
@@ -714,10 +713,10 @@ function stripWrappers(s: string): string {
   return t.trim();
 }
 
-/** Deterministische Reinigung der LLM-Antwort von Zeichen, die Qwen3-TTS
- *  aus dem Konzept bringen. Läuft als letzter Pass vor der Persistenz.
- *  Der System-Prompt verbietet diese Zeichen auch, aber kleinere Modelle
- *  halten sich nicht immer dran. */
+/** Deterministic cleanup of the LLM response, removing characters
+ *  that throw Qwen3-TTS off. Runs as the last pass before persistence.
+ *  The system prompt also forbids these characters, but smaller
+ *  models don't always honor that. */
 function stripProblematicCharsForTts(s: string): string {
   const counts = {
     horizontalRule: (s.match(/^[ \t]*[-=*_]{3,}[ \t]*$/gm) ?? []).length,
@@ -748,28 +747,28 @@ function stripProblematicCharsForTts(s: string): string {
   return cleaned;
 }
 
-/** Manche Modelle (gerade kleinere wie Gemma) ignorieren die
- *  „Absatz-Struktur erhalten"-Regel und ziehen Heading + erster
- *  Body-Satz auf eine Zeile zusammen. Beispiel:
+/** Some models (especially smaller ones like Gemma) ignore the
+ *  "preserve paragraph structure" rule and pull heading + first
+ *  body sentence onto a single line. Example:
  *
  *    Input:  "1.4 Dienstleistung.\n\nDer Begriff …"
  *    Output: "1.4 Dienstleistung. Der Begriff …"
  *
- *  Heuristik macht das rückgängig: nummerierter Heading-Pattern
- *  (Sub-Section-Notation, Großbuchstabe, Punkt am Ende) gefolgt
- *  von einem Großbuchstaben → Absatz-Newline einschieben. */
+ *  Heuristic reverses that: numbered heading pattern (sub-section
+ *  notation, capital letter, trailing period) followed by a capital
+ *  letter → insert a paragraph newline. */
 function restoreHeadingParagraphs(text: string): string {
   return text.replace(
     // Match: "<num>.<num> Capitalized Title.<space><Capital>"
-    // Group 1 = die Heading-Phrase inkl. Punkt
-    // Lookahead = Großbuchstabe als Start des nächsten Satzes
+    // Group 1 = the heading phrase incl. period
+    // Lookahead = uppercase as the start of the next sentence
     /^(\d+(?:\.\d+){0,3}\s+[A-ZÄÖÜ][^\n.]{2,80}\.)\s+(?=[A-ZÄÖÜ])/gm,
     "$1\n\n"
   );
 }
 
-/** Cache leeren — z. B. wenn der User den Modell-Override ändert oder
- *  manuell den Kapiteltext editiert hat. */
+/** Clear the cache — e.g. when the user changes the model override
+ *  or manually edits the chapter text. */
 export function clearAudioTextCache(chapterId: string): void {
   db()
     .prepare(

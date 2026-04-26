@@ -1,13 +1,13 @@
 /**
- * Voice-Sample-Service — User-Uploads für Qwen3-TTS Voice-Clone.
+ * Voice sample service — user uploads for Qwen3-TTS voice clone.
  *
- * Jede Zeile in `voice_samples` = eine „kloneerbare Stimme". Die
- * Referenz-WAV/MP3 liegt als Datei im Data-Volume unter
- * `$PM_DATA_DIR/voice-samples/<id>.<ext>`, die Engine liest sie bei
- * jedem Synthese-Call und reicht sie als base64 an den Sidecar.
+ * Each row in `voice_samples` = one "clonable voice". The reference
+ * WAV/MP3 sits as a file in the data volume under
+ * `$PM_DATA_DIR/voice-samples/<id>.<ext>`; the engine reads it on
+ * every synthesis call and forwards it as base64 to the sidecar.
  *
- * Seeds werden beim Upload einmalig gewürfelt und NIE geändert —
- * so klingt dieselbe Voice zwei Monate später noch gleich.
+ * Seeds are rolled once on upload and NEVER changed — that way the
+ * same voice still sounds the same two months later.
  */
 
 import { randomUUID, randomInt } from "node:crypto";
@@ -18,9 +18,9 @@ import { db } from "../db";
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const VOICE_DIR = join(DATA_DIR, "voice-samples");
 
-// Upload-Limits — mehr als 10 s braucht Qwen3-TTS-Base nicht für einen
-// sauberen Clone; größere Uploads sind meist Anwender-Missverständnis
-// (ganze Hörbuch-Kapitel etc.).
+// Upload limits — Qwen3-TTS-Base doesn't need more than 10 s for a
+// clean clone; bigger uploads are usually a user misunderstanding
+// (whole audiobook chapters etc.).
 export const MAX_BYTES = 2_500_000; // ~2.5 MB (10 s @ 24 kHz 16-bit ≈ 0.5 MB, MP3 ≈ 120 KB)
 export const ALLOWED_EXTS = new Set([".wav", ".mp3", ".flac", ".ogg", ".m4a"]);
 
@@ -41,11 +41,11 @@ export interface VoiceSample {
   bytes: number;
   durationMs: number;
   createdAt: string;
-  /** Gleitender Durchschnitt der TTS-Synthese-Geschwindigkeit für
-   *  diese Voice — Millisekunden pro Eingabe-Zeichen. Wird nach jedem
-   *  erfolgreichen Chunk via EMA (alpha=0.2) aktualisiert. `null`
-   *  wenn noch nie erfolgreich synthetisiert wurde. Frontend nutzt
-   *  das für die initiale ETA eines Hörbuch-Runs. */
+  /** Rolling average of TTS synthesis speed for this voice —
+   *  milliseconds per input character. Updated via EMA (alpha=0.2)
+   *  after every successful chunk. `null` if never synthesized
+   *  successfully. The frontend uses this for the initial ETA of an
+   *  audiobook run. */
   msPerChar: number | null;
   samplesCount: number;
 }
@@ -101,7 +101,7 @@ export interface CreateVoiceSampleInput {
   gender: Gender;
   language?: string;
   refText?: string;
-  filename: string; // originaler Dateiname, nur für Extension
+  filename: string; // original filename, only for extension
   bytes: Uint8Array;
 }
 
@@ -109,8 +109,8 @@ export interface CreateVoiceSampleResult {
   sample: VoiceSample;
 }
 
-/** Erstellt einen neuen Voice-Sample-Eintrag. Wirft bei ungültiger
- *  Erweiterung oder zu großer Datei. */
+/** Creates a new voice sample entry. Throws on invalid extension or
+ *  oversized file. */
 export function createVoiceSample(
   input: CreateVoiceSampleInput
 ): CreateVoiceSampleResult {
@@ -141,7 +141,7 @@ export function createVoiceSample(
   const refPath = join(VOICE_DIR, `${id}${ext}`);
   writeFileSync(refPath, input.bytes);
 
-  // 31-bit positive int — passt in SQLite INTEGER und Python
+  // 31-bit positive int — fits in SQLite INTEGER and Python
   // `torch.manual_seed()`.
   const seed = randomInt(1, 2 ** 31 - 1);
 
@@ -159,7 +159,7 @@ export function createVoiceSample(
       input.refText?.trim() || null,
       seed,
       input.bytes.byteLength,
-      0 // Dauer ermitteln wir nicht — wäre ein ffprobe-Subprocess pro Upload
+      0 // We don't determine duration — would be an ffprobe subprocess per upload
     );
 
   const sample = getVoiceSample(id);
@@ -181,8 +181,8 @@ export function deleteVoiceSample(id: string): boolean {
   return r.changes > 0;
 }
 
-/** Lädt die Referenz-Audio-Bytes vom Disk. Wird von der qwen-Engine
- *  vor jedem Synthese-Call aufgerufen. */
+/** Reads the reference audio bytes from disk. Called by the qwen
+ *  engine before each synthesis call. */
 export function readVoiceRefBytes(sample: VoiceSample): Buffer {
   if (!existsSync(sample.refPath)) {
     throw new Error(
@@ -192,20 +192,20 @@ export function readVoiceRefBytes(sample: VoiceSample): Buffer {
   return readFileSync(sample.refPath);
 }
 
-/** EMA-Update für die Synthese-Geschwindigkeit einer Voice.
+/** EMA update for a voice's synthesis speed.
  *
- *  Formel: ms_per_char_new = alpha * (elapsed / chars) + (1 - alpha) * old
- *  alpha = 0.2 → ein neuer Datenpunkt wiegt 20 %, die Historie 80 %.
- *  Das glättet Ausreißer (gelegentlich hängender Chunk) ohne dass
- *  Messpunkte jahrelang nachhallen.
+ *  Formula: ms_per_char_new = alpha * (elapsed / chars) + (1 - alpha) * old
+ *  alpha = 0.2 → a new data point weighs 20 %, history 80 %.
+ *  Smooths outliers (an occasionally stalled chunk) without letting
+ *  measurements linger for years.
  *
- *  Erster Datenpunkt: ms_per_char wird direkt gesetzt, ohne EMA-Mix. */
+ *  First data point: ms_per_char is set directly, no EMA blend. */
 export function recordChunkTiming(
   voiceId: string,
   chars: number,
   elapsedMs: number
 ): void {
-  if (chars < 50 || elapsedMs < 100) return; // zu kleine Samples sind rauschig
+  if (chars < 50 || elapsedMs < 100) return; // too-small samples are noisy
   const sample = getVoiceSample(voiceId);
   if (!sample) return;
 

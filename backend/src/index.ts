@@ -21,10 +21,10 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
-// Version-Resolver: primär aus VERSION-Datei (Repo-Root, Single Source
-// of Truth), fallback auf package.json. VERSION landet im Docker-Image
-// unter /app/VERSION (siehe Dockerfile). Im lokalen Dev-Betrieb ist
-// die Datei zwei Ebenen über src/index.ts.
+// Version resolver: primarily from the VERSION file (repo root, single
+// source of truth), fallback to package.json. VERSION lands in the
+// Docker image at /app/VERSION (see Dockerfile). In local dev the
+// file is two levels above src/index.ts.
 const PKG_VERSION = ((): string => {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
@@ -49,13 +49,12 @@ const PKG_VERSION = ((): string => {
   }
 })();
 
-// Timestamp-Prefix für alle console.*-Ausgaben. Docker-Log-Driver
-// prefixt die Zeilen zwar schon in Portainer, aber wer Logs per
-// `docker logs` ohne -t zieht oder sie in einer Text-Datei parst,
-// hat sonst nackte Zeilen ohne Zeitbezug — und wenn man mehrere
-// Container-Logs vergleicht wird's mühsam. Ein zusätzlicher ISO-
-// Timestamp am Zeilenanfang hilft auch der Frontend-Log-Ansicht
-// (falls wir mal eine bauen).
+// Timestamp prefix for all console.* output. The Docker log driver
+// already prefixes lines in Portainer, but anyone pulling logs via
+// `docker logs` without -t or parsing them from a text file gets
+// bare lines without time context — and comparing multiple container
+// logs becomes painful. An additional ISO timestamp at the line
+// start also helps a frontend log view (if we ever build one).
 (() => {
   const origLog = console.log.bind(console);
   const origWarn = console.warn.bind(console);
@@ -68,9 +67,10 @@ const PKG_VERSION = ((): string => {
   console.error = (...args: unknown[]) => origError(`[${ts()}] ERROR`, ...args);
 })();
 
-// Auffälliger Startup-Banner — macht im Portainer-Log sofort sichtbar
-// dass der neue Build auch wirklich läuft (Portainer zeigt Container-
-// Recreates oft ohne klares Signal, auch wenn's still durchging).
+// Loud startup banner — makes it immediately visible in the
+// Portainer log that the new build is actually running (Portainer
+// often shows container recreates without a clear signal, even
+// when they went through silently).
 console.log("================================================================");
 console.log(`  PageMentor backend v${PKG_VERSION}`);
 console.log(`  started at ${new Date().toISOString()}`);
@@ -111,14 +111,14 @@ ensureSearchReady();
 export default {
   port: 3000,
   fetch: app.fetch,
-  // Bun's default idleTimeout of 10 s kills audio range fetches und
-  // LLM streaming. 255 s war lange genug bis M4B-Rebuilds dazukamen —
-  // ein großer Book-Re-Encode (14+ Kapitel, 130 min Audio → AAC) kann
-  // 5-10 min am Stück CPU-bound laufen ohne Bytes zum Client zu senden,
-  // und Bun würde den Request mittendrin schließen.
-  // 0 = kein Timeout (per Bun-Docs). Macht das Backend robust gegen
-  // langsame Long-Polling-/Encode-Pfade. LLM-Streaming und Ranges
-  // sind aktive Streams und brauchen den Timer sowieso nicht.
+  // Bun's default idleTimeout of 10 s kills audio range fetches and
+  // LLM streaming. 255 s was long enough until M4B rebuilds came in —
+  // a large book re-encode (14+ chapters, 130 min audio → AAC) can
+  // run 5-10 min CPU-bound without sending bytes to the client,
+  // and Bun would close the request mid-flight.
+  // 0 = no timeout (per Bun docs). Makes the backend robust against
+  // slow long-polling / encode paths. LLM streaming and ranges
+  // are active streams and don't need the timer anyway.
   idleTimeout: 0,
 };
 

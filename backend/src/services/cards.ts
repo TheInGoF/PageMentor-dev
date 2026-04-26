@@ -1,16 +1,17 @@
 /**
- * Aufgaben-Extraktion aus Kapiteltext.
+ * Exercise extraction from chapter text.
  *
- * Erkennt Marker wie "Aufgabe 3:", "Frage 1)", "Exercise 2.", sammelt
- * den Text bis zum nächsten Marker und versucht, zugehörige Lösungen
- * anhand der Nummer zuzuordnen.
+ * Detects markers like "Aufgabe 3:", "Frage 1)", "Exercise 2.",
+ * collects the text up to the next marker and tries to match
+ * corresponding solutions by number.
  *
- * Zwei Zuordnungs-Modi:
- *  - `extractCards(text)`            — single-chapter, Lösung muss im
- *    selben Kapitel stehen (alte API, für Abwärtskompatibilität).
- *  - `extractCardsFromDoc(chapters)` — doc-weit, zieht Aufgaben aus
- *    content-Kapiteln, nutzt zusätzlich `kind='solutions'`-Kapitel als
- *    Musterlösungs-Pool (typischer Anhang). Matching via Aufgaben-Nummer.
+ * Two matching modes:
+ *  - `extractCards(text)`            — single chapter; solution must
+ *    sit in the same chapter (old API, kept for backward compat).
+ *  - `extractCardsFromDoc(chapters)` — doc-wide; pulls exercises from
+ *    content chapters and additionally uses `kind='solutions'`
+ *    chapters as the solution pool (typical appendix). Matched by
+ *    exercise number.
  */
 
 export interface ExtractedCard {
@@ -38,10 +39,10 @@ interface ChapterInput {
   start_page: number;
 }
 
-// Pattern toleriert Markdown-Bold/Italic-Wrapping: "**Aufgabe 1.1:**",
-// "*Frage 3*" etc. Docling liefert Aufgaben-Marker im neueren Output
-// häufig als Bold. Plus optional "Selbstüberprüfung", "Übungsaufgabe"
-// als Synonyme.
+// Pattern tolerates Markdown bold/italic wrapping: "**Aufgabe 1.1:**",
+// "*Frage 3*" etc. Docling often emits exercise markers as bold in
+// the newer output. Plus optional "Selbstüberprüfung",
+// "Übungsaufgabe" as synonyms.
 const TASK_RE =
   /(?:^|\n)\s*[*_]{0,2}\s*(?:Aufgabe|Übung|Übungsaufgabe|Selbstüberprüfung|Selbsttest|Exercise|Problem|Frage|Question)\s+(\d+(?:\.\d+)?)\s*[:.)\-–]?\s*[*_]{0,2}\s*/gi;
 const SOL_RE =
@@ -81,7 +82,7 @@ function scanMarkers(text: string): Block[] {
   });
 }
 
-/** Single-chapter Extraktion — Lösung muss im selben Text stehen. */
+/** Single-chapter extraction — solution must be in the same text. */
 export function extractCards(text: string): ExtractedCard[] {
   const blocks = scanMarkers(text);
   if (blocks.length === 0) return [];
@@ -121,17 +122,18 @@ export function extractCards(text: string): ExtractedCard[] {
   return out;
 }
 
-/** Doc-weite Extraktion mit Cross-Chapter-Matching.
+/** Doc-wide extraction with cross-chapter matching.
  *
- *  Ablauf:
- *   1. Aufgaben aus `content`-Kapiteln sammeln. Lösungen werden aus
- *      ALLEN Kapiteln gesammelt — also auch dem Anhang (`solutions`).
- *   2. Erst Nummern-Match (Aufgabe 3.2 → Lösung 3.2), dann ungenutzte
- *      Lösungen in Doc-Reihenfolge auf noch unmatchte Aufgaben im
- *      gleichen Kapitel zurückfallen lassen (konservativ — kein
- *      Cross-Chapter-Fallback ohne Nummer, das wäre Raten).
- *   3. Unmatchte Aufgaben kommen als `unmatched` zurück, damit Stage B
- *      (RAG-LLM) sie behandeln kann.
+ *  Flow:
+ *   1. Collect exercises from `content` chapters. Solutions are
+ *      collected from ALL chapters — including the appendix
+ *      (`solutions`).
+ *   2. Number match first (Aufgabe 3.2 → Lösung 3.2), then fall back
+ *      to unused solutions in doc order against still-unmatched
+ *      exercises in the same chapter (conservative — no cross-chapter
+ *      fallback without a number, that would be guessing).
+ *   3. Unmatched exercises are returned as `unmatched` so stage B
+ *      (RAG+LLM) can handle them.
  */
 export function extractCardsFromDoc(chapters: ChapterInput[]): {
   cards: ExtractedCardWithSource[];
@@ -147,7 +149,7 @@ export function extractCardsFromDoc(chapters: ChapterInput[]): {
     chapterId: string;
     num?: string;
     content: string;
-    order: number; // stable Reihenfolge für Fallback
+    order: number; // stable order for fallback
   }
 
   const tasks: TaskEntry[] = [];
@@ -159,11 +161,10 @@ export function extractCardsFromDoc(chapters: ChapterInput[]): {
     const blocks = scanMarkers(ch.text);
     if (blocks.length === 0) continue;
 
-    // Aus solutions-Kapiteln ziehen wir nur Lösungen, keine Aufgaben.
-    // Der Anhang listet häufig nochmal alle Aufgaben-Überschriften
-    // ("Aufgabe 3.1") als Struktur-Marker, aber inhaltlich sind das
-    // Lösungen — sonst würden wir Doppelt-Karten mit leerer Antwort
-    // erzeugen.
+    // From solutions chapters we pull only solutions, no exercises.
+    // The appendix often lists all exercise headings ("Aufgabe 3.1")
+    // as structure markers, but content-wise those are solutions —
+    // otherwise we'd produce duplicate cards with empty answers.
     const takeTasks = kind !== "solutions";
 
     for (const b of blocks) {
@@ -186,11 +187,11 @@ export function extractCardsFromDoc(chapters: ChapterInput[]): {
       }
     }
 
-    // Im solutions-Anhang wird oft jeder "Aufgabe X.Y"-Marker als task
-    // geparst, weil Docling ihn als Überschrift liefert. Wir kippen das
-    // hier noch einmal um und interpretieren diese "Pseudo-Tasks" als
-    // nummerierte Solution-Marker — sonst haben wir eine
-    // "Aufgabe 3.1"-Aufgabe im Anhang ohne Lösung.
+    // In the solutions appendix every "Aufgabe X.Y" marker is often
+    // parsed as a task because Docling emits it as a heading. We
+    // flip that here and interpret these "pseudo-tasks" as numbered
+    // solution markers — otherwise we'd have an "Aufgabe 3.1"
+    // exercise in the appendix without a solution.
     if (kind === "solutions") {
       for (const b of blocks) {
         if (b.type === "task" && b.num && b.content && b.content.length >= 4) {
@@ -213,8 +214,8 @@ export function extractCardsFromDoc(chapters: ChapterInput[]): {
     let sol: SolutionEntry | undefined;
 
     if (task.num) {
-      // Bevorzuge Lösung mit derselben Nummer aus einem solutions-
-      // Kapitel, dann aus irgendeinem Kapitel.
+      // Prefer solution with the same number from a solutions
+      // chapter, then from any chapter.
       const inAppendix = solutions.findIndex(
         (s, i) =>
           !used.has(i) &&
@@ -236,10 +237,10 @@ export function extractCardsFromDoc(chapters: ChapterInput[]): {
     }
 
     if (!sol) {
-      // Kein Nummer-Match → im gleichen Kapitel nach der nächsten
-      // freien Lösung in Doc-Reihenfolge schauen. Kein Cross-Chapter-
-      // Fallback ohne Nummer — das wäre raten und die Zuordnung würde
-      // auseinanderdriften, sobald ein einzelner Marker fehlt.
+      // No number match → look in the same chapter for the next free
+      // solution in doc order. No cross-chapter fallback without a
+      // number — that would be guessing, and the mapping would drift
+      // apart as soon as a single marker is missing.
       const sameChapter = solutions.findIndex(
         (s, i) => !used.has(i) && !s.num && s.chapterId === task.chapterId
       );

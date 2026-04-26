@@ -15,6 +15,7 @@ import {
 } from "./audioPreprocess";
 import { ensureCover } from "./covers";
 import { emit } from "./events";
+import { pickLang, tLang, chapterLabel } from "../lib/i18n";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
@@ -31,9 +32,9 @@ interface Chapter {
   include_in_audio?: number | null;
 }
 
-/** Default-Auswahl wenn `include_in_audio` für ein Kapitel noch nicht
- *  gesetzt ist (alte Rows vor v1.14.001). Pflegerelease-Kapitel
- *  (Übungen, Verzeichnisse) bleiben aus, content + summary an. */
+/** Default selection when `include_in_audio` isn't set yet for a
+ *  chapter (old rows before v1.14.001). Maintenance-release chapters
+ *  (exercises, indexes) stay off, content + summary on. */
 function defaultIncludeForKind(kind: string | undefined): boolean {
   return kind === "content" || kind === "summary";
 }
@@ -66,8 +67,8 @@ export class AudiobookCanceled extends Error {
   }
 }
 
-/** Signalisiert dem laufenden Worker, nach dem aktuellen Chunk zu
- *  stoppen. Bereits fertige Kapitel bleiben erhalten. */
+/** Signals the running worker to stop after the current chunk.
+ *  Already-finished chapters are kept. */
 export function cancelAudiobook(docId: string): boolean {
   const ctrl = running.get(docId);
   if (!ctrl) return false;
@@ -79,9 +80,9 @@ export async function generateAudiobook(params: {
   docId: string;
   voiceId?: string;
   rate?: string;
-  /** Override für das Preprocess-LLM. Kommt vom Frontend aus
-   *  `settings.defaultOllamaModel`. Wenn leer, wird der LLM-Config-
-   *  Default (Settings → LLM → Ollama-Model) verwendet. */
+  /** Override for the preprocess LLM. Comes from the frontend via
+   *  `settings.defaultOllamaModel`. When empty the LLM-config
+   *  default (Settings → LLM → Ollama model) is used. */
   model?: string;
 }): Promise<void> {
   if (running.has(params.docId)) return;
@@ -115,10 +116,10 @@ export async function generateAudiobook(params: {
     throw new Error("No chapters - run chapter detection first.");
   }
 
-  // User-Auswahl pro Kapitel respektieren. Falls keiner aktiv ist
-  // (User hat alles ausgeknipst oder ein Edge-Case-Doc), fallen wir
-  // auf die kind-basierte Default-Logik zurück damit überhaupt was
-  // generiert wird.
+  // Respect the user's per-chapter selection. If none are active
+  // (user turned everything off or an edge-case doc), fall back to
+  // the kind-based default logic so something at least gets
+  // generated.
   const filtered = allChapters.filter(isIncluded);
   const chapters = filtered.length > 0 ? filtered : allChapters;
 
@@ -141,20 +142,23 @@ export async function generateAudiobook(params: {
   const audioDir = join(DATA_DIR, "audio", doc.id);
   mkdirSync(audioDir, { recursive: true });
 
+  const lang = pickLang(doc.language);
+
   emit({
     phase: "audiobook.start",
     docId: doc.id,
     total: chapters.length,
-    message: `Generiere ${chapters.length} Kapitel mit ${voice?.label ?? voiceId}`,
+    message: tLang(lang, "msg.audiobookStart", {
+      count: chapters.length,
+      voice: voice?.label ?? voiceId,
+    }),
   });
 
-  // Preprocessor-Verfügbarkeit einmal vor der Loop checken — vermeidet
-  // N Ollama-Pings, der `pickProvider()`-Cache hält 30 s.
+  // Check preprocessor availability once before the loop — avoids
+  // N Ollama pings, the `pickProvider()` cache lasts 30 s.
   const llmReady = await preprocessAvailable();
   if (!llmReady) {
-    console.warn(
-      `[audiobook] LLM-Preprocessor nicht verfügbar — verwende Original-Text. Hörbuch klingt evtl. holprig (Abkürzungen, Zitate, Formeln).`
-    );
+    console.warn(tLang(lang, "msg.audioPreprocessUnavailable"));
   }
 
   const successfulChapterFiles: string[] = [];
@@ -166,11 +170,11 @@ export async function generateAudiobook(params: {
       const ch = chapters[i];
       const outFile = chapterFile(audioDir, ch);
 
-      // Skip-Check: bereits fertige Kapitel nicht neu generieren.
-      // Wenn die User "Hörbuch erzeugen" klickt nachdem sie einzelne
-      // Kapitel vorab gebaut haben, soll das die fertigen behalten
-      // und nur die fehlenden Kapitel ergänzen. Per-Kapitel-Clear-
-      // Button erlaubt explizites Neu-Generieren.
+      // Skip check: don't regenerate already-finished chapters.
+      // When the user clicks "Generate audiobook" after pre-building
+      // individual chapters, the finished ones should be kept and
+      // only the missing chapters added. The per-chapter clear
+      // button allows explicit regeneration.
       const existingAudio = d
         .prepare(
           "SELECT status, duration_ms FROM audio WHERE chapter_id = ?"
@@ -188,11 +192,11 @@ export async function generateAudiobook(params: {
         );
         successfulChapterFiles.push(outFile);
         chapterDurations.push({
-          title: ch.title || `Kapitel ${ch.number}`,
+          title: ch.title || chapterLabel(lang, ch.number),
           durationMs: existingAudio.duration_ms,
         });
-        // Dem Frontend trotzdem Progress emitten, sonst steht die UI
-        // kurz auf "preprocessing" ohne Feedback.
+        // Still emit progress to the frontend, otherwise the UI sits
+        // on "preprocessing" briefly with no feedback.
         emit({
           phase: "audiobook.chapter.done",
           docId: doc.id,
@@ -204,11 +208,11 @@ export async function generateAudiobook(params: {
         continue;
       }
 
-      // Preprocessing: LLM bereinigt den Text für TTS (Abkürzungen
-      // ausschreiben, Formeln verbalisieren, Zitate raus). Cached in
-      // `chapters.audio_text` — beim zweiten Run kein LLM-Call mehr.
-      // Fehlschlag oder LLM offline → Fallback auf Original-Text, weil
-      // ein holpriges Hörbuch immer noch besser ist als gar keins.
+      // Preprocessing: LLM cleans the text for TTS (expand abbreviations,
+      // verbalize formulas, strip citations). Cached in
+      // `chapters.audio_text` — no LLM call on second run.
+      // Failure or LLM offline → fall back to original text, because
+      // a rough audiobook still beats no audiobook at all.
       let chapterText = ch.text;
       if (llmReady) {
         try {
@@ -244,7 +248,7 @@ export async function generateAudiobook(params: {
         chapterNumber: ch.number,
         current: i + 1,
         total: chapters.length,
-        message: ch.title || `Kapitel ${ch.number}`,
+        message: ch.title || chapterLabel(lang, ch.number),
       });
 
       try {
@@ -278,7 +282,7 @@ export async function generateAudiobook(params: {
 
         successfulChapterFiles.push(outFile);
         chapterDurations.push({
-          title: ch.title || `Kapitel ${ch.number}`,
+          title: ch.title || chapterLabel(lang, ch.number),
           durationMs,
         });
 
@@ -292,10 +296,10 @@ export async function generateAudiobook(params: {
         });
       } catch (err) {
         if (err instanceof AudiobookCanceled) throw err;
-        // Kein Failed-DB-Row mehr anlegen — nutzlos, muss nur manuell
-        // aufgeräumt werden. Wenn ein früherer Run eine alte Datei/Row
-        // für dieses Kapitel hinterlassen hat, jetzt wegräumen, damit
-        // das UI das Kapitel sauber als "noch kein Audio" anzeigt.
+        // Don't create a failed DB row anymore — useless, only needs
+        // manual cleanup. If a previous run left an old file/row for
+        // this chapter, clean it up now so the UI shows the chapter
+        // cleanly as "no audio yet".
         deleteAudioForChapter(ch.id, outFile);
         const message = err instanceof Error ? err.message : String(err);
 
@@ -317,21 +321,20 @@ export async function generateAudiobook(params: {
         emit({
           phase: "audiobook.book.building",
           docId: doc.id,
-          message: "Baue M4B mit Kapitelmarken …",
+          message: tLang(lang, "msg.buildingM4B"),
         });
 
-        // Wenn ein Intro-MP3 existiert, als Track 0 voranstellen.
-        // Duration via ffprobe (innerhalb buildM4B) — wir geben hier
-        // 0 vor, ffmpeg ermittelt die echte Länge selbst.
-        // Chapter-Marker-Label sprachabhängig — wird nur im Player
-        // angezeigt, nicht vorgelesen.
+        // If an intro MP3 exists, prepend it as track 0. Duration
+        // via ffprobe (inside buildM4B) — we pass 0 here, ffmpeg
+        // determines the actual length itself. The chapter-marker
+        // label is language-dependent — only shown in the player,
+        // not spoken.
         const introPath = join(audioDir, "intro.mp3");
         const inputs = [...successfulChapterFiles];
         const m4bChapters = [...chapterDurations];
         if (existsSync(introPath)) {
           inputs.unshift(introPath);
-          const introLabel = doc.language === "de" ? "Einleitung" : "Intro";
-          m4bChapters.unshift({ title: introLabel, durationMs: 0 });
+          m4bChapters.unshift({ title: tLang(lang, "label.intro"), durationMs: 0 });
         }
 
         const bookPath = join(audioDir, "book.m4b");
@@ -395,15 +398,15 @@ export async function generateAudiobook(params: {
 }
 
 /**
- * Erzeugt Audio für EIN Kapitel. Im Gegensatz zu `generateAudiobook`
- * läuft hier kein Preprocessor, es wird kein M4B gebaut und es gibt
- * keinen Circuit-Breaker — der Caller weiß was er tut (UI-Flow: User
- * hat das Kapitel explizit ausgewählt und ggf. den audio_text bereits
- * kuratiert).
+ * Generates audio for ONE chapter. Unlike `generateAudiobook`, no
+ * preprocessor runs here, no M4B is built, and there's no circuit
+ * breaker — the caller knows what they're doing (UI flow: the user
+ * explicitly picked the chapter and may have already curated the
+ * audio_text).
  *
- * Nutzt `audio_text` wenn gesetzt, fällt sonst auf `text` zurück.
- * Das Ergebnis wird wie bei der Full-Pipeline in der `audio`-Tabelle
- * persistiert + ffmpeg-normalisiert.
+ * Uses `audio_text` if set, otherwise falls back to `text`. The
+ * result is persisted in the `audio` table + ffmpeg-normalized
+ * just like the full pipeline.
  */
 export async function generateSingleChapterAudio(params: {
   chapterId: string;
@@ -429,7 +432,7 @@ export async function generateSingleChapterAudio(params: {
   if (!voice) throw new Error(`Unknown voice: ${params.voiceId}`);
   const rate = params.rate || "+0%";
 
-  // audio_text bevorzugt — der User hat ihn ggf. manuell kuratiert.
+  // Prefer audio_text — the user may have curated it manually.
   const effectiveText = (row.audio_text && row.audio_text.trim().length > 0)
     ? row.audio_text
     : row.text;
@@ -438,10 +441,10 @@ export async function generateSingleChapterAudio(params: {
   mkdirSync(audioDir, { recursive: true });
   const outFile = chapterFile(audioDir, row as Chapter);
 
-  // Auch Single-Chapter-Runs im `running`-Map registrieren, damit
-  // `cancelAudiobook(docId)` sie stoppt. Wenn ein Full-Book-Run schon
-  // läuft, teilen wir uns seinen Controller — dann cancelt der User
-  // mit einem Klick beides.
+  // Register single-chapter runs in the `running` map too, so
+  // `cancelAudiobook(docId)` stops them. If a full-book run is
+  // already running we share its controller — one click then
+  // cancels both.
   const alreadyRunning = running.has(row.document_id);
   const abortController =
     running.get(row.document_id) ?? new AbortController();
@@ -462,7 +465,7 @@ export async function generateSingleChapterAudio(params: {
     chapterNumber: row.number,
     current: 1,
     total: 1,
-    message: row.title || `Kapitel ${row.number}`,
+    message: row.title || chapterLabel(pickLang(row.language), row.number),
   });
 
   try {
@@ -494,9 +497,9 @@ export async function generateSingleChapterAudio(params: {
       status: "done",
     });
 
-    // Book-M4B ist jetzt veraltet (beinhaltet dieses Kapitel evtl.
-    // nicht oder noch die alte Version). Löschen damit der Download-
-    // Button offline geht bis ein neuer Full-Run läuft.
+    // The book M4B is now stale (may not include this chapter or
+    // still has the old version). Delete it so the download button
+    // goes offline until a new full run completes.
     const bookPath = join(audioDir, "book.m4b");
     if (existsSync(bookPath)) {
       try {
@@ -536,9 +539,9 @@ export async function generateSingleChapterAudio(params: {
   }
 }
 
-/** Erzeugt das Intro-Audio (eine .mp3 die vor dem ersten Kapitel
- *  liegt). Nutzt denselben TTS-Pfad wie ein Kapitel, aber speichert
- *  als deterministischer Pfad `audio/{docId}/intro.mp3` ohne DB-Eintrag. */
+/** Generates the intro audio (a .mp3 placed before the first
+ *  chapter). Uses the same TTS path as a chapter but stores it under
+ *  the deterministic path `audio/{docId}/intro.mp3` with no DB row. */
 export async function generateIntroAudio(params: {
   docId: string;
   text: string;
@@ -549,11 +552,16 @@ export async function generateIntroAudio(params: {
   if (!voice) throw new Error(`Unknown voice: ${params.voiceId}`);
   const rate = params.rate || "+0%";
 
+  const introDoc = db()
+    .prepare("SELECT language FROM documents WHERE id = ?")
+    .get(params.docId) as { language: string } | undefined;
+  const lang = pickLang(introDoc?.language);
+
   const audioDir = join(DATA_DIR, "audio", params.docId);
   mkdirSync(audioDir, { recursive: true });
   const outFile = join(audioDir, "intro.mp3");
 
-  // Bestehendes M4B invalidieren — neuer Intro = altes Buch passt nicht mehr.
+  // Invalidate any existing M4B — new intro = old book no longer matches.
   const bookPath = join(audioDir, "book.m4b");
   if (existsSync(bookPath)) {
     try {
@@ -569,7 +577,7 @@ export async function generateIntroAudio(params: {
     chapterNumber: 0,
     current: 1,
     total: 1,
-    message: "Intro",
+    message: tLang(lang, "label.intro"),
   });
 
   const alreadyRunning = running.has(params.docId);
@@ -578,10 +586,10 @@ export async function generateIntroAudio(params: {
   if (!alreadyRunning) {
     running.set(params.docId, abortController);
   }
-  // Synthetisches Single-Chapter. Title ist bewusst LEER — der
-  // User-Intro-Text ("Hörbuch: Foo. Verfasst von Bar.") ist selbst-
-  // erklärend, eine zusätzliche TTS-Ansage "Intro." vornweg würde
-  // redundant wirken.
+  // Synthetic single chapter. Title is deliberately EMPTY — the
+  // user intro text ("Audiobook: Foo. Written by Bar.") is
+  // self-explanatory; an additional TTS announcement "Intro." up
+  // front would feel redundant.
   const synth: Chapter = {
     id: `intro-${params.docId}`,
     document_id: params.docId,
@@ -651,19 +659,24 @@ async function synthesizeChapter(params: {
     throw new Error("Chapter text is too short or empty.");
   }
 
-  // Tmp-Dir bleibt stabil pro Kapitel. Bei erfolgreicher Generierung
-  // wird er am Ende gelöscht, bei Fehler BEHALTEN — so können bereits
-  // fertige Chunks beim Retry übersprungen werden.
+  // Tmp dir stays stable per chapter. On successful generation it's
+  // deleted at the end; on failure KEPT — that way already-finished
+  // chunks can be skipped on retry.
   const tmpDir = join(audioDir, `.tmp-${chapter.id}`);
   mkdirSync(tmpDir, { recursive: true });
 
   let success = false;
   try {
     const segments = segmentText(chapter.text);
-    if (segments.length === 0) throw new Error("Keine Segmente aus Kapiteltext.");
+    if (segments.length === 0) {
+      // No good language hint here (this helper is generic); fall back
+      // to English. Caller already validated chapter text upstream, so
+      // this is mostly an internal-bug signal.
+      throw new Error("No segments from chapter text.");
+    }
 
-    // Initial Chunk-Total melden, damit das Frontend den Total-Wert
-    // sofort sieht ("0/3" statt erst "1/1", später "1/3").
+    // Emit the initial chunk total so the frontend sees the total
+    // immediately ("0/3" instead of first "1/1", later "1/3").
     params.onChunk(0, segments.length);
 
     const isDe = params.voice.locale.startsWith("de");
@@ -691,9 +704,9 @@ async function synthesizeChapter(params: {
         ? `${announcement}.\n\n${paragraphText}`
         : paragraphText;
 
-      // Hash-basierter Cache-Key: wenn Text, Voice, Rate sich ändern,
-      // wandert der Hash und eine alte Datei wird ignoriert. Der Hash
-      // ist bewusst KEIN Zeitstempel — derselbe Input = dieselbe Datei.
+      // Hash-based cache key: when text, voice, or rate change the
+      // hash moves and an old file is ignored. The hash is
+      // deliberately NOT a timestamp — same input = same file.
       const cacheKey = chunkHash({
         text: plainText,
         voice: voice.id,
@@ -746,11 +759,11 @@ async function synthesizeChapter(params: {
     );
 
     const mergedPath = join(tmpDir, "merged.mp3");
-    // Silence-Pads: ~250 ms zwischen Chunks geben Qwen eine "Denk-Pause"
-    // zwischen Absatzgruppen (das Modell ignoriert \n\n und rattert sonst
-    // durch). ~900 ms am Kapitel-Ende liefert die Trennung vor dem
-    // nächsten Kapitel — auch bei Intros (Intro-Text fließt sonst
-    // nahtlos in Kapitel 1).
+    // Silence pads: ~250 ms between chunks give Qwen a "thinking
+    // pause" between paragraph groups (the model ignores \n\n and
+    // would otherwise rattle through). ~900 ms at chapter end
+    // provides the break before the next chapter — also for intros
+    // (otherwise the intro text flows seamlessly into chapter 1).
     await concatMp3WithGaps(chunkFiles, mergedPath, {
       interChunkMs: 250,
       trailingMs: 900,
@@ -760,7 +773,7 @@ async function synthesizeChapter(params: {
     const { durationMs } = await normalizeAndTag({
       input: mergedPath,
       output: outFile,
-      title: chapter.title || `Kapitel ${chapter.number}`,
+      title: chapter.title || `Chapter ${chapter.number}`,
       album: await documentTitle(chapter.document_id),
       trackNumber: chapter.number,
       coverPath: cover,
@@ -769,8 +782,8 @@ async function synthesizeChapter(params: {
     success = true;
     return { durationMs };
   } finally {
-    // Nur bei Erfolg aufräumen. Bei Failure BEHALTEN — der User kann
-    // den Retry anstoßen und landet direkt in der Cache-Lese-Schleife.
+    // Only clean up on success. On failure KEEP — the user can
+    // trigger retry and lands straight in the cache-read loop.
     if (success) {
       try {
         rmSync(tmpDir, { recursive: true, force: true });
@@ -785,9 +798,9 @@ async function synthesizeChapter(params: {
   }
 }
 
-/** Deterministischer 8-stelliger Hash pro Chunk (text + voice + rate +
- *  chapter + index). Ändert sich einer dieser Inputs, bekommt der
- *  Chunk einen neuen Cache-Key und wird neu generiert. */
+/** Deterministic 8-char hash per chunk (text + voice + rate +
+ *  chapter + index). When any of these inputs change the chunk gets
+ *  a new cache key and is regenerated. */
 function chunkHash(input: {
   text: string;
   voice: string;
@@ -871,9 +884,9 @@ function upsertAudio(params: {
   }
 }
 
-/** Entfernt Audio-Row + MP3-Datei für ein einzelnes Kapitel. Wird beim
- *  Scheitern einer Synthese aufgerufen, damit die Bibliothek keinen
- *  toten Failed-Eintrag zurücklässt. */
+/** Removes the audio row + MP3 file for a single chapter. Called
+ *  when a synthesis fails so the library doesn't keep a dead failed
+ *  entry around. */
 function deleteAudioForChapter(chapterId: string, chapterFilePath: string): void {
   try {
     if (existsSync(chapterFilePath)) rmSync(chapterFilePath, { force: true });
@@ -883,7 +896,7 @@ function deleteAudioForChapter(chapterId: string, chapterFilePath: string): void
   db().prepare("DELETE FROM audio WHERE chapter_id = ?").run(chapterId);
 }
 
-/** Entfernt alle generierten Hörbuch-Dateien für ein Dokument. */
+/** Removes all generated audiobook files for a document. */
 export function clearAudio(docId: string): void {
   const dir = join(DATA_DIR, "audio", docId);
   if (existsSync(dir)) {
@@ -897,9 +910,9 @@ export function clearAudio(docId: string): void {
   ).run(docId);
 }
 
-/** Entfernt eine einzelne Kapitel-Audio-Datei + DB-Row. Das Buch-M4B
- *  wird ebenfalls verworfen, weil es sonst auf eine nicht mehr
- *  existente Spur verweist. */
+/** Removes a single chapter audio file + DB row. The book M4B is
+ *  also discarded because it would otherwise reference a track that
+ *  no longer exists. */
 export function clearAudioForChapter(audioId: string): boolean {
   const d = db();
   const row = d
@@ -916,7 +929,7 @@ export function clearAudioForChapter(audioId: string): boolean {
     try {
       rmSync(fullPath, { force: true });
     } catch {
-      // best effort — DB row wird trotzdem entfernt, damit das UI aufräumt
+      // best effort — DB row is removed regardless so the UI cleans up
     }
   }
 
@@ -933,9 +946,9 @@ export function clearAudioForChapter(audioId: string): boolean {
   return true;
 }
 
-/** Baut ein M4B aus allen bereits existierenden Kapitel-MP3s des
- *  Dokuments. Wird von der UI gerufen, wenn der User per-chapter
- *  generiert hat und nachträglich ein Komplett-Download möchte. */
+/** Builds an M4B from all existing chapter MP3s of the document.
+ *  Called by the UI when the user generated per chapter and wants a
+ *  full download afterwards. */
 export async function rebuildM4B(docId: string): Promise<{
   path: string;
   chapters: number;
@@ -955,7 +968,7 @@ export async function rebuildM4B(docId: string): Promise<{
   const audioDir = join(DATA_DIR, "audio", docId);
   mkdirSync(audioDir, { recursive: true });
 
-  // Alle done-Audios in Kapitel-Reihenfolge sammeln.
+  // Collect all done audio files in chapter order.
   const rows = d
     .prepare(
       `SELECT a.stored_path, c.title, a.duration_ms, c.number, c.sort_order
@@ -972,10 +985,10 @@ export async function rebuildM4B(docId: string): Promise<{
     sort_order: number;
   }>;
 
+  const lang = pickLang(doc.language);
+
   if (rows.length === 0) {
-    throw new Error(
-      "Keine fertigen Kapitel-Audios gefunden — zuerst Kapitel generieren."
-    );
+    throw new Error(tLang(lang, "err.noFinishedAudio"));
   }
 
   const inputs: string[] = [];
@@ -984,8 +997,7 @@ export async function rebuildM4B(docId: string): Promise<{
   const introPath = join(audioDir, "intro.mp3");
   if (existsSync(introPath)) {
     inputs.push(introPath);
-    const introLabel = doc.language === "de" ? "Einleitung" : "Intro";
-    m4bChapters.push({ title: introLabel, durationMs: 0 });
+    m4bChapters.push({ title: tLang(lang, "label.intro"), durationMs: 0 });
   }
 
   for (const r of rows) {
@@ -993,15 +1005,13 @@ export async function rebuildM4B(docId: string): Promise<{
     if (!existsSync(full)) continue;
     inputs.push(full);
     m4bChapters.push({
-      title: r.title || `Kapitel ${r.number}`,
+      title: r.title || chapterLabel(lang, r.number),
       durationMs: r.duration_ms,
     });
   }
 
   if (inputs.length === 0) {
-    throw new Error(
-      "Alle Kapitel-Datei-Referenzen zeigen ins Leere — bitte Kapitel neu generieren."
-    );
+    throw new Error(tLang(lang, "err.allAudioMissing"));
   }
 
   const bookPath = join(audioDir, "book.m4b");

@@ -1,19 +1,19 @@
 /**
- * Paragraph-aware Chunker für RAG.
+ * Paragraph-aware chunker for RAG.
  *
- * Input: ein Array von Kapitel-ähnlichen Sektionen.
- * Output: Chunks von ~targetTokens Größe mit overlapTokens Overlap
- * zum vorigen Chunk derselben Section.
+ * Input: an array of chapter-like sections.
+ * Output: chunks of ~targetTokens size with overlapTokens overlap
+ * from the previous chunk in the same section.
  *
- * Bewusst einfach: Token-Schätzung via `chars / 4` (grobe Daumenregel
- * für deutsche Fließtexte). Das reicht für Chunk-Größen-Steuerung;
- * für präzise Einhaltung bräuchte es einen echten Tokenizer.
+ * Deliberately simple: token estimation via `chars / 4` (rough rule
+ * of thumb for German prose). That's enough for chunk size control;
+ * precise adherence would need a real tokenizer.
  *
- * Grenzen beim Schneiden:
- *   1. Nie mitten in einem Absatz schneiden (split auf `\n\n+`).
- *   2. Nie über Section-Grenzen hinweg einen Chunk bauen.
- *   3. Einzelne Absätze die größer als das Chunk-Target sind, werden
- *      hart am Zeichen-Limit zerlegt (seltener Extrem-Fall).
+ * Cut boundaries:
+ *   1. Never cut in the middle of a paragraph (split on `\n\n+`).
+ *   2. Never build a chunk across section boundaries.
+ *   3. Single paragraphs larger than the chunk target are hard-split
+ *      at the character limit (rare edge case).
  */
 
 const CHARS_PER_TOKEN = 4;
@@ -36,7 +36,7 @@ export interface Chunk {
   chapter_kind?: string;
   start_page: number;
   end_page: number;
-  chunk_index: number;  // global, 0-basiert über alle Sektionen
+  chunk_index: number;  // global, 0-based across all sections
 }
 
 export interface ChunkOptions {
@@ -75,8 +75,8 @@ export function chunkChapters(
         end_page: chapter.end_page,
         chunk_index: globalIdx++,
       });
-      // Overlap: letzten Absatz behalten wenn er reinpasst, sonst
-      // wir starten den nächsten Chunk leer.
+      // Overlap: keep the last paragraph if it fits, otherwise start
+      // the next chunk empty.
       const tail = buf[buf.length - 1];
       if (overlapChars > 0 && tail && tail.length <= overlapChars && buf.length > 1) {
         buf = [tail];
@@ -88,7 +88,7 @@ export function chunkChapters(
     };
 
     for (const p of paragraphs) {
-      // Absatz so groß, dass er allein das Limit sprengt → harter Cut
+      // Paragraph so big it exceeds the limit on its own → hard cut
       if (p.length > targetChars) {
         if (buf.length > 0) emit();
         for (let i = 0; i < p.length; i += targetChars) {

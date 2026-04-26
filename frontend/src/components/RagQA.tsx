@@ -7,9 +7,9 @@ import { t } from "../lib/i18n";
 
 interface Props {
   docId: string;
-  /** Öffnet das PDF-Modal auf der Seite einer RAG-Quelle. Wird vom
-   *  LearningMenu gesteuert, nicht lokal — so behält die Chat-Ansicht
-   *  ihren Zustand während der User das PDF nebenher liest. */
+  /** Opens the PDF modal on the page of a RAG source. Controlled by
+   *  LearningMenu, not locally — so the chat view keeps its state
+   *  while the user reads the PDF on the side. */
   onOpenSource?: (source: RagSource) => void;
 }
 
@@ -27,12 +27,12 @@ export function RagQA({ docId, onOpenSource }: Props) {
   const answerRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
-  // Auto-Focus auf das Frage-Feld beim Mount.
+  // Auto-focus the question field on mount.
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  // Sanftes Scrollen nach unten während Tokens reinkommen.
+  // Smooth-scroll to the bottom while tokens stream in.
   useEffect(() => {
     if (busy && answerRef.current) {
       answerRef.current.scrollTop = answerRef.current.scrollHeight;
@@ -299,9 +299,9 @@ function SourceCard({
   );
 }
 
-/** Rendert den Antworttext mit klickbaren [n]-Belegen (scrollt zur
- *  entsprechenden Source-Card in der Sidebar). Light-Markdown:
- *  ## Headings, - Bullets, sonst Absätze. */
+/** Renders the answer text with clickable [n] citations (scrolls to
+ *  the corresponding source card in the sidebar). Light Markdown:
+ *  ## headings, - bullets, otherwise paragraphs. */
 function RenderAnswer({
   text,
   sources,

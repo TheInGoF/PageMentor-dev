@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# bump.sh — setzt die Versionsnummer an allen vier Stellen gleichzeitig:
+# bump.sh — sets the version number in all four places at once:
 #
-#   VERSION                 (Single Source of Truth, Runtime-Read)
-#   package.json            (Repo-Root)
+#   VERSION                 (single source of truth, runtime read)
+#   package.json            (repo root)
 #   backend/package.json
 #   frontend/package.json
 #
 # Usage:
-#   scripts/bump.sh 1.18.006        # auf Ziel-Version setzen
-#   scripts/bump.sh                 # patch bump (letzte Komponente +1)
+#   scripts/bump.sh 1.18.006        # set to a target version
+#   scripts/bump.sh                 # patch bump (last component +1)
 #
-# Nimmt dir nichts weiteres ab — kein git add, kein commit. Macht
-# deterministisch EINE Änderung in vier Dateien, du siehst sie im
-# git diff und committest selber.
+# Doesn't do anything else for you — no git add, no commit. Makes
+# ONE deterministic change in four files; you review the git diff
+# and commit yourself.
 
 set -euo pipefail
 
@@ -23,19 +23,19 @@ CURRENT="$(cat VERSION | tr -d '[:space:]')"
 if [[ $# -ge 1 ]]; then
   NEW="$1"
 else
-  # Patch-Bump: 1.18.005 → 1.18.006
+  # Patch bump: 1.18.005 → 1.18.006
   IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
   if [[ -z "${PATCH:-}" ]]; then
     echo "error: cannot parse current VERSION '$CURRENT' (expected X.Y.Z)" >&2
     exit 1
   fi
   PATCH_NUM=$((10#$PATCH + 1))
-  # Wir halten das 3-stellige Patch-Format bei (001, 002, ...)
+  # Keep the 3-digit patch format (001, 002, ...)
   NEW=$(printf "%d.%d.%03d" "$MAJOR" "$MINOR" "$PATCH_NUM")
 fi
 
 if [[ ! "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "error: '$NEW' ist kein X.Y.Z" >&2
+  echo "error: '$NEW' is not X.Y.Z" >&2
   exit 1
 fi
 
@@ -43,21 +43,21 @@ echo "$CURRENT  →  $NEW"
 
 echo "$NEW" > VERSION
 
-# package.json-Felder per sed — eine Zeile wie
+# package.json fields via sed — one line like
 #   "version": "1.18.005",
-# in jedem der drei package.json.
+# in each of the three package.json files.
 for PKG in package.json backend/package.json frontend/package.json; do
   if [[ -f "$PKG" ]]; then
-    # BSD/macOS sed braucht '', GNU sed nicht. `sed -i.bak` funktioniert
-    # auf beiden, Backup hinterher löschen.
+    # BSD/macOS sed needs '', GNU sed doesn't. `sed -i.bak` works on
+    # both; delete the backup afterwards.
     sed -i.bak "s/\"version\": *\"[^\"]*\"/\"version\": \"$NEW\"/" "$PKG"
     rm -f "$PKG.bak"
   fi
 done
 
 echo ""
-echo "Geänderte Dateien:"
+echo "Changed files:"
 git diff --name-only VERSION package.json backend/package.json frontend/package.json 2>/dev/null || true
 echo ""
 echo "Next:"
-echo "  git add -A && git commit -m \"v$NEW — <beschreibung>\" && git push"
+echo "  git add -A && git commit -m \"v$NEW — <description>\" && git push"

@@ -1,14 +1,13 @@
 name: build pm-qwen-tts
 
-# Triggert nur bei Änderungen im Sidecar-Ordner oder am Workflow selbst.
-# Das Image wird ~3-4 GB groß (PyTorch-CUDA-Base + flash-attn). Der
-# Build-Prozess:
-#   - Stage 1 (-devel): flash-attn 2.7.2 aus Source, ~15-20 min mit
-#     MAX_JOBS=2. Docker-Layer-Cache macht nachfolgende Builds schneller
-#     wenn sich weder torch noch flash-attn ändern.
-#   - Stage 2 (runtime): schlankes Image mit nur dem kompilierten
-#     flash-attn-Package.
-# Insgesamt ~20-30 min beim ersten Build, ~2-5 min wenn Cache trifft.
+# Triggers only on changes inside the sidecar folder or this workflow itself.
+# The image ends up ~3-4 GB (PyTorch-CUDA base + flash-attn). Build process:
+#   - Stage 1 (-devel): flash-attn 2.7.2 from source, ~15-20 min with
+#     MAX_JOBS=2. Docker layer cache makes subsequent builds much faster
+#     as long as neither torch nor flash-attn change.
+#   - Stage 2 (runtime): slim image with only the compiled flash-attn
+#     package.
+# Total ~20-30 min on first build, ~2-5 min on a cache hit.
 on:
   push:
     branches: [main]
@@ -21,19 +20,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # flash-attn aus Source ist C++-schwer; default 6h ist ausreichend,
-    # aber wir setzen 60 min als Hard-Safety, damit ein hängender Build
-    # nicht still 6h Minuten frisst.
+    # flash-attn from source is C++-heavy; the GHA default of 6h is plenty,
+    # but we cap at 60 min as hard safety so a hung build doesn't quietly
+    # eat 6h of CI minutes.
     timeout-minutes: 60
     permissions:
       contents: read
       packages: write
 
     steps:
-      # GHA-Default-Runner hat nur ~14 GB freien Speicher — pytorch-devel
-      # ist 17 GB plus flash-attn-Build-Tempdateien. Ohne Reclaim landet
-      # der Build bei "No space left on device". Das Action räumt ~30 GB
-      # Preinstalled-Junk (dotnet, swift, android-sdk, haskell, …).
+      # The default GHA runner has only ~14 GB free — pytorch-devel alone is
+      # 17 GB plus flash-attn build temp files. Without reclaiming space the
+      # build dies with "No space left on device". This action frees ~30 GB
+      # of preinstalled junk (dotnet, swift, android-sdk, haskell, …).
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main
         with:
@@ -42,7 +41,7 @@ jobs:
           dotnet: true
           haskell: true
           large-packages: true
-          docker-images: false  # die brauchen wir gleich
+          docker-images: false  # we need these in a moment
           swap-storage: true
 
       - name: Checkout
@@ -62,7 +61,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/lordvonbaum/pm-qwen-tts
+          images: ghcr.io/theingof/pm-qwen-tts-dev
           tags: |
             type=ref,event=branch
             type=ref,event=tag

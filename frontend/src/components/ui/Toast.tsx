@@ -23,11 +23,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 4000);
   }, []);
 
-  // Provider-Value memoisieren — sonst ist `{ show }` jedes Render ein
-  // neues Objekt, alle `useToast()`-Consumers bekommen neue `toast`-
-  // Referenz und useEffects mit `toast` in Deps feuern bei jedem
-  // Toast-Render. Konkreter Symptom-Bug: Voice-Picker im Audiobook
-  // sprang zurück auf Default beim Klick auf "Audio erzeugen".
+  // Memoize the provider value — otherwise `{ show }` is a new
+  // object on every render, every `useToast()` consumer gets a new
+  // `toast` reference, and useEffects with `toast` in deps fire on
+  // every toast render. Concrete symptom bug: the voice picker in
+  // Audiobook snapped back to default when clicking "Generate audio".
   const ctxValue = useMemo(() => ({ show }), [show]);
 
   return (

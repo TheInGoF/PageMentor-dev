@@ -243,7 +243,7 @@ function ExtractionCard({
   const status = doc.ocr_status;
   const ready = status === "done";
 
-  // Tick 1× pro Sekunde während Running — Laufzeit-Anzeige.
+  // Tick once per second while running — runtime display.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!running) return;
@@ -258,8 +258,8 @@ function ExtractionCard({
       ? phase.current
       : null;
   const pct = fraction != null ? Math.round(fraction * 100) : null;
-  // Für die Laufzeit zählt der DB-Wert (persistent über Seiten-Reloads),
-  // der SSE-gesetzte startedAt ist nur Fallback für den ersten Event.
+  // For runtime the DB value counts (persistent across page reloads),
+  // the SSE-set startedAt is only a fallback for the first event.
   const effectiveStart = doc.extraction_started_at ?? startedAt ?? null;
   const elapsed = effectiveStart != null ? Date.now() - effectiveStart : 0;
 

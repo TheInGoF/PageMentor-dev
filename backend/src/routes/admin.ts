@@ -1,9 +1,9 @@
 /**
- * Admin-Routen — für UI-Aktionen die am Arbiter / an der GPU hängen.
+ * Admin routes — for UI actions tied to the arbiter / GPU.
  *
- *   POST /api/admin/gpu/reset   → reicht an pm-gpu-arbiter durch,
- *                                 der stoppt den TTS-Container und
- *                                 entlädt Ollama-Modelle.
+ *   POST /api/admin/gpu/reset   → forwarded to pm-gpu-arbiter, which
+ *                                 stops the TTS container and unloads
+ *                                 Ollama models.
  */
 
 import { Hono } from "hono";
@@ -30,7 +30,7 @@ function arbiterAuthHeaders(): Record<string, string> {
 }
 
 // =====================================================================
-// Audiobookshelf-Integration
+// Audiobookshelf integration
 // =====================================================================
 
 adminRoutes.get("/abs/test", async (c) => {
@@ -59,14 +59,14 @@ adminRoutes.post("/abs/upload/:docId", async (c) => {
 });
 
 // =====================================================================
-// GPU-Reset (bestehend)
+// GPU reset (existing)
 // =====================================================================
 
 adminRoutes.post("/gpu/reset", async (c) => {
   const url = `${arbiterBaseUrl()}/admin/gpu/reset`;
   try {
-    // Ollama-Unload über keep_alive=0 kann je nach Modell 10–30 s
-    // brauchen, Container-Stop nochmal ~10 s. 60 s Puffer.
+    // Ollama unload via keep_alive=0 can take 10-30 s depending on
+    // model, container stop another ~10 s. 60 s buffer.
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -80,7 +80,7 @@ adminRoutes.post("/gpu/reset", async (c) => {
     try {
       parsed = JSON.parse(text);
     } catch {
-      // arbiter kann in Edge-Cases Plain-Text zurückgeben
+      // arbiter can return plain text in edge cases
     }
     if (!res.ok) {
       return c.json(

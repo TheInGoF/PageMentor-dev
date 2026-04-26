@@ -1,14 +1,14 @@
 /**
- * Audiobookshelf-API-Integration.
+ * Audiobookshelf API integration.
  *
- * REST-Client für einen lokal laufenden Audiobookshelf-Server. User
- * konfiguriert URL + API-Token in Settings, wir nutzen die ABS-API
- * zum direkten Hochladen gebauter M4Bs samt Metadaten — umgeht
- * komplett die iTunes-Atom-Mapping-Probleme in FFMETADATA.
+ * REST client for a locally running Audiobookshelf server. User
+ * configures URL + API token in Settings; we use the ABS API to
+ * directly upload built M4Bs with metadata — fully bypassing the
+ * iTunes-atom-mapping issues in FFMETADATA.
  *
- * Auth: Bearer-Token (in ABS generierbar unter User → API-Keys).
+ * Auth: bearer token (generated in ABS under User → API Keys).
  *
- * API-Referenz: https://api.audiobookshelf.org/
+ * API reference: https://api.audiobookshelf.org/
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -16,6 +16,7 @@ import { basename, join } from "node:path";
 import { db } from "../db";
 import { effective } from "./llmConfig";
 import { ensureCover } from "./covers";
+import { pickLang, tLang } from "../lib/i18n";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
@@ -34,9 +35,9 @@ function absHeaders(): Record<string, string> {
   return key ? { Authorization: `Bearer ${key}` } : {};
 }
 
-/** Grundlegende Ping-/Auth-Probe. Liefert Server-Info wenn OK,
- *  sonst die Fehler-Message. Wird vom Frontend für den „Verbindung
- *  testen"-Button genutzt. */
+/** Basic ping / auth probe. Returns server info if OK, otherwise the
+ *  error message. Used by the frontend for the "test connection"
+ *  button. */
 export async function testConnection(): Promise<{
   ok: boolean;
   url?: string;
@@ -49,7 +50,7 @@ export async function testConnection(): Promise<{
   const key = absApiKey();
   if (!key) return { ok: false, message: "no ABS API key configured" };
   try {
-    // /api/me verifiziert Token und liefert gleichzeitig User-Info.
+    // /api/me verifies the token and returns user info at the same time.
     const res = await fetch(`${url}/api/me`, {
       headers: absHeaders(),
       signal: AbortSignal.timeout(8_000),
@@ -62,7 +63,7 @@ export async function testConnection(): Promise<{
       };
     }
     const data = (await res.json()) as { username?: string };
-    // Server-Version separat über /status abfragen (öffentlicher Endpoint).
+    // Fetch server version separately via /status (public endpoint).
     let serverVersion: string | undefined;
     try {
       const v = await fetch(`${url}/status`, {
@@ -121,21 +122,28 @@ interface DocumentMeta {
   author: string | null;
   short_code: string | null;
   module_name: string | null;
+  language: string;
 }
 
-/** Lädt eine fertige M4B (plus Cover) in die konfigurierte Library
- *  hoch und setzt danach die Metadaten sauber via PATCH. Gibt die
- *  neue Library-Item-ID zurück. */
+/** Uploads a finished M4B (plus cover) into the configured library
+ *  and afterwards sets the metadata cleanly via PATCH. Returns the
+ *  new library-item ID. */
 export async function uploadBook(docId: string): Promise<UploadResult> {
+  // Pre-load doc.language so error messages can be localised.
+  const langRow = db()
+    .prepare("SELECT language FROM documents WHERE id = ?")
+    .get(docId) as { language: string } | undefined;
+  const lang = pickLang(langRow?.language);
+
   const url = absBaseUrl();
-  if (!url) throw new Error("ABS-URL nicht konfiguriert");
-  if (!absApiKey()) throw new Error("ABS-API-Key nicht konfiguriert");
+  if (!url) throw new Error(tLang(lang, "err.absUrlMissing"));
+  if (!absApiKey()) throw new Error(tLang(lang, "err.absKeyMissing"));
   const libraryId = effective("absLibraryId", "PM_ABS_LIBRARY_ID");
-  if (!libraryId) throw new Error("Keine ABS-Library ausgewählt");
+  if (!libraryId) throw new Error(tLang(lang, "err.absLibraryMissing"));
 
   const doc = db()
     .prepare(
-      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code,
+      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.language,
               m.name AS module_name
        FROM documents d
        LEFT JOIN modules m ON m.id = d.module_id
@@ -146,31 +154,29 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
 
   const m4bPath = join(DATA_DIR, "audio", docId, "book.m4b");
   if (!existsSync(m4bPath)) {
-    throw new Error(
-      "book.m4b existiert nicht — zuerst Kapitel generieren + M4B bauen"
-    );
+    throw new Error(tLang(lang, "err.absM4bMissing"));
   }
 
   const bookTitle = doc.doc_title?.trim() || doc.title;
   const authorName = doc.author?.trim() || "Unknown";
   const seriesName = doc.module_name?.trim() || "";
 
-  // Cover lazy rendern falls nicht vorhanden — damit der Upload immer
-  // ein Titelbild mitbringt.
+  // Render the cover lazily if missing — so the upload always
+  // includes a cover.
   const coverPath = await ensureCover(docId);
 
   // === Upload ===
-  // POST /api/upload akzeptiert multipart/form-data:
+  // POST /api/upload accepts multipart/form-data:
   //   - library: libraryId
-  //   - folder:  folder ID innerhalb der Library (wir nehmen den
-  //              ersten root folder, siehe unten)
-  //   - title, author, series: primäre Metadaten für den Directory-
-  //     Namen den ABS anlegt
-  //   - Dateien als indexed fields "0", "1", ... (file + optional cover)
+  //   - folder:  folder ID inside the library (we use the first
+  //              root folder, see below)
+  //   - title, author, series: primary metadata for the directory
+  //     name ABS creates
+  //   - files as indexed fields "0", "1", ... (file + optional cover)
   //
-  // Erstmal den ersten Folder der Library holen — ABS-Libraries haben
-  // in der Regel genau einen Root-Folder; wenn mehrere, nehmen wir
-  // den ersten (User kann später manuell verschieben).
+  // First fetch the first folder of the library — ABS libraries
+  // usually have exactly one root folder; with multiple we take the
+  // first (user can move it manually later).
   const folderRes = await fetch(
     `${url}/api/libraries/${libraryId}?include=folders`,
     {
@@ -189,7 +195,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   };
   let folders = libData.library?.folders ?? libData.folders ?? [];
   if (folders.length === 0) {
-    // Fallback: /api/libraries (Liste) liefert oft die Folders mit.
+    // Fallback: /api/libraries (list) often includes the folders.
     try {
       const listRes = await fetch(`${url}/api/libraries`, {
         headers: absHeaders(),
@@ -208,13 +214,11 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   }
   if (folders.length === 0) {
     console.warn(
-      `[abs] keine Folders in Library-Response — raw keys: ${Object.keys(
+      `[abs] no folders in library response — raw keys: ${Object.keys(
         libData
       ).join(",")}`
     );
-    throw new Error(
-      `ABS-Library ${libraryId} hat keinen Ordner — in ABS-Settings hinzufügen`
-    );
+    throw new Error(tLang(lang, "err.absLibraryNoFolder", { libraryId }));
   }
   const folderId = folders[0].id;
 
@@ -224,7 +228,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   form.append("title", bookTitle);
   form.append("author", authorName);
   if (seriesName) form.append("series", seriesName);
-  // Datei(en) als indexed fields
+  // file(s) as indexed fields
   const m4bBytes = readFileSync(m4bPath);
   form.append(
     "0",
@@ -264,18 +268,18 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
       uploadData = JSON.parse(uploadText);
     } catch {
       console.warn(
-        `[abs] upload response kein JSON (${uploadRes.status}): ${uploadText.slice(0, 200)}`
+        `[abs] upload response not JSON (${uploadRes.status}): ${uploadText.slice(0, 200)}`
       );
     }
   } else {
     console.log(
-      `[abs] upload response leer (${uploadRes.status}) — Scan triggert Import`
+      `[abs] upload response empty (${uploadRes.status}) — scan triggers import`
     );
   }
 
-  // === Library-Scan triggern ===
-  // ABS indexiert Uploads normalerweise automatisch, aber ein expliziter
-  // Scan beschleunigt es und ist idempotent.
+  // === Trigger library scan ===
+  // ABS normally indexes uploads automatically, but an explicit scan
+  // speeds it up and is idempotent.
   try {
     await fetch(`${url}/api/libraries/${libraryId}/scan`, {
       method: "POST",
@@ -283,15 +287,15 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
       signal: AbortSignal.timeout(5_000),
     });
   } catch (e) {
-    console.warn(`[abs] scan trigger fehlgeschlagen:`, e);
+    console.warn(`[abs] scan trigger failed:`, e);
   }
 
-  // === Library-Item-ID auflösen ===
-  // /api/upload liefert in aktuellen ABS-Versionen keine ItemId zurück.
-  // Damit der nachgelagerte Metadaten-PATCH trotzdem greift, suchen wir
-  // das frisch gescannte Item via /search (Titel + Autor als Query) und
-  // pollen bis zu 8 Sekunden — der Scan ist bei Single-File-Uploads
-  // praktisch sofort durch.
+  // === Resolve library-item ID ===
+  // /api/upload doesn't return an ItemId in current ABS versions.
+  // To make the follow-up metadata PATCH work, we search the
+  // freshly scanned item via /search (title + author as query) and
+  // poll up to 8 seconds — for single-file uploads the scan is
+  // practically instant.
   if (!uploadData.libraryItemId) {
     const searchUrl = `${url}/api/libraries/${libraryId}/search?q=${encodeURIComponent(
       bookTitle
@@ -320,31 +324,31 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
         if (hit?.libraryItem?.id) {
           uploadData.libraryItemId = hit.libraryItem.id;
           console.log(
-            `[abs] item nach scan gefunden: ${uploadData.libraryItemId} (versuch ${i + 1})`
+            `[abs] item found after scan: ${uploadData.libraryItemId} (attempt ${i + 1})`
           );
           break;
         }
       } catch (e) {
-        console.warn(`[abs] search versuch ${i + 1} fehlgeschlagen:`, e);
+        console.warn(`[abs] search attempt ${i + 1} failed:`, e);
       }
     }
     if (!uploadData.libraryItemId) {
       console.warn(
-        `[abs] konnte Library-Item nach Upload nicht finden — Metadaten-PATCH übersprungen`
+        `[abs] could not find library item after upload — metadata PATCH skipped`
       );
     }
   }
 
-  // === Metadaten-PATCH ===
-  // ABS /api/upload erzeugt das LibraryItem aus den Upload-Metadaten
-  // und den M4B-Tags. Mit der ItemId können wir sauber via PATCH die
-  // Felder setzen die wir präzise haben wollen (Subtitle, Series) —
-  // umgeht iTunes-Atom-Mapping komplett.
+  // === Metadata PATCH ===
+  // ABS /api/upload creates the LibraryItem from upload metadata and
+  // the M4B tags. With the ItemId we can cleanly set the fields we
+  // want exactly via PATCH (subtitle, series) — bypasses
+  // iTunes-atom mapping entirely.
   if (uploadData.libraryItemId) {
     try {
-      // description explizit leeren — ABS parst grouping/©grp aus der
-      // M4B sonst manchmal in die Description, und das Kürzel soll
-      // ausschließlich im Subtitle landen.
+      // explicitly clear description — ABS sometimes parses
+      // grouping/©grp from the M4B into the description, and the
+      // shortcode should land exclusively in subtitle.
       const metaBody: Record<string, unknown> = {
         metadata: {
           title: bookTitle,
@@ -353,7 +357,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
           authors: authorName ? [{ name: authorName }] : undefined,
           series: seriesName ? [{ name: seriesName }] : undefined,
           genres: ["Audiobook"],
-          language: "de",
+          language: doc.language || "de",
         },
       };
       const patchRes = await fetch(
@@ -371,7 +375,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
       if (!patchRes.ok) {
         const pt = await patchRes.text().catch(() => "");
         console.warn(
-          `[abs] metadata PATCH fehlgeschlagen ${patchRes.status}: ${pt.slice(0, 300)}`
+          `[abs] metadata PATCH failed ${patchRes.status}: ${pt.slice(0, 300)}`
         );
       } else {
         console.log(

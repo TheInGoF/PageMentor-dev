@@ -49,8 +49,8 @@ export function LearningMenu({ docId, onBack }: Props) {
   const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
   const [extractionStartedAt, setExtractionStartedAt] = useState<number | null>(null);
   const [busyExtract, setBusyExtract] = useState(false);
-  // RAG-Quelle im PDF-Modal anzeigen: der User soll die Chat-Antwort
-  // nicht verlieren, während er die zitierte Textstelle anschaut.
+  // Show a RAG source in the PDF modal: the user shouldn't lose the
+  // chat answer while inspecting the cited passage.
   const [pdfSource, setPdfSource] = useState<
     { docId: string; initialPage?: number; title?: string } | null
   >(null);
@@ -70,7 +70,7 @@ export function LearningMenu({ docId, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);
 
-  // SSE-Abo für Pipeline-Phasen (Extraktion, Kapitel, done/failed).
+  // SSE subscription for pipeline phases (extraction, chapters, done/failed).
   useEffect(() => {
     const unsub = subscribeProgress(docId, (ev) => {
       if (ev.phase.startsWith("pipeline.")) {
@@ -88,10 +88,10 @@ export function LearningMenu({ docId, onBack }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);
 
-  // Wenn das Dokument bei Seitenöffnung bereits extrahiert, aber noch
-  // nicht fertig ist (Reload nach Browser-Tab-Wechsel), den Timer
-  // plausibel starten — wir wissen nicht wann's wirklich losging, aber
-  // ab jetzt zu zählen ist besser als gar kein Timer.
+  // If the document is already extracting on page open but not yet
+  // done (reload after a browser tab switch), start the timer
+  // plausibly — we don't know when it actually started, but counting
+  // from now is better than no timer at all.
   useEffect(() => {
     if (
       doc?.ocr_status === "running" &&

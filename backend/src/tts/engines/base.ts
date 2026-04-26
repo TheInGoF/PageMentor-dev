@@ -1,9 +1,9 @@
 /**
- * Gemeinsames Interface für TTS-Engines.
+ * Shared interface for TTS engines.
  *
- * Jede Engine meldet zur Laufzeit, ob sie verfügbar ist. Qwen pingt
- * den Arbiter. `listVoices()` darf bei Async-Engines synchronen Cache
- * liefern, der im Hintergrund aktualisiert wird (siehe qwen.ts).
+ * Each engine reports at runtime whether it is available. Qwen pings
+ * the arbiter. `listVoices()` may return a synchronous cache for async
+ * engines that gets refreshed in the background (see qwen.ts).
  */
 
 import type { Segment } from "../segment";
@@ -19,19 +19,19 @@ export interface Voice {
   engine: EngineId;
   flagship?: boolean;
   note?: string;
-  /** Gleitender Durchschnitt der Synthese-Dauer pro Zeichen (ms/char).
-   *  `null` wenn noch keine Messpunkte vorliegen. Genutzt vom Frontend
-   *  für die initiale ETA-Schätzung eines Hörbuch-Runs. */
+  /** Rolling average of synthesis duration per character (ms/char).
+   *  `null` when no measurements exist yet. Used by the frontend
+   *  for the initial ETA estimate of an audiobook run. */
   msPerChar?: number | null;
 }
 
 export interface SynthesizeParams {
   segment: Segment;
-  text: string;             // vorbereiteter Plain-Text (für Engines ohne SSML)
+  text: string;             // prepared plain text (for engines without SSML)
   voice: Voice;
-  locale: string;           // Engine-spezifisches Locale-Format
-  rate: string;             // "+0%", "-10%" … (nur Edge nutzt es)
-  announce?: string;        // Kapitel-Ansage als erster Satz
+  locale: string;           // engine-specific locale format
+  rate: string;             // "+0%", "-10%" … (only Edge uses it)
+  announce?: string;        // chapter announcement as first sentence
   outPath: string;
 }
 
@@ -44,14 +44,14 @@ export interface PreviewParams {
   voice: Voice;
   locale: string;
   text: string;
-  /** Pro-Request-Override des globalen Qwen-TTS-Instruction-Prompts.
-   *  Wird vom Settings-Preset-Tester genutzt, damit der User unsaved
-   *  Instruction-Änderungen anhören kann bevor er speichert. Nur für
-   *  CustomVoice-Presets relevant; Voice-Clone-Pfad ignoriert. */
+  /** Per-request override of the global Qwen-TTS instruction prompt.
+   *  Used by the settings preset tester so the user can preview
+   *  unsaved instruction changes before saving. Only relevant for
+   *  CustomVoice presets; ignored on the voice-clone path. */
   instructOverride?: string;
-  /** Sampling-Dial-Overrides für den Tester — erlaubt das Probieren
-   *  verschiedener temperature/top_p/seed-Werte ohne sie vorher in
-   *  llm-config zu persistieren. `undefined` = Config-Default benutzen. */
+  /** Sampling dial overrides for the tester — allows trying different
+   *  temperature/top_p/seed values without persisting them in
+   *  llm-config first. `undefined` = use the config default. */
   temperatureOverride?: number;
   topPOverride?: number;
   maxNewTokensOverride?: number;
@@ -60,10 +60,10 @@ export interface PreviewParams {
 
 export interface TtsEngine {
   id: EngineId;
-  /** Engines mit Sidecar (Qwen) melden hier `false`, wenn der
-   *  Sidecar beim letzten Discovery-Refresh nicht antwortete.
-   *  Netz-basierte Engines (Edge) melden immer `true` und fallen erst
-   *  reaktiv um, wenn der Server stumm Empty-Audio liefert. */
+  /** Engines with a sidecar (Qwen) report `false` here when the
+   *  sidecar didn't respond on the last discovery refresh.
+   *  Network-based engines (Edge) always report `true` and only flip
+   *  reactively when the server silently returns empty audio. */
   isAvailable(): boolean;
   listVoices(): Voice[];
   synthesize(params: SynthesizeParams): Promise<SynthesizeResult>;

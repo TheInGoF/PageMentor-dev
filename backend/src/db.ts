@@ -139,10 +139,9 @@ export function initDb() {
     d.exec("ALTER TABLE documents ADD COLUMN thumb_page INTEGER NOT NULL DEFAULT 1");
   }
   if (!cols.some((c) => c.name === "extraction_started_at")) {
-    // Epoch-ms. Wird beim Extraktionsstart gesetzt und beim Ende
-    // (done / failed) wieder auf NULL. Erlaubt es dem Frontend, nach
-    // einem Reload weiterhin die richtige Laufzeit anzuzeigen statt
-    // den Timer bei 0 neu zu starten.
+    // Epoch-ms. Set at extraction start and reset to NULL on end
+    // (done / failed). Lets the frontend keep showing the correct
+    // runtime after a reload instead of restarting the timer at 0.
     d.exec("ALTER TABLE documents ADD COLUMN extraction_started_at INTEGER");
   }
 
@@ -153,61 +152,61 @@ export function initDb() {
 
   const chapterCols = d.prepare("PRAGMA table_info(chapters)").all() as Array<{ name: string }>;
   if (!chapterCols.some((c) => c.name === "kind")) {
-    // Art des Abschnitts — steuert welche Features ihn nutzen. Default
-    // "content" für alte Rows; neu extrahierte Docs kriegen die
-    // Klassifikation direkt aus dem Docling-Parser.
+    // Section kind — drives which features use it. Default
+    // "content" for old rows; newly extracted docs get the
+    // classification directly from the Docling parser.
     d.exec("ALTER TABLE chapters ADD COLUMN kind TEXT NOT NULL DEFAULT 'content'");
   }
   if (!chapterCols.some((c) => c.name === "audio_text")) {
-    // LLM-vorverarbeiteter Kapiteltext, optimiert für TTS:
-    // Abkürzungen ausgeschrieben, Formeln verbalisiert, Zitate
-    // entfernt etc. NULL = noch nicht generiert; bei Re-Extraktion
-    // werden Kapitel-Rows komplett ersetzt (DELETE/INSERT in
-    // pipeline.ts), wodurch der Cache automatisch invalidiert.
+    // LLM-preprocessed chapter text, optimized for TTS:
+    // abbreviations expanded, formulas verbalized, citations
+    // stripped, etc. NULL = not yet generated; on re-extraction
+    // chapter rows are fully replaced (DELETE/INSERT in
+    // pipeline.ts), which invalidates the cache automatically.
     d.exec("ALTER TABLE chapters ADD COLUMN audio_text TEXT");
     d.exec("ALTER TABLE chapters ADD COLUMN audio_text_model TEXT");
   }
   if (!chapterCols.some((c) => c.name === "include_in_audio")) {
-    // Pro-Kapitel-Toggle ob es ins Hörbuch geht. Default an für
-    // content/summary, aus für alle anderen kinds — wird beim
-    // Insert in pipeline.ts gesetzt. Bei alten Rows ohne Wert
-    // bekommt das die kind-basierte Default-Logik beim Lesen.
+    // Per-chapter toggle for whether it goes into the audiobook.
+    // Default on for content/summary, off for all other kinds —
+    // set on insert in pipeline.ts. Old rows without a value get
+    // the kind-based default logic on read.
     // 1 = include, 0 = exclude, NULL = use kind-default.
     d.exec("ALTER TABLE chapters ADD COLUMN include_in_audio INTEGER");
   }
 
   const docCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
   if (!docCols.some((c) => c.name === "author")) {
-    // Aus Docling-Metadaten extrahiert (PDF-Metadata-Feld). Wenn
-    // die PDF keine Autor-Info hat, bleibt NULL — wir füllen das
-    // nicht heuristisch (Fehlerquelle für ID3-Tags).
+    // Extracted from Docling metadata (PDF metadata field). If the
+    // PDF has no author info, stays NULL — we don't fill this
+    // heuristically (source of errors for ID3 tags).
     d.exec("ALTER TABLE documents ADD COLUMN author TEXT");
   }
   if (!docCols.some((c) => c.name === "doc_title")) {
-    // Echter Doc-Titel aus Docling (vs. `title` der vom Filename
-    // kommt und vom User editiert sein kann). Wenn beide gesetzt,
-    // gewinnt `title` für die UI; `doc_title` ist für ID3-Tags
-    // und exakte Bibliografie.
+    // Real doc title from Docling (vs. `title` which comes from the
+    // filename and may have been edited by the user). When both are
+    // set, `title` wins for the UI; `doc_title` is for ID3 tags
+    // and exact bibliography.
     d.exec("ALTER TABLE documents ADD COLUMN doc_title TEXT");
   }
   if (!docCols.some((c) => c.name === "short_code")) {
-    // User-Kürzel für die Bibliothek — z. B. „SE12k" für Studienhefte
-    // oder „1", „2", „3" für Serien-Bände. Fließt in den M4B-
-    // Dateinamen + Metadaten (iTunes-Feld `grouping`) ein.
+    // User shortcode for the library — e.g. "SE12k" for course
+    // booklets or "1", "2", "3" for series volumes. Feeds into the
+    // M4B filename + metadata (iTunes field `grouping`).
     d.exec("ALTER TABLE documents ADD COLUMN short_code TEXT");
   }
   if (!docCols.some((c) => c.name === "audio_intro_text")) {
-    // Optionaler Intro-Text der vor dem ersten Kapitel ins Hörbuch
-    // eingeführt wird ("Hörbuch: ..., Verfasst von ..., ..."). NULL
-    // = kein Intro, Hörbuch beginnt direkt mit Kapitel 1. User
-    // editiert das im Audiobook-Tab über die Intro-Box.
+    // Optional intro text spoken before the first chapter in the
+    // audiobook ("Audiobook: ..., Written by ..., ..."). NULL =
+    // no intro, audiobook starts directly with chapter 1. User
+    // edits this in the Audiobook tab via the intro box.
     d.exec("ALTER TABLE documents ADD COLUMN audio_intro_text TEXT");
   }
 
-  // chunks-Tabelle für RAG. Pro Chunk ca. 800 Tokens Text + ein 768-
-  // float32-Embedding (3 KB) von nomic-embed-text. Brute-Force-Cosine
-  // über alle Chunks eines Dokuments ist in < 100 ms machbar bis in
-  // die Zehntausender — wir brauchen keine Vector-DB solange.
+  // chunks table for RAG. Per chunk roughly 800 tokens of text + a
+  // 768-float32 embedding (3 KB) from nomic-embed-text. Brute-force
+  // cosine over all chunks of a document runs in < 100 ms up into
+  // the tens of thousands — we don't need a vector DB for that long.
   d.exec(`
     CREATE TABLE IF NOT EXISTS chunks (
       id TEXT PRIMARY KEY,
@@ -225,11 +224,10 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_chunks_chapter ON chunks(chapter_id);
   `);
 
-  // Voice-Samples für Qwen3-TTS Voice-Clone. User lädt eine 3-10 s
-  // Referenz-WAV/MP3 hoch, wir speichern die Datei im Data-Volume und
-  // halten Metadaten in dieser Tabelle. Der feste Seed (Random gewürfelt
-  // beim Upload) sorgt dafür, dass dieselbe Voice run-to-run identisch
-  // klingt.
+  // Voice samples for Qwen3-TTS voice clone. User uploads a 3-10 s
+  // reference WAV/MP3, we store the file in the data volume and keep
+  // metadata in this table. The fixed seed (rolled at upload) ensures
+  // that the same voice sounds identical run-to-run.
   d.exec(`
     CREATE TABLE IF NOT EXISTS voice_samples (
       id TEXT PRIMARY KEY,
@@ -245,10 +243,10 @@ export function initDb() {
     );
   `);
 
-  // Benchmark-Spalten für ETA-Berechnung. Nach jedem erfolgreichen
-  // Chunk updatet die qwen-Engine ms_per_char per Exponential-Moving-
-  // Average (alpha=0.2). Die Frontend-ETA nutzt das als Startwert,
-  // bevor der laufende Run eigene Messpunkte produziert.
+  // Benchmark columns for ETA calculation. After every successful
+  // chunk the qwen engine updates ms_per_char via exponential moving
+  // average (alpha=0.2). The frontend ETA uses this as the starting
+  // value before the running run produces its own measurements.
   const vsCols = d
     .prepare("PRAGMA table_info(voice_samples)")
     .all() as Array<{ name: string }>;
@@ -261,11 +259,11 @@ export function initDb() {
     );
   }
 
-  // voice_designs — Text-beschriebene Stimmen für das Qwen3-TTS
-  // VoiceDesign-Modell. Statt einer Referenz-Audio-Datei steht hier
-  // ein Freitext-Prompt ("Warmer deutscher Erzähler, Anfang 40, …").
-  // Der Seed friert die Stimme — gleicher Seed + gleiche Beschreibung
-  // soll empirisch dieselbe Stimme reproduzieren.
+  // voice_designs — text-described voices for the Qwen3-TTS
+  // VoiceDesign model. Instead of a reference audio file, this holds
+  // a free-text prompt ("Warm German narrator, early 40s, …").
+  // The seed freezes the voice — same seed + same description should
+  // empirically reproduce the same voice.
   d.exec(`
     CREATE TABLE IF NOT EXISTS voice_designs (
       id TEXT PRIMARY KEY,
@@ -280,14 +278,14 @@ export function initDb() {
     );
   `);
 
-  // Referenz-Audio pro Design. Qwen3-TTS VoiceDesign liefert keinen
-  // seed-stabilen Output pro Generate-Call, dafür ist es nicht gebaut —
-  // die offizielle Qwen-README zeigt das "VoiceDesign → Clone"-Pattern:
-  // einmalig eine Referenz-WAV via VoiceDesign erzeugen, dann für jede
-  // weitere Synthese das Base-Clone-Modell mit dieser Referenz nutzen
-  // (Clone IST seed-stabil). Spalten werden lazy gefüllt: beim Create
-  // einer neuen Design-Voice, oder beim ersten Audiobook-Use einer
-  // alten Design-Voice ohne gespeicherte Referenz.
+  // Reference audio per design. Qwen3-TTS VoiceDesign doesn't return
+  // seed-stable output per generate call — it's not built for that.
+  // The official Qwen README shows the "VoiceDesign → Clone" pattern:
+  // generate a reference WAV via VoiceDesign once, then for every
+  // further synthesis use the base clone model with that reference
+  // (clone IS seed-stable). Columns are filled lazily: on create
+  // of a new design voice, or on first audiobook use of an old
+  // design voice without a stored reference.
   const vdCols = d
     .prepare("PRAGMA table_info(voice_designs)")
     .all() as Array<{ name: string }>;
@@ -298,10 +296,10 @@ export function initDb() {
     d.exec("ALTER TABLE voice_designs ADD COLUMN ref_text TEXT");
   }
 
-  // Beim Start aufräumen: alle Dokumente, die noch `running` stehen,
-  // sind Überbleibsel aus einem vorherigen App-Run (Container-Restart
-  // während einer Docling-Extraktion — Task-ID war nur in-memory, ist
-  // verloren). Auf `failed` setzen + Start-Zeit-Spalte clearen.
+  // Cleanup at startup: any documents still in `running` are leftovers
+  // from a previous app run (container restart during a Docling
+  // extraction — task ID was only in-memory and is lost). Set to
+  // `failed` + clear the start-time column.
   const stuck = d
     .prepare(
       "UPDATE documents SET ocr_status = 'failed', extraction_started_at = NULL WHERE ocr_status IN ('running', 'pending')"

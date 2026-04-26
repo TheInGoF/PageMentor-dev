@@ -1,23 +1,22 @@
 /**
- * Stage B für die vereinheitlichte Karten-Pipeline: Antworten für
- * Aufgaben finden, die kein Marker-Match hatten.
+ * Stage B for the unified card pipeline: find answers for exercises
+ * that had no marker match.
  *
- * Ablauf pro Frage:
- *   1. Question per Ollama-Embedder vektorisieren.
- *   2. Cosine-Similarity über alle Chunks des Dokuments, Top-K ziehen.
- *      (Chunks werden außerhalb einmal pro Durchlauf geladen — keine
- *      Wiederholung der DB-Query pro Frage.)
- *   3. LLM bekommt die Chunks als Quellen-Snippets und darf nur dann
- *      antworten, wenn die Antwort belegt ist. Format ist strenges
- *      JSON mit Quote + Seitenzahl; alles andere fällt als
- *      "nicht gefunden" durch.
+ * Flow per question:
+ *   1. Vectorize the question via the Ollama embedder.
+ *   2. Cosine similarity over all chunks of the document, take top-K.
+ *      (Chunks are loaded once per run from the outside — no repeated
+ *      DB query per question.)
+ *   3. The LLM gets the chunks as source snippets and may only answer
+ *      when the answer is grounded. Format is strict JSON with quote
+ *      + page number; anything else falls through as "not found".
  *
- * Gegen Halluzinationen:
+ * Against hallucinations:
  *   - Temperature 0.1
- *   - System-Prompt verbietet Erfinden und verlangt Quelle
- *   - Output muss parsebar sein und die Quote muss im Snippet-Text
- *     als Substring vorkommen (approximative Prüfung über
- *     Whitespace-normalisierte Enthält-Relation)
+ *   - System prompt forbids invention and requires a source
+ *   - Output must be parseable and the quote must appear in the
+ *     snippet text as a substring (approximate check via
+ *     whitespace-normalized contains relation)
  */
 
 import { db } from "../db";
@@ -44,9 +43,9 @@ export interface FillResult {
   page: number | null;
 }
 
-/** Holt alle Chunks eines Dokuments, die ein Embedding im gewünschten
- *  Modell haben. Wenn die Modell-Dimension nicht passt, filtern wir
- *  die Zeile raus (passiert beim Modell-Wechsel vor Re-Embed). */
+/** Fetches all chunks of a document that have an embedding in the
+ *  desired model. If the model dimension doesn't match we filter the
+ *  row out (happens after a model switch before re-embed). */
 export function loadDocChunks(docId: string, embedderModel: string): DocChunk[] {
   const rows = db()
     .prepare(
@@ -85,10 +84,10 @@ export function loadDocChunks(docId: string, embedderModel: string): DocChunk[] 
   return out;
 }
 
-/** Top-K Chunks per Cosine. Lösungen-Kapitel bekommen einen leichten
- *  Score-Bonus, weil Musterlösungen-Anhänge semantisch ähnlich sind zu
- *  anderen Aufgaben — der Bonus hebt sie an die Spitze wenn sie
- *  ohnehin in der Nähe liegen. */
+/** Top-K chunks via cosine. Solutions chapters get a small score
+ *  bonus because solution appendices are semantically similar to
+ *  other exercises — the bonus lifts them to the top when they're
+ *  already close. */
 function topK(
   chunks: DocChunk[],
   queryEmb: Float32Array,
@@ -159,9 +158,9 @@ function parseFillResponse(raw: string): FillParsed | null {
   }
 }
 
-/** Normalisiert Text für den Subset-Check: kein Whitespace, kein
- *  Markdown-Fett, lowercased. So erkennen wir ein "im Sinne von wörtlich"-
- *  Zitat auch wenn das LLM Zeilenumbrüche verändert hat. */
+/** Normalizes text for the subset check: no whitespace, no Markdown
+ *  bold, lowercased. This way we recognize a "verbatim-ish" quote
+ *  even if the LLM changed line breaks. */
 function normalize(s: string): string {
   return s
     .toLowerCase()
@@ -170,9 +169,9 @@ function normalize(s: string): string {
     .trim();
 }
 
-/** Stage B: sucht die Antwort zu einer Frage in den Chunks eines Docs.
- *  Return `null` bedeutet: nicht belegt gefunden — die Aufgabe bleibt
- *  ohne Antwort und der User kann sie manuell nachziehen. */
+/** Stage B: searches the answer to a question in the chunks of a doc.
+ *  Returns `null` to mean: no grounded answer found — the exercise
+ *  remains unanswered and the user can fill it in manually. */
 export async function fillAnswerFromChunks(params: {
   chunks: DocChunk[];
   question: string;
@@ -190,8 +189,8 @@ export async function fillAnswerFromChunks(params: {
   } catch {
     return null;
   }
-  // Dimensions-Mismatch (Embedder hat sich geändert aber Chunks sind
-  // alt) würde cosineSim zu 0 machen — filtern vorab.
+  // Dimension mismatch (embedder changed but chunks are old) would
+  // make cosineSim zero — filter ahead of time.
   const compatible = params.chunks.filter(
     (c) => c.embedding.length === queryEmb.length
   );
@@ -218,10 +217,9 @@ export async function fillAnswerFromChunks(params: {
   const parsed = parseFillResponse(raw);
   if (!parsed || !parsed.found || !parsed.answer) return null;
 
-  // Verifizieren, dass die Antwort halbwegs aus einem Snippet kommt.
-  // Wenn sie in keinem Quellensnippet enthalten ist (normalisiert),
-  // verwerfen wir sie — das ist der wichtigste Schutz vor
-  // Halluzinationen.
+  // Verify that the answer roughly comes from a snippet. If it's not
+  // contained in any source snippet (normalized), we drop it —
+  // that's the most important protection against hallucinations.
   const normAnswer = normalize(parsed.answer);
   const shortEnough = normAnswer.length < 40;
   let matched: DocChunk | undefined;
@@ -231,10 +229,10 @@ export async function fillAnswerFromChunks(params: {
       matched = s;
       break;
     }
-    // Für kurze Antworten (z. B. "42" oder Einwortbegriffe) ist ein
-    // reiner Substring-Match zu locker — wir verlangen dann, dass die
-    // Antwort samt Umgebung überlappt. Fallback: Index-Hinweis vom
-    // LLM glauben, wenn vorhanden.
+    // For short answers (e.g. "42" or single-word terms) a pure
+    // substring match is too loose — we then require that the answer
+    // and surrounding context overlap. Fallback: trust the index hint
+    // from the LLM if present.
   }
   if (!matched && parsed.sourceIndex && parsed.sourceIndex >= 1 && parsed.sourceIndex <= sources.length) {
     matched = sources[parsed.sourceIndex - 1];

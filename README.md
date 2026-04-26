@@ -233,9 +233,9 @@ mkdir -p /volume1/docker/pagementor/ollama    # optional, only if you enable the
 
 5. **Deploy the stack.**
 
-The image is pulled from `ghcr.io/lordvonbaum/pagementor:latest`. Since
-the repo is private, you'll need a Personal Access Token with
-`read:packages` on your GitHub account:
+The image is pulled from `ghcr.io/theingof/pagementor:latest`. The
+package is public, so no token is required for `docker pull`. Skip the
+PAT setup unless you switch to the private `-dev` channel:
 
 - Go to GitHub → **Settings → Developer settings → Personal access tokens (classic)**
 - Generate a token with scope `read:packages`
@@ -275,7 +275,7 @@ compose lives at
 
 ```bash
 # on the GPU host:
-curl -fLO https://raw.githubusercontent.com/LordVonBaum/PageMentor/main/docker-compose.gpu-host.example.yaml
+curl -fLO https://raw.githubusercontent.com/TheInGoF/PageMentor/main/docker-compose.gpu-host.example.yaml
 mv docker-compose.gpu-host.example.yaml docker-compose.yaml
 # edit DOCLING_SERVE_API_KEY to match your NAS .env
 docker compose pull
@@ -289,8 +289,8 @@ between the LLM and the TTS sidecar. Set that URL once in the
 Settings modal (LLM → Ollama URL, and Local TTS → Arbiter URL) and
 it persists in `llm-config.json`.
 
-Images `ghcr.io/lordvonbaum/pm-gpu-arbiter` and
-`ghcr.io/lordvonbaum/pm-qwen-tts` are built and pushed by the GitHub
+Images `ghcr.io/theingof/pm-gpu-arbiter` and
+`ghcr.io/theingof/pm-qwen-tts` are built and pushed by the GitHub
 Actions workflows in this repo (`publish-arbiter.yml`,
 `publish-qwen-tts.yml`) — you only `docker compose pull`, never build
 locally.

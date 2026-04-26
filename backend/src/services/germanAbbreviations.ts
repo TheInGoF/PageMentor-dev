@@ -1,21 +1,22 @@
 /**
- * Deterministische Expansion deutscher Abkürzungen und Sonderzeichen
- * VOR dem LLM-Preprocessor. Spart Ollama Arbeit, ist konsistent, und
- * vermeidet dass der LLM z. B. mal „zum Beispiel" und mal „z. B."
- * rausgibt.
+ * Deterministic expansion of German abbreviations and special
+ * characters BEFORE the LLM preprocessor. Saves Ollama work, is
+ * consistent, and prevents the LLM from emitting "zum Beispiel"
+ * one time and "z. B." the next.
  *
- * Listen inspiriert von `repodiac/german_transliterate` (CC-BY 4.0,
- * https://github.com/repodiac/german_transliterate) — ergänzt um
- * PageMentor-spezifische Einträge (Abb./Tab. für Studienhefte, §§).
- * Credit siehe NOTICE.
+ * Lists inspired by `repodiac/german_transliterate` (CC-BY 4.0,
+ * https://github.com/repodiac/german_transliterate) — extended with
+ * PageMentor-specific entries (Abb./Tab. for course booklets, §§).
+ * See NOTICE for credit.
  *
- * Reihenfolge der Regeln ist wichtig: Compound-Abkürzungen (z. B.)
- * müssen vor Titel (Dr.) vor Einzel-Abk. (ggf.) vor Einheiten vor
- * Symbolen. Bei Zahl-kombinierten Regeln match nur wenn Zahl wirklich
- * davor / danach steht.
+ * Rule order matters: compound abbreviations (z. B.) must run before
+ * titles (Dr.) before single abbreviations (ggf.) before units before
+ * symbols. For number-combined rules we only match when a number
+ * actually sits before / after.
  *
- * Keine Zahl-Spellout ("5 → fünf") — das macht TTS in beiden Sprachen
- * zuverlässig, Spell-out in JS wäre fehlerträchtig und nicht nötig.
+ * No number spell-out ("5 → fünf") — TTS handles that reliably in
+ * both languages, and a JS spell-out would be error-prone and
+ * unnecessary.
  */
 
 interface Rule {
@@ -23,38 +24,37 @@ interface Rule {
   replacement: string | ((match: string, ...groups: string[]) => string);
 }
 
-/** Sprach-agnostisch: Markdown-Syntax TTS-tauglich umformen.
- *  Nicht nur stumm strippen — die strukturelle Bedeutung in
- *  Satzzeichen übersetzen, damit TTS-Prosodie (Pausen!) erhalten
- *  bleibt:
- *    - Headings → Text mit Punkt am Ende (Satz-Pause)
- *    - Bold     → von Kommas umschlossen (kurze Atempause)
- *    - Italic   → nur Text (keine Pause — Italic ist emphasis,
- *                 das kann die Voice-Prosodie nicht nachbilden)
+/** Language-agnostic: reshape Markdown syntax for TTS.
+ *  Don't just silently strip — translate the structural meaning
+ *  into punctuation so TTS prosody (pauses!) is preserved:
+ *    - Headings → text with period at the end (sentence pause)
+ *    - Bold     → wrapped in commas (short breath pause)
+ *    - Italic   → text only (no pause — italic is emphasis,
+ *                 voice prosody can't reproduce that)
  *
- *  Sonderfälle die Docling-Output mitbringt:
- *    - "**Beispiel 1.1:**" am Zeilenanfang ist ein Studienheft-
- *      Header (Bold gewrapped). Wird zu "Beispiel 1.1." mit Absatz
- *      damit TTS eine saubere Pause macht.
- *    - "## Foo:" → das angehängte "." am Ende würde "Foo:." machen.
- *      Kein doppeltes Satzzeichen wenn das Heading schon mit
- *      .:?!/; endet.
+ *  Edge cases Docling output produces:
+ *    - "**Beispiel 1.1:**" at the start of a line is a course
+ *      booklet header (bold-wrapped). Becomes "Beispiel 1.1." with
+ *      a paragraph break so TTS makes a clean pause.
+ *    - "## Foo:" → an appended "." would produce "Foo:." — skip
+ *      the second punctuation when the heading already ends with
+ *      .:?!/;.
  */
 const MARKDOWN_STRIP: Rule[] = [
-  // ZUERST: Bold-wrapped Studienheft-Header am Zeilenanfang. Diese
-  // sehen aus wie "**Beispiel 1.1:**" / "**Übung 3:**" — kommen
-  // alleinstehend in einer Zeile vor. Wir machen sie zu Headern
-  // bevor der generische Bold-Strip "** ... **" zu Kommas macht
-  // und das Pattern verschüttet.
+  // FIRST: bold-wrapped course-booklet headers at the start of a
+  // line. They look like "**Beispiel 1.1:**" / "**Übung 3:**" —
+  // they appear standalone on a line. We turn them into headers
+  // before the generic bold strip "** ... **" turns them into
+  // commas and buries the pattern.
   {
     pattern:
       /^\s*\*\*\s*(Übung|Aufgabe|Beispiel|Definition|Satz|Lemma|Korollar|Theorem|Beweis|Bemerkung|Hinweis|Anmerkung|Achtung|Wichtig|Merksatz|Tipp|Frage|Lösung|Antwort|Vorgehen|Voraussetzung|Behauptung|Folgerung|Übungsaufgabe|Selbsttest|Exercise|Problem|Example|Definition|Theorem|Lemma|Corollary|Proof|Remark|Note|Notice|Warning|Tip|Question|Answer|Solution|Approach|Hint)(\s+[\dA-Za-z]+(?:[.\-][\dA-Za-z]+)*)?\s*:?\s*\*\*\s*$/gm,
     replacement: (_, header: string, num?: string) =>
       `${header}${num ?? ""}.\n\n`,
   },
-  // Heading: "## 1.1 Titel" → "1.1 Titel." — wenn das Heading
-  // bereits mit Satzzeichen endet, KEIN doppeltes anhängen
-  // (sonst wird "## Foo:" zu "Foo:." was TTS verwirrt).
+  // Heading: "## 1.1 Titel" → "1.1 Titel." — when the heading
+  // already ends with punctuation, do NOT append a second one
+  // (otherwise "## Foo:" becomes "Foo:." which confuses TTS).
   {
     pattern: /^#{1,6}\s+(.+?)\s*$/gm,
     replacement: (_, title: string) => {
@@ -62,43 +62,45 @@ const MARKDOWN_STRIP: Rule[] = [
       return /[.,:;!?]$/.test(t) ? t : `${t}.`;
     },
   },
-  // Horizontal rule → Absatz-Trenner (zwei Newlines die die
-  // paragraph-splitter in tts/segment.ts als Absatz-Grenze liest)
+  // Horizontal rule → paragraph break (two newlines that the
+  // paragraph splitter in tts/segment.ts reads as a paragraph
+  // boundary).
   { pattern: /^---+\s*$/gm, replacement: "\n\n" },
-  // Blockquote-Marker weg, Text bleibt
+  // Strip blockquote marker, keep the text.
   { pattern: /^>\s+/gm, replacement: "" },
-  // Code-Blöcke (mehrzeilig) — kurze Ansage mit Punkten für Pause
+  // Code blocks (multi-line) — short announcement with periods
+  // to introduce a pause.
   { pattern: /```[\s\S]*?```/g, replacement: " Codeblock. " },
-  // Inline-Code `foo` → nur foo, kein Sonderzeichen
+  // Inline code `foo` → just foo, no special character.
   { pattern: /`([^`\n]+)`/g, replacement: "$1" },
-  // Bold mit Kommas: ",text," gibt TTS eine kurze Pause vor und
-  // nach dem hervorgehobenen Abschnitt — egal ob standalone
-  // "** Beispiel 1 **" oder inline "Der **Satz** beginnt".
-  // Whitespace im match schluckt führende/trailing Spaces.
+  // Bold with commas: ",text," gives TTS a short pause before and
+  // after the highlighted segment — whether standalone
+  // "** Beispiel 1 **" or inline "Der **Satz** beginnt".
+  // Whitespace in the match swallows leading/trailing spaces.
   { pattern: /\*\*\s*([^*\n]+?)\s*\*\*/g, replacement: ", $1," },
   { pattern: /__\s*([^_\n]+?)\s*__/g, replacement: ", $1," },
-  // Image ![alt](url) → nur Alt-Text
+  // Image ![alt](url) → alt text only.
   { pattern: /!\[([^\]]*)\]\([^)]+\)/g, replacement: "$1" },
-  // Link [text](url) → nur text
+  // Link [text](url) → text only.
   { pattern: /\[([^\]]+)\]\([^)]+\)/g, replacement: "$1" },
-  // Italic *text* / _text_ — emphasis ohne Pause. Lookbehind damit
-  // wir nicht in snake_case oder "3*x*5" reinfahren.
+  // Italic *text* / _text_ — emphasis without pause. Lookbehind
+  // so we don't collide with snake_case or "3*x*5".
   { pattern: /(?<![\w*])\*([^*\n]+)\*(?![\w*])/g, replacement: "$1" },
   { pattern: /(?<![\w_])_([^_\n]+)_(?![\w_])/g, replacement: "$1" },
-  // Doppelte Satzzeichen nach unseren Einschüben aufräumen:
+  // Clean up doubled punctuation from our insertions:
   // ",, Text ,," → ", Text,"  |  ".." → "."  |  "((Text)" → "(Text)"
-  // Letzteres ist ein häufiges Docling-Artefakt bei Citations.
+  // The last one is a common Docling artifact in citations.
   { pattern: /,\s*,/g, replacement: "," },
   { pattern: /\.\s*\./g, replacement: "." },
   { pattern: /\(\s*\(/g, replacement: "(" },
   { pattern: /\)\s*\)/g, replacement: ")" },
-  // Heading-Endung mit Doppelpunkt + Punkt aufräumen für den Fall
-  // dass die Endsatzzeichen-Erkennung im Heading-Strip mal versagt.
+  // Clean up colon + period at the end of a heading in case the
+  // end-punctuation detection in the heading strip fails.
   { pattern: /:\.\s/g, replacement: ": " },
 ];
 
-/** Multi-Token-Abkürzungen mit Punkten: z. B., d. h., i. d. R., …
- *  Matchen auch Varianten ohne Space ("z.B.") und ohne Trailing-Dot. */
+/** Multi-token abbreviations with periods: z. B., d. h., i. d. R., …
+ *  Also match variants without a space ("z.B.") and without trailing dot. */
 const DE_COMPOUND: Rule[] = [
   { pattern: /\bz\.?\s*B\.?/g, replacement: "zum Beispiel" },
   { pattern: /\bd\.?\s*h\.?/g, replacement: "das heißt" },
@@ -125,7 +127,7 @@ const DE_COMPOUND: Rule[] = [
   { pattern: /\bvgl\.\s*ebd\.?/g, replacement: "vergleiche ebenda" },
 ];
 
-/** Titel vor einem Großbuchstaben (= Name folgt). */
+/** Titles before an uppercase letter (= name follows). */
 const DE_TITLES: Rule[] = [
   { pattern: /\bDr\.\s+(?=[A-ZÄÖÜ])/g, replacement: "Doktor " },
   { pattern: /\bProf\.\s+(?=[A-ZÄÖÜ])/g, replacement: "Professor " },
@@ -137,8 +139,8 @@ const DE_TITLES: Rule[] = [
   { pattern: /\bMag\.\s+(?=[A-ZÄÖÜ])/g, replacement: "Magister " },
 ];
 
-/** Abkürzung + nachfolgende Zahl (S. 42, § 12, Nr. 7, …). Die Zahl
- *  bleibt numerisch — TTS liest sie korrekt. */
+/** Abbreviation + following number (S. 42, § 12, Nr. 7, …). The number
+ *  stays numeric — TTS reads it correctly. */
 const DE_WITH_NUMBER: Rule[] = [
   { pattern: /§§\s*(\d)/g, replacement: "Paragraphen $1" },
   { pattern: /§\s*(\d)/g, replacement: "Paragraph $1" },
@@ -151,7 +153,7 @@ const DE_WITH_NUMBER: Rule[] = [
   { pattern: /\bTab\.\s*(\d)/g, replacement: "Tabelle $1" },
 ];
 
-/** Einzelwort-Abk. — per `\b`-Grenzen. */
+/** Single-word abbreviations — via `\b` boundaries. */
 const DE_SINGLE: Rule[] = [
   { pattern: /\bggf\b\.?/g, replacement: "gegebenenfalls" },
   { pattern: /\bbzw\b\.?/g, replacement: "beziehungsweise" },
@@ -170,11 +172,11 @@ const DE_SINGLE: Rule[] = [
   { pattern: /\bMio\b\.?/g, replacement: "Millionen" },
   { pattern: /\bMrd\b\.?/g, replacement: "Milliarden" },
   { pattern: /\bTsd\b\.?/g, replacement: "Tausend" },
-  // Bibliografie: "S. 29 ff." / "S. 29ff" → "Seite 29 und folgende"
-  // Das "S." selbst behandeln wir oben in DE_WITH_NUMBER, hier nur
-  // das nachfolgende ff./ff
+  // Bibliography: "S. 29 ff." / "S. 29ff" → "Seite 29 und folgende".
+  // We handle "S." itself above in DE_WITH_NUMBER; here only the
+  // trailing ff./ff.
   { pattern: /(\d)\s*ff\b\.?/g, replacement: "$1 und folgende" },
-  // Studienheft-typisch (ohne Zahl — „siehe Abb. rechts")
+  // Course-booklet specific (without a number — "siehe Abb. rechts")
   { pattern: /\bAbb\b\.?/g, replacement: "Abbildung" },
   { pattern: /\bTab\b\.?/g, replacement: "Tabelle" },
   { pattern: /\bKap\b\.?/g, replacement: "Kapitel" },
@@ -186,15 +188,15 @@ const DE_SINGLE: Rule[] = [
   { pattern: /\bStd\b\.?/g, replacement: "Stunden" },
 ];
 
-/** Einheiten nach Zahlen. `\b` reicht nicht immer (z. B. "m" folgt
- *  auf Buchstabe) — wir nutzen negative Lookahead für Buchstaben. */
+/** Units after numbers. `\b` isn't always enough (e.g. "m" followed
+ *  by a letter) — we use a negative lookahead for letters. */
 const DE_UNITS: Rule[] = [
-  // Gewicht
+  // Weight
   { pattern: /(\d+(?:[.,]\d+)?)\s*mg(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Milligramm" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*kg(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Kilogramm" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*g(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Gramm" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*t(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Tonnen" },
-  // Länge / Fläche / Volumen
+  // Length / area / volume
   { pattern: /(\d+(?:[.,]\d+)?)\s*km²/g, replacement: "$1 Quadratkilometer" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*m²/g, replacement: "$1 Quadratmeter" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*cm²/g, replacement: "$1 Quadratzentimeter" },
@@ -205,15 +207,15 @@ const DE_UNITS: Rule[] = [
   { pattern: /(\d+(?:[.,]\d+)?)\s*cm(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Zentimeter" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*mm(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Millimeter" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*m(?![a-zA-ZäöüÄÖÜ²³])/g, replacement: "$1 Meter" },
-  // Zeit (Einheiten — Uhrzeiten separat)
+  // Time (units — clock times handled separately)
   { pattern: /(\d+(?:[.,]\d+)?)\s*ms(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Millisekunden" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*sek(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Sekunden" },
-  // Daten
+  // Data
   { pattern: /(\d+(?:[.,]\d+)?)\s*TB(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Terabyte" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*GB(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Gigabyte" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*MB(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Megabyte" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*KB(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Kilobyte" },
-  // Energie
+  // Energy
   { pattern: /(\d+(?:[.,]\d+)?)\s*kWh(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Kilowattstunden" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*MWh(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Megawattstunden" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*kW(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Kilowatt" },
@@ -223,7 +225,7 @@ const DE_UNITS: Rule[] = [
   { pattern: /(\d+(?:[.,]\d+)?)\s*MHz(?![a-zA-ZäöüÄÖÜ])/g, replacement: "$1 Megahertz" },
 ];
 
-/** Währung und Symbole (mit und ohne führende Zahl). */
+/** Currency and symbols (with and without a leading number). */
 const DE_SYMBOLS: Rule[] = [
   { pattern: /(\d+(?:[.,]\d+)?)\s*€/g, replacement: "$1 Euro" },
   { pattern: /€\s*(\d)/g, replacement: "Euro $1" },
@@ -235,7 +237,7 @@ const DE_SYMBOLS: Rule[] = [
   { pattern: /(\d+(?:[.,]\d+)?)\s*°\s*C\b/g, replacement: "$1 Grad Celsius" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*°\s*F\b/g, replacement: "$1 Grad Fahrenheit" },
   { pattern: /(\d+(?:[.,]\d+)?)\s*°(?![a-zA-Z])/g, replacement: "$1 Grad" },
-  // Math-Symbole standalone
+  // Standalone math symbols
   { pattern: /≈/g, replacement: " ungefähr " },
   { pattern: /≠/g, replacement: " ungleich " },
   { pattern: /≤/g, replacement: " kleiner gleich " },
@@ -254,25 +256,25 @@ const DE_SYMBOLS: Rule[] = [
   { pattern: /∂/g, replacement: " partielle Ableitung " },
   { pattern: /∀/g, replacement: " für alle " },
   { pattern: /∃/g, replacement: " es existiert " },
-  // Ampersand nur wenn isoliert — sonst Teil von HTML-Entity o. ä.
+  // Ampersand only when isolated — otherwise part of HTML entity etc.
   { pattern: /\s&\s/g, replacement: " und " },
 ];
 
-/** Uhrzeiten: 14:30 → 14 Uhr 30, 14:00 → 14 Uhr. */
+/** Clock times: 14:30 → 14 Uhr 30, 14:00 → 14 Uhr. */
 const DE_TIMES: Rule[] = [
   {
     pattern: /\b(\d{1,2}):(\d{2})(?:\s*Uhr)?\b/g,
     replacement: (_m, h: string, min: string) => {
       const hh = parseInt(h, 10);
       const mm = parseInt(min, 10);
-      if (hh > 23 || mm > 59) return _m; // kein Zeitformat
+      if (hh > 23 || mm > 59) return _m; // not a time format
       return mm === 0 ? `${hh} Uhr` : `${hh} Uhr ${mm}`;
     },
   },
 ];
 
-/** Datum: 12.03.2024 → 12. März 2024. Nur matchen wenn Monat 1-12
- *  (sonst könnte es IP-Adresse o. ä. sein). */
+/** Dates: 12.03.2024 → 12. März 2024. Only match when month is 1-12
+ *  (otherwise it could be an IP address etc.). */
 const MONTHS_DE = [
   "Januar", "Februar", "März", "April", "Mai", "Juni",
   "Juli", "August", "September", "Oktober", "November", "Dezember",
@@ -289,27 +291,27 @@ const DE_DATES: Rule[] = [
   },
 ];
 
-/** Aufzählungen am Zeilenanfang: `- foo`, `* foo`, `• foo` → weg.
- *  Nummerierte (1./2./a)) lassen wir stehen — Kontext-entscheidung
- *  ob Kapitel oder Aufzählung überlassen wir dem LLM. */
+/** List markers at the start of a line: `- foo`, `* foo`, `• foo`
+ *  → strip. Numbered ones (1./2./a)) we leave alone — the LLM gets
+ *  to decide whether it's a chapter or a list item from context. */
 const DE_LIST_MARKERS: Rule[] = [
   { pattern: /^[\s]*[-*•–][\s]+/gm, replacement: "" },
 ];
 
-/** Studienheft-Header mit Doppelpunkt: "Übung 1.7:", "Beispiel 3.2:",
- *  "Definition:", "Satz:" usw. Edge-TTS macht bei `:` nur eine kurze
- *  Pause — bei einem Header der das Thema einleitet wollen wir aber
- *  eine deutliche Trennung zum folgenden Inhalt. Lösung: `:` → `.`
- *  plus Absatz-Newline. Damit liest TTS den Header als eigenen Satz
- *  und macht danach Atempause vor dem Inhalt.
+/** Course-booklet headers with colon: "Übung 1.7:", "Beispiel 3.2:",
+ *  "Definition:", "Satz:" etc. Edge-TTS only makes a short pause for
+ *  `:` — but for a header introducing a topic we want a clear break
+ *  from the following content. Solution: `:` → `.` plus a paragraph
+ *  newline. That way TTS reads the header as its own sentence and
+ *  pauses before the content.
  *
- *  Pattern matched nur am Zeilenanfang (^…$ mit m-flag) — Doppelpunkte
- *  mitten im Satz ("Folgende drei Aspekte sind wichtig:") bleiben
- *  unangetastet, das macht Edge selbst korrekt. */
+ *  Pattern matches only at the start of a line (^…$ with m flag) —
+ *  colons inside a sentence ("The following three aspects matter:")
+ *  stay untouched, Edge already handles those correctly. */
 const DE_HEADERS: Rule[] = [
   {
-    // Header mit optionaler Nummerierung: "Übung 1.7:", "Aufgabe 3:",
-    // "Beispiel A.2:", "Satz 4.1:" — Nummer ist optional.
+    // Header with optional numbering: "Übung 1.7:", "Aufgabe 3:",
+    // "Beispiel A.2:", "Satz 4.1:" — number is optional.
     pattern:
       /^(Übung|Aufgabe|Beispiel|Definition|Satz|Lemma|Korollar|Theorem|Beweis|Bemerkung|Hinweis|Anmerkung|Achtung|Wichtig|Merksatz|Tipp|Frage|Lösung|Antwort|Vorgehen|Voraussetzung|Behauptung|Folgerung|Übungsaufgabe|Selbsttest)(\s+[\dA-Za-z]+(?:[.\-][\dA-Za-z]+)*)?\s*:\s*/gm,
     replacement: (_, header: string, num?: string) =>
@@ -319,8 +321,8 @@ const DE_HEADERS: Rule[] = [
 
 const DE_ALL: Rule[] = [
   ...MARKDOWN_STRIP,
-  // Header MÜSSEN nach MARKDOWN_STRIP laufen — "## Übung 1.7:" wird
-  // erst zu "Übung 1.7:" und matched dann das Header-Pattern.
+  // Headers MUST run after MARKDOWN_STRIP — "## Übung 1.7:" first
+  // becomes "Übung 1.7:" and only then matches the header pattern.
   ...DE_HEADERS,
   ...DE_COMPOUND,
   ...DE_TITLES,
@@ -338,14 +340,14 @@ export function expandGermanAbbreviations(text: string): string {
   for (const rule of DE_ALL) {
     out = out.replace(rule.pattern, rule.replacement as string);
   }
-  // Doppelte Leerzeichen die durch Symbol-Ersetzungen entstehen
-  // zusammenziehen (die Symbole hatten führende + nachfolgende Space).
+  // Collapse double spaces caused by symbol substitutions (the
+  // symbols had leading + trailing spaces).
   out = out.replace(/  +/g, " ");
   return out;
 }
 
 // ---------------------------------------------------------------------
-// Englische Variante (für document.language === "en")
+// English variant (for document.language === "en")
 // ---------------------------------------------------------------------
 
 const EN_COMPOUND: Rule[] = [
@@ -474,7 +476,7 @@ export function expandEnglishAbbreviations(text: string): string {
   return out;
 }
 
-/** Sprach-agnostische Einstiegsfunktion, dispatched anhand der Doc-Sprache. */
+/** Language-agnostic entry point, dispatches by document language. */
 export function expandAbbreviations(text: string, language: string): string {
   if (language === "de") return expandGermanAbbreviations(text);
   return expandEnglishAbbreviations(text);

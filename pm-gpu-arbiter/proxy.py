@@ -28,12 +28,12 @@ _HOP_BY_HOP = {
     "upgrade",
 }
 
-# Response-Header, die der Wire-Layer neu berechnet.
-# content-encoding BLEIBT — aiter_raw() liefert gzip-Bytes noch komprimiert,
-# der Client dekodiert anhand dieses Headers.
+# Response headers that the wire layer recomputes.
+# content-encoding STAYS — aiter_raw() returns gzip bytes still
+# compressed, the client decodes via this header.
 _STRIPPED_RESPONSE_HEADERS = _HOP_BY_HOP | {"content-length"}
 
-# Request-Header, die beim Weiterleiten stören.
+# Request headers that interfere with forwarding.
 _STRIPPED_REQUEST_HEADERS = _HOP_BY_HOP | {"host", "content-length"}
 
 

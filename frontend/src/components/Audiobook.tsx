@@ -80,9 +80,9 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [absBusy, setAbsBusy] = useState(false);
   const [absConfigured, setAbsConfigured] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
-  // Snapshot für den SSE-Handler, der sonst stale chapterStatus sieht
-  // (useEffect-Deps halten es nicht frisch). Beim `audiobook.start`-
-  // Event wird chapterCharsRef.current gelesen.
+  // Snapshot for the SSE handler, which would otherwise see stale
+  // chapterStatus (useEffect deps don't keep it fresh). On the
+  // `audiobook.start` event chapterCharsRef.current is read.
   const chapterStatusRef = useRef<ChapterAudioStatus[]>([]);
   useEffect(() => {
     chapterStatusRef.current = chapterStatus;
@@ -95,8 +95,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       setChapterStatus(res.chapters);
       if (res.intro) setIntro(res.intro);
     } catch {
-      // Silent — wenn der Endpoint mal kurz nicht geht (Pipeline-Reload),
-      // nicht mit Toast spammen.
+      // Silent — when the endpoint briefly fails (pipeline reload),
+      // don't spam with toasts.
     }
   }, [docId]);
 
@@ -125,10 +125,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             langVoices[0]?.id ??
             v.voices[0]?.id ??
             "";
-          // User-Wahl nicht überschreiben — nur initial setzen (wenn leer)
-          // oder wenn die bisherige Wahl gar nicht mehr in der Liste ist
-          // (Voice wurde gelöscht). Verhindert, dass der Picker bei
-          // Re-Rendern (Toast-Show, State-Update) auf Default zurückspringt.
+          // Don't overwrite the user's choice — only set initially
+          // (when empty) or when the current choice no longer exists
+          // (voice was deleted). Prevents the picker from snapping
+          // back to default on re-render (toast show, state update).
           setVoiceId((prev) => {
             if (prev && v.voices.some((vc) => vc.id === prev)) return prev;
             return preferred;
@@ -139,10 +139,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         );
     };
     loadVoicesAndState();
-    // Voice-Liste neu laden wenn in Settings eine Stimme angelegt/
-    // gelöscht wurde. SettingsModal feuert `pm:voices-changed`; ohne
-    // diesen Listener zeigt der Audiobook-Picker nur die Voices die
-    // beim Tab-Öffnen existierten.
+    // Reload the voice list when a voice was created/deleted in
+    // Settings. SettingsModal fires `pm:voices-changed`; without
+    // this listener the audiobook picker only shows voices that
+    // existed when the tab opened.
     const voicesChangedHandler = () => {
       api.audio.voices().then((v) => setVoices(v.voices)).catch(() => {});
     };
@@ -161,8 +161,9 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     return () => {
       window.removeEventListener("pm:voices-changed", voicesChangedHandler);
     };
-    // `toast` bewusst nicht in Deps — die Fehlermeldung ist nur ein Side-Effect,
-    // braucht den Effect nicht zu triggern. Voice-Load hängt an Doc + Sprache.
+    // `toast` deliberately not in deps — the error toast is a side
+    // effect and doesn't need to retrigger the effect. Voice load
+    // depends on doc + language.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId, documentLanguage]);
 
@@ -177,10 +178,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           return next;
         });
       }
-      // Book-level Progress aus den phase-Events ableiten.
+      // Derive book-level progress from the phase events.
       if (ev.phase === "audiobook.start") {
-        // Zeichen-Snapshot der zum Run eingeschlossenen Kapitel —
-        // bildet die Grundlage für die ETA (ms/Zeichen × remaining).
+        // Character snapshot of chapters included in the run —
+        // forms the basis for the ETA (ms/char × remaining).
         const chapterChars = chapterStatusRef.current
           .filter(isChapterIncluded)
           .map((c) => c.text_length || 0);
@@ -193,12 +194,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           chapterChars,
         });
       } else if (ev.phase === "audiobook.chapter.start") {
-        // Nur fortschreiben wenn ein Full-Book-Run schon gestartet
-        // ist (audiobook.start hat bookProgress != null gesetzt).
-        // Single-Chapter- und Intro-Generates emittieren chapter.*-
-        // Events ohne audiobook.start — die sollen das Full-Book-
-        // Progress-Panel NICHT aktivieren, sonst hängt es ewig
-        // weil kein audiobook.done je kommt.
+        // Only advance when a full-book run is already in progress
+        // (audiobook.start set bookProgress != null). Single-chapter
+        // and intro generates emit chapter.* events without
+        // audiobook.start — those should NOT activate the full-book
+        // progress panel, otherwise it hangs forever because no
+        // audiobook.done ever arrives.
         setBookProgress((prev) =>
           prev
             ? {
@@ -237,10 +238,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       ) {
         setBookProgress(null);
       }
-      // M4B-Encode-Progress-Events (SSE vom Backend beim Book-Build
-      // oder Rebuild). current = aktuelle Audio-Position in ms,
-      // total = gemergte MP3-Dauer in ms. Damit der User sieht wie
-      // weit ffmpeg wirklich ist statt nur "builds …" zu lesen.
+      // M4B encode progress events (SSE from the backend during
+      // book build or rebuild). current = current audio position in
+      // ms, total = merged MP3 duration in ms. So the user sees how
+      // far ffmpeg actually is instead of only reading "builds …".
       if (ev.phase === "audiobook.m4b.start") {
         setM4bProgress({ currentMs: 0, totalMs: ev.total ?? 0 });
       } else if (ev.phase === "audiobook.m4b.progress") {
@@ -302,7 +303,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         "success"
       );
       if (url) {
-        // In neuem Tab öffnen damit der User das Item direkt sieht.
+        // Open in a new tab so the user sees the item right away.
         window.open(url, "_blank", "noopener");
       }
     } catch (err) {
@@ -320,9 +321,9 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       setState(refreshed);
       toast.show(t("audiobook.m4b.built"), "success");
     } catch (err) {
-      // Leere Error-Messages (z. B. wenn Backend nur Status 4xx ohne
-      // Body liefert oder Fetch abbricht) → Fallback auf Übersetzung,
-      // sonst sieht der User einen roten Toast ohne Text.
+      // Empty error messages (e.g. backend only returns a 4xx status
+      // without a body or fetch aborts) → fall back to translation,
+      // otherwise the user sees a red toast with no text.
       const msg =
         err instanceof Error && err.message.trim().length > 0
           ? err.message
@@ -337,9 +338,9 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     if (!confirm(t("audiobook.clearChapterConfirm"))) return;
     try {
       await api.audio.clearChapter(audioId);
-      // Reihenfolge matters: Audio-Liste UND per-Kapitel-Status aus
-      // dem Backend neu ziehen, sonst bleibt die Row im UI als "fertig"
-      // stehen weil chapterStatus noch die alte audio_id hält.
+      // Order matters: pull both the audio list AND per-chapter
+      // status from the backend, otherwise the row stays in the UI as
+      // "done" because chapterStatus still holds the old audio_id.
       const refreshed = await api.audio.get(docId);
       setState(refreshed);
       await loadChapterStatus();
@@ -412,7 +413,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         getSettings().defaultOllamaModel || undefined
       );
       toast.show(t("audiobook.intro.queued"), "success");
-      // Background-Job läuft, Status wird via SSE aktualisiert.
+      // Background job is running, status is updated via SSE.
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
@@ -433,7 +434,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
 
   async function bulkIncludeByKind(kind: string, include: boolean) {
     setKindBulkBusy(kind);
-    // Optimistic — UI updaten bevor Backend antwortet.
+    // Optimistic — update UI before the backend responds.
     setChapterStatus((prev) =>
       prev.map((c) =>
         c.kind === kind ? { ...c, include_in_audio: include ? 1 : 0 } : c
@@ -485,10 +486,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     setSelectedIds(new Set());
   }
 
-  /** Sequentielles Preprocess für alle ausgewählten. Sequentiell statt
-   *  parallel weil Ollama auf einem Modell eh nur einen Generate-Call
-   *  zur Zeit verarbeitet — paralleler Aufruf würde nur die HTTP-Queue
-   *  füllen und die App ggf. mit Timeouts überraschen. */
+  /** Sequential preprocess for all selected items. Sequential rather
+   *  than parallel because Ollama on a single model only handles one
+   *  generate call at a time — parallel calls would just fill the
+   *  HTTP queue and risk timeouts. */
   async function bulkPreprocess(force: boolean) {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -513,8 +514,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             return rest;
           });
         }
-        // Kurze Pause damit das UI atmen kann + status-load nicht
-        // direkt mit dem nächsten Generate-Call kollidiert.
+        // Short pause so the UI can breathe and the status load
+        // doesn't collide directly with the next generate call.
         await loadChapterStatus();
       }
       if (failed === 0) {
@@ -598,10 +599,10 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     audio.play().catch(() => toast.show(t("audiobook.previewFailed"), "error"));
   }
 
-  // Counts für den Haupt-Button-Label. Das Backend überspringt bereits
-  // fertige Kapitel beim Hörbuch-Run (v1.18.010); das UI soll das auch
-  // ehrlich widerspiegeln statt "Neu erzeugen" zu sagen während in
-  // Wahrheit nur die fehlenden generiert werden.
+  // Counts for the main button label. The backend already skips
+  // finished chapters in the audiobook run (v1.18.010); the UI
+  // should reflect that honestly instead of saying "Regenerate"
+  // while in reality only the missing ones are generated.
   const includedCount = useMemo(
     () => chapterStatus.filter(isChapterIncluded).length,
     [chapterStatus]
@@ -630,27 +631,28 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     [voices, documentLanguage]
   );
 
-  // Terminal-Phasen dürfen `generating` NICHT mehr true halten — sonst
-  // bleibt der Generate-Button nach einem Fehlschlag disabled.
+  // Terminal phases must NOT keep `generating` true anymore —
+  // otherwise the Generate button stays disabled after a failure.
   const progressIsTerminal =
     progress?.phase === "audiobook.done" ||
     progress?.phase === "audiobook.failed" ||
     progress?.phase === "audiobook.canceled";
-  // „in flight" nur wenn ein Full-Book-Run aktiv ist (bookProgress
-  // gesetzt). Bei Single-Chapter- oder Intro-Generates emittiert das
-  // Backend ja chapter.start/done, aber das ist KEIN Full-Book-Run —
-  // sonst bliebe der Generate-Button disabled bis zum nächsten
-  // Doc-Wechsel. Per-chapter „busy"-State zeigt das schon im Row.
+  // "in flight" only when a full-book run is active (bookProgress
+  // set). Single-chapter or intro generates also emit chapter
+  // start/done events, but those are NOT a full-book run —
+  // otherwise the Generate button would stay disabled until the next
+  // doc switch. The per-chapter "busy" state already shows that in
+  // the row.
   const progressIsInFlight =
     !!bookProgress &&
     progress?.phase.startsWith("audiobook.") === true &&
     !progressIsTerminal;
-  // Auch Single-Chapter- und Intro-Generates zählen als „läuft was" —
-  // sonst sieht der User keinen Cancel-Button wenn er ein einzelnes
-  // Kapitel generiert hat und das jetzt hängen bleibt. Wir leiten
-  // „aktives Kapitel" aus den SSE-chapter.*-Events ab: solange ein
-  // Kapitel in start/progress-Phase steckt (also nicht done/failed/
-  // canceled), läuft da was im Backend.
+  // Single-chapter and intro generates also count as "something is
+  // running" — otherwise the user wouldn't see a Cancel button after
+  // generating a single chapter that then gets stuck. We derive
+  // "active chapter" from the SSE chapter.* events: as long as a
+  // chapter is in start/progress phase (i.e. not done/failed/
+  // canceled) something is running on the backend.
   const anyChapterSynthRunning = Array.from(chapterProgress.values()).some(
     (ev) =>
       ev.phase === "audiobook.chapter.start" ||
@@ -668,8 +670,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     introBusy;
   const phaseMessage = progress ? describePhase(progress) : null;
 
-  // Tick 1× pro Sekunde, damit Laufzeit + Restzeit sichtbar weiterzählen
-  // (Book-Progress-State selbst ändert sich nur bei SSE-Events).
+  // Tick once per second so runtime + remaining keep counting
+  // visibly (the book progress state itself only changes on SSE events).
   useEffect(() => {
     if (!bookProgress) return;
     const iv = setInterval(() => setElapsedTick((n) => n + 1), 1000);
@@ -1400,10 +1402,10 @@ function BookProgressPanel({
     startedAt: number;
     chapterChars: number[];
   };
-  /** Vom Backend gemessener EMA-Durchschnitt für die gewählte Voice.
-   *  Wird als Startwert für die ETA genutzt, bevor der laufende Run
-   *  genug eigene Messpunkte hat. `null` → erste Generation dieser
-   *  Voice, wir zeigen keine ETA bis genug Daten da sind. */
+  /** Backend-measured EMA average for the chosen voice. Used as a
+   *  starting value for the ETA before the current run has enough
+   *  measurements of its own. `null` → first generation with this
+   *  voice; we don't show an ETA until enough data exists. */
   benchmarkMsPerChar: number | null;
 }) {
   const {
@@ -1416,16 +1418,16 @@ function BookProgressPanel({
   } = progress;
   const elapsedMs = Date.now() - startedAt;
 
-  // Gesamt-Zeichen + bis hierhin gemachte Zeichen.
+  // Total chars + chars done so far.
   const totalChars = chapterChars.reduce((a, b) => a + b, 0);
 
-  // Fertige Kapitel bis currentChapter-1 (exkl.) zählen voll mit.
+  // Finished chapters up to currentChapter-1 (exclusive) count fully.
   const completedIdx = Math.max(0, currentChapter - 1);
   const completedChars = chapterChars
     .slice(0, completedIdx)
     .reduce((a, b) => a + b, 0);
 
-  // Aktuelles Kapitel proportional über chunks zählen.
+  // Current chapter counted proportionally via chunks.
   const currentChapterTotal =
     currentChapter >= 1 && currentChapter <= chapterChars.length
       ? chapterChars[currentChapter - 1]
@@ -1434,16 +1436,16 @@ function BookProgressPanel({
   const charsDone = completedChars + currentChapterTotal * chapterFrac;
   const charsRemaining = Math.max(0, totalChars - charsDone);
 
-  // Rate-Wahl: live wenn wir genug eigene Daten haben, sonst Backend-
-  // Benchmark. Schwelle 800 Zeichen = meistens >= 1 Chunk durch →
-  // genug um die live-Messung über Rauschen zu heben.
+  // Rate choice: live when we have enough data of our own, otherwise
+  // the backend benchmark. Threshold 800 chars = usually ≥ 1 chunk
+  // done → enough to lift the live measurement above noise.
   const liveRate = charsDone >= 800 ? elapsedMs / charsDone : null;
   const rate = liveRate ?? benchmarkMsPerChar;
 
   const etaMs =
     rate !== null ? Math.max(0, Math.round(charsRemaining * rate)) : null;
 
-  // Anzeige der Rate in Zeichen/Sekunde, damit Gefühl dafür entsteht.
+  // Show the rate in chars/sec so users get a feel for it.
   const charsPerSec =
     rate !== null && rate > 0 ? Math.round(1000 / rate) : null;
 
@@ -1493,12 +1495,12 @@ function BookProgressPanel({
 }
 
 // ---------------------------------------------------------------------
-// Intro-Editor
+// Intro editor
 // ---------------------------------------------------------------------
 
-/** Default-Intro-Vorschlag. Jede Zeile endet mit Satzzeichen (. oder
- *  Komma), sonst rattert Edge alles ohne Pausen runter — Newlines
- *  alleine reichen der TTS-Engine nicht für Atempausen. */
+/** Default intro suggestion. Each line ends with punctuation (. or
+ *  comma), otherwise Edge rattles everything through without pauses
+ *  — newlines alone don't give the TTS engine breath pauses. */
 function buildIntroDefault(
   meta: { title: string; author: string | null; language: string } | null,
   voice: Voice | null,
@@ -1518,8 +1520,8 @@ function buildIntroDefault(
       lines.push(`Aufbereitet durch ${phoneticizeModelName(model, "de")}.`);
     }
     if (voice) {
-      // "Qwen" ausgeschrieben mit Doppel-N, damit Qwen-TTS nicht "Kwen"
-      // sagt. Model-Version als phonetische Zahl.
+      // "Qwen" spelled with double N so Qwen-TTS doesn't say "Kwen".
+      // Model version as a phonetic number.
       lines.push(
         `Gesprochen durch Qwenn drei T T S, mit der Stimme ${voice.label}.`
       );
@@ -1542,37 +1544,37 @@ function buildIntroDefault(
   return lines.join("\n");
 }
 
-/** Modellnamen wie `gemma4:26b` in lesbare Intro-Phonetik umbauen:
- *  `gemma4:26b` → "Gemma Vier", `llama3.1:8b` → "Lama drei Punkt eins".
- *  Die TTS-Engine würde sonst „gemma-vier-doppelpunkt-sechsundzwanzig-b"
- *  sagen, was unschön klingt. */
+/** Convert model names like `gemma4:26b` into readable intro
+ *  phonetics: `gemma4:26b` → "Gemma Vier", `llama3.1:8b` → "Lama
+ *  drei Punkt eins". Otherwise the TTS engine would say
+ *  "gemma-vier-doppelpunkt-sechsundzwanzig-b", which sounds bad. */
 function phoneticizeModelName(model: string, lang: "de" | "en"): string {
-  // Alles nach Doppelpunkt (":26b", ":8b") ist Parameter-Größe — für
-  // Menschen unnötig, für Betonung nervig. Abschneiden.
+  // Everything after the colon (":26b", ":8b") is the parameter
+  // size — unnecessary for humans, annoying for emphasis. Strip.
   let stem = model.split(":")[0] ?? model;
-  // Provider-Präfix wie "jina/jina-embeddings-v2-base-de" abschneiden.
+  // Strip provider prefix like "jina/jina-embeddings-v2-base-de".
   stem = stem.includes("/") ? stem.split("/").pop()! : stem;
 
   const digitsDe = ["null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun"];
   const digitsEn = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
   const digits = lang === "de" ? digitsDe : digitsEn;
 
-  // Ziffern zu Wörtern, Bindestriche/Unterstriche als Leerzeichen.
+  // Digits to words, hyphens/underscores as spaces.
   let s = stem.replace(/[_-]/g, " ");
-  // Zahlen 0-9 als Wort, mehrstellig Ziffer-für-Ziffer.
+  // Numbers 0-9 as a word, multi-digit digit by digit.
   s = s.replace(/(\d+)/g, (m) =>
     m
       .split("")
       .map((d) => digits[Number(d)] ?? d)
       .join(" ")
   );
-  // Punkt → "Punkt"/"point" ausgeschrieben, damit TTS nicht abrupt
-  // satz-bricht. Nur wenn zwischen Buchstaben/Wörtern.
+  // Period → spelled-out "Punkt"/"point" so TTS doesn't break the
+  // sentence abruptly. Only between letters/words.
   s = s.replace(/(\w) *\. *(\w)/g, (_, a, b) =>
     lang === "de" ? `${a} Punkt ${b}` : `${a} point ${b}`
   );
-  // Erster Buchstabe groß ("gemma" → "Gemma"), Rest lowercase mit
-  // Preserved-Spaces. Wortgrenzen wie gehabt.
+  // First letter uppercase ("gemma" → "Gemma"), rest lowercase with
+  // spaces preserved. Word boundaries as before.
   return s
     .split(/\s+/)
     .filter(Boolean)
@@ -1610,7 +1612,7 @@ function IntroEditor({
   const [draft, setDraft] = useState<string>("");
   const [open, setOpen] = useState<boolean>(false);
 
-  // Bei Intro-Update von außen lokal sync — verhindert Stale-Draft.
+  // Sync locally on external intro updates — prevents stale draft.
   useEffect(() => {
     setDraft(intro.text ?? "");
   }, [intro.text]);
@@ -1705,7 +1707,7 @@ function IntroEditor({
 }
 
 // ---------------------------------------------------------------------
-// Kind-Filter-Bar
+// Kind filter bar
 // ---------------------------------------------------------------------
 
 const KIND_FILTERS: Array<{ kind: string; defaultOn: boolean }> = [
@@ -1729,7 +1731,7 @@ function KindFilterBar({
   busy: string | null;
   onToggle: (kind: string, include: boolean) => void;
 }) {
-  // Pro kind: wie viele Kapitel + wie viele aktuell included.
+  // Per kind: how many chapters + how many currently included.
   const stats = useMemo(() => {
     const m = new Map<string, { total: number; included: number }>();
     for (const c of chapters) {
@@ -1745,7 +1747,7 @@ function KindFilterBar({
     return m;
   }, [chapters]);
 
-  // Nur Filter zeigen für kinds die im Doc tatsächlich vorkommen.
+  // Only show filters for kinds actually present in the doc.
   const visible = KIND_FILTERS.filter((f) => stats.has(f.kind));
   if (visible.length === 0) return null;
 

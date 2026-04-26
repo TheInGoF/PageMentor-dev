@@ -1,14 +1,14 @@
 /**
- * SuperMemo-2-Algorithmus für Spaced Repetition.
+ * SuperMemo-2 algorithm for spaced repetition.
  *
- * Wir bilden die drei UI-Buttons auf SM-2-Qualitätsstufen ab:
- *   forgot   → quality 1  (muss komplett neu gelernt werden)
- *   partial  → quality 3  (gewusst, aber mühsam)
- *   known    → quality 5  (sofort abrufbar)
+ * We map the three UI buttons to SM-2 quality levels:
+ *   forgot   → quality 1  (must be relearned from scratch)
+ *   partial  → quality 3  (recalled, but with effort)
+ *   known    → quality 5  (recalled instantly)
  *
- * Ease kann nicht unter 1.3 fallen. Intervalle in Tagen, aber beim
- * nächsten Review-Termin nutzen wir Minuten für gerade gescheiterte
- * Karten (10 min), damit sie in derselben Session wiederkommen.
+ * Ease can't drop below 1.3. Intervals are in days, but for the next
+ * review of just-failed cards we use minutes (10 min) so they come
+ * back in the same session.
  */
 
 export type Quality = 1 | 3 | 5;

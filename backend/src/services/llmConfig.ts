@@ -24,47 +24,48 @@ export interface LlmConfig {
   openaiModel?: string;
   googleApiKey?: string;
   googleModel?: string;
-  /** URL des pm-gpu-arbiter, hinter dem Qwen3-TTS sitzt. Default aus
-   *  der ENV `PM_QWEN_TTS_URL`, im NAS-Setup zeigt das auf den
-   *  3090-PC (z. B. `http://192.168.1.50:8790`). */
+  /** URL of the pm-gpu-arbiter sitting in front of Qwen3-TTS. Default
+   *  from the ENV `PM_QWEN_TTS_URL`; in the NAS setup this points at
+   *  the 3090 PC (e.g. `http://192.168.1.50:8790`). */
   qwenTtsUrl?: string;
   qwenTtsApiKey?: string;
-  /** Freitext-Instruction-Prompt für Qwen3-TTS CustomVoice-Presets.
-   *  Wird bei JEDEM Request an den Sidecar weitergereicht und steuert
-   *  Tonfall / Tempo der Preset-Stimme. Leer = neutral.
-   *  Beispiel: "Calm audiobook narrator, slow and clear pacing." */
+  /** Free-text instruction prompt for Qwen3-TTS CustomVoice presets.
+   *  Forwarded to the sidecar on EVERY request and controls tone /
+   *  pacing of the preset voice. Empty = neutral.
+   *  Example: "Calm audiobook narrator, slow and clear pacing." */
   qwenTtsInstruction?: string;
-  /** Sampling-Temperature für CustomVoice-Generate (0.0-1.5). Niedrig
-   *  = deterministischer, straffer an Instruction; hoch = mehr
-   *  Varianz/Emotion. Leer = Qwen-Default. Bei Akzent-Drift-Problemen
-   *  (Vivian/ZH-Speaker driften zurück zu Chinese) lohnt ~0.3-0.5. */
+  /** Sampling temperature for CustomVoice generate (0.0-1.5). Low
+   *  = more deterministic, sticks tighter to the instruction; high
+   *  = more variance/emotion. Empty = Qwen default. For accent-drift
+   *  problems (Vivian/ZH speakers drift back to Chinese) ~0.3-0.5
+   *  helps. */
   qwenTtsTemperature?: string;
-  /** Top-P Sampling (0.0-1.0). Leer = Qwen-Default. */
+  /** Top-P sampling (0.0-1.0). Empty = Qwen default. */
   qwenTtsTopP?: string;
-  /** Override für max_new_tokens des Qwen-Generate. Leer = Sidecar-
-   *  Default (MAX_NEW_TOKENS, derzeit 4096). Hochsetzen nur bei
-   *  extrem langen Chunks; meistens irrelevant weil wir zuvor auf
-   *  ~1500 chars splitten. */
+  /** Override for max_new_tokens of the Qwen generate. Empty =
+   *  sidecar default (MAX_NEW_TOKENS, currently 4096). Only raise
+   *  for extremely long chunks; mostly irrelevant since we split
+   *  to ~1500 chars beforehand. */
   qwenTtsMaxNewTokens?: string;
-  /** Seed-Override (Int-String). Leer = Sidecar berechnet einen
-   *  deterministischen Seed aus dem Speaker-Namen (FNV-Hash) —
-   *  gleicher Speaker → gleiche Stimme über alle Sessions. Explizit
-   *  gesetzt ermöglicht andere Varianten desselben Presets. */
+  /** Seed override (int string). Empty = sidecar computes a
+   *  deterministic seed from the speaker name (FNV hash) — same
+   *  speaker → same voice across all sessions. Explicitly set
+   *  enables variants of the same preset. */
   qwenTtsSeedOverride?: string;
-  /** Max. Zeichen pro TTS-Chunk (500-8000). Leer = 4000-Default bzw.
-   *  ENV PM_TTS_MAX_CHUNK. Kleinere Werte = schnelleres Fail-Fast
-   *  bei Problemen, größere Werte = bessere Prosodie-Kohärenz aber
-   *  höheres OOM-/Timeout-Risiko je nach GPU. Auf 3090 hat 4000
-   *  experimentell nicht stabil funktioniert — 2000-2500 ist safer. */
+  /** Max. characters per TTS chunk (500-8000). Empty = 4000 default
+   *  or ENV PM_TTS_MAX_CHUNK. Smaller values = faster fail-fast on
+   *  problems, larger values = better prosody coherence but higher
+   *  OOM/timeout risk depending on GPU. On the 3090, 4000 wasn't
+   *  experimentally stable — 2000-2500 is safer. */
   ttsMaxChunk?: string;
-  /** Audiobookshelf-Server-URL (z. B. http://192.168.188.5:13378).
-   *  Leer = ABS-Integration deaktiviert. */
+  /** Audiobookshelf server URL (e.g. http://192.168.188.5:13378).
+   *  Empty = ABS integration disabled. */
   absUrl?: string;
-  /** Audiobookshelf-API-Token. In ABS generierbar unter Settings →
-   *  Users → <dein User> → API-Token. Bearer-Auth. */
+  /** Audiobookshelf API token. Generate in ABS under Settings →
+   *  Users → <your user> → API token. Bearer auth. */
   absApiKey?: string;
-  /** ZieI-Library-ID in Audiobookshelf (UUID). Wird über /api/libraries
-   *  gelistet und vom User ausgewählt. Uploads gehen immer dorthin. */
+  /** Target library ID in Audiobookshelf (UUID). Listed via
+   *  /api/libraries and picked by the user. Uploads always go there. */
   absLibraryId?: string;
 }
 

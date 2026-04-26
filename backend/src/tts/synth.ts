@@ -1,8 +1,8 @@
 /**
- * Engine-Dispatcher mit Retry + Backoff. Qwen (lokaler Sidecar hinter
- * dem Arbiter) hat keine Rate-Limits — der Arbiter queued pro Request,
- * keine Inter-Chunk-Pause. Bei endgültigem Fail: `ChunkSynthesisFailure`
- * nach oben.
+ * Engine dispatcher with retry + backoff. Qwen (local sidecar behind
+ * the arbiter) has no rate limits — the arbiter queues per request,
+ * no inter-chunk pause. On final failure: `ChunkSynthesisFailure`
+ * bubbles up.
  */
 
 import { setTimeout as sleep } from "timers/promises";
@@ -13,15 +13,15 @@ import type { EngineId, Voice } from "./engines/base";
 const MAX_RETRIES = 2;
 
 interface EnginePolicy {
-  /** Pause zwischen aufeinanderfolgenden Chunks. */
+  /** Pause between consecutive chunks. */
   interChunkDelayMs: number;
-  /** Cooldown nach Empty-Audio-Fehler. */
+  /** Cooldown after an empty-audio error. */
   emptyAudioCooldownMs: number;
 }
 
 const POLICIES: Record<EngineId, EnginePolicy> = {
-  // Qwen läuft auf derselben GPU wie Ollama — der Arbiter queued pro
-  // Request, zusätzliche Inter-Chunk-Pause bringt nichts.
+  // Qwen runs on the same GPU as Ollama — the arbiter queues per
+  // request, an additional inter-chunk pause buys nothing.
   qwen: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0 },
 };
 
@@ -33,8 +33,8 @@ export interface ChunkSynthesisParams {
   rate: string;
   announce?: string;
   outPath: string;
-  /** Optional AbortSignal — wenn der User mittendrin Cancel drückt,
-   *  bricht der Backoff-Sleep sofort ab statt 30 s abzuwarten. */
+  /** Optional AbortSignal — when the user cancels mid-flight, the
+   *  backoff sleep aborts immediately instead of waiting out 30 s. */
   signal?: AbortSignal;
 }
 
@@ -49,9 +49,9 @@ export class ChunkSynthesisFailure extends Error {
 }
 
 /**
- * Synthesisiert einen Chunk über die für die Voice passende Engine.
- * Führt Retries mit Backoff aus. Wirft `ChunkSynthesisFailure` wenn
- * alle Versuche scheitern.
+ * Synthesizes a chunk via the engine matching the voice. Performs
+ * retries with backoff. Throws `ChunkSynthesisFailure` when all
+ * attempts fail.
  */
 export async function synthesizeChunk(
   params: ChunkSynthesisParams
@@ -99,23 +99,23 @@ export async function synthesizeChunk(
   throw new ChunkSynthesisFailure(params.voice.id, lastErr);
 }
 
-/** Inter-Chunk-Pause zur Rate-Limit-Vermeidung. Pro Engine konfiguriert
+/** Inter-chunk pause to avoid rate limits. Configured per engine
  *  — Qwen = 0 ms, Edge = 1500 ms. */
 export async function interChunkPause(engineId: EngineId): Promise<void> {
   const ms = POLICIES[engineId]?.interChunkDelayMs ?? 0;
   if (ms > 0) await sleep(ms);
 }
 
-/** Preview → Buffer. Keine Retries/Fallbacks — wenn die Engine nicht
- *  antwortet, sieht der User das sofort. */
+/** Preview → Buffer. No retries/fallbacks — if the engine doesn't
+ *  respond, the user sees it immediately. */
 export async function synthesizePreview(params: {
   voice: string;
   locale: string;
   text: string;
-  /** Override für Qwen-Instruction (Preset-Voices). Ermöglicht dem
-   *  Settings-Tester, unsaved Instruction-Text zu probieren. */
+  /** Override for the Qwen instruction (preset voices). Lets the
+   *  settings tester try unsaved instruction text. */
   instructOverride?: string;
-  /** Advanced-Dial-Overrides — analog zu instructOverride. */
+  /** Advanced dial overrides — analogous to instructOverride. */
   temperatureOverride?: number;
   topPOverride?: number;
   maxNewTokensOverride?: number;

@@ -3,15 +3,15 @@ import { PdfViewer } from "./PdfViewer";
 import { t } from "../lib/i18n";
 
 interface Props {
-  /** Wenn null, ist der Modal zu. Ein Objekt heißt: öffnen mit docId +
-   *  optional initialPage zum Hinspringen. */
+  /** When null, the modal is closed. An object means: open with
+   *  docId and optional initialPage to jump to. */
   source: { docId: string; initialPage?: number; title?: string } | null;
   onClose: () => void;
 }
 
-/** Voll-flächiges Modal mit eingebettetem PdfViewer. Genutzt vom
- *  Frage-Tab, um Quellen-Referenzen auf der richtigen Seite des PDFs
- *  anzuzeigen, ohne den Nutzer vom Chat-Kontext wegzureißen. */
+/** Full-screen modal with an embedded PdfViewer. Used by the Q&A
+ *  tab to show source references on the right page of the PDF
+ *  without yanking the user out of the chat context. */
 export function PdfModal({ source, onClose }: Props) {
   useEffect(() => {
     if (!source) return;

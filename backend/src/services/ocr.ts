@@ -1,12 +1,12 @@
 /**
- * OCR-Fallback für Bild-PDFs.
+ * OCR fallback for image-only PDFs.
  *
- * Strategie: Wenn pdf-parse zu wenig Text pro Seite liefert, rendern
- * wir die betroffenen Seiten per `pdftoppm` (poppler-utils) als PNG und
- * schicken sie an `tesseract` (subprocess). Beide Tools müssen im
- * Docker-Image installiert sein (`apk add poppler-utils tesseract-ocr
- * tesseract-ocr-data-deu`). Wenn sie fehlen, fällt die Pipeline
- * transparent auf den pdf-parse-Text zurück.
+ * Strategy: when pdf-parse yields too little text per page, we render
+ * the affected pages via `pdftoppm` (poppler-utils) as PNG and send
+ * them to `tesseract` (subprocess). Both tools must be installed in
+ * the Docker image (`apk add poppler-utils tesseract-ocr
+ * tesseract-ocr-data-deu`). If they're missing, the pipeline
+ * transparently falls back to the pdf-parse text.
  */
 
 import { spawn } from "child_process";

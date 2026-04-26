@@ -51,8 +51,8 @@ chapterRoutes.patch("/:id", async (c) => {
       vals.push(v);
     }
   }
-  // Wenn der User den Kapiteltext editiert, ist die LLM-vorbereitete
-  // Audio-Variante stale — sonst läge das Hörbuch hinter dem Lese-Text.
+  // When the user edits the chapter text, the LLM-prepared audio
+  // variant is stale — otherwise the audiobook would lag the read text.
   if (body.text !== undefined) {
     sets.push("audio_text = NULL", "audio_text_model = NULL");
   }
@@ -92,8 +92,8 @@ chapterRoutes.post("/merge", async (c) => {
   const last = chapters[chapters.length - 1];
   const mergedText = chapters.map((ch) => ch.text).join("\n\n");
 
-  // Audio-Cache invalidieren — der zusammengeführte Text muss neu
-  // präprozessiert werden (Übergänge zwischen Original-Kapiteln).
+  // Invalidate audio cache — the merged text must be re-preprocessed
+  // (transitions between original chapters).
   d.prepare(
     "UPDATE chapters SET title = ?, text = ?, start_page = ?, end_page = ?, audio_text = NULL, audio_text_model = NULL WHERE id = ?"
   ).run(

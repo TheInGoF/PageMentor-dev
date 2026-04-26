@@ -153,7 +153,7 @@ summaryRoutes.post("/chapter/:chapterId", async (c) => {
   }
 });
 
-// Streaming variant — liefert Tokens live als NDJSON-Stream
+// Streaming variant — emits tokens live as NDJSON stream
 // (Content-Type application/x-ndjson). Events:
 //   {"type":"token","data":"..."}
 //   {"type":"done","id":"...","model":"...","content":"..."}

@@ -1,36 +1,36 @@
 /**
- * Preset-Voices aus Qwen3-TTS-12Hz-1.7B-CustomVoice.
+ * Preset voices from Qwen3-TTS-12Hz-1.7B-CustomVoice.
  *
- * Neun im Modell verankerte Stimmen — driften nicht zwischen Chunks
- * (der Schwachpunkt von Voice-Clone-aus-Referenz im Base-Modell).
- * Der Sprachen-Claim der Stimmen ist ihre Muttersprache; das Modell
- * rendert aber in die Zielsprache, die der Sidecar per `language`-
- * Parameter übergibt. Für DE-Content empfiehlt die offizielle
- * Model-Card die EN-Speaker `Ryan` / `Aiden`.
+ * Nine voices anchored in the model — they don't drift between chunks
+ * (the weak spot of voice-clone-from-reference in the base model).
+ * The language claim of each voice is its native language; the model
+ * still renders in the target language passed by the sidecar via the
+ * `language` parameter. For DE content the official model card
+ * recommends the EN speakers `Ryan` / `Aiden`.
  *
- * Voice-ID-Konvention: `preset:<Speaker>` — der Präfix signalisiert
- * der qwen-Engine den CustomVoice-Pfad (anstelle von `custom:<uuid>`
- * für Referenz-Uploads).
+ * Voice-ID convention: `preset:<Speaker>` — the prefix signals the
+ * qwen engine to take the CustomVoice path (instead of `custom:<uuid>`
+ * for reference uploads).
  */
 
 import type { Voice } from "./engines/base";
 
 export const PRESET_PREFIX = "preset:";
 
-/** Welche Presets tauchen in der DE-Voice-Liste auf?
- *  Die offizielle Empfehlung für deutsche Inhalte ist Ryan/Aiden; die
- *  ZH/JP/KR-Stimmen erlauben wir zusätzlich für Experimente, markieren
- *  sie aber als Nicht-Flagship. */
+/** Which presets show up in the DE voice list?
+ *  The official recommendation for German content is Ryan/Aiden; the
+ *  ZH/JP/KR voices we allow for experimentation but mark them as
+ *  non-flagship. */
 interface PresetSpec {
   speaker: string;
   nativeLang: "zh" | "en" | "ja" | "ko";
   gender: "male" | "female";
   label: string;
-  /** Kurzer Charakter-Hinweis für den Voice-Picker. */
+  /** Short character hint for the voice picker. */
   flavor: string;
-  /** Für welche Zielsprachen zeigen wir die Voice im Picker primär an? */
+  /** For which target languages do we primarily show the voice in the picker? */
   showFor: Array<"de" | "en">;
-  /** Ob die Voice als Default-Kandidat für eine bestimmte Sprache gilt. */
+  /** Whether the voice is a default candidate for a specific language. */
   flagshipFor?: "de" | "en";
 }
 
@@ -40,7 +40,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "en",
     gender: "male",
     label: "Ryan",
-    flavor: "dynamisch, klarer Hörbuch-Erzähler",
+    flavor: "dynamic, clear audiobook narrator",
     showFor: ["de", "en"],
     flagshipFor: "de",
   },
@@ -49,7 +49,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "en",
     gender: "male",
     label: "Aiden",
-    flavor: "sonnig, mittlere US-Tonlage",
+    flavor: "sunny, mid-range US tone",
     showFor: ["de", "en"],
     flagshipFor: "en",
   },
@@ -58,7 +58,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "zh",
     gender: "female",
     label: "Vivian",
-    flavor: "helle junge Frau (ZH-Stammstimme)",
+    flavor: "bright young woman (ZH native voice)",
     showFor: ["de", "en"],
   },
   {
@@ -66,7 +66,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "zh",
     gender: "female",
     label: "Serena",
-    flavor: "warm, sanft (ZH-Stammstimme)",
+    flavor: "warm, gentle (ZH native voice)",
     showFor: ["de", "en"],
   },
   {
@@ -74,7 +74,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "zh",
     gender: "male",
     label: "Uncle Fu",
-    flavor: "reifer, milder Mann (ZH-Stammstimme)",
+    flavor: "mature, mild man (ZH native voice)",
     showFor: ["de", "en"],
   },
   {
@@ -82,7 +82,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "zh",
     gender: "male",
     label: "Dylan",
-    flavor: "jugendlich, Beijing (ZH-Stammstimme)",
+    flavor: "youthful, Beijing (ZH native voice)",
     showFor: ["de", "en"],
   },
   {
@@ -90,7 +90,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "zh",
     gender: "male",
     label: "Eric",
-    flavor: "lebhaft, Sichuan (ZH-Stammstimme)",
+    flavor: "lively, Sichuan (ZH native voice)",
     showFor: ["de", "en"],
   },
   {
@@ -98,7 +98,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "ja",
     gender: "female",
     label: "Ono Anna",
-    flavor: "verspielt (JP-Stammstimme)",
+    flavor: "playful (JP native voice)",
     showFor: ["de", "en"],
   },
   {
@@ -106,7 +106,7 @@ const PRESETS: PresetSpec[] = [
     nativeLang: "ko",
     gender: "female",
     label: "Sohee",
-    flavor: "warm, emotional (KR-Stammstimme)",
+    flavor: "warm, emotional (KR native voice)",
     showFor: ["de", "en"],
   },
 ];
@@ -126,10 +126,10 @@ function toVoice(spec: PresetSpec, targetLang: "de" | "en"): Voice {
   };
 }
 
-/** Voice-Objekte aller Presets in allen Ziel-Sprachen. Pro Sprache
- *  erscheint jede Preset-Stimme einmal — die ID ist dieselbe (die
- *  Sprache steckt im Request, nicht in der Voice-ID), darum deduplizieren
- *  Consumer die Liste bei Bedarf über die ID. */
+/** Voice objects for all presets in all target languages. Per language
+ *  each preset voice appears once — the ID is the same (language is
+ *  in the request, not in the voice ID), so consumers dedupe the list
+ *  by ID when needed. */
 export function listPresetVoices(): Voice[] {
   const out: Voice[] = [];
   for (const spec of PRESETS) {
@@ -140,8 +140,8 @@ export function listPresetVoices(): Voice[] {
   return out;
 }
 
-/** Liefert den Speaker-Namen für eine Preset-Voice-ID, oder null wenn
- *  es keine Preset-ID ist. */
+/** Returns the speaker name for a preset voice ID, or null if it's
+ *  not a preset ID. */
 export function speakerForPresetId(voiceId: string): string | null {
   if (!voiceId.startsWith(PRESET_PREFIX)) return null;
   const speaker = voiceId.slice(PRESET_PREFIX.length);

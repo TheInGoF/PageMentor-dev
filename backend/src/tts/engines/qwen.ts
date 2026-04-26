@@ -1,21 +1,20 @@
 /**
- * Qwen3-TTS-Engine — spricht den pm-qwen-tts Voice-Clone-Sidecar über
- * den pm-gpu-arbiter an.
+ * Qwen3-TTS engine — talks to the pm-qwen-tts voice-clone sidecar via
+ * the pm-gpu-arbiter.
  *
- * Voice-Katalog kommt rein aus der SQLite-Tabelle `voice_samples` —
- * der User lädt Referenz-Audio-Samples (3-10 s WAV/MP3) hoch, pro
- * Sample wird ein fester Seed gewürfelt. Die Engine lädt bei jedem
- * Synthese-Call die Referenz-Datei, base64-kodiert sie, und reicht
- * sie plus den Seed an den Sidecar durch.
+ * The voice catalog comes purely from the SQLite `voice_samples` table:
+ * the user uploads reference audio samples (3-10 s WAV/MP3), and a
+ * fixed seed is rolled per sample. On each synthesis call the engine
+ * loads the reference file, base64-encodes it, and forwards it plus
+ * the seed to the sidecar.
  *
- * Determinismus: gleicher Seed + gleicher Referenz-Clip + gleicher
- * Text ⇒ identisches Audio. Der Seed wird in der DB persistiert und
- * nie geändert, bis der User das Sample löscht.
+ * Determinism: same seed + same reference clip + same text ⇒
+ * identical audio. The seed is persisted in the DB and never changed
+ * until the user deletes the sample.
  *
- * Voice-ID-Konvention: `custom:<uuid>`. Der Präfix signalisiert dem
- * Engine-Code, dass der Rest eine voice_samples.id ist — andere
- * Präfixe könnten später built-in Voice-Packs o. ä. sein, ohne das
- * UI anzufassen.
+ * Voice-ID convention: `custom:<uuid>`. The prefix signals to engine
+ * code that the rest is a voice_samples.id — other prefixes could
+ * later be built-in voice packs etc., without touching the UI.
  */
 
 import { writeFile, unlink } from "fs/promises";
@@ -64,11 +63,11 @@ function apiKey(): string {
 const MODEL = process.env.PM_QWEN_TTS_MODEL || "Qwen/Qwen3-TTS-12Hz-1.7B-Base";
 
 const DISCOVERY_TIMEOUT_MS = 5_000;
-// Qwen3-TTS-Base auf einer 3090 braucht ohne flash-attn gut 5-8 min für
-// einen langen Chunk (Intros, volle Absätze). Mit flash-attn 2 eher 2-4
-// min. Default jetzt 20 min damit auch 4000-Zeichen-Chunks (per
-// PM_TTS_MAX_CHUNK erweitert) nicht abschneiden. Override via ENV
-// falls knapper Server einen strikteren Fail-Fast braucht.
+// Qwen3-TTS-Base on a 3090 needs roughly 5-8 min for a long chunk
+// (intros, full paragraphs) without flash-attn. With flash-attn 2 it's
+// closer to 2-4 min. Default is now 20 min so even 4000-character
+// chunks (raised via PM_TTS_MAX_CHUNK) don't time out. Override via
+// ENV if a tight server needs stricter fail-fast.
 function envMs(name: string, defaultMs: number): number {
   const raw = parseInt(process.env[name] ?? "", 10);
   if (!Number.isFinite(raw) || raw < 1_000) return defaultMs;
@@ -109,7 +108,7 @@ async function discover(): Promise<void> {
   } catch (err) {
     probe = { alive: false, refreshedAt: Date.now() };
     console.warn(
-      `[qwen-tts] arbiter nicht erreichbar (${url}): ${(err as Error).message}`
+      `[qwen-tts] arbiter unreachable (${url}): ${(err as Error).message}`
     );
   }
 }
@@ -149,12 +148,12 @@ function sampleToVoice(s: VoiceSample, idx: number): Voice {
     locale,
     gender: s.gender,
     engine: "qwen",
-    // Erste Voice einer Sprache als Flagship markieren — damit der Audio-
-    // Picker bei einem frischen Upload direkt einen Default wählt.
+    // Mark the first voice of a language as flagship so the audio
+    // picker auto-selects a default after a fresh upload.
     flagship: idx === 0,
     note: s.refText
-      ? "Qwen3-TTS Voice-Clone · mit Transkript-Referenz"
-      : "Qwen3-TTS Voice-Clone · x-vector-only",
+      ? "Qwen3-TTS voice clone · with transcript reference"
+      : "Qwen3-TTS voice clone · x-vector only",
     msPerChar: s.msPerChar,
   };
 }
@@ -188,9 +187,9 @@ function resolveDesign(voiceId: string): VoiceDesign | null {
   return getVoiceDesign(id);
 }
 
-/** Deterministischer Seed pro Preset-Voice — gleicher Speaker → gleicher
- *  Seed → kein RNG-Drift zwischen Chunks. Speaker-Name als stabiles
- *  Identity-Token; Hash-Fold auf 32 Bit. */
+/** Deterministic seed per preset voice — same speaker → same seed →
+ *  no RNG drift between chunks. Speaker name as a stable identity
+ *  token; hash folded to 32 bits. */
 function seedForSpeaker(speaker: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < speaker.length; i++) {
@@ -223,7 +222,7 @@ async function callSpeechClone(params: {
     body: JSON.stringify({
       model: MODEL,
       input: params.text,
-      voice: params.sample.id,            // nur für Logging im Sidecar
+      voice: params.sample.id,            // only for sidecar logging
       response_format: "mp3",
       speed: params.speed,
       ref_audio_b64: refB64,
@@ -270,17 +269,17 @@ function readDials(): AdvancedDials {
   };
 }
 
-/** Baut den `instruct`-Prompt für Qwen-VoiceDesign. Prepend eines
- *  Gender-Cues ist nötig, weil Qwen selbst kein Gender-Feld hat — der
- *  UI-Dropdown hätte sonst keinen Effekt.
+/** Builds the `instruct` prompt for Qwen VoiceDesign. Prepending a
+ *  gender cue is needed because Qwen itself has no gender field — the
+ *  UI dropdown would otherwise have no effect.
  *
- *  Früher gab es einen Skip wenn die Beschreibung schon ein Gender-Wort
- *  enthielt — die Heuristik war zu fragil (DE „Erzähler" matched auch
- *  in „Hörbuch-Erzähler" und unterdrückte das female-Prefix obwohl
- *  female ausgewählt war). Jetzt: IMMER prefixen, Dropdown ist
- *  authoritative. Falls die Beschreibung redundant Gender mitnennt
- *  („Erzählerin"), schadet das nichts — Qwen reagiert auf die ersten
- *  Tokens stärker als auf wiederholte Cues weiter hinten. */
+ *  There used to be a skip when the description already contained a
+ *  gender word — the heuristic was too fragile (DE "Erzähler" also
+ *  matched in "Hörbuch-Erzähler" and suppressed the female prefix
+ *  even though female was selected). Now: ALWAYS prefix, the dropdown
+ *  is authoritative. If the description redundantly mentions gender
+ *  ("Erzählerin"), no harm done — Qwen responds more strongly to the
+ *  first tokens than to repeated cues later. */
 function buildDesignInstruct(design: VoiceDesign): string {
   const desc = design.description.trim();
   const prefix =
@@ -290,11 +289,11 @@ function buildDesignInstruct(design: VoiceDesign): string {
   return prefix + desc;
 }
 
-/** Sendet Text + Design-Referenz-Audio als Base-Voice-Clone-Request
- *  an den Sidecar. Damit ist die Stimm-Identität über alle Chunks
- *  stabil — Base-Clone IST seed-deterministisch, VoiceDesign ist es
- *  nicht. Offizielles "Voice Design then Clone"-Pattern aus der
- *  Qwen3-TTS-README.
+/** Sends text + design reference audio as a base voice-clone request
+ *  to the sidecar. This keeps voice identity stable across all
+ *  chunks — base clone IS seed-deterministic, VoiceDesign isn't.
+ *  Official "Voice Design then Clone" pattern from the Qwen3-TTS
+ *  README.
  */
 async function callSpeechCloneFromDesign(params: {
   text: string;
@@ -303,7 +302,7 @@ async function callSpeechCloneFromDesign(params: {
 }): Promise<Buffer> {
   if (!params.design.refPath || !existsSync(params.design.refPath)) {
     throw new Error(
-      `Design ${params.design.id} hat keine Referenz-Audio — bitte neu anlegen oder ensureDesignReference() aufrufen.`
+      `Design ${params.design.id} has no reference audio — please re-create or call ensureDesignReference().`
     );
   }
   const url = baseUrl();
@@ -338,15 +337,14 @@ async function callSpeechCloneFromDesign(params: {
   return Buffer.from(await res.arrayBuffer());
 }
 
-/** Stellt sicher, dass eine Design-Voice eine Referenz-Audio-Datei
- *  auf Disk hat. Wenn nicht, wird EINMAL via VoiceDesign generiert,
- *  das Ergebnis als MP3 gespeichert und die DB-Row geupdatet. Danach
- *  zeigt `design.refPath` auf die Datei. Gibt das aktualisierte Design
- *  zurück.
+/** Ensures a design voice has a reference audio file on disk. If not,
+ *  it is generated ONCE via VoiceDesign, the result is saved as MP3
+ *  and the DB row is updated. Afterwards `design.refPath` points to
+ *  the file. Returns the updated design.
  *
- *  Nötig für alte Designs aus v1.18.025-v1.18.032 (vor dem Refactor
- *  auf Clone-Pattern) sowie als Server-Fallback wenn der Client beim
- *  Create keinen Blob mitschickt.
+ *  Needed for old designs from v1.18.025-v1.18.032 (before the
+ *  clone-pattern refactor) and as a server-side fallback when the
+ *  client doesn't send a blob on create.
  */
 export async function ensureDesignReference(
   design: VoiceDesign,
@@ -354,8 +352,8 @@ export async function ensureDesignReference(
 ): Promise<VoiceDesign> {
   if (design.refPath && existsSync(design.refPath)) return design;
 
-  // Kurzer Ref-Text (~5-7 s Audio) — Qwen-Base-Clone erwartet 3-10 s.
-  // Längere Referenzen produzieren Kauderwelsch bei der Synthese.
+  // Short reference text (~5-7 s audio) — Qwen-Base clone expects
+  // 3-10 s. Longer references produce gibberish in synthesis.
   const refText =
     design.language === "de"
       ? "Hallo, dies ist eine Sprachprobe dieser Stimme. So klingt sie beim Vorlesen eines Textes."
@@ -381,15 +379,16 @@ export async function ensureDesignReference(
   return { ...design, refPath: path, refText };
 }
 
-/** Preview-Synthese für eine NOCH-NICHT-gespeicherte Voice-Design —
- *  wird vom Settings-Form genutzt bevor die Design-Zeile in die DB
- *  persistiert wird. Ermöglicht Seed-Reroll ohne Insert-Delete-Dance.
- *  Das Ergebnis wird NICHT benchmarkt (kein DB-Row zum Aktualisieren).
+/** Preview synthesis for a NOT-YET-saved voice design — used by the
+ *  settings form before the design row is persisted to the DB.
+ *  Allows seed reroll without an insert-delete dance. The result is
+ *  NOT benchmarked (no DB row to update).
  *
- *  Dials-Default = llm-config. Damit klingt die Wizard-Vorschau
- *  identisch zur späteren Hörbuch-Synthese (beide lesen denselben
- *  temperature/top_p/seed-Override aus der Config). Bei Caller-
- *  supplied `dials` haben diese Vorrang — für Live-UI-Tuning. */
+ *  Dials default = llm-config. That way the wizard preview sounds
+ *  identical to the later audiobook synthesis (both read the same
+ *  temperature/top_p/seed overrides from the config). When the
+ *  caller supplies `dials`, those take precedence — for live UI
+ *  tuning. */
 export async function previewDesignUnsaved(params: {
   text: string;
   description: string;
@@ -516,17 +515,17 @@ export const qwenEngine: TtsEngine = {
 
   isAvailable: () => {
     maybeRefresh();
-    // Engine ist auch „verfügbar" wenn Arbiter lebt aber noch keine
-    // Samples hochgeladen sind — die listVoices-Liste ist dann leer,
-    // also taucht keine Voice im Picker auf. Das ist die gewünschte UX.
+    // The engine is also "available" if the arbiter is alive but no
+    // samples have been uploaded yet — listVoices is then empty, so
+    // no voice shows up in the picker. That's the intended UX.
     return probe.alive;
   },
 
   listVoices: () => {
     maybeRefresh();
-    // Preset-Voices kommen aus dem CustomVoice-Modell (9 Speaker,
-    // keine Stil-Drift zwischen Chunks) — immer anbieten, auch wenn
-    // der User noch keine eigenen Samples hochgeladen hat.
+    // Preset voices come from the CustomVoice model (9 speakers, no
+    // style drift between chunks) — always offer them, even when the
+    // user hasn't uploaded any custom samples yet.
     const presets = listPresetVoices();
     let designs: Voice[] = [];
     try {
@@ -554,10 +553,10 @@ export const qwenEngine: TtsEngine = {
     let buf: Buffer;
 
     if (design) {
-      // Offizielles Qwen-Pattern: Design-Voice einmalig referenz-
-      // bouncen, dann über Base-Clone rendern. Das ist seed-stabil —
-      // jeder Chunk bekommt dieselbe Stimm-Identität. VoiceDesign
-      // direkt pro Chunk aufzurufen wäre es nicht.
+      // Official Qwen pattern: bounce the design voice to a reference
+      // once, then render via base clone. That is seed-stable —
+      // every chunk gets the same voice identity. Calling VoiceDesign
+      // directly per chunk would not be.
       const ready = await ensureDesignReference(design, SYNTH_TIMEOUT_MS);
       console.log(
         `[qwen-tts] synth design=${ready.id} (${ready.label}) via clone text=${text.length}c rate=${params.rate} seed=${ready.seed}`
@@ -590,17 +589,17 @@ export const qwenEngine: TtsEngine = {
           `Qwen-TTS voice sample ${params.voice.id} not found in DB`
         );
       }
-      // Qwen-Base akzeptiert KEIN speed-Kwarg im generate_voice_clone —
-      // das Tempo zieht's aus dem Referenz-Audio. Wir senden die
-      // Rohausgabe und passen die Geschwindigkeit danach per ffmpeg
-      // atempo an (ändert Tempo ohne Tonhöhe zu verschieben).
+      // Qwen-Base does NOT accept a speed kwarg in generate_voice_clone
+      // — it pulls tempo from the reference audio. We send the raw
+      // output and adjust speed afterwards via ffmpeg atempo
+      // (changes tempo without shifting pitch).
       console.log(
         `[qwen-tts] synth clone voice=${params.voice.id} text=${text.length}c rate=${params.rate}`
       );
       buf = await callSpeechClone({
         text,
         sample,
-        speed: 1.0, // Info fürs Sidecar-Log, faktisch ignoriert
+        speed: 1.0, // info for the sidecar log, effectively ignored
         timeoutMs: SYNTH_TIMEOUT_MS,
       });
     }
@@ -633,9 +632,9 @@ export const qwenEngine: TtsEngine = {
       );
     }
 
-    // Benchmark-Updates: Preset-Voices teilen keinen DB-Record, darum
-    // überspringen. Custom-Samples und Designs haben je eigene ID-
-    // stabile Tabelle — ETA-EMA dort hochzählen.
+    // Benchmark updates: preset voices share no DB record, so skip.
+    // Custom samples and designs each have their own ID-stable table —
+    // bump the ETA EMA there.
     if (design) {
       try {
         recordDesignChunkTiming(design.id, text.length, Date.now() - t0);
@@ -659,8 +658,8 @@ export const qwenEngine: TtsEngine = {
   async preview(params: PreviewParams): Promise<Buffer> {
     const design = resolveDesign(params.voice.id);
     if (design) {
-      // Preview auf einer GESPEICHERTEN Design-Voice geht über Clone —
-      // dieselbe stabile Stimme die der User im Audiobook hören wird.
+      // Preview for a SAVED design voice goes via clone — the same
+      // stable voice the user will hear in the audiobook.
       const ready = await ensureDesignReference(design, PREVIEW_TIMEOUT_MS);
       const buf = await callSpeechCloneFromDesign({
         text: params.text,
@@ -681,9 +680,9 @@ export const qwenEngine: TtsEngine = {
         params.instructOverride !== undefined
           ? params.instructOverride
           : effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
-      // Preview nutzt dieselben Dials wie Produktiv-Synthese — User
-      // hört direkt was er bei der Generierung kriegen wird. Pro-Request-
-      // Overrides (Tester-UI) haben Vorrang vor Config-Defaults.
+      // Preview uses the same dials as production synthesis — the user
+      // hears exactly what generation will produce. Per-request
+      // overrides (tester UI) take precedence over config defaults.
       const base = readDials();
       const dials: AdvancedDials = {
         temperature:

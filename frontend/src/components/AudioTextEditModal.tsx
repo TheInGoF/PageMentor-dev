@@ -6,16 +6,16 @@ import { useToast } from "./ui/Toast";
 import { t } from "../lib/i18n";
 
 /**
- * Side-by-side Viewer + Editor für den TTS-optimierten Kapiteltext.
- * Links: Original aus Docling (read-only). Rechts: audio_text, manuell
- * editierbar. User kann den Ollama-Output noch anfassen bevor er TTS
- * anwirft — typische Korrekturen: Eigennamen die der LLM vermanscht
- * hat, Abkürzungen die nicht ausgeschrieben wurden, eigene Pausen.
+ * Side-by-side viewer + editor for the TTS-optimized chapter text.
+ * Left: original from Docling (read-only). Right: audio_text,
+ * manually editable. The user can fix the Ollama output before
+ * starting TTS — typical fixes: proper nouns the LLM mangled,
+ * abbreviations that weren't expanded, manual pauses.
  *
- * Save → PATCH /api/audio/preprocessed/:chapterId (setzt Model-Marker
- * auf "manual-edit" damit der Status-Badge das anzeigt).
- * Reset → DELETE-Semantik via PATCH mit leerem text, der nächste
- * Preprocess-Aufruf schickt dann wieder Ollama.
+ * Save → PATCH /api/audio/preprocessed/:chapterId (sets the model
+ * marker to "manual-edit" so the status badge shows it).
+ * Reset → DELETE semantics via PATCH with empty text; the next
+ * preprocess call will then run Ollama again.
  */
 
 interface Props {
@@ -32,10 +32,11 @@ export function AudioTextEditModal({ chapterId, onClose, onSaved }: Props) {
   const toast = useToast();
 
   useEffect(() => {
-    // Nur bei chapter-Wechsel neu laden. `toast` und `onClose` sind
-    // im Parent Inline-Lambdas — ihre Referenz-Identity wechselt bei
-    // jedem Parent-Rerender, was sonst jeden Tick ein Re-Fetch
-    // triggert (→ UI-Flackern während SSE-Events reinkommen).
+    // Only re-fetch on chapter change. `toast` and `onClose` are
+    // inline lambdas in the parent — their reference identity
+    // changes on every parent re-render, which would otherwise
+    // trigger a refetch on every tick (→ UI flicker as SSE events
+    // arrive).
     setLoading(true);
     api.audio
       .getPreprocessed(chapterId)

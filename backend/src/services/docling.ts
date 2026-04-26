@@ -1,41 +1,42 @@
 /**
- * Docling-Serve-Client. Wir nutzen ausschließlich den asynchronen
- * Endpoint, weil eine 100-Seiten-PDF auf der Synology-CPU locker
- * 30+ Minuten dauert und der sync-Endpoint ohnehin nach 120 s aufgibt.
+ * Docling-serve client. We exclusively use the asynchronous endpoint
+ * because a 100-page PDF on the Synology CPU easily takes 30+ minutes
+ * and the sync endpoint gives up after 120 s anyway.
  *
  * Flow:
- *   1. POST /v1/convert/file/async → liefert { task_id }
- *   2. GET /v1/status/poll/{task_id} alle paar Sekunden, bis task_status
- *      "success" (oder "failure") ist.
- *   3. GET /v1/result/{task_id} → volles DoclingResponse-JSON.
+ *   1. POST /v1/convert/file/async → returns { task_id }
+ *   2. GET /v1/status/poll/{task_id} every few seconds until
+ *      task_status is "success" (or "failure").
+ *   3. GET /v1/result/{task_id} → full DoclingResponse JSON.
  *
- * Ausgabe sind (a) das komplette Markdown und (b) eine aus dem
- * strukturierten JSON abgeleitete Kapitel-Liste. Kapitel-Erkennung
- * wählt den "richtigen" Heading-Level dynamisch: den kleinsten Level,
- * der mindestens dreimal auftritt — so passt sich das an Studienhefte
- * mit H1-Kapiteln genauso an wie an Scripte, die nur mit H2 gliedern.
+ * Output is (a) the full Markdown and (b) a chapter list derived from
+ * the structured JSON. Chapter detection picks the "right" heading
+ * level dynamically: the smallest level that occurs at least three
+ * times — that way it adapts to course booklets with H1 chapters as
+ * well as scripts that only structure with H2.
  */
 
 import { readFile } from "fs/promises";
 import { basename } from "path";
 import { setTimeout as sleep } from "timers/promises";
+import { pickLang, tLang } from "../lib/i18n";
 
 const DOCLING_URL = process.env.PM_DOCLING_URL || "http://docling:5001";
 const DOCLING_API_KEY = process.env.PM_DOCLING_API_KEY || "";
 const POLL_INTERVAL_MS = 4000;
 
-/** Klassifikation eines erkannten Abschnitts. Steuert welche Features
- *  den Abschnitt verwenden:
- *    - content:       echter Lerntext — geht ins Hörbuch, Karten, Zsf.
- *    - example:       Beispiele — gehen in Karten, NICHT ins Hörbuch
- *    - exercise:      Übungen/Aufgaben — Klausur-Pool, nicht ins Hörbuch
- *    - summary:       Zusammenfassung am Kapitelende — gutes Hörbuch-Material
- *    - self_check:    Aufgaben zur Selbstüberprüfung
- *    - solutions:     Lösungen der Übungen / der Selbstüberprüfung
- *    - index:         TOC, Glossar, Sachwortverzeichnis, Abb./Tab.-Verz.
- *    - references:    Literaturverzeichnis, Internet-Links
- *    - meta:          Vorwort, Impressum, Einsendeaufgabe, Front Matter
- *    - other:         unklare Klassifizierung — Default
+/** Classification of a detected section. Drives which features use
+ *  the section:
+ *    - content:       real study text — goes into audiobook, cards, summary.
+ *    - example:       examples — go into cards, NOT into the audiobook.
+ *    - exercise:      exercises/problems — exam pool, not into audiobook.
+ *    - summary:       summary at chapter end — good audiobook material.
+ *    - self_check:    self-check exercises.
+ *    - solutions:     solutions to exercises / self-check.
+ *    - index:         TOC, glossary, subject index, fig./tab. index.
+ *    - references:    bibliography, internet links.
+ *    - meta:          preface, imprint, submission task, front matter.
+ *    - other:         unclear classification — default.
  */
 export type ChapterKind =
   | "content"
@@ -50,11 +51,11 @@ export type ChapterKind =
   | "other";
 
 export interface DoclingSection {
-  number: number;        // 1-basiert
+  number: number;        // 1-based
   title: string;
   startPage: number;
   endPage: number;
-  text: string;          // Markdown-Absätze dieses Abschnitts
+  text: string;          // Markdown paragraphs of this section
   kind: ChapterKind;
 }
 
@@ -62,16 +63,16 @@ export interface DoclingExtraction {
   markdown: string;
   pageCount: number;
   sections: DoclingSection[];
-  /** Aus dem Docling-Document-JSON extrahierte Metadaten. Beide Felder
-   *  können null sein wenn die PDF keine Metadata-Felder hat (typisch
-   *  für gescannte oder Selfpublish-Skripte). */
+  /** Metadata extracted from the Docling document JSON. Both fields
+   *  may be null if the PDF has no metadata fields (typical for
+   *  scanned or self-published scripts). */
   metadata: {
     title: string | null;
     author: string | null;
   };
-  /** Rohe DoclingDocument-JSON — für Artefakt-Dump auf Disk und
-   *  spätere Weiterverarbeitung (Tabellen-Struktur, Bild-Bounding-
-   *  Boxes, …). Kann null sein wenn docling nichts geliefert hat. */
+  /** Raw DoclingDocument JSON — for artifact dump to disk and later
+   *  processing (table structure, image bounding boxes, …). Can be
+   *  null if docling returned nothing. */
   docJson: unknown | null;
 }
 
@@ -85,9 +86,9 @@ interface DoclingTextItem {
 interface DoclingDocumentJson {
   pages?: Record<string, unknown>;
   texts?: DoclingTextItem[];
-  /** PDF-Metadaten via PyMuPDF / pypdfium. Felder sind alle optional;
-   *  je nach PDF-Quelle ist mal das eine, mal das andere ausgefüllt.
-   *  Manche Studienhefte tragen den Titel im subject, andere im title. */
+  /** PDF metadata via PyMuPDF / pypdfium. All fields optional;
+   *  depending on the PDF source either one or the other is filled.
+   *  Some course booklets carry the title in subject, others in title. */
   meta?: {
     title?: string;
     author?: string;
@@ -97,10 +98,10 @@ interface DoclingDocumentJson {
   };
 }
 
-/** Holt Titel + Autor aus den Docling-Metadaten. Falls die PDF keine
- *  oder schrottige Metadaten hat (Default „Microsoft Word — …" als
- *  Title o. ä.), gibt's null zurück; der Caller behält dann den
- *  Filename-Title und author bleibt leer. */
+/** Pulls title + author from the Docling metadata. When the PDF has
+ *  no or junk metadata (default "Microsoft Word — …" as title etc.),
+ *  returns null; the caller then keeps the filename title and
+ *  author stays empty. */
 function extractDocMetadata(
   doc: DoclingDocumentJson
 ): { title: string | null; author: string | null } {
@@ -109,24 +110,24 @@ function extractDocMetadata(
     if (typeof s !== "string") return null;
     const t = s.trim();
     if (!t) return null;
-    // Boilerplate-Titel die PDF-Tools default reinschreiben aussortieren.
+    // Filter out boilerplate titles PDF tools write by default.
     if (/^(microsoft\s+word|untitled|document\d*|new document|adobe.*photoshop)/i.test(t))
       return null;
-    if (t.length > 200) return null; // wahrscheinlich kein Titel
+    if (t.length > 200) return null; // probably not a title
     return t;
   };
   const cleanAuthor = (s: unknown): string | null => {
     if (typeof s !== "string") return null;
     const a = s.trim();
     if (!a) return null;
-    // Default-Werte aus Office-Suites die niemand interessieren.
+    // Default values from office suites no one cares about.
     if (/^(unknown|admin|user|administrator|standard)$/i.test(a)) return null;
     if (a.length > 150) return null;
     return a;
   };
-  // Titel-Fallback-Kette: title → subject → null. Subject hält bei
-  // PDFs aus Acrobat/InDesign oft den echten Buch-Titel wenn das
-  // title-Feld nur den Dateinamen wiederholt.
+  // Title fallback chain: title → subject → null. With PDFs from
+  // Acrobat/InDesign, subject often holds the real book title when
+  // the title field just repeats the filename.
   const title = cleanTitle(meta.title) ?? cleanTitle(meta.subject) ?? null;
   const author = cleanAuthor(meta.author);
   return { title, author };
@@ -149,13 +150,13 @@ interface PollResponse {
   task_status?: string;
   task_progress?: number;
   task_meta?: Record<string, unknown>;
-  /** Manche docling-serve-Versionen packen zusätzliche Felder rein
-   *  (z. B. processed_pages, total_pages). Wir nehmen alles was wir
-   *  kriegen und loggen's für die Debug-Sicht. */
+  /** Some docling-serve versions add extra fields
+   *  (e.g. processed_pages, total_pages). We accept everything we
+   *  get and log it for debug visibility. */
   [key: string]: unknown;
 }
 
-/** Fallback-Polling wenn WS nicht geht. */
+/** Fallback polling when WS doesn't work. */
 async function pollUntilDone(
   taskId: string,
   signal: AbortSignal | undefined,
@@ -179,10 +180,10 @@ async function pollUntilDone(
   }
 }
 
-/** WS-Subscription. Docling pusht Status-Updates ohne 4s-Poll-Lag,
- *  und wir füllen das Log nicht mit identischen „noch am laufen"-
- *  Zeilen zu. Bei Verbindungsfehler wirft die Promise und der
- *  Caller fällt auf Polling zurück. */
+/** WS subscription. Docling pushes status updates without the 4s
+ *  poll lag, and we don't flood the log with identical
+ *  "still running" lines. On connection error the promise rejects
+ *  and the caller falls back to polling. */
 async function subscribeViaWs(
   taskId: string,
   signal: AbortSignal | undefined,
@@ -213,7 +214,7 @@ async function subscribeViaWs(
       fn();
     };
 
-    // Wenn die Verbindung nicht binnen 5 s steht, werfen wir.
+    // If the connection isn't up within 5 s, throw.
     const connectTimeout = setTimeout(() => {
       finish(() => reject(new Error("WS connect timeout")));
     }, 5000);
@@ -256,8 +257,8 @@ async function subscribeViaWs(
 
     ws.addEventListener("close", () => {
       clearTimeout(connectTimeout);
-      // Wenn WS zu schließt ohne dass wir ein "success" gesehen haben,
-      // liefern wir das als Fehler — der Caller poll dann fallback.
+      // If WS closes without our seeing a "success", report it as
+      // an error — the caller then falls back to polling.
       finish(() => reject(new Error("WS closed before task completion")));
     });
 
@@ -285,8 +286,8 @@ async function doclingFetch(
   return fetch(`${DOCLING_URL}${path}`, { ...init, headers });
 }
 
-/** Health-Check — wird beim Pipeline-Start kurz angerufen, damit wir
- *  einen sauberen Fehler werfen können falls docling-serve down ist. */
+/** Health check — called briefly at pipeline start so we can throw
+ *  a clean error if docling-serve is down. */
 export async function doclingAlive(): Promise<boolean> {
   try {
     const res = await doclingFetch("/health", { method: "GET" });
@@ -303,6 +304,7 @@ export async function extractPdfViaDocling(params: {
   onProgress?: (message: string, fraction?: number) => void;
 }): Promise<DoclingExtraction> {
   const { pdfPath, language = "de", signal, onProgress } = params;
+  const lang = pickLang(language);
 
   // ---- 1. Upload -----------------------------------------------------
   const fileBuf = await readFile(pdfPath);
@@ -321,7 +323,7 @@ export async function extractPdfViaDocling(params: {
   form.append("pdf_backend", "dlparse_v2");
   form.append("abort_on_error", "false");
 
-  onProgress?.("Docling: Upload läuft …");
+  onProgress?.(tLang(lang, "msg.doclingUploading"));
   const uploadRes = await doclingFetch("/v1/convert/file/async", {
     method: "POST",
     body: form,
@@ -334,16 +336,15 @@ export async function extractPdfViaDocling(params: {
   const { task_id } = (await uploadRes.json()) as AsyncTaskHandle;
   if (!task_id) throw new Error("docling upload missing task_id");
 
-  // ---- 2. Auf Fertigstellung warten ---------------------------------
-  // Bevorzugt WebSocket (Push-basiert, keine Poll-Log-Flut). Fällt
-  // automatisch auf Polling zurück falls die WS-Verbindung nicht
-  // zustande kommt (älteres docling-serve, Proxy blockt, o. ä.).
+  // ---- 2. Wait for completion ---------------------------------------
+  // Prefer WebSocket (push-based, no poll log flood). Automatically
+  // falls back to polling if the WS connection can't be established
+  // (older docling-serve, proxy blocks, etc.).
   //
-  // docling-serve sendet während der Verarbeitung praktisch keine
-  // Status-Updates — der State bleibt minutenlang "started". Damit
-  // der User im App-Log sieht dass die Pipeline noch lebt, geben
-  // wir alle 30 s einen Heartbeat raus, auch wenn der State sich
-  // nicht ändert.
+  // docling-serve sends practically no status updates during
+  // processing — the state stays "started" for minutes. So the user
+  // sees in the app log that the pipeline is alive, we emit a
+  // heartbeat every 30 s even when the state doesn't change.
   const HEARTBEAT_MS = 30_000;
   const startedAt = Date.now();
   let lastLoggedState = "";
@@ -401,15 +402,15 @@ export async function extractPdfViaDocling(params: {
   try {
     await subscribeViaWs(task_id, signal, reportStatus);
   } catch (wsErr) {
-    // WS nicht verfügbar → Fallback aufs klassische Polling.
+    // WS unavailable → fall back to classic polling.
     console.log(
-      `[docling] WS-Subscription nicht möglich (${(wsErr as Error).message}), falle auf Polling zurück`
+      `[docling] WS subscription not possible (${(wsErr as Error).message}), falling back to polling`
     );
     await pollUntilDone(task_id, signal, reportStatus);
   }
 
-  // ---- 3. Result abholen --------------------------------------------
-  onProgress?.("Docling: Ergebnis abholen …");
+  // ---- 3. Fetch result ----------------------------------------------
+  onProgress?.(tLang(lang, "msg.doclingFetchResult"));
   const resultRes = await doclingFetch(`/v1/result/${task_id}`);
   if (!resultRes.ok) {
     throw new Error(`docling result fetch failed ${resultRes.status}`);
@@ -436,17 +437,17 @@ export async function extractPdfViaDocling(params: {
   };
 }
 
-/** Erkennt eine nummerierte Kapitel-Überschrift ("1 Einleitung",
- *  "1.1 Grundlagen", "2.3.4 Detail"). Liefert die Tiefe (Anzahl der
- *  Komponenten), damit wir nur Top-Level-Kapitel als Grenzen nehmen. */
+/** Detects a numbered chapter heading ("1 Einleitung",
+ *  "1.1 Grundlagen", "2.3.4 Detail"). Returns the depth (number of
+ *  components) so we only take top-level chapters as boundaries. */
 function numberedHeadingDepth(title: string): number | null {
   const m = /^\s*(\d+(?:\.\d+)*)\s+\S/.exec(title);
   if (!m) return null;
   return m[1].split(".").length;
 }
 
-/** Titel, die ein Studienheft auch ohne Nummerierung als eigenes
- *  Kapitel zählen — und gleich ihre Klassifikation mitbringen. */
+/** Titles that count as their own chapter in a course booklet even
+ *  without numbering — they bring their classification along. */
 const KNOWN_SECTION_TITLES: Array<{ pattern: RegExp; kind: ChapterKind }> = [
   { pattern: /^vorwort$/i, kind: "meta" },
   { pattern: /^einleitung$/i, kind: "meta" },
@@ -461,38 +462,38 @@ const KNOWN_SECTION_TITLES: Array<{ pattern: RegExp; kind: ChapterKind }> = [
   { pattern: /^lösungen\s+der\s+übungen/i, kind: "solutions" },
   { pattern: /^lösungen\s+der\s+aufgaben/i, kind: "solutions" },
   { pattern: /^einsendeaufgabe/i, kind: "self_check" },
-  // Generische Verzeichnisse — kurze Titel mit "Verzeichnis" am Ende.
+  // Generic indexes — short titles ending in "Verzeichnis".
   { pattern: /\bverzeichnis$/i, kind: "index" },
 ];
 
-/** Mustertest, ob ein Heading INLINE-Kram ist (Beispiel, Übung, Tab.,
- *  Abb.) — also in den aktuellen Abschnitt eingehen soll, nicht ein
- *  eigener Abschnitt sein. */
+/** Checks whether a heading is INLINE stuff (Beispiel, Übung, Tab.,
+ *  Abb.) — i.e. should fold into the current section rather than be
+ *  its own section. */
 function isInlineMarker(title: string): boolean {
   return /^(beispiel|übung|aufgabe|tab\.|tabelle|abb\.|abbildung|fig\.|figure|tab|merksatz|hinweis|tipp)\s*\d/i.test(
     title.trim()
   );
 }
 
-/** Klassifiziert einen Abschnitt anhand seines Titels. */
+/** Classifies a section by its title. */
 function classifyKind(title: string, numberedDepth: number | null): ChapterKind {
   const t = title.trim();
   for (const { pattern, kind } of KNOWN_SECTION_TITLES) {
     if (pattern.test(t)) return kind;
   }
-  // Nummerierte Kapitel sind standardmäßig Lerninhalte.
+  // Numbered chapters are study content by default.
   if (numberedDepth != null) return "content";
   return "other";
 }
 
-/** Wählt den Chapter-Boundary-Heuristik-Modus anhand der vorhandenen
- *  Heading-Struktur. Bevorzugt: nummerierte Top-Level-Überschriften
- *  (depth=1), weil das in Studienheften die echten Kapitel sind.
- *  Fallback: Heading-Level aus Docling.
+/** Picks the chapter-boundary heuristic mode based on the available
+ *  heading structure. Preferred: numbered top-level headings
+ *  (depth=1), because in course booklets those are the real
+ *  chapters. Fallback: heading level from Docling.
  */
 function analyzeHeadings(items: DoclingTextItem[]): {
   useNumbered: boolean;
-  numberedDepthCutoff: number;   // nur relevant wenn useNumbered
+  numberedDepthCutoff: number;   // only relevant when useNumbered
   fallbackLevel: number;
 } {
   let numberedDepth1 = 0;
@@ -543,25 +544,25 @@ function buildSections(
   }> = [];
   let cur: (typeof sections)[number] | null = null;
 
-  /** Entscheidet, ob ein Item einen neuen Kapitel-Start triggert. */
+  /** Decides whether an item triggers a new chapter start. */
   const isChapterBoundary = (item: DoclingTextItem): boolean => {
     if (item.label !== "section_header" && item.label !== "title") return false;
     const title = (item.text ?? "").trim();
     if (!title) return false;
-    // Inline-Marker (Beispiel/Übung/Tab.) niemals als eigenes Kapitel.
+    // Inline markers (Beispiel/Übung/Tab.) never become their own chapter.
     if (isInlineMarker(title)) return false;
 
-    // Bekannte Sonder-Titel (Glossar, Literatur, Zusammenfassung…)
-    // zählen immer als Kapitel-Grenze.
+    // Known special titles (glossary, references, summary…) always
+    // count as a chapter boundary.
     if (KNOWN_SECTION_TITLES.some((k) => k.pattern.test(title))) return true;
 
     if (heur.useNumbered) {
-      // Nur nummerierte Top-Level-Überschriften ("1 ", "2 ", …).
+      // Only numbered top-level headings ("1 ", "2 ", …).
       const depth = numberedHeadingDepth(title);
       return depth !== null && depth <= heur.numberedDepthCutoff;
     }
 
-    // Fallback: Docling-Level ≤ gewähltem Cutoff.
+    // Fallback: Docling level ≤ chosen cutoff.
     const lvl = typeof item.level === "number" && item.level > 0 ? item.level : 1;
     return lvl <= heur.fallbackLevel;
   };
@@ -583,7 +584,7 @@ function buildSections(
       continue;
     }
 
-    if (!cur) continue; // vor dem ersten Kapitel-Start → Titelseite, droppen
+    if (!cur) continue; // before the first chapter → title page, drop
 
     const label = item.label ?? "text";
     if (["page_footer", "page_header", "page_number", "caption", "furniture"].includes(label)) {
@@ -592,14 +593,14 @@ function buildSections(
     const text = (item.text ?? "").trim();
     if (!text) continue;
 
-    // Inline-Marker (Beispiel 1.2:, Übung 3.4:) als kursiven Markdown-
-    // Block in den Kapiteltext einbetten — verloren geht nichts, aber
-    // die werden keine eigene Zeile im Kapitel-Panel.
+    // Inline markers (Beispiel 1.2:, Übung 3.4:) embedded as a bold
+    // Markdown block in the chapter text — nothing is lost, but they
+    // don't get their own row in the chapter panel.
     if (item.label === "section_header" || item.label === "title") {
       if (isInlineMarker(text)) {
         cur.parts.push(`**${text}**`);
       } else {
-        // Sub-Überschrift innerhalb eines Kapitels — als ## drunter.
+        // Sub-heading inside a chapter — emit as ## below.
         cur.parts.push(`\n## ${text}\n`);
       }
     } else {

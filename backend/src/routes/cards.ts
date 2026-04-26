@@ -87,13 +87,13 @@ cardRoutes.post("/extract/:docId", async (c) => {
 });
 
 // Fire-and-forget hybrid pipeline:
-//   Stage 1 (deterministisch): Aufgaben aus Markern in content-Kapiteln
-//     ziehen + Lösungen aus content UND solutions-Kapiteln matchen.
-//   Stage 2 (RAG+LLM): für alle Aufgaben ohne Antwort per Embedding-
-//     Retrieval die wahrscheinlichsten Chunks holen und das LLM
-//     wörtlich zitieren lassen.
-// Progress geht über den gemeinsamen Event-Bus (`cards.*`-Phasen) und
-// wird von der Frontend-UI via /api/audio/stream/:docId abonniert.
+//   Stage 1 (deterministic): pull exercises from markers in content
+//     chapters and match solutions from content AND solutions chapters.
+//   Stage 2 (RAG+LLM): for any exercise without an answer, fetch the
+//     most likely chunks via embedding retrieval and have the LLM
+//     quote verbatim.
+// Progress is emitted via the shared event bus (`cards.*` phases) and
+// the frontend UI subscribes through /api/audio/stream/:docId.
 const cardRunsActive = new Set<string>();
 
 cardRoutes.post("/generate/:docId", async (c) => {
@@ -117,7 +117,7 @@ cardRoutes.post("/generate/:docId", async (c) => {
   }
 
   cardRunsActive.add(docId);
-  // Fire-and-forget — UI sieht Progress über SSE.
+  // Fire-and-forget — UI sees progress via SSE.
   void runCardGenerate(docId, doExtract, doFill).finally(() => {
     cardRunsActive.delete(docId);
   });
@@ -265,7 +265,7 @@ async function runCardGenerate(
                   filled++;
                 }
               } catch {
-                // Einzelne Frage ausfallen lassen, Gesamtlauf weiter.
+                // Let a single question fail, keep the overall run going.
               }
               emitEvent({
                 phase: "cards.fill.progress",
@@ -447,7 +447,7 @@ cardRoutes.post("/:id/review", async (c) => {
   });
 });
 
-// CSV-Export (Anki-kompatibel: "question";"answer" semikolongetrennt mit Quotes).
+// CSV export (Anki compatible: "question";"answer" semicolon-separated with quotes).
 cardRoutes.get("/export/:docId", (c) => {
   const docId = c.req.param("docId");
   const format = (c.req.query("format") || "csv").toLowerCase();
@@ -504,9 +504,9 @@ cardRoutes.get("/export/:docId", (c) => {
   });
 });
 
-// CSV-Import (komplementär zum Export). Akzeptiert UTF-8 CSV mit
-// ";" oder "," als Trenner. Erste Zeile wird als Header interpretiert,
-// erwartet werden die Spalten "question" und "answer" (Rest optional).
+// CSV import (complementary to export). Accepts UTF-8 CSV with ";" or
+// "," as separator. The first line is interpreted as the header,
+// "question" and "answer" columns are required (rest optional).
 cardRoutes.post("/import/:docId", async (c) => {
   const docId = c.req.param("docId");
   const doc = db().prepare("SELECT id FROM documents WHERE id = ?").get(docId);
@@ -598,7 +598,7 @@ function csvCell(s: string | null | undefined): string {
   return `"${esc}"`;
 }
 
-// Aggregate stats for a document (for the "Übungen"-Tab header).
+// Aggregate stats for a document (for the "Exercises" tab header).
 cardRoutes.get("/stats/:docId", (c) => {
   const docId = c.req.param("docId");
   const d = db();

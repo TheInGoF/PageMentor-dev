@@ -16,8 +16,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 interface Props {
   docId: string;
-  /** Wenn gesetzt, springt der Viewer nach dem ersten PDF-Load auf
-   *  diese Seite. Wird aus RagQA-Quellen-Clicks gefüttert. */
+  /** When set, the viewer jumps to this page after the first PDF
+   *  load. Fed by RagQA source clicks. */
   initialPage?: number;
 }
 

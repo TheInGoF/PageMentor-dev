@@ -32,12 +32,11 @@ audioRoutes.get("/voices", (c) => {
 });
 
 // Short sample in the requested voice — played on picker click.
-// Optional query params ermöglichen dem Settings-Preset-Tester einen
-// maßgeschneiderten Preview mit eigenem Text und noch-nicht-gespeicherter
-// Instruction:
+// Optional query params let the settings preset tester request a
+// tailored preview with custom text and not-yet-saved instruction:
 //   /api/audio/preview?voice=preset:Ryan&text=...&instruct=...
-// Bei Overrides deaktivieren wir das 24h-Caching (sonst sieht der User
-// alte Tests wenn er den Text tweaked).
+// With overrides we disable the 24h cache (otherwise the user sees
+// old tests when they tweak the text).
 audioRoutes.get("/preview", async (c) => {
   const voiceId = c.req.query("voice") || "";
   const voice = findVoice(voiceId);
@@ -57,12 +56,12 @@ audioRoutes.get("/preview", async (c) => {
     maxTokOverride !== undefined ||
     seedOverride !== undefined;
 
-  // Längerer Probe-Text: Qwen-TTS driftet autoregressiv — die ersten
-  // ~5 Sekunden klingen konsistent zum Instruction-Prompt, später kann
-  // die Stimme Richtung Trainings-Verteilung zurückfallen. Ein 50-
-  // Zeichen-Sample würde diesen Drift nicht zeigen; der Hörbuch-Chunk
-  // schon. Also geben wir hier einen ~380-Zeichen-Absatz, damit die
-  // Vorschau repräsentativ für die spätere Hörbuch-Ausgabe ist.
+  // Longer sample text: Qwen-TTS drifts autoregressively — the first
+  // ~5 seconds sound consistent with the instruction prompt, after
+  // which the voice can fall back toward the training distribution.
+  // A 50-character sample wouldn't show this drift; an audiobook
+  // chunk would. So we use a ~380-character paragraph here so the
+  // preview is representative of the later audiobook output.
   const sample = textOverride
     ? textOverride
     : voice.language === "de"
@@ -104,19 +103,19 @@ audioRoutes.get("/preview", async (c) => {
   }
 });
 
-// --- Per-Chapter Workflow ---------------------------------------------
+// --- Per-chapter workflow ---------------------------------------------
 //
-// Granulare Kontrolle damit der User pro Kapitel steuern kann, ob/wie
-// Ollama cleant und wann TTS läuft. Flow im UI:
-//   1. GET /chapter-status/:docId   → aktueller Stand aller Kapitel
-//   2. POST /preprocess/:chapterId  → Ollama clean (nur dieses Kapitel)
-//   3. GET /preprocessed/:chapterId → gereinigten Text anzeigen
-//   4. PATCH /preprocessed/:chapterId → manueller Edit
-//   5. POST /generate-chapter/:chapterId → TTS für das eine Kapitel
+// Granular control so the user can decide per chapter whether/how
+// Ollama cleans and when TTS runs. Flow in the UI:
+//   1. GET /chapter-status/:docId   → current state of all chapters
+//   2. POST /preprocess/:chapterId  → Ollama clean (this chapter only)
+//   3. GET /preprocessed/:chapterId → show cleaned text
+//   4. PATCH /preprocessed/:chapterId → manual edit
+//   5. POST /generate-chapter/:chapterId → TTS for that one chapter
 
-// Vereinheitlichter Status pro Kapitel — kombiniert chapters + audio +
-// audio_text damit das UI alles aus einem Call bekommt. Liefert auch
-// das doc-level Intro (audio_intro_text + ggf. existing intro.mp3).
+// Unified per-chapter status — combines chapters + audio +
+// audio_text so the UI gets everything from one call. Also returns
+// the doc-level intro (audio_intro_text + an existing intro.mp3).
 audioRoutes.get("/chapter-status/:docId", (c) => {
   const docId = c.req.param("docId");
   const rows = db()
@@ -153,10 +152,10 @@ audioRoutes.get("/chapter-status/:docId", (c) => {
     intro: {
       text: doc?.audio_intro_text ?? null,
       audioUrl: existsSync(introPath) ? `/api/audio/intro/${docId}/file` : null,
-      // Roh-Metadaten für den Default-Vorschlag im Frontend. Der baut
-      // den ausführlichen Default selbst, weil er Modell + Voice
-      // (Frontend-State) auch kennt — die wollen wir nicht im
-      // Backend hin- und herreichen.
+      // Raw metadata for the default suggestion in the frontend. The
+      // frontend builds the detailed default itself because it also
+      // knows model + voice (frontend state) — we don't want to pass
+      // those back and forth to the backend.
       docMeta: doc
         ? {
             title: doc.doc_title || doc.title,
@@ -168,7 +167,7 @@ audioRoutes.get("/chapter-status/:docId", (c) => {
   });
 });
 
-// Intro-Text setzen / lesen / löschen.
+// Set / read / delete intro text.
 audioRoutes.put("/intro/:docId", async (c) => {
   const docId = c.req.param("docId");
   const body = await c.req
@@ -189,7 +188,7 @@ audioRoutes.put("/intro/:docId", async (c) => {
   return c.json({ docId, text: value });
 });
 
-// Intro-MP3 generieren (nutzt aktuelle audio_intro_text).
+// Generate intro MP3 (uses the current audio_intro_text).
 audioRoutes.post("/intro/:docId/generate", async (c) => {
   const docId = c.req.param("docId");
   const body = await c.req
@@ -220,7 +219,7 @@ audioRoutes.post("/intro/:docId/generate", async (c) => {
   return c.json({ status: "queued", docId, voice: voiceId });
 });
 
-// Intro-MP3 streamen (HTTP Range, wie chapter-files).
+// Stream intro MP3 (HTTP Range, like chapter files).
 audioRoutes.get("/intro/:docId/file", (c) => {
   const docId = c.req.param("docId");
   const fullPath = join(DATA_DIR, "audio", docId, "intro.mp3");
@@ -228,7 +227,7 @@ audioRoutes.get("/intro/:docId/file", (c) => {
   return serveFileWithRange(c, fullPath, "audio/mpeg");
 });
 
-// Intro-MP3 löschen (Text bleibt — User will evtl. neu generieren).
+// Delete intro MP3 (text remains — user may want to regenerate).
 audioRoutes.delete("/intro/:docId/file", (c) => {
   const docId = c.req.param("docId");
   const fullPath = join(DATA_DIR, "audio", docId, "intro.mp3");
@@ -243,8 +242,8 @@ audioRoutes.delete("/intro/:docId/file", (c) => {
   return c.json({ status: "ok" });
 });
 
-// Bulk-Toggle aller Kapitel eines kind. UI nutzt das für
-// "alle Beispiele inkludieren" / "alle Übungen ausschließen" etc.
+// Bulk toggle of all chapters of a kind. UI uses this for
+// "include all examples" / "exclude all exercises" etc.
 audioRoutes.patch("/include-by-kind/:docId", async (c) => {
   const docId = c.req.param("docId");
   const body = await c.req
@@ -262,8 +261,9 @@ audioRoutes.patch("/include-by-kind/:docId", async (c) => {
   return c.json({ kind: body.kind, include: body.include ?? null, updated: result.changes });
 });
 
-// Toggle ob ein Kapitel ins Hörbuch geht. NULL als Wert = "Default
-// für diesen kind nutzen" (entspricht initial-State vor v1.14.001).
+// Toggle whether a chapter goes into the audiobook. NULL as value =
+// "use default for this kind" (matches the initial state before
+// v1.14.001).
 audioRoutes.patch("/chapter-include/:chapterId", async (c) => {
   const chapterId = c.req.param("chapterId");
   const body = await c.req
@@ -282,8 +282,8 @@ audioRoutes.patch("/chapter-include/:chapterId", async (c) => {
   return c.json({ chapterId, include: body.include ?? null });
 });
 
-// Cleanup eines einzelnen Kapitels via Ollama. `force=true` ignoriert
-// den Cache und generiert neu (z. B. nach Modell-Wechsel).
+// Clean up a single chapter via Ollama. `force=true` ignores the
+// cache and regenerates (e.g. after model change).
 audioRoutes.post("/preprocess/:chapterId", async (c) => {
   const chapterId = c.req.param("chapterId");
   const body = await c.req
@@ -318,8 +318,8 @@ audioRoutes.post("/preprocess/:chapterId", async (c) => {
   }
 });
 
-// Den gecleanten Text lesen — falls noch keiner da ist, kommt der
-// Original-Text mit `cleaned: false`.
+// Read the cleaned text — if there isn't one yet, the original text
+// is returned with `cleaned: false`.
 audioRoutes.get("/preprocessed/:chapterId", (c) => {
   const row = db()
     .prepare(
@@ -338,8 +338,8 @@ audioRoutes.get("/preprocessed/:chapterId", (c) => {
   });
 });
 
-// Manueller Edit des gecleanten Texts. Leerstring oder null → Cache
-// leeren (beim nächsten Preprocess wird wieder Ollama angestoßen).
+// Manual edit of the cleaned text. Empty string or null → clear
+// cache (next preprocess will trigger Ollama again).
 audioRoutes.patch("/preprocessed/:chapterId", async (c) => {
   const chapterId = c.req.param("chapterId");
   const body = await c.req
@@ -358,17 +358,17 @@ audioRoutes.patch("/preprocessed/:chapterId", async (c) => {
 
   db()
     .prepare(
-      // Manuelle Edits markieren wir mit einem eigenen Model-String,
-      // damit das UI den "human-curated"-Status anzeigen kann.
+      // We mark manual edits with a dedicated model string so the
+      // UI can show the "human-curated" status.
       "UPDATE chapters SET audio_text = ?, audio_text_model = ? WHERE id = ?"
     )
     .run(body.text.trim(), "manual-edit", chapterId);
   return c.json({ chapterId, saved: true, length: body.text.trim().length });
 });
 
-// TTS für ein einzelnes Kapitel. Nutzt audio_text wenn da, sonst text.
-// KEIN Preprocess hier — der User soll bewusst entscheiden wann Ollama
-// läuft (damit er den Text erst reviewen kann).
+// TTS for a single chapter. Uses audio_text if present, otherwise text.
+// NO preprocessing here — the user should consciously decide when
+// Ollama runs (so they can review the text first).
 audioRoutes.post("/generate-chapter/:chapterId", async (c) => {
   const chapterId = c.req.param("chapterId");
   const body = await c.req
@@ -385,7 +385,7 @@ audioRoutes.post("/generate-chapter/:chapterId", async (c) => {
   const voiceId = body.voice || defaultVoiceFor(chapter.language);
   if (!voiceId) return c.json({ error: "No voice available." }, 400);
 
-  // Fire-and-forget, UI beobachtet SSE wie gehabt.
+  // Fire-and-forget, the UI observes SSE as before.
   generateSingleChapterAudio({
     chapterId,
     voiceId,
@@ -465,9 +465,9 @@ audioRoutes.post("/cancel/:docId", (c) => {
   return c.json({ status: ok ? "canceling" : "not-running" });
 });
 
-// Baut ein M4B aus allen bereits fertigen Kapitel-MP3s + Intro. Wird
-// benötigt, wenn der User per-chapter generiert hat und nachträglich
-// ein Komplett-Download möchte (ein Full-Book-Run baut das M4B automatisch).
+// Builds an M4B from all already-finished chapter MP3s + intro.
+// Needed when the user generated per-chapter and afterwards wants a
+// full download (a full-book run builds the M4B automatically).
 audioRoutes.post("/rebuild-m4b/:docId", async (c) => {
   const docId = c.req.param("docId");
   try {
@@ -475,8 +475,8 @@ audioRoutes.post("/rebuild-m4b/:docId", async (c) => {
     return c.json({ ok: true, chapters: res.chapters });
   } catch (e) {
     const msg = (e as Error).message || "rebuildM4B failed (empty error)";
-    // Server-seitig vollständig loggen — sonst sieht man im NAS-Log nur
-    // die `[m4b] build ...`-Start-Zeile und die Exception war stumm.
+    // Log server-side fully — otherwise the NAS log only shows the
+    // `[m4b] build ...` start line and the exception was silent.
     console.error(`[rebuild-m4b] ${docId} failed:`, e);
     return c.json({ error: msg }, 400);
   }
@@ -495,10 +495,10 @@ audioRoutes.get("/file/:audioId", (c) => {
   return serveFileWithRange(c, fullPath, "audio/mpeg");
 });
 
-// Download the full book as M4B. Der Dateiname, den der Browser dem
-// User beim Download anbietet, wird aus dem Dokument-Titel abgeleitet
-// — sonst hätte der User nach dem Speichern X anonyme "book.m4b" in
-// seinem Download-Ordner. Auf Disk bleibt der Pfad trotzdem stabil.
+// Download the full book as M4B. The filename the browser offers
+// the user on download is derived from the document title —
+// otherwise the user would end up with X anonymous "book.m4b"
+// files in their download folder. The on-disk path stays stable.
 audioRoutes.get("/book/:docId", (c) => {
   const docId = c.req.param("docId");
   const fullPath = join(DATA_DIR, "audio", docId, "book.m4b");
@@ -516,8 +516,8 @@ audioRoutes.get("/book/:docId", (c) => {
       }
     | undefined;
   const baseTitle = doc?.doc_title?.trim() || doc?.title || "audiobook";
-  // Filename-Segmente: kürzel_autor_titel — leere Segmente werden
-  // ausgelassen, damit keine doppelten Unterstriche entstehen.
+  // Filename segments: shortcode_author_title — empty segments are
+  // skipped so we don't end up with double underscores.
   const parts = [
     doc?.short_code?.trim(),
     doc?.author?.trim(),
@@ -529,13 +529,13 @@ audioRoutes.get("/book/:docId", (c) => {
   return serveFileWithRange(c, fullPath, "audio/mp4", downloadName);
 });
 
-/** Macht einen beliebigen Doc-Titel filesystem-/header-safe:
- *  - Deutsche Umlaute + ß ausschreiben (Safari/IE mögen rohe Bytes im
- *    Content-Disposition nicht)
- *  - alles außer Buchstaben/Zahlen/Bindestrich/Leer durch _ ersetzen
- *  - Mehrfach-Leerzeichen zu einem, trim
- *  - auf 120 Zeichen kürzen (manche FS haben 255-Byte-Limits und
- *    UTF-8-Expansion frisst Puffer)
+/** Makes any doc title filesystem-/header-safe:
+ *  - expand German umlauts + ß (Safari/IE don't like raw bytes in
+ *    Content-Disposition)
+ *  - replace anything but letters/digits/dash/space with _
+ *  - collapse multiple spaces, trim
+ *  - cap at 120 characters (some FS have 255-byte limits and UTF-8
+ *    expansion eats the buffer)
  */
 function safeFilename(s: string): string {
   return s
@@ -571,19 +571,19 @@ audioRoutes.get("/stream/:docId", (c) => {
       }
     });
 
-    // Keep-Alive alle 20 s. Ohne das schließt jeder Proxy (nginx
-    // default 60 s, cloudflare 100 s) und manche Browser die Idle-
-    // HTTP/2-Verbindung — EventSource reconnected dann ständig und
-    // der Client sieht ERR_HTTP2_PROTOCOL_ERROR in der Konsole.
-    // SSE-Kommentar (`:`-Prefix) wird vom EventSource-Client still
-    // verworfen, hält die TCP-Verbindung aber warm.
+    // Keep-alive every 20 s. Without it every proxy (nginx default
+    // 60 s, cloudflare 100 s) and some browsers close the idle
+    // HTTP/2 connection — EventSource then reconnects constantly
+    // and the client sees ERR_HTTP2_PROTOCOL_ERROR in the console.
+    // SSE comments (`:` prefix) are silently dropped by the
+    // EventSource client but keep the TCP connection warm.
     keepAliveTimer = setInterval(() => {
       if (stream.aborted) return;
-      // writeSSE mit `event: "ping"` wäre auch eine Option, aber
-      // EventSource-Clients die nur auf `progress` hören würden das
-      // als stillen Trigger bekommen. SSE-Comment ist sauberer.
+      // writeSSE with `event: "ping"` would also be an option, but
+      // EventSource clients listening only for `progress` would get
+      // it as a silent trigger. SSE comment is cleaner.
       stream.write(": keepalive\n\n").catch(() => {
-        // client gone — nächste Iteration der Main-Loop räumt auf
+        // client gone — next iteration of the main loop cleans up
       });
     }, 20_000);
 

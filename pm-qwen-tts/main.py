@@ -75,68 +75,68 @@ MODEL_ID = os.environ.get("QWEN_TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
 CUSTOMVOICE_MODEL_ID = os.environ.get(
     "QWEN_TTS_CUSTOMVOICE_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
 )
-# VoiceDesign-Modell: erzeugt eine Stimme aus einer Freitext-Beschreibung
-# (statt aus 9 Presets oder einem ref.wav). Lazy-load analog zu
-# CustomVoice — erster Request mit `voice_description`-Feld triggert.
-# HF-Snapshot ist komplett (speech_tokenizer/ ist im Repo enthalten),
-# daher kein Symlink-Dance nötig.
+# VoiceDesign model: produces a voice from a free-text description
+# (instead of one of 9 presets or a ref.wav). Lazy-loaded analogously
+# to CustomVoice — the first request with a `voice_description` field
+# triggers it. The HF snapshot is complete (speech_tokenizer/ is in
+# the repo), so no symlink dance needed.
 VOICEDESIGN_MODEL_ID = os.environ.get(
     "QWEN_TTS_VOICEDESIGN_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
 )
-# Audio-Tokenizer. Qwen hostet Base-Modell und Tokenizer als getrennte
-# HF-Repos, der qwen-tts-Loader erwartet aber einen speech_tokenizer/-
-# Unterordner im Base-Snapshot — wir laden beide und symlinken sie
-# zusammen (siehe `_prepare_model_path`).
+# Audio tokenizer. Qwen hosts the base model and tokenizer as
+# separate HF repos, but the qwen-tts loader expects a
+# speech_tokenizer/ subfolder inside the base snapshot — so we load
+# both and symlink them together (see `_prepare_model_path`).
 TOKENIZER_ID = os.environ.get(
     "QWEN_TTS_TOKENIZER_MODEL", "Qwen/Qwen3-TTS-Tokenizer-12Hz"
 )
 
-# Die 9 Preset-Stimmen in CustomVoice. Kein DE-nativer Speaker — für DE
-# empfiehlt die Model-Card `Ryan`/`Aiden` (EN-Speaker) + language="German";
-# das Modell re-rendert die Stimme in der Zielsprache.
+# The 9 preset voices in CustomVoice. No DE-native speaker — the
+# model card recommends `Ryan`/`Aiden` (EN speakers) + language="German"
+# for DE; the model re-renders the voice in the target language.
 CUSTOMVOICE_PRESETS: list[str] = [
-    "Vivian",     # ZH, junge Frau
+    "Vivian",     # ZH, young woman
     "Serena",     # ZH, warm
-    "Uncle_Fu",   # ZH, reifer Mann
+    "Uncle_Fu",   # ZH, mature man
     "Dylan",      # ZH (Beijing)
     "Eric",       # ZH (Sichuan)
-    "Ryan",       # EN, dynamisch — DE-Empfehlung
-    "Aiden",      # EN, sonnig — DE-Empfehlung
-    "Ono_Anna",   # JP, verspielt
+    "Ryan",       # EN, dynamic — DE recommendation
+    "Aiden",      # EN, sunny — DE recommendation
+    "Ono_Anna",   # JP, playful
     "Sohee",      # KR, warm
 ]
 DEVICE = os.environ.get("QWEN_TTS_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 DTYPE_NAME = os.environ.get("QWEN_TTS_DTYPE", "bfloat16")
-# flash_attention_2 ist ab v1.17.003 im Image vorinstalliert (prebuilt
-# wheel, siehe Dockerfile). Auf älteren GPUs (Compute Capability < 8.0,
-# z. B. RTX 20xx) `QWEN_TTS_ATTN_IMPL=sdpa` setzen — flash-attn unterstützt
-# erst Ampere+.
+# flash_attention_2 has been preinstalled in the image since v1.17.003
+# (prebuilt wheel, see Dockerfile). On older GPUs (compute capability
+# < 8.0, e.g. RTX 20xx) set `QWEN_TTS_ATTN_IMPL=sdpa` — flash-attn
+# only supports Ampere+.
 ATTN_IMPL = os.environ.get("QWEN_TTS_ATTN_IMPL", "flash_attention_2")
 
-# Voice-Clone-Qualitäts-Tuning (können per ENV übersteuert werden).
+# Voice clone quality tuning (overridable via ENV).
 DEFAULT_LANGUAGE = os.environ.get("QWEN_TTS_DEFAULT_LANGUAGE", "German")
 MAX_NEW_TOKENS = int(os.environ.get("QWEN_TTS_MAX_NEW_TOKENS", "4096"))
 
-# Hard-Timeout pro Generate-Call. Zombie-Generationen (Modell-Loop, NaN,
-# infinite-repeat) frieren sonst die GPU bis zum Container-Neustart ein.
-# Bei Überschreitung: 504 an den Client + self-exit(1), damit Docker den
-# Container neu hochfahren kann. Arbiter `restart: "no"` heißt: Arbiter
-# entscheidet den Re-Start beim nächsten TTS-Call.
+# Hard timeout per generate call. Zombie generations (model loop,
+# NaN, infinite-repeat) otherwise freeze the GPU until container
+# restart. On overrun: 504 to the client + self-exit(1) so Docker
+# can bring the container back up. Arbiter `restart: "no"` means:
+# the arbiter decides the restart on the next TTS call.
 #
-# 1200 s = 20 min: Default großzügig damit 4000-Zeichen-Chunks (per
-# PM_TTS_MAX_CHUNK backend-seitig erhöht) durchgehen. Backend-Timeout
-# SYNTH_TIMEOUT_MS sollte ≤ diesem Wert sein, sonst schießt der
-# Sidecar sich selbst ab bevor der Client das 504 sieht. Override
-# für striktere Fail-Fast-Setups über QWEN_TTS_GENERATION_TIMEOUT.
+# 1200 s = 20 min: default generously sized so 4000-char chunks (raised
+# backend-side via PM_TTS_MAX_CHUNK) get through. Backend timeout
+# SYNTH_TIMEOUT_MS should be ≤ this value, otherwise the sidecar
+# kills itself before the client sees the 504. Override for stricter
+# fail-fast setups via QWEN_TTS_GENERATION_TIMEOUT.
 GENERATION_TIMEOUT_S = int(os.environ.get("QWEN_TTS_GENERATION_TIMEOUT", "1200"))
 
-# Heartbeat-Log-Intervall während aktiver Generation (nur in den Logs,
-# nicht am Client). Hilft zu sehen, dass der Prozess nicht hängt.
+# Heartbeat log interval during active generation (logs only, not
+# the client). Helps see that the process isn't stuck.
 HEARTBEAT_INTERVAL_S = float(os.environ.get("QWEN_TTS_HEARTBEAT_INTERVAL", "10"))
-# Wenn `ref_text` leer bleibt, nutzt Qwen3-TTS-Base den x_vector-only-
-# Mode — die Clone-Qualität ist dann leicht reduziert, dafür spart man
-# sich die Transkription. Default: echter Clone mit ref_text wenn
-# geliefert, sonst x_vector-only.
+# When `ref_text` is empty, Qwen3-TTS-Base uses the x_vector-only
+# mode — clone quality is slightly reduced but you skip the
+# transcription. Default: real clone with ref_text when supplied,
+# otherwise x_vector-only.
 X_VECTOR_ONLY_FALLBACK = os.environ.get("QWEN_TTS_X_VECTOR_ONLY", "true").lower() in (
     "1", "true", "yes",
 )
@@ -157,32 +157,33 @@ def _torch_dtype(name: str):
 _model = None
 _load_error: Optional[str] = None
 
-# CustomVoice wird lazy geladen (nicht im lifespan), damit Setups ohne
-# Preset-Nutzung nicht die zusätzlichen ~4 GB VRAM reservieren. Beim
-# ersten Request mit `speaker`-Param wird der Load angestoßen.
+# CustomVoice is lazy-loaded (not in lifespan) so setups that don't
+# use presets don't reserve the extra ~4 GB of VRAM. The first
+# request with a `speaker` param triggers the load.
 _custom_model = None
 _custom_load_error: Optional[str] = None
 _custom_load_lock = threading.Lock()
 
-# VoiceDesign analog lazy, getriggert beim ersten `voice_description`-
-# Request. Weitere ~4 GB VRAM — auf 24-GB-GPU mit Ollama eng, ohne
-# Ollama problemlos. Drei parallel geladene Modelle sind realistisch
-# nur auf 32 GB+ GPUs.
+# VoiceDesign analogously lazy, triggered by the first
+# `voice_description` request. Another ~4 GB VRAM — tight on a 24 GB
+# GPU with Ollama, fine without Ollama. Three concurrently loaded
+# models are realistic only on 32 GB+ GPUs.
 _design_model = None
 _design_load_error: Optional[str] = None
 _design_load_lock = threading.Lock()
 
 
 def _prepare_model_path() -> str:
-    """Lädt Base-Modell und Audio-Tokenizer aus dem HF-Hub und verlinkt
-    den Tokenizer als ``speech_tokenizer/``-Unterordner im Base-Snapshot.
+    """Loads base model and audio tokenizer from the HF Hub and links
+    the tokenizer as a ``speech_tokenizer/`` subfolder in the base
+    snapshot.
 
-    Qwen hat die beiden Modelle als getrennte HF-Repos veröffentlicht,
-    aber der ``Qwen3TTSModel``-Loader erwartet sie zusammen. Der
-    Symlink ist idempotent — bei Neustart auf bereits gecachtem Volume
-    macht die Funktion nichts mehr.
+    Qwen ships the two as separate HF repos, but the
+    ``Qwen3TTSModel`` loader expects them together. The symlink is
+    idempotent — on restart with an already-cached volume the function
+    does nothing.
 
-    Gibt den lokalen Pfad des (jetzt vollständigen) Base-Snapshots zurück.
+    Returns the local path of the (now complete) base snapshot.
     """
     from huggingface_hub import snapshot_download  # noqa: WPS433
 
@@ -194,8 +195,8 @@ def _prepare_model_path() -> str:
     target = os.path.join(base_dir, "speech_tokenizer")
 
     if os.path.islink(target):
-        # Bereits verlinkt — Link auf den erwarteten Snapshot zeigen
-        # lassen (Repo-Update könnte Snapshot-Hash ändern).
+        # Already linked — make sure the link points at the expected
+        # snapshot (a repo update could change the snapshot hash).
         current = os.readlink(target)
         if os.path.realpath(current) != os.path.realpath(tokenizer_dir):
             log.info("updating stale tokenizer symlink %s → %s", target, tokenizer_dir)
@@ -204,8 +205,8 @@ def _prepare_model_path() -> str:
         return base_dir
 
     if os.path.isdir(target):
-        # Vom Upstream bereits mitgeliefert (Repo-Struktur kann sich
-        # später ändern). Nicht anfassen, erwartbarer Best-Case.
+        # Already shipped by upstream (repo structure may change
+        # later). Don't touch, expected best case.
         log.info("speech_tokenizer/ already present in base snapshot")
         return base_dir
 
@@ -213,7 +214,7 @@ def _prepare_model_path() -> str:
     try:
         os.symlink(tokenizer_dir, target, target_is_directory=True)
     except OSError as e:
-        # Fallback für FS ohne Symlink-Support (manche bind-mounts).
+        # Fallback for filesystems without symlink support (some bind mounts).
         log.warning("symlink failed (%r), falling back to copytree", e)
         import shutil  # noqa: WPS433
         shutil.copytree(tokenizer_dir, target)
@@ -228,7 +229,7 @@ def _load_model() -> None:
     try:
         from qwen_tts import Qwen3TTSModel  # noqa: WPS433
     except Exception as e:  # noqa: BLE001
-        _load_error = f"qwen-tts package nicht importierbar: {e!r}"
+        _load_error = f"qwen-tts package not importable: {e!r}"
         log.error(_load_error)
         return
 
@@ -254,35 +255,35 @@ def _load_model() -> None:
 
 
 def _load_customvoice_model() -> None:
-    """Lazy-Load für das CustomVoice-Modell. Idempotent + thread-safe
-    (mehrere parallele ``/v1/audio/speech``-Calls mit Preset können den
-    Load gleichzeitig triggern, nur einer lädt tatsächlich).
+    """Lazy load for the CustomVoice model. Idempotent + thread-safe
+    (multiple concurrent ``/v1/audio/speech`` calls with a preset can
+    trigger the load simultaneously, only one actually loads).
 
-    Wenn der User `QWEN_TTS_MODEL` selbst schon auf den CustomVoice-Repo
-    gesetzt hat (statt den Default Base-Repo zu lassen), teilen sich
-    Base- und CustomVoice-Pfad dieselbe geladene Modell-Instanz — sonst
-    hätten wir zwei identische ~4 GB-Downloads und doppelten VRAM-
-    Verbrauch. Die ``Qwen3TTSModel``-Klasse exponiert beide
-    ``generate_voice_clone`` und ``generate_custom_voice`` — welche
-    davon sinnvoll antwortet hängt von den Weights ab.
+    When the user has set `QWEN_TTS_MODEL` to the CustomVoice repo
+    themselves (instead of leaving the default base repo), the base
+    and CustomVoice paths share the same loaded model instance —
+    otherwise we'd have two identical ~4 GB downloads and double the
+    VRAM usage. The ``Qwen3TTSModel`` class exposes both
+    ``generate_voice_clone`` and ``generate_custom_voice`` — which one
+    sensibly responds depends on the weights.
 
-    Nutzt kein Audio-Tokenizer-Symlink — CustomVoice-Repo enthält den
-    speech_tokenizer/ bereits oder braucht ihn nicht (der qwen-tts-
-    Loader holt ihn bei Bedarf). Falls der Load fehlschlägt, landet der
-    Fehler in ``_custom_load_error`` und der Request kriegt 503.
+    Doesn't use an audio-tokenizer symlink — the CustomVoice repo
+    already contains speech_tokenizer/ or doesn't need it (the
+    qwen-tts loader fetches it on demand). If the load fails, the
+    error lands in ``_custom_load_error`` and the request gets 503.
     """
     global _custom_model, _custom_load_error
     if _custom_model is not None or _custom_load_error is not None:
         return
 
     with _custom_load_lock:
-        # Double-check nach Lock-Acquire.
+        # Double-check after lock acquisition.
         if _custom_model is not None or _custom_load_error is not None:
             return
 
-        # Fall: MODEL_ID und CUSTOMVOICE_MODEL_ID zeigen auf dasselbe
-        # Repo (z. B. weil User `QWEN_TTS_MODEL=…CustomVoice` override
-        # hat). Wiederverwenden statt nochmal laden.
+        # Case: MODEL_ID and CUSTOMVOICE_MODEL_ID point at the same
+        # repo (e.g. because the user overrode
+        # `QWEN_TTS_MODEL=…CustomVoice`). Reuse instead of reloading.
         if (
             MODEL_ID == CUSTOMVOICE_MODEL_ID
             and _model is not None
@@ -298,7 +299,7 @@ def _load_customvoice_model() -> None:
         try:
             from qwen_tts import Qwen3TTSModel  # noqa: WPS433
         except Exception as e:  # noqa: BLE001
-            _custom_load_error = f"qwen-tts package nicht importierbar: {e!r}"
+            _custom_load_error = f"qwen-tts package not importable: {e!r}"
             log.error(_custom_load_error)
             return
 
@@ -323,11 +324,11 @@ def _load_customvoice_model() -> None:
 
 
 def _load_voicedesign_model() -> None:
-    """Lazy-Load für VoiceDesign. Analog zu ``_load_customvoice_model``.
+    """Lazy load for VoiceDesign. Analogous to ``_load_customvoice_model``.
 
-    Wiederverwendet die Base- oder CustomVoice-Instanz, wenn der User
-    dasselbe Repo für mehrere Slots konfiguriert hat (spart 4 GB Download
-    + VRAM). Im Normalfall ist das Repo aber ein eigenes.
+    Reuses the base or CustomVoice instance when the user configured
+    the same repo for multiple slots (saves 4 GB download + VRAM). In
+    the typical case the repo is its own, though.
     """
     global _design_model, _design_load_error
     if _design_model is not None or _design_load_error is not None:
@@ -390,10 +391,11 @@ def _apply_seed(seed: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-# Decode-Cache für Referenz-Audio. Bei einem 100-Kapitel-Hörbuch mit
-# immer demselben User-Sample sparen wir N-mal das base64-decode +
-# soundfile-parse + mono-izen (~50-200 ms pro Chunk). Key = SHA-256 des
-# Rohstrings; LRU-ähnliches Verhalten via OrderedDict + Max-Size.
+# Decode cache for reference audio. With a 100-chapter audiobook
+# always using the same user sample, we save N times the base64
+# decode + soundfile parse + mono conversion (~50-200 ms per chunk).
+# Key = SHA-256 of the raw string; LRU-like behavior via OrderedDict
+# + max size.
 from collections import OrderedDict  # noqa: E402
 
 _REF_AUDIO_CACHE_MAX = int(os.environ.get("QWEN_TTS_REF_CACHE_SIZE", "16"))
@@ -404,8 +406,8 @@ _ref_audio_cache_lock = threading.Lock()
 def _decode_ref_audio(b64: str) -> tuple[np.ndarray, int]:
     """base64 (WAV/MP3/FLAC) → (mono float32 numpy, sample_rate).
 
-    Cached auf dem Roh-b64-String (SHA-256). Identischer Upload bei
-    Chunk N+1 trifft den Cache und überspringt das Parsen komplett.
+    Cached on the raw base64 string (SHA-256). Identical upload at
+    chunk N+1 hits the cache and skips parsing entirely.
     """
     cache_key = hashlib.sha256(b64.encode("utf-8", errors="ignore")).hexdigest()
     with _ref_audio_cache_lock:
@@ -419,9 +421,9 @@ def _decode_ref_audio(b64: str) -> tuple[np.ndarray, int]:
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"ref_audio_b64 not valid base64: {e}")
 
-    # soundfile liest WAV/FLAC/OGG nativ. MP3 braucht libsndfile ≥ 1.1 ODER
-    # pydub → wir gehen den pydub-Weg für MP3 damit's auch auf älteren
-    # Hosts funktioniert.
+    # soundfile reads WAV/FLAC/OGG natively. MP3 needs libsndfile ≥ 1.1
+    # OR pydub → we go the pydub route for MP3 so it also works on
+    # older hosts.
     try:
         arr, sr = sf.read(io.BytesIO(raw), dtype="float32")
     except Exception:
@@ -439,7 +441,7 @@ def _decode_ref_audio(b64: str) -> tuple[np.ndarray, int]:
                 detail=f"ref_audio decode failed: {e}",
             )
 
-    # Mono machen + shape (N,) erzwingen.
+    # Convert to mono + force shape (N,).
     arr = np.squeeze(arr)
     if arr.ndim > 1:
         arr = arr.mean(axis=1)
@@ -516,9 +518,9 @@ def _run_with_heartbeat_and_timeout(
     label: str,
     timeout_s: int,
 ) -> Any:
-    """Führt ``func()`` in einem Thread aus, loggt alle
-    ``HEARTBEAT_INTERVAL_S`` einen Heartbeat, und bricht nach
-    ``timeout_s`` ab (HTTP 504 + geplanter Self-Exit)."""
+    """Runs ``func()`` in a thread, logs a heartbeat every
+    ``HEARTBEAT_INTERVAL_S``, and aborts after ``timeout_s`` (HTTP
+    504 + scheduled self-exit)."""
     result: dict[str, Any] = {}
     done = threading.Event()
 
@@ -538,15 +540,15 @@ def _run_with_heartbeat_and_timeout(
         elapsed = time.time() - t_start
         if elapsed >= timeout_s:
             log.error(
-                "%s timed out after %.0fs (limit=%ds) — zombie generation, self-exit geplant",
+                "%s timed out after %.0fs (limit=%ds) — zombie generation, self-exit scheduled",
                 label, elapsed, timeout_s,
             )
             _schedule_self_exit(f"{label} timeout ({elapsed:.0f}s)")
             raise HTTPException(
                 status_code=504,
                 detail=(
-                    f"TTS-Generation hing nach {elapsed:.0f}s fest. Der Sidecar "
-                    f"startet gleich neu — bitte Request wiederholen."
+                    f"TTS generation stalled after {elapsed:.0f}s. The sidecar "
+                    f"is restarting — please retry the request."
                 ),
             )
         log.info(
@@ -559,13 +561,13 @@ def _run_with_heartbeat_and_timeout(
     return result.get("value")
 
 
-# --- Clone-Prompt-Cache -----------------------------------------------
-# Qwens offizielle Longform-Empfehlung: `create_voice_clone_prompt()`
-# einmal pro Voice ausführen, dann den resultierenden Prompt bei JEDEM
-# Chunk via `voice_clone_prompt=` kwarg reingeben — statt jedes mal
-# ref_audio neu extrahieren zu lassen. Speaker-Vektor bleibt identisch
-# → konsistente Stimm-Färbung über alle Chunks.
-# Siehe Qwen-README "Voice Design then Clone"-Abschnitt.
+# --- Clone prompt cache ------------------------------------------------
+# Qwen's official longform recommendation: run
+# `create_voice_clone_prompt()` once per voice, then pass the resulting
+# prompt into EVERY chunk via the `voice_clone_prompt=` kwarg —
+# instead of re-extracting ref_audio every time. Speaker vector stays
+# identical → consistent voice color across all chunks.
+# See the Qwen README "Voice Design then Clone" section.
 _CLONE_PROMPT_CACHE_MAX = int(os.environ.get("QWEN_TTS_CLONE_PROMPT_CACHE_SIZE", "8"))
 _clone_prompt_cache: OrderedDict[str, Any] = OrderedDict()
 _clone_prompt_cache_lock = threading.Lock()
@@ -574,8 +576,8 @@ _clone_prompt_cache_lock = threading.Lock()
 def _clone_prompt_key(ref_audio: tuple[np.ndarray, int], ref_text: Optional[str]) -> str:
     arr, sr = ref_audio
     h = hashlib.sha256()
-    # arr.tobytes() deckt Shape + Values ab, sr und ref_text sind Style-
-    # relevant, alle zusammen identifizieren den Clone-Prompt eindeutig.
+    # arr.tobytes() covers shape + values, sr and ref_text are
+    # style-relevant; together they uniquely identify the clone prompt.
     h.update(arr.tobytes())
     h.update(str(sr).encode())
     h.update((ref_text or "").encode("utf-8"))
@@ -638,9 +640,9 @@ def _synth_clone(
 
     _apply_seed(seed)
 
-    # Pre-compiled Clone-Prompt holen (aus Cache oder frisch bauen).
-    # Dasselbe Prompt-Objekt wird bei allen Chunks derselben Voice
-    # genutzt → kein Speaker-Drift zwischen Chunks.
+    # Fetch the pre-compiled clone prompt (from cache or freshly built).
+    # The same prompt object is used for all chunks of the same voice
+    # → no speaker drift between chunks.
     clone_prompt = _get_clone_prompt(ref_audio, ref_text)
 
     gen_kwargs: dict[str, Any] = {
@@ -649,11 +651,11 @@ def _synth_clone(
         "voice_clone_prompt": clone_prompt,
         "max_new_tokens": MAX_NEW_TOKENS,
     }
-    _ = speed  # speed lässt sich über diesen Pfad nicht setzen (siehe alter Kommentar)
+    _ = speed  # speed cannot be set via this path (see older comment)
 
-    # Request-Identifier fürs Log-Grepping: 8-stelliger Hash aus Text +
-    # Seed + ref_audio-Shape. Macht es einfach, in einem zusammenhängenden
-    # Hörbuch-Run den Chunk zu identifizieren der hängt.
+    # Request identifier for log grepping: 8-char hash from text +
+    # seed + ref_audio shape. Makes it easy to identify the stuck
+    # chunk inside a contiguous audiobook run.
     req_hash = hashlib.sha256(
         f"{text}|{seed}|{len(ref_audio[0])}".encode("utf-8")
     ).hexdigest()[:8]
@@ -704,7 +706,7 @@ def _synth_custom(
     top_p: Optional[float] = None,
     max_new_tokens_override: Optional[int] = None,
 ) -> tuple[np.ndarray, int]:
-    """Synthese über das CustomVoice-Modell. `speaker` muss einer der
+    """Synthesis via the CustomVoice model. `speaker` must be one of the
     9 Presets sein; `instruct` ist Freitext ("Calm narrator, slow pace")
     oder leer.
 
@@ -807,19 +809,19 @@ def _synth_design(
     top_p: Optional[float] = None,
     max_new_tokens_override: Optional[int] = None,
 ) -> tuple[np.ndarray, int]:
-    """Synthese über das VoiceDesign-Modell. `voice_description` landet
-    im `instruct`-Parameter (das Modell hat keinen separaten Speaker-
-    Slot — die ganze Stimm-Spec steckt im Beschreibungstext).
+    """Synthesis via the VoiceDesign model. `voice_description` lands
+    in the `instruct` parameter (the model has no separate speaker
+    slot — the entire voice spec sits in the description text).
 
-    Seed-Semantik ist in der Model-Card nicht garantiert, aber
-    ``torch.manual_seed(seed)`` vor dem Call greift empirisch — gleicher
-    Seed + gleiche Beschreibung reproduzieren dieselbe Stimme in den
-    meisten Fällen.
+    Seed semantics are not guaranteed by the model card, but
+    ``torch.manual_seed(seed)`` before the call works empirically —
+    same seed + same description reproduces the same voice in most
+    cases.
     """
     if not voice_description or not voice_description.strip():
         raise HTTPException(
             status_code=400,
-            detail="voice_description darf nicht leer sein (VoiceDesign-Pfad)",
+            detail="voice_description must not be empty (VoiceDesign path)",
         )
 
     _load_voicedesign_model()
@@ -859,18 +861,18 @@ def _synth_design(
     t0 = time.time()
 
     def run() -> tuple[Any, Any]:
-        # Seed im Worker-Thread erneut anwenden. `torch.manual_seed` ist
-        # zwar prozess-global, aber wenn zwischen Main-Thread-Seeding und
-        # Thread-Start entropy verbraucht wird (oder Qwen intern einen
-        # eigenen Generator anlegt), kommt beim Generate ein anderer RNG-
-        # State raus. Doppelt hält besser, und in der offiziellen Qwen-
-        # Doku gibt's sowieso keine Garantie fürs Seeding.
+        # Re-apply seed in the worker thread. `torch.manual_seed` is
+        # process-global, but if entropy is consumed between
+        # main-thread seeding and thread start (or Qwen creates its
+        # own generator internally), generate ends up with a different
+        # RNG state. Belt and suspenders, and the official Qwen docs
+        # don't guarantee seeding behavior anyway.
         _apply_seed(seed)
-        # Expliziter Generator zusätzlich. Falls `generate_voice_design`
-        # ihn als kwarg akzeptiert (HF-generate-Stack), nutzt Qwen diesen
-        # Generator intern statt der globalen RNG. Akzeptiert das Modell
-        # den kwarg nicht, ignoriert es ihn oder wirft — wir fangen das
-        # ab und fallen auf reines manual_seed zurück.
+        # Explicit generator on top. If `generate_voice_design`
+        # accepts it as a kwarg (HF generate stack), Qwen uses this
+        # generator internally instead of the global RNG. If the
+        # model doesn't accept the kwarg, ignores it, or raises, we
+        # catch and fall back to plain manual_seed.
         final_kwargs = dict(gen_kwargs)
         try:
             gen_device = DEVICE if DEVICE.startswith("cuda") else "cpu"
@@ -879,8 +881,8 @@ def _synth_design(
             ).manual_seed(seed)
         except Exception as e:  # noqa: BLE001
             log.warning(
-                "voicedesign [%s]: konnte Generator nicht anlegen (%r), " +
-                "fahre nur mit manual_seed fort", req_hash, e,
+                "voicedesign [%s]: could not create generator (%r), " +
+                "continuing with manual_seed only", req_hash, e,
             )
 
         try:
@@ -888,14 +890,14 @@ def _synth_design(
                 try:
                     wavs, sr = _design_model.generate_voice_design(**final_kwargs)
                 except TypeError as e:
-                    # Generator-kwarg wurde nicht akzeptiert — retry ohne.
+                    # generator kwarg wasn't accepted — retry without.
                     if "generator" in final_kwargs and "generator" in str(e):
                         log.warning(
                             "voicedesign [%s]: generator-kwarg rejected (%s), retrying without",
                             req_hash, e,
                         )
                         final_kwargs.pop("generator", None)
-                        _apply_seed(seed)  # nochmal seeden vor Retry
+                        _apply_seed(seed)  # re-seed before retry
                         wavs, sr = _design_model.generate_voice_design(**final_kwargs)
                     else:
                         raise
@@ -950,14 +952,15 @@ async def lifespan(app: FastAPI):
     if MODEL_ID == CUSTOMVOICE_MODEL_ID:
         log.warning(
             "MODEL_ID == CUSTOMVOICE_MODEL_ID — "
-            "du lädst CustomVoice in beide Slots. Voice-Clone-Pfad "
-            "(ref_audio_b64) wird dann auf CustomVoice-Weights aufgerufen "
-            "und kann unerwartet ausfallen. Wenn du nur Presets nutzt, ist "
-            "das OK; wenn du auch eigene Samples hochlädst, setze "
-            "QWEN_TTS_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-Base (oder unset)."
+            "you're loading CustomVoice into both slots. The voice "
+            "clone path (ref_audio_b64) will then run against the "
+            "CustomVoice weights and may fail unexpectedly. If you "
+            "only use presets, that's OK; if you also upload your own "
+            "samples, set "
+            "QWEN_TTS_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-Base (or unset)."
         )
     log.info("=" * 64)
-    _load_model()  # blockiert Startup bis Modell (oder Load-Error) da ist
+    _load_model()  # blocks startup until model (or load error) is ready
     yield
 
 
@@ -966,10 +969,11 @@ app = FastAPI(title="pm-qwen-tts", lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    # Base-Modell ist beim Startup-Gate (lifespan) geladen — wenn es
-    # da nicht durchkommt, ist der Sidecar komplett kaputt. CustomVoice
-    # wird lazy geladen, fehlt hier also absichtlich in der Ready-
-    # Condition (wäre sonst "healthy=false" bis jemand ein Preset nutzt).
+    # The base model is loaded by the startup gate (lifespan) — if it
+    # doesn't make it through, the sidecar is completely broken.
+    # CustomVoice is lazy-loaded so it's deliberately missing from
+    # the ready condition (would otherwise stay "healthy=false" until
+    # someone uses a preset).
     if _model is None:
         return JSONResponse(
             status_code=503,
@@ -993,9 +997,9 @@ async def health():
 
 @app.get("/v1/audio/voices")
 async def list_voices():
-    # Keine Built-in-Voices mehr — die Voice-Verwaltung sitzt im
-    # PageMentor-Backend (Uploads + DB). Hier geben wir nur Metadaten
-    # zurück, damit man den Sidecar auch solo prüfen kann.
+    # No more built-in voices — voice management lives in the
+    # PageMentor backend (uploads + DB). Here we only return metadata
+    # so the sidecar can also be checked solo.
     return {
         "base_model": MODEL_ID,
         "customvoice_model": CUSTOMVOICE_MODEL_ID,
@@ -1015,48 +1019,49 @@ class SpeechRequest(BaseModel):
     # OpenAI-kompat-Felder (werden teilweise ignoriert):
     model: Optional[str] = None
     input: str = Field(..., min_length=1)
-    voice: Optional[str] = None          # nur Logging/Diagnose
+    voice: Optional[str] = None          # logging/diagnostics only
     response_format: Literal["mp3", "wav", "flac"] = "mp3"
     speed: float = 1.0
 
-    # Dispatch: genau EINER der folgenden Pfade muss gesetzt sein.
-    # Wenn `speaker` gesetzt → CustomVoice-Pfad (Preset + Instruction).
-    # Sonst → Voice-Clone-Pfad über `ref_audio_b64` + optional `ref_text`.
+    # Dispatch: exactly ONE of the following paths must be set.
+    # If `speaker` is set → CustomVoice path (preset + instruction).
+    # Otherwise → voice-clone path via `ref_audio_b64` + optional `ref_text`.
 
-    # Voice-Clone-Felder (optional, wenn speaker gesetzt):
+    # Voice clone fields (optional when speaker is set):
     ref_audio_b64: Optional[str] = None
     ref_text: Optional[str] = None
 
-    # CustomVoice-Felder (optional, wenn ref_audio_b64 gesetzt):
+    # CustomVoice fields (optional when ref_audio_b64 is set):
     speaker: Optional[str] = None
     instruct: Optional[str] = None
 
-    # VoiceDesign-Feld — wenn gesetzt, überschreibt alle anderen Pfade
-    # und routet auf `generate_voice_design`. Die Beschreibung IST
-    # zugleich der Style-Prompt (kein separater instruct-Slot im
-    # VoiceDesign-Modell).
+    # VoiceDesign field — when set, overrides all other paths and
+    # routes to `generate_voice_design`. The description IS the style
+    # prompt at the same time (no separate instruct slot in the
+    # VoiceDesign model).
     voice_description: Optional[str] = None
 
     language: str = DEFAULT_LANGUAGE
     seed: int = 0
 
-    # Advanced-Sampling-Parameter — alle optional. ``None`` bedeutet
-    # Qwen-Default nutzen. Werden 1:1 an ``generate_custom_voice``
-    # durchgereicht. Grund für die explizite Exposition: User kann bei
-    # Akzent-Drift-Problemen temperature runter schrauben (strafft das
-    # Sampling Richtung Instruction-Vorgabe), oder mit einem abweichenden
-    # Seed eine andere Stimm-Variante desselben Presets bekommen.
+    # Advanced sampling parameters — all optional. ``None`` means use
+    # the Qwen default. Forwarded 1:1 to ``generate_custom_voice``.
+    # Reason for the explicit exposure: the user can dial temperature
+    # down on accent-drift issues (tightens sampling toward the
+    # instruction), or get a different voice variant of the same
+    # preset with a different seed.
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     max_new_tokens_override: Optional[int] = None
 
 
-# WICHTIG: `def` statt `async def`. Der Synth-Call blockiert Minuten-
-# lang (threading.Event.wait im Heartbeat-Wrapper). Ein `async def`-
-# Handler würde den asyncio-Event-Loop blockieren, bis die Generation
-# fertig ist → Docker-Healthcheck auf /health kriegt keine Antwort und
-# markiert den Container als unhealthy. FastAPI führt `def`-Handler
-# automatisch im Threadpool aus; Event-Loop bleibt responsiv.
+# IMPORTANT: `def` instead of `async def`. The synth call blocks for
+# minutes (threading.Event.wait inside the heartbeat wrapper). An
+# `async def` handler would block the asyncio event loop until
+# generation is done → the Docker healthcheck on /health gets no
+# response and the container is marked unhealthy. FastAPI runs `def`
+# handlers in a thread pool automatically; the event loop stays
+# responsive.
 @app.post("/v1/audio/speech")
 def speech(req: SpeechRequest):
     use_design = bool(req.voice_description and req.voice_description.strip())

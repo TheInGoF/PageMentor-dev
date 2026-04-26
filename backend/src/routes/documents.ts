@@ -63,7 +63,7 @@ documentRoutes.get("/", (c) => {
   );
 });
 
-// Docling-Serve Health — für den Status-Panel in den Settings.
+// Docling-Serve health — for the status panel in Settings.
 documentRoutes.get("/docling/status", async (c) => {
   const alive = await doclingAlive();
   return c.json({ alive });
@@ -83,7 +83,7 @@ documentRoutes.get("/tags/all", (c) => {
   return c.json(rows);
 });
 
-// Get single document (mit Tags, damit die Shape zur List-Query passt).
+// Get single document (with tags so the shape matches the list query).
 documentRoutes.get("/:id", (c) => {
   const id = c.req.param("id");
   const row = db()
@@ -183,15 +183,15 @@ documentRoutes.post("/upload", async (c) => {
     }
   }
 
-  // Extraktion startet NICHT automatisch — der User triggert sie
-  // explizit per POST /:id/reprocess, wenn er bereit ist (docling-
-  // Läufe brauchen auf dem NAS durchaus eine halbe Stunde).
+  // Extraction does NOT start automatically — the user triggers it
+  // explicitly via POST /:id/reprocess when ready (docling runs can
+  // take a good half hour on the NAS).
 
   return c.json({ id, title, filename: file.name }, 201);
 });
 
-// Start (or re-run) Docling extraction. Auch beim ersten Mal manuell
-// ausgelöst — Uploads setzen nur Status "awaiting-extraction".
+// Start (or re-run) Docling extraction. Manually triggered even for
+// the first run — uploads only set status "awaiting-extraction".
 documentRoutes.post("/:id/reprocess", async (c) => {
   const id = c.req.param("id");
   const doc = db().prepare("SELECT id FROM documents WHERE id = ?").get(id);
@@ -200,7 +200,7 @@ documentRoutes.post("/:id/reprocess", async (c) => {
   return c.json({ status: "queued" });
 });
 
-// Laufende Extraktion abbrechen.
+// Cancel a running extraction.
 documentRoutes.post("/:id/extract/cancel", (c) => {
   const id = c.req.param("id");
   const ok = cancelProcessing(id);
@@ -260,9 +260,9 @@ documentRoutes.patch("/:id", async (c) => {
     db().prepare("UPDATE documents SET thumb_page = ? WHERE id = ?").run(clamped, id);
   }
   if (body.author !== undefined) {
-    // null oder leerer String → Spalte zurück auf NULL setzen,
-    // sonst trim und speichern. So kann der User einen
-    // versehentlich falsch gepullten Autor wieder löschen.
+    // null or empty string → reset column to NULL, otherwise trim
+    // and store. Lets the user delete an accidentally wrong author
+    // pulled by extraction.
     const value =
       body.author === null || body.author.trim().length === 0
         ? null

@@ -3,8 +3,8 @@ import { writeFileSync, statSync, existsSync } from "fs";
 import { join, dirname, basename } from "path";
 
 /**
- * Thin ffmpeg/ffprobe Wrapper. Setzt voraus, dass ffmpeg im PATH liegt
- * (im Docker-Image via apk add ffmpeg; lokal via brew install ffmpeg).
+ * Thin ffmpeg/ffprobe wrapper. Assumes ffmpeg is on the PATH
+ * (in the Docker image via apk add ffmpeg; locally via brew install ffmpeg).
  */
 
 export async function run(
@@ -13,10 +13,10 @@ export async function run(
   opts?: {
     liveStderr?: boolean;
     logPrefix?: string;
-    /** Wird pro ganzer stderr-Zeile aufgerufen. ffmpeg emittiert
-     *  Progress als `\r`-getrennte Einzeiler — wir splitten auf
-     *  beide `\r` und `\n` damit der Callback auch bei Live-Progress
-     *  jede Zeile einzeln sieht. */
+    /** Called for each whole stderr line. ffmpeg emits progress
+     *  as `\r`-separated single lines — we split on both `\r` and
+     *  `\n` so the callback sees each line individually even
+     *  during live progress. */
     onStderrLine?: (line: string) => void;
   }
 ): Promise<{ stdout: string; stderr: string }> {
@@ -47,16 +47,16 @@ export async function run(
 
 /** Concat MP3 files with identical encoding (stream copy). */
 /**
- * Ändert das Wiedergabe-Tempo einer MP3-Datei via ffmpeg `atempo`-
- * Filter, ohne Tonhöhe zu verschieben.
+ * Changes playback tempo of an MP3 file via ffmpeg's `atempo`
+ * filter, without shifting pitch.
  *
- * `atempo` akzeptiert nur 0.5 ≤ f ≤ 2.0. Für Werte außerhalb müssten
- * wir verketten (atempo=2.0,atempo=2.0 für 4×), aber unser Edge-Rate-
- * Format "+/-30%" liegt ohnehin im [0.7, 1.3]-Bereich — safe.
+ * `atempo` only accepts 0.5 ≤ f ≤ 2.0. For values outside we'd
+ * have to chain (atempo=2.0,atempo=2.0 for 4×), but our Edge rate
+ * format "+/-30%" sits in the [0.7, 1.3] range anyway — safe.
  *
- * `factor > 1` = schneller (Audio wird kürzer), `< 1` = langsamer.
- * `factor === 1` ist Opt-out und macht einen Dateikopie-Trick statt
- * Re-Encode (spart Qualitätsverlust).
+ * `factor > 1` = faster (audio gets shorter), `< 1` = slower.
+ * `factor === 1` is an opt-out and does a file-copy trick instead
+ * of re-encode (saves quality loss).
  */
 export async function applyAtempo(
   inPath: string,
@@ -64,7 +64,7 @@ export async function applyAtempo(
   factor: number
 ): Promise<void> {
   if (Math.abs(factor - 1.0) < 1e-3) {
-    // Identity — einfach kopieren (bzw. umbenennen wenn das OK ist).
+    // Identity — just copy (or rename if that's OK).
     if (inPath !== outPath) {
       const { copyFile } = await import("fs/promises");
       await copyFile(inPath, outPath);
@@ -111,16 +111,16 @@ export async function concatMp3(inputs: string[], output: string): Promise<void>
 }
 
 /**
- * Concat wie `concatMp3`, aber mit Silence-Pads zwischen den Inputs
- * (`interChunkMs`) und/oder am Ende (`trailingMs`).
+ * Concat like `concatMp3`, but with silence pads between inputs
+ * (`interChunkMs`) and/or at the end (`trailingMs`).
  *
- * Zweck: Qwen3-TTS-Base ignoriert `\n\n` und rattert Absatzgrenzen
- * durch. Kurze Pause zwischen Chunks = Denk-Pause zwischen Absätzen.
- * Trailing-Pause am Kapitel-Ende = Absatz vor dem nächsten Kapitel
- * bzw. vor M4B-Konkatenation.
+ * Purpose: Qwen3-TTS-Base ignores `\n\n` and rattles through
+ * paragraph boundaries. Short pause between chunks = thinking
+ * pause between paragraphs. Trailing pause at chapter end =
+ * paragraph before the next chapter or before M4B concatenation.
  *
- * Silence-MP3 wird mit der Sample-Rate des ersten Inputs erzeugt, damit
- * der stream-copy-Concat ohne Codec-Mismatch durchläuft.
+ * Silence MP3 is generated at the sample rate of the first input so
+ * the stream-copy concat runs without codec mismatch.
  */
 export async function concatMp3WithGaps(
   inputs: string[],
@@ -212,8 +212,8 @@ async function probeSampleRate(file: string): Promise<number | null> {
 }
 
 /**
- * Loudnorm (EBU R128 → Podcast-Standard -16 LUFS) + Re-Encode auf
- * 128kbps MP3 mit ID3-Tags. Gibt die Laufzeit in Millisekunden zurück.
+ * Loudnorm (EBU R128 → podcast standard -16 LUFS) + re-encode to
+ * 128kbps MP3 with ID3 tags. Returns the runtime in milliseconds.
  */
 export async function normalizeAndTag(params: {
   input: string;
@@ -293,14 +293,14 @@ export async function probeDurationMs(file: string): Promise<number> {
 }
 
 /**
- * Baut ein M4B (AAC in MP4) mit Kapitelmarken + Metadaten + Cover.
- * `chapters` wird als FFMETADATA-File an ffmpeg übergeben.
+ * Builds an M4B (AAC in MP4) with chapter markers + metadata + cover.
+ * `chapters` is passed to ffmpeg as an FFMETADATA file.
  *
- * Metadaten-Layout:
- * - title  = Doc-Titel (was der User im UI sieht)
- * - artist = Author aus der PDF-Metadata (oder "PageMentor" fallback)
- * - album  = Titel (iTunes zeigt M4B-Hörbücher gruppiert nach Album)
- * - grouping = shortCode (User-Kürzel, z. B. „SE12k" / „1" / „2")
+ * Metadata layout:
+ * - title  = doc title (what the user sees in the UI)
+ * - artist = author from PDF metadata (or "PageMentor" fallback)
+ * - album  = title (iTunes groups M4B audiobooks by album)
+ * - grouping = shortCode (user shortcode, e.g. "SE12k" / "1" / "2")
  * - genre  = Audiobook
  */
 export async function buildM4B(params: {
@@ -310,23 +310,23 @@ export async function buildM4B(params: {
   title: string;
   artist?: string;
   shortCode?: string;
-  /** Serien-Name (z. B. Modul-Name). Landet als `series`-Metadata-Tag
-   *  — das ist der primäre Tag den Audiobookshelf per ffprobe liest.
-   *  `mvnm` wäre der dokumentierte Fallback, wird aber von ffprobe
-   *  nicht zuverlässig extrahiert, also lassen wir's weg. */
+  /** Series name (e.g. module name). Lands as the `series` metadata
+   *  tag — that's the primary tag Audiobookshelf reads via ffprobe.
+   *  `mvnm` would be the documented fallback, but ffprobe doesn't
+   *  extract it reliably, so we skip it. */
   series?: string;
   coverPath?: string;
-  /** Optional: Progress-Callback während des ffmpeg-Encodes.
-   *  `currentMs` = aktuelle Audio-Position laut ffmpeg, `totalMs` =
-   *  Gesamt-Dauer des gemergten MP3 laut ffprobe. Wird pro stderr-
-   *  Zeile mit `time=...` aufgerufen (im Schnitt 1-2× pro Sekunde). */
+  /** Optional: progress callback during the ffmpeg encode.
+   *  `currentMs` = current audio position per ffmpeg, `totalMs` =
+   *  total duration of the merged MP3 per ffprobe. Called per
+   *  stderr line with `time=...` (on average 1-2× per second). */
   onProgress?: (currentMs: number, totalMs: number) => void;
 }): Promise<void> {
   const buildStart = Date.now();
-  // Stale-Zwischendateien aus einem früheren abgebrochenen Build
-  // aufräumen, sonst führt das zu Inkonsistenzen (kaputte M4B neben
-  // einer 120-MB-merged.mp3, kein Weg das vom User aus zu heilen).
-  // Auch die Ziel-M4B killen, falls sie truncated liegen geblieben ist.
+  // Clean up stale intermediates from a previous aborted build,
+  // otherwise we get inconsistencies (broken M4B next to a 120 MB
+  // merged.mp3, no way for the user to recover). Also kill the
+  // target M4B in case it was left truncated.
   const merged = params.output.replace(/\.m4b$/i, ".merged.mp3");
   const metaPath = params.output.replace(/\.m4b$/i, ".ffmeta");
   const { unlinkSync } = await import("fs");
@@ -368,14 +368,14 @@ export async function buildM4B(params: {
       `artist=${JSON.stringify(params.artist ?? "PageMentor")} ` +
       `subtitle=${JSON.stringify(params.shortCode ?? "")} ` +
       `series=${JSON.stringify(params.series ?? "")} ` +
-      `cover=${coverExists ? params.coverPath : "(keine Datei gefunden)"}`
+      `cover=${coverExists ? params.coverPath : "(no file found)"}`
   );
 
   // 3. Encode to AAC/M4B with chapter metadata (and optional cover).
-  // `-loglevel info` + liveStderr: sehen wir pro 5-s-Intervall eine
-  // Progress-Zeile („size=... time=... bitrate=...") im Backend-Log,
-  // damit der User bei langen Builds Feedback hat UND wir im Fehlerfall
-  // sofort sehen wo's riss.
+  // `-loglevel info` + liveStderr: we see one progress line per 5 s
+  // ("size=... time=... bitrate=...") in the backend log, so the
+  // user gets feedback during long builds AND on failure we
+  // immediately see where it broke.
   const args = [
     "-y",
     "-hide_banner",
@@ -414,9 +414,9 @@ export async function buildM4B(params: {
   }
   args.push(params.output);
   const encodeStart = Date.now();
-  // Gesamt-Dauer einmalig probe'n — brauchen wir für die Progress-
-  // Berechnung. ffmpeg selbst gibt time= als Zähler aus, aber kein
-  // Total; das rechnen wir selbst zusammen.
+  // Probe the total duration once — we need it for progress
+  // calculation. ffmpeg itself emits time= as a counter but no
+  // total; we compute that ourselves.
   const totalMs = params.onProgress
     ? await probeDurationMs(merged).catch(() => 0)
     : 0;
@@ -442,16 +442,16 @@ export async function buildM4B(params: {
   console.log(
     `[m4b] encode ${params.output} (${(outSize / 1024 / 1024).toFixed(1)} MB) in ${((Date.now() - encodeStart) / 1000).toFixed(1)}s`
   );
-  // ffmpeg emittiert viele Progress-Zeilen auf stderr auch bei Erfolg —
-  // wenn M4B unerwartet klein ist, helfen die letzten Zeilen beim
-  // Diagnostizieren (z. B. "moov atom not found" oder "Conversion
-  // failed!" trotz exit 0).
+  // ffmpeg emits many progress lines on stderr even on success — if
+  // the M4B is unexpectedly small, the last lines help diagnose
+  // (e.g. "moov atom not found" or "Conversion failed!" despite
+  // exit 0).
   const tailLines = stderr.trim().split(/\r?\n/).slice(-8).join(" | ");
   if (tailLines) {
     console.log(`[m4b] ffmpeg tail: ${tailLines}`);
   }
 
-  // Cleanup — mit fs.unlink statt shell-rm (weniger Moving-Parts).
+  // Cleanup — using fs.unlink instead of shell rm (fewer moving parts).
   for (const stale of [merged, metaPath]) {
     if (existsSync(stale)) {
       try {
@@ -473,39 +473,39 @@ function buildFfMetadata(params: {
   series?: string;
   chapters: Array<{ title: string; durationMs: number }>;
 }): string {
-  // Mapping-Realität bei ffmpeg/MP4: nur Keys die auf bekannte
-  // iTunes-Atoms abbilden (©nam, ©ART, ©alb, ©cmt, ©grp, aART,
-  // ©mvn/©mvi, tvsh, …) überleben den Muxer. `series` und `subtitle`
-  // werden verworfen. Audiobookshelf liest `album` als Series-Name
-  // im Audiobook-Modus — deshalb packen wir die Series dort rein,
-  // und nur wenn keine da ist fällt album auf den Titel zurück.
+  // Mapping reality with ffmpeg/MP4: only keys that map to known
+  // iTunes atoms (©nam, ©ART, ©alb, ©cmt, ©grp, aART,
+  // ©mvn/©mvi, tvsh, …) survive the muxer. `series` and `subtitle`
+  // get discarded. Audiobookshelf reads `album` as series name
+  // in audiobook mode — so we put the series there, and only if
+  // there's no series does album fall back to the title.
   const lines: string[] = [";FFMETADATA1"];
   lines.push(`title=${params.title}`);
   lines.push(`artist=${params.artist}`);
-  // Audiobookshelf nimmt artist als Autor, aber album_artist ist
-  // der offiziellere Pfad — doppelt hält.
+  // Audiobookshelf takes artist as author, but album_artist is the
+  // more official path — belt and suspenders.
   lines.push(`album_artist=${params.artist}`);
   const seriesName = params.series?.trim();
   if (seriesName && seriesName.length > 0) {
-    // Primär: album = Serie (ABS-Convention im Audiobook-Modus)
+    // Primary: album = series (ABS convention in audiobook mode)
     lines.push(`album=${seriesName}`);
-    // Zusätzlich: movement_name + show als Fallbacks — beide mappen
-    // auf echte MP4-Atoms (©mvn, tvsh). ABS und einige andere Player
-    // lesen einen davon wenn `series` fehlt (was bei ffmpeg-Output
-    // immer der Fall ist).
+    // Additionally: movement_name + show as fallbacks — both map
+    // to real MP4 atoms (©mvn, tvsh). ABS and some other players
+    // read one of these when `series` is missing (always the case
+    // with ffmpeg output).
     lines.push(`movement_name=${seriesName}`);
     lines.push(`show=${seriesName}`);
   }
-  // Kein Serien-/Modul-Name → album/movement_name/show bleiben leer.
-  // User-Vorgabe: lieber keine Metadaten-Falschbefüllung als den Titel
-  // in ein Series-Feld zu stopfen.
+  // No series/module name → album/movement_name/show stay empty.
+  // User preference: rather have no metadata than stuff the title
+  // into a series field incorrectly.
   lines.push(`genre=Audiobook`);
   if (params.shortCode && params.shortCode.trim().length > 0) {
-    // Nur `grouping` — das ist ein echtes iTunes-Atom (©grp) und
-    // überlebt den Muxer garantiert. `comment` hatten wir vorher auch
-    // beschrieben, das liest ABS aber als Description (semantisch
-    // falsch für ein Kürzel). `subtitle` ist im MP4-Standard kein
-    // Atom, ffmpeg verwirft es — deshalb lassen wir's weg.
+    // Only `grouping` — that's a real iTunes atom (©grp) and is
+    // guaranteed to survive the muxer. We previously also wrote
+    // `comment`, but ABS reads that as description (semantically
+    // wrong for a shortcode). `subtitle` is not an MP4-standard
+    // atom and ffmpeg discards it — so we skip it.
     lines.push(`grouping=${params.shortCode.trim()}`);
   }
   let start = 0;

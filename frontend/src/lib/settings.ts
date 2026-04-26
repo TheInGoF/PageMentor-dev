@@ -1,6 +1,6 @@
 /**
- * Kleine localStorage-basierte Settings. Keine Backend-Route nötig —
- * Defaults sind pro Browser/Benutzer.
+ * Small localStorage-based settings. No backend route required —
+ * defaults are per browser/user.
  */
 
 const KEY = "pagementor.settings.v1";

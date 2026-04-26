@@ -555,8 +555,8 @@ function GenerateModal({
     }
   }, [open]);
 
-  // Beim Unmount ggf. Stream schließen — sonst leaken EventSource-
-  // Instanzen wenn der User Tabs wechselt während ein Lauf aktiv ist.
+  // Close the stream on unmount — otherwise EventSource instances
+  // leak when the user switches tabs while a run is active.
   useEffect(() => {
     return () => {
       unsubRef.current?.();
