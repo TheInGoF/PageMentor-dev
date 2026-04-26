@@ -1,11 +1,44 @@
 # PageMentor
 
-> **Turn your lecture PDFs into audiobooks, flashcards and exam sessions
-> — all on your own hardware. No cloud, no API credits, no subscription.**
+<img src="frontend/public/app-icon-dark.svg" alt="PageMentor logo" width="64">
 
-![PageMentor library](docs/screenshots/library.png)
+**Self-hosted study companion: turn lecture PDFs into audiobooks,
+flashcards and exam sessions — entirely on your own hardware.**
+No cloud, no API credits, no subscription.
+
+> **Note:** Personal hobby project for data-obsessed self-hosters. Not
+> intended for commercial use, no warranties, no support guarantees.
 
 ---
+
+## Why does this exist?
+
+Built alongside a job with a lot of time behind the wheel and an
+open-university degree on the side. Reality of that combination:
+
+- **Lecture scripts pile up faster than evenings to read them.** A
+  ~100-page chapter eats a Sunday; a commute eats nothing.
+- **The cloud-AI study tools out there want to host your scripts.**
+  Some of mine come from a private university, some from internal
+  training — those PDFs aren't going on a SaaS server.
+- **And honestly: while every "AI study buddy" still routes everything
+  through someone else's GPU** 🙃 I'd rather burn my own electricity.
+
+So I built **PageMentor**: drop a PDF in, and the same evening you get
+back an **M4B audiobook** for the car, an **AI-generated flashcard
+deck** for the train and a **timed exam trainer** for the weekend
+before the actual exam. All three driven by a local Ollama + local TTS
+stack, with cloud LLMs as optional fallback.
+
+If you're in the same bucket — long drives, open-university study,
+sensitive material, limited quiet desk time — the tool was designed
+for exactly that.
+
+PageMentor is a fresh build and does not fork any existing project.
+
+---
+
+![PageMentor library](docs/screenshots/library.png)
 
 ## What it does
 
@@ -50,20 +83,6 @@ versus the reference — and plots the trend as a sparkline.
   optional fallbacks, configured from the UI.
 - 🏠 **One Docker stack** — runs on a Synology NAS (bind-mounted data),
   scales to a GPU workstation when you want speed.
-
-> **Note:** Personal hobby project for data-obsessed self-hosters. Not
-> intended for commercial use, no warranties, no support guarantees.
-
----
-
-## Why this exists
-
-Built alongside a job with a lot of time behind the wheel. Instead of
-letting those commuting hours go to waste, PageMentor turns lecture
-scripts into audiobooks that keep the studies moving — plus flashcards
-and exam prep for the evenings. If you're in the same bucket (long
-drives, open-university study, limited quiet desk time), the tool was
-designed for exactly that.
 
 ### What you need
 
