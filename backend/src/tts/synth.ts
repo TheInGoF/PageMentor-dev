@@ -10,7 +10,13 @@ import { findVoice, engineFor } from "./voices";
 import type { Segment } from "./segment";
 import type { EngineId, Voice } from "./engines/base";
 
-const MAX_RETRIES = 2;
+// Two retries was the historical default from when chunks were
+// 30-60s and a transient hiccup was cheap to redo. With chunks up to
+// 4000 chars taking 4-6 minutes on Qwen3-TTS, three attempts can
+// silently consume 20+ minutes of GPU time on the same broken chunk.
+// One retry is the right balance: covers a real transient drop, but
+// fails fast when the chunk genuinely doesn't work.
+const MAX_RETRIES = 1;
 
 interface EnginePolicy {
   /** Pause between consecutive chunks. */
@@ -78,6 +84,11 @@ export async function synthesizeChunk(
       return { ...result, engineId: engine.id };
     } catch (err) {
       lastErr = err;
+      const cause = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[tts] chunk synthesis attempt ${attempt + 1}/${MAX_RETRIES + 1} ` +
+          `failed for voice=${params.voice.id} engine=${engine.id}: ${cause}`
+      );
       if (attempt < MAX_RETRIES) {
         const isEmptyAudio =
           err instanceof Error && /empty audio/i.test(err.message);
@@ -85,6 +96,10 @@ export async function synthesizeChunk(
           isEmptyAudio && policy.emptyAudioCooldownMs > 0
             ? policy.emptyAudioCooldownMs
             : 400 * Math.pow(2, attempt);
+        console.warn(
+          `[tts] retrying chunk in ${backoff}ms ` +
+            `(reason=${isEmptyAudio ? "empty-audio" : "exception"})`
+        );
         try {
           await sleep(backoff, undefined, { signal: params.signal });
         } catch {
