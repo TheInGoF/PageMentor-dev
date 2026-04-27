@@ -183,6 +183,20 @@ export async function generateAudiobook(params: {
         | { status: string; duration_ms: number }
         | undefined;
 
+      // Stale non-done rows (failed / running / pending leftovers
+      // from a crashed earlier run, or rows written by older
+      // PageMentor versions) are dropped right here. Without this,
+      // a "failed" status survives forever — the catch-block below
+      // only fires when THIS run's synth fails, never on inherited
+      // rows. Keeping them around makes the chapter look perma-broken
+      // in the UI even though a fresh generate would succeed.
+      if (existingAudio && existingAudio.status !== "done") {
+        console.log(
+          `[audiobook] chapter ${ch.number}: dropping stale audio row (status=${existingAudio.status}) before re-generate`
+        );
+        deleteAudioForChapter(ch.id, outFile);
+      }
+
       if (
         existingAudio?.status === "done" &&
         existsSync(outFile)
@@ -440,6 +454,18 @@ export async function generateSingleChapterAudio(params: {
   const audioDir = join(DATA_DIR, "audio", row.document_id);
   mkdirSync(audioDir, { recursive: true });
   const outFile = chapterFile(audioDir, row as Chapter);
+
+  // Drop any stale non-done audio row for this chapter before the
+  // fresh synth — same rationale as in the full-book loop.
+  const staleAudio = db()
+    .prepare("SELECT status FROM audio WHERE chapter_id = ?")
+    .get(row.id) as { status: string } | undefined;
+  if (staleAudio && staleAudio.status !== "done") {
+    console.log(
+      `[audiobook] single-chapter: dropping stale audio row (status=${staleAudio.status}) for chapter ${row.id}`
+    );
+    deleteAudioForChapter(row.id, outFile);
+  }
 
   // Register single-chapter runs in the `running` map too, so
   // `cancelAudiobook(docId)` stops them. If a full-book run is
