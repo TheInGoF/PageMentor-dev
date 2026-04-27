@@ -28,8 +28,8 @@ llmConfigRoutes.put("/", async (c) => {
     qwenTtsInstruction?: string;
     qwenTtsTemperature?: string;
     qwenTtsTopP?: string;
-    qwenTtsMaxNewTokens?: string;
-    qwenTtsSeedOverride?: string;
+    qwenTtsTopK?: string;
+    qwenTtsRepetitionPenalty?: string;
     ttsMaxChunk?: string;
     absUrl?: string;
     absApiKey?: string;

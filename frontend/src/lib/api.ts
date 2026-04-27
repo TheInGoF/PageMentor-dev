@@ -636,8 +636,8 @@ export const api = {
           qwenTtsInstruction?: string;
           qwenTtsTemperature?: string;
           qwenTtsTopP?: string;
-          qwenTtsMaxNewTokens?: string;
-          qwenTtsSeedOverride?: string;
+          qwenTtsTopK?: string;
+          qwenTtsRepetitionPenalty?: string;
           ttsMaxChunk?: string;
           absUrl?: string;
           absApiKeyPresent?: boolean;
@@ -661,8 +661,8 @@ export const api = {
       qwenTtsInstruction?: string;
       qwenTtsTemperature?: string;
       qwenTtsTopP?: string;
-      qwenTtsMaxNewTokens?: string;
-      qwenTtsSeedOverride?: string;
+      qwenTtsTopK?: string;
+      qwenTtsRepetitionPenalty?: string;
       ttsMaxChunk?: string;
       absUrl?: string;
       absApiKey?: string;
@@ -902,8 +902,8 @@ export const api = {
         instruct?: string;
         temperature?: string;
         topP?: string;
-        maxNewTokens?: string;
-        seed?: string;
+        topK?: string;
+        repetitionPenalty?: string;
       }
     ) => {
       const parts = [`voice=${encodeURIComponent(voiceId)}`];
@@ -913,9 +913,9 @@ export const api = {
       if (opts?.temperature)
         parts.push(`temperature=${encodeURIComponent(opts.temperature)}`);
       if (opts?.topP) parts.push(`top_p=${encodeURIComponent(opts.topP)}`);
-      if (opts?.maxNewTokens)
-        parts.push(`max_new_tokens=${encodeURIComponent(opts.maxNewTokens)}`);
-      if (opts?.seed) parts.push(`seed=${encodeURIComponent(opts.seed)}`);
+      if (opts?.topK) parts.push(`top_k=${encodeURIComponent(opts.topK)}`);
+      if (opts?.repetitionPenalty)
+        parts.push(`repetition_penalty=${encodeURIComponent(opts.repetitionPenalty)}`);
       return `/api/audio/preview?${parts.join("&")}`;
     },
     get: (docId: string) => request<AudioDocument>(`/api/audio/document/${docId}`),

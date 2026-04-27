@@ -4,9 +4,9 @@ import { getSettings, onSettingsChange, setSettings } from "./settings";
 export type Locale = "en" | "de";
 
 /**
- * Locale-Auswahl: Settings-Override > Browser-Default > "en".
- * Default ist Englisch, Deutsch wird nur gewählt wenn der Browser
- * explizit eine de-*-Sprache meldet und kein Override gesetzt ist.
+ * Locale resolution: settings override > browser default > "en".
+ * English is the default; German is only chosen when the browser
+ * explicitly reports a de-* language and no override is set.
  */
 export function detectInitialLocale(): Locale {
   const fromSettings = getSettings().locale;
@@ -679,12 +679,11 @@ const en: Record<string, string> = {
   "settings.tts.tester.advanced": "Advanced Qwen parameters ▾",
   "settings.tts.advanced.temperature": "Temperature",
   "settings.tts.advanced.topP": "Top-P",
-  "settings.tts.advanced.maxTokens": "Max new tokens",
-  "settings.tts.advanced.seed": "Seed override",
-  "settings.tts.advanced.seedAuto": "auto",
+  "settings.tts.advanced.topK": "Top-K",
+  "settings.tts.advanced.repetitionPenalty": "Repetition penalty",
   "settings.tts.advanced.chunkSize": "Chunk size (chars)",
   "settings.tts.advanced.hint":
-    "Lower temperature (0.3–0.5) keeps the voice closer to the instruction and reduces accent drift on long paragraphs, at the cost of slightly flatter prosody. Seed override: empty = deterministic per speaker, set an integer for a different variant of the same preset.",
+    "Sampling tuning for stable long-form narration: temperature 0.7–0.8 keeps voices natural without too much drift, top-P 0.7–0.85 tightens the timbre, top-K caps long-tail randomness. Repetition penalty around 1.05–1.15 fights the looping/garble bug seen on long voice clones (Qwen3-TTS issue #258). Empty fields fall back to the sidecar's QWEN_TTS_DEFAULT_* values.",
   "settings.design.title": "Designed voices (text-described)",
   "settings.design.subtitle":
     "Generate voices from a text description instead of picking a preset or uploading a reference. Uses the Qwen3-TTS VoiceDesign model — a separate ~4 GB model, lazy-loaded on first use.",
@@ -1495,12 +1494,11 @@ const de: Record<string, string> = {
   "settings.tts.tester.advanced": "Erweiterte Qwen-Parameter ▾",
   "settings.tts.advanced.temperature": "Temperature",
   "settings.tts.advanced.topP": "Top-P",
-  "settings.tts.advanced.maxTokens": "Max. neue Tokens",
-  "settings.tts.advanced.seed": "Seed-Override",
-  "settings.tts.advanced.seedAuto": "auto",
+  "settings.tts.advanced.topK": "Top-K",
+  "settings.tts.advanced.repetitionPenalty": "Repetition Penalty",
   "settings.tts.advanced.chunkSize": "Chunk-Größe (Zeichen)",
   "settings.tts.advanced.hint":
-    "Niedrigere Temperature (0.3–0.5) hält die Stimme näher an der Instruction und reduziert Akzent-Drift in langen Absätzen — auf Kosten etwas flacherer Prosodie. Seed-Override leer = deterministisch pro Speaker; mit Integer bekommst du eine andere Variante desselben Presets.",
+    "Sampling-Tuning für stabile Langform-Erzählung: Temperature 0,7–0,8 hält die Stimme natürlich ohne starken Drift, Top-P 0,7–0,85 strafft das Klangbild, Top-K kappt Long-Tail-Zufallstokens. Repetition Penalty um 1,05–1,15 wirkt gegen den Loop/Garble-Bug langer Voice-Clones (Qwen3-TTS Issue #258). Leere Felder fallen auf die QWEN_TTS_DEFAULT_*-Werte des Sidecar zurück.",
   "settings.design.title": "Designte Stimmen (aus Textbeschreibung)",
   "settings.design.subtitle":
     "Erzeugt Stimmen aus einer Freitext-Beschreibung — statt Preset wählen oder Referenz-Audio hochladen. Nutzt das Qwen3-TTS-VoiceDesign-Modell (~4 GB, lazy-load beim ersten Einsatz).",

@@ -117,6 +117,18 @@ ATTN_IMPL = os.environ.get("QWEN_TTS_ATTN_IMPL", "flash_attention_2")
 DEFAULT_LANGUAGE = os.environ.get("QWEN_TTS_DEFAULT_LANGUAGE", "German")
 MAX_NEW_TOKENS = int(os.environ.get("QWEN_TTS_MAX_NEW_TOKENS", "4096"))
 
+# Sampling defaults — used when the request doesn't override them.
+# These four params land in `gen_kwargs` of every synthesis path and
+# directly affect chunk-to-chunk voice stability. Lower temperature +
+# tighter top_p reduce drift; repetition_penalty > 1.0 helps against
+# the well-known "looping garble" (issue #258 in QwenLM/Qwen3-TTS).
+DEFAULT_TEMPERATURE = float(os.environ.get("QWEN_TTS_DEFAULT_TEMPERATURE", "0.75"))
+DEFAULT_TOP_P = float(os.environ.get("QWEN_TTS_DEFAULT_TOP_P", "0.8"))
+DEFAULT_TOP_K = int(os.environ.get("QWEN_TTS_DEFAULT_TOP_K", "40"))
+DEFAULT_REPETITION_PENALTY = float(
+    os.environ.get("QWEN_TTS_DEFAULT_REPETITION_PENALTY", "1.05")
+)
+
 # Hard timeout per generate call. Zombie generations (model loop,
 # NaN, infinite-repeat) otherwise freeze the GPU until container
 # restart. On overrun: 504 to the client + self-exit(1) so Docker
@@ -386,6 +398,30 @@ def _apply_seed(seed: int) -> None:
     random.seed(seed)
 
 
+def _resolve_sampling(
+    temperature: Optional[float],
+    top_p: Optional[float],
+    top_k: Optional[int],
+    repetition_penalty: Optional[float],
+) -> dict[str, Any]:
+    """Builds the sampling kwargs subset for a generate-call.
+
+    Anything passed as ``None`` falls back to the ENV-provided default;
+    that means an empty App-Settings field hands control back to the
+    container's startup ENV instead of leaking a blank to the model.
+    """
+    return {
+        "temperature": temperature if temperature is not None else DEFAULT_TEMPERATURE,
+        "top_p": top_p if top_p is not None else DEFAULT_TOP_P,
+        "top_k": top_k if top_k is not None else DEFAULT_TOP_K,
+        "repetition_penalty": (
+            repetition_penalty
+            if repetition_penalty is not None
+            else DEFAULT_REPETITION_PENALTY
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Audio helpers
 # ---------------------------------------------------------------------------
@@ -631,6 +667,11 @@ def _synth_clone(
     language: str,
     seed: int,
     speed: float,
+    max_new_tokens_override: Optional[int] = None,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    top_k: Optional[int] = None,
+    repetition_penalty: Optional[float] = None,
 ) -> tuple[np.ndarray, int]:
     if _model is None:
         raise HTTPException(
@@ -645,11 +686,18 @@ def _synth_clone(
     # → no speaker drift between chunks.
     clone_prompt = _get_clone_prompt(ref_audio, ref_text)
 
+    effective_max = (
+        max_new_tokens_override
+        if max_new_tokens_override and max_new_tokens_override > 0
+        else MAX_NEW_TOKENS
+    )
+
     gen_kwargs: dict[str, Any] = {
         "text": text,
         "language": language,
         "voice_clone_prompt": clone_prompt,
-        "max_new_tokens": MAX_NEW_TOKENS,
+        "max_new_tokens": effective_max,
+        **_resolve_sampling(temperature, top_p, top_k, repetition_penalty),
     }
     _ = speed  # speed cannot be set via this path (see older comment)
 
@@ -704,22 +752,25 @@ def _synth_custom(
     seed: int,
     temperature: Optional[float] = None,
     top_p: Optional[float] = None,
+    top_k: Optional[int] = None,
+    repetition_penalty: Optional[float] = None,
     max_new_tokens_override: Optional[int] = None,
 ) -> tuple[np.ndarray, int]:
     """Synthesis via the CustomVoice model. `speaker` must be one of the
-    9 Presets sein; `instruct` ist Freitext ("Calm narrator, slow pace")
-    oder leer.
+    nine presets; `instruct` is free text ("Calm narrator, slow pace")
+    or empty.
 
-    Advanced-Sampling-Dials werden 1:1 an Qwen durchgereicht wenn nicht
-    ``None`` — sonst nimmt Qwen seine internen Defaults. Niedrigere
-    ``temperature`` (~0.3-0.5) kann Akzent-Drift im Body-Text reduzieren
-    (straffer am Instruction-Prompt), auf Kosten etwas monotonerer
-    Prosodie.
+    Sampling dials are forwarded 1:1 to Qwen — anything left as ``None``
+    falls back to the ENV-provided defaults via ``_resolve_sampling``.
+    Lower ``temperature`` (0.3-0.6) reduces accent drift in long body
+    text (the model sticks closer to the instruction prompt) at the
+    cost of slightly flatter prosody.
 
-    Keine Stil-Drift zwischen Chunks weil die Preset-Stimme im Modell
-    verankert ist — aber innerhalb eines langen Chunks kann die Stimme
-    autoregressiv Richtung Sprecher-Muttersprache zurückfallen (z. B.
-    Vivian→Chinese). Niedrige temperature mildert das."""
+    There is no per-chunk style drift because the preset speaker is
+    baked into the weights — but within a single very long chunk the
+    autoregressive decoder can drift toward the speaker's native
+    language (e.g. Vivian → Chinese). Lower temperature mitigates that.
+    """
     if speaker not in CUSTOMVOICE_PRESETS:
         raise HTTPException(
             status_code=400,
@@ -748,13 +799,10 @@ def _synth_custom(
         "language": language,
         "speaker": speaker,
         "max_new_tokens": effective_max,
+        **_resolve_sampling(temperature, top_p, top_k, repetition_penalty),
     }
     if instruct and instruct.strip():
         gen_kwargs["instruct"] = instruct.strip()
-    if temperature is not None and temperature >= 0:
-        gen_kwargs["temperature"] = float(temperature)
-    if top_p is not None and 0 < top_p <= 1:
-        gen_kwargs["top_p"] = float(top_p)
 
     req_hash = hashlib.sha256(
         f"{text}|{seed}|{speaker}|{instruct or ''}".encode("utf-8")
@@ -807,6 +855,8 @@ def _synth_design(
     seed: int,
     temperature: Optional[float] = None,
     top_p: Optional[float] = None,
+    top_k: Optional[int] = None,
+    repetition_penalty: Optional[float] = None,
     max_new_tokens_override: Optional[int] = None,
 ) -> tuple[np.ndarray, int]:
     """Synthesis via the VoiceDesign model. `voice_description` lands
@@ -843,11 +893,8 @@ def _synth_design(
         "language": language,
         "instruct": voice_description.strip(),
         "max_new_tokens": effective_max,
+        **_resolve_sampling(temperature, top_p, top_k, repetition_penalty),
     }
-    if temperature is not None and temperature >= 0:
-        gen_kwargs["temperature"] = float(temperature)
-    if top_p is not None and 0 < top_p <= 1:
-        gen_kwargs["top_p"] = float(top_p)
 
     req_hash = hashlib.sha256(
         f"{text}|{seed}|{voice_description}".encode("utf-8")
@@ -992,6 +1039,14 @@ async def health():
         "voicedesign_model": VOICEDESIGN_MODEL_ID,
         "voicedesign_loaded": _design_model is not None,
         "voicedesign_error": _design_load_error,
+        "max_new_tokens": MAX_NEW_TOKENS,
+        "generation_timeout_s": GENERATION_TIMEOUT_S,
+        "sampling_defaults": {
+            "temperature": DEFAULT_TEMPERATURE,
+            "top_p": DEFAULT_TOP_P,
+            "top_k": DEFAULT_TOP_K,
+            "repetition_penalty": DEFAULT_REPETITION_PENALTY,
+        },
     }
 
 
@@ -1044,14 +1099,18 @@ class SpeechRequest(BaseModel):
     language: str = DEFAULT_LANGUAGE
     seed: int = 0
 
-    # Advanced sampling parameters — all optional. ``None`` means use
-    # the Qwen default. Forwarded 1:1 to ``generate_custom_voice``.
-    # Reason for the explicit exposure: the user can dial temperature
-    # down on accent-drift issues (tightens sampling toward the
-    # instruction), or get a different voice variant of the same
-    # preset with a different seed.
+    # Advanced sampling parameters — all optional. ``None`` falls back
+    # to the QWEN_TTS_DEFAULT_* ENV defaults (resolved in
+    # ``_resolve_sampling``). Forwarded 1:1 to all three generate
+    # paths. Tuning recipe (community + official issues):
+    #   - lower temperature (0.5-0.75) reduces chunk-to-chunk drift
+    #   - top_p tighter than 0.9 (try 0.7-0.85) for stable timbre
+    #   - top_k caps the long-tail random tokens
+    #   - repetition_penalty > 1.0 fights the looping garble bug
     temperature: Optional[float] = None
     top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    repetition_penalty: Optional[float] = None
     max_new_tokens_override: Optional[int] = None
 
 
@@ -1074,6 +1133,8 @@ def speech(req: SpeechRequest):
             seed=req.seed,
             temperature=req.temperature,
             top_p=req.top_p,
+            top_k=req.top_k,
+            repetition_penalty=req.repetition_penalty,
             max_new_tokens_override=req.max_new_tokens_override,
         )
     elif use_custom:
@@ -1085,6 +1146,8 @@ def speech(req: SpeechRequest):
             seed=req.seed,
             temperature=req.temperature,
             top_p=req.top_p,
+            top_k=req.top_k,
+            repetition_penalty=req.repetition_penalty,
             max_new_tokens_override=req.max_new_tokens_override,
         )
     else:
@@ -1092,8 +1155,8 @@ def speech(req: SpeechRequest):
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Request muss entweder `speaker` (CustomVoice-Preset) "
-                    "oder `ref_audio_b64` (Voice-Clone) enthalten."
+                    "request must contain either `speaker` (CustomVoice "
+                    "preset) or `ref_audio_b64` (voice clone)."
                 ),
             )
         ref_audio = _decode_ref_audio(req.ref_audio_b64)
@@ -1104,6 +1167,11 @@ def speech(req: SpeechRequest):
             language=req.language,
             seed=req.seed,
             speed=req.speed,
+            temperature=req.temperature,
+            top_p=req.top_p,
+            top_k=req.top_k,
+            repetition_penalty=req.repetition_penalty,
+            max_new_tokens_override=req.max_new_tokens_override,
         )
     body, ctype = _encode_audio(samples, sr, req.response_format)
     return Response(content=body, media_type=ctype)

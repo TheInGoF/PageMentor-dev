@@ -208,8 +208,10 @@ async function callSpeechClone(params: {
   sample: VoiceSample;
   speed: number;
   timeoutMs: number;
+  dials?: AdvancedDials;
 }): Promise<Buffer> {
   const url = baseUrl();
+  const d = params.dials ?? {};
   const refBytes = readVoiceRefBytes(params.sample);
   const refB64 = refBytes.toString("base64");
 
@@ -229,6 +231,10 @@ async function callSpeechClone(params: {
       ref_text: params.sample.refText ?? undefined,
       language: qwenLanguageFor(params.sample.language),
       seed: params.sample.seed,
+      temperature: d.temperature,
+      top_p: d.topP,
+      top_k: d.topK,
+      repetition_penalty: d.repetitionPenalty,
     }),
     signal: AbortSignal.timeout(params.timeoutMs),
   });
@@ -256,16 +262,18 @@ function parseIntConfig(raw: string | undefined): number | undefined {
 interface AdvancedDials {
   temperature?: number;
   topP?: number;
-  maxNewTokens?: number;
-  seedOverride?: number;
+  topK?: number;
+  repetitionPenalty?: number;
 }
 
 function readDials(): AdvancedDials {
   return {
     temperature: parseNumConfig(effective("qwenTtsTemperature", "PM_QWEN_TTS_TEMPERATURE")),
     topP: parseNumConfig(effective("qwenTtsTopP", "PM_QWEN_TTS_TOP_P")),
-    maxNewTokens: parseIntConfig(effective("qwenTtsMaxNewTokens", "PM_QWEN_TTS_MAX_NEW_TOKENS")),
-    seedOverride: parseIntConfig(effective("qwenTtsSeedOverride", "PM_QWEN_TTS_SEED_OVERRIDE")),
+    topK: parseIntConfig(effective("qwenTtsTopK", "PM_QWEN_TTS_TOP_K")),
+    repetitionPenalty: parseNumConfig(
+      effective("qwenTtsRepetitionPenalty", "PM_QWEN_TTS_REPETITION_PENALTY")
+    ),
   };
 }
 
@@ -427,10 +435,6 @@ async function callSpeechDesign(params: {
 }): Promise<Buffer> {
   const url = baseUrl();
   const d = params.dials ?? {};
-  const seed =
-    d.seedOverride !== undefined && Number.isFinite(d.seedOverride)
-      ? d.seedOverride
-      : params.design.seed;
 
   const instructForQwen = buildDesignInstruct(params.design);
 
@@ -448,10 +452,11 @@ async function callSpeechDesign(params: {
       speed: 1.0,
       voice_description: instructForQwen,
       language: qwenLanguageFor(params.design.language),
-      seed,
+      seed: params.design.seed,
       temperature: d.temperature,
       top_p: d.topP,
-      max_new_tokens_override: d.maxNewTokens,
+      top_k: d.topK,
+      repetition_penalty: d.repetitionPenalty,
     }),
     signal: AbortSignal.timeout(params.timeoutMs),
   });
@@ -474,10 +479,6 @@ async function callSpeechPreset(params: {
 }): Promise<Buffer> {
   const url = baseUrl();
   const d = params.dials ?? {};
-  const seed =
-    d.seedOverride !== undefined && Number.isFinite(d.seedOverride)
-      ? d.seedOverride
-      : seedForSpeaker(params.speaker);
 
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
@@ -494,10 +495,11 @@ async function callSpeechPreset(params: {
       speaker: params.speaker,
       instruct: params.instruct || undefined,
       language: qwenLanguageFor(params.language),
-      seed,
+      seed: seedForSpeaker(params.speaker),
       temperature: d.temperature,
       top_p: d.topP,
-      max_new_tokens_override: d.maxNewTokens,
+      top_k: d.topK,
+      repetition_penalty: d.repetitionPenalty,
     }),
     signal: AbortSignal.timeout(params.timeoutMs),
   });
@@ -572,7 +574,8 @@ export const qwenEngine: TtsEngine = {
       console.log(
         `[qwen-tts] synth preset=${presetSpeaker} text=${text.length}c rate=${params.rate} ` +
           `instruct=${instruct ? "yes" : "no"} temp=${dials.temperature ?? "def"} ` +
-          `top_p=${dials.topP ?? "def"} seedOverride=${dials.seedOverride ?? "auto"}`
+          `top_p=${dials.topP ?? "def"} top_k=${dials.topK ?? "def"} ` +
+          `rep_pen=${dials.repetitionPenalty ?? "def"}`
       );
       buf = await callSpeechPreset({
         text,
@@ -593,14 +596,18 @@ export const qwenEngine: TtsEngine = {
       // — it pulls tempo from the reference audio. We send the raw
       // output and adjust speed afterwards via ffmpeg atempo
       // (changes tempo without shifting pitch).
+      const dials = readDials();
       console.log(
-        `[qwen-tts] synth clone voice=${params.voice.id} text=${text.length}c rate=${params.rate}`
+        `[qwen-tts] synth clone voice=${params.voice.id} text=${text.length}c rate=${params.rate} ` +
+          `temp=${dials.temperature ?? "def"} top_p=${dials.topP ?? "def"} ` +
+          `top_k=${dials.topK ?? "def"} rep_pen=${dials.repetitionPenalty ?? "def"}`
       );
       buf = await callSpeechClone({
         text,
         sample,
         speed: 1.0, // info for the sidecar log, effectively ignored
         timeoutMs: SYNTH_TIMEOUT_MS,
+        dials,
       });
     }
     console.log(
@@ -693,14 +700,14 @@ export const qwenEngine: TtsEngine = {
           params.topPOverride !== undefined
             ? params.topPOverride
             : base.topP,
-        maxNewTokens:
-          params.maxNewTokensOverride !== undefined
-            ? params.maxNewTokensOverride
-            : base.maxNewTokens,
-        seedOverride:
-          params.seedOverride !== undefined
-            ? params.seedOverride
-            : base.seedOverride,
+        topK:
+          params.topKOverride !== undefined
+            ? params.topKOverride
+            : base.topK,
+        repetitionPenalty:
+          params.repetitionPenaltyOverride !== undefined
+            ? params.repetitionPenaltyOverride
+            : base.repetitionPenalty,
       };
       const buf = await callSpeechPreset({
         text: params.text,
@@ -724,11 +731,27 @@ export const qwenEngine: TtsEngine = {
         `Qwen-TTS voice sample ${params.voice.id} not found in DB`
       );
     }
+    const base = readDials();
+    const dials: AdvancedDials = {
+      temperature:
+        params.temperatureOverride !== undefined
+          ? params.temperatureOverride
+          : base.temperature,
+      topP:
+        params.topPOverride !== undefined ? params.topPOverride : base.topP,
+      topK:
+        params.topKOverride !== undefined ? params.topKOverride : base.topK,
+      repetitionPenalty:
+        params.repetitionPenaltyOverride !== undefined
+          ? params.repetitionPenaltyOverride
+          : base.repetitionPenalty,
+    };
     const buf = await callSpeechClone({
       text: params.text,
       sample,
       speed: 1.0,
       timeoutMs: PREVIEW_TIMEOUT_MS,
+      dials,
     });
     if (buf.length === 0) {
       throw new Error(

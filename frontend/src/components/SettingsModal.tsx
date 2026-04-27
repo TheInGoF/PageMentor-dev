@@ -32,8 +32,8 @@ interface LlmConfig {
   absLibraryId?: string;
   qwenTtsTemperature?: string;
   qwenTtsTopP?: string;
-  qwenTtsMaxNewTokens?: string;
-  qwenTtsSeedOverride?: string;
+  qwenTtsTopK?: string;
+  qwenTtsRepetitionPenalty?: string;
   ttsMaxChunk?: string;
 }
 
@@ -225,8 +225,8 @@ export function SettingsModal({ open, onClose }: Props) {
         qwenTtsInstruction: llmConfig.qwenTtsInstruction ?? "",
         qwenTtsTemperature: llmConfig.qwenTtsTemperature ?? "",
         qwenTtsTopP: llmConfig.qwenTtsTopP ?? "",
-        qwenTtsMaxNewTokens: llmConfig.qwenTtsMaxNewTokens ?? "",
-        qwenTtsSeedOverride: llmConfig.qwenTtsSeedOverride ?? "",
+        qwenTtsTopK: llmConfig.qwenTtsTopK ?? "",
+        qwenTtsRepetitionPenalty: llmConfig.qwenTtsRepetitionPenalty ?? "",
         ttsMaxChunk: llmConfig.ttsMaxChunk ?? "",
         absUrl: llmConfig.absUrl ?? "",
         absLibraryId: llmConfig.absLibraryId ?? "",
@@ -290,8 +290,8 @@ export function SettingsModal({ open, onClose }: Props) {
         instruct: llmConfig.qwenTtsInstruction ?? "",
         temperature: llmConfig.qwenTtsTemperature || undefined,
         topP: llmConfig.qwenTtsTopP || undefined,
-        maxNewTokens: llmConfig.qwenTtsMaxNewTokens || undefined,
-        seed: llmConfig.qwenTtsSeedOverride || undefined,
+        topK: llmConfig.qwenTtsTopK || undefined,
+        repetitionPenalty: llmConfig.qwenTtsRepetitionPenalty || undefined,
       });
       const res = await fetch(url);
       if (!res.ok) {
@@ -1092,35 +1092,37 @@ export function SettingsModal({ open, onClose }: Props) {
                         qwenTtsTopP: e.target.value,
                       })
                     }
-                    placeholder="0.9"
+                    placeholder="0.8"
                   />
                   <Input
-                    label={t("settings.tts.advanced.maxTokens")}
-                    type="number"
-                    step="256"
-                    min={256}
-                    max={16384}
-                    value={llmConfig.qwenTtsMaxNewTokens ?? ""}
-                    onChange={(e) =>
-                      setLlmConfig({
-                        ...llmConfig,
-                        qwenTtsMaxNewTokens: e.target.value,
-                      })
-                    }
-                    placeholder="4096"
-                  />
-                  <Input
-                    label={t("settings.tts.advanced.seed")}
+                    label={t("settings.tts.advanced.topK")}
                     type="number"
                     step="1"
-                    value={llmConfig.qwenTtsSeedOverride ?? ""}
+                    min={1}
+                    max={200}
+                    value={llmConfig.qwenTtsTopK ?? ""}
                     onChange={(e) =>
                       setLlmConfig({
                         ...llmConfig,
-                        qwenTtsSeedOverride: e.target.value,
+                        qwenTtsTopK: e.target.value,
                       })
                     }
-                    placeholder={t("settings.tts.advanced.seedAuto")}
+                    placeholder="40"
+                  />
+                  <Input
+                    label={t("settings.tts.advanced.repetitionPenalty")}
+                    type="number"
+                    step="0.01"
+                    min={1}
+                    max={2}
+                    value={llmConfig.qwenTtsRepetitionPenalty ?? ""}
+                    onChange={(e) =>
+                      setLlmConfig({
+                        ...llmConfig,
+                        qwenTtsRepetitionPenalty: e.target.value,
+                      })
+                    }
+                    placeholder="1.05"
                   />
                   <Input
                     label={t("settings.tts.advanced.chunkSize")}

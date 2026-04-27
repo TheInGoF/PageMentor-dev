@@ -46,15 +46,15 @@ audioRoutes.get("/preview", async (c) => {
   const instructOverride = c.req.query("instruct");
   const tempOverride = c.req.query("temperature");
   const topPOverride = c.req.query("top_p");
-  const maxTokOverride = c.req.query("max_new_tokens");
-  const seedOverride = c.req.query("seed");
+  const topKOverride = c.req.query("top_k");
+  const repPenOverride = c.req.query("repetition_penalty");
   const hasOverrides =
     textOverride !== undefined ||
     instructOverride !== undefined ||
     tempOverride !== undefined ||
     topPOverride !== undefined ||
-    maxTokOverride !== undefined ||
-    seedOverride !== undefined;
+    topKOverride !== undefined ||
+    repPenOverride !== undefined;
 
   // Longer sample text: Qwen-TTS drifts autoregressively — the first
   // ~5 seconds sound consistent with the instruction prompt, after
@@ -87,8 +87,8 @@ audioRoutes.get("/preview", async (c) => {
       instructOverride,
       temperatureOverride: parseOptFloat(tempOverride),
       topPOverride: parseOptFloat(topPOverride),
-      maxNewTokensOverride: parseOptInt(maxTokOverride),
-      seedOverride: parseOptInt(seedOverride),
+      topKOverride: parseOptInt(topKOverride),
+      repetitionPenaltyOverride: parseOptFloat(repPenOverride),
     });
     // Use the underlying ArrayBuffer so Response accepts it cleanly under both Bun and Node types.
     const body = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) as unknown as BodyInit;

@@ -138,12 +138,22 @@ services:
       QWEN_TTS_DTYPE: "bfloat16"
       QWEN_TTS_ATTN_IMPL: "sdpa"       # "flash_attention_2" saves ~15% VRAM but needs a downstream rebuild
       QWEN_TTS_DEFAULT_LANGUAGE: "German"
-      # Hard timeout per chunk in seconds. Typical chunks on a 3090
-      # take ~4:30 min, so 360 s (6 min) gives headroom. On overrun
-      # the sidecar returns 504 + self-exits; the arbiter restarts
-      # the container cleanly for the next call.
-      # If you use Settings → Chunk size > 4000, bump this to 600+.
-      QWEN_TTS_GENERATION_TIMEOUT: "360"
+      # Token / timeout budget. Each character of German narration
+      # decodes to roughly 4-5 audio tokens on the 12 Hz codec, so for
+      # 4000-char chunks you need ~22000 max_new_tokens and the
+      # generation can take 8-12 min on a 3090. Tuned for chunks up
+      # to ~4000 chars; lower if your chunks are smaller.
+      QWEN_TTS_MAX_NEW_TOKENS: "22000"
+      QWEN_TTS_GENERATION_TIMEOUT: "900"
+      # Default sampling parameters used when the App-Settings leave
+      # a field blank. Lower temperature + tighter top_p reduce
+      # chunk-to-chunk timbre drift; repetition_penalty > 1.0 fights
+      # the looping/garble bug seen on long voice clones
+      # (Qwen3-TTS issue #258).
+      QWEN_TTS_DEFAULT_TEMPERATURE: "0.75"
+      QWEN_TTS_DEFAULT_TOP_P: "0.8"
+      QWEN_TTS_DEFAULT_TOP_K: "40"
+      QWEN_TTS_DEFAULT_REPETITION_PENALTY: "1.05"
     deploy:
       resources:
         reservations:

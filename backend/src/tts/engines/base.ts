@@ -50,12 +50,13 @@ export interface PreviewParams {
    *  CustomVoice presets; ignored on the voice-clone path. */
   instructOverride?: string;
   /** Sampling dial overrides for the tester — allows trying different
-   *  temperature/top_p/seed values without persisting them in
-   *  llm-config first. `undefined` = use the config default. */
+   *  temperature / top_p / top_k / repetition_penalty values without
+   *  persisting them in llm-config first. `undefined` on a field means
+   *  "use the config default". */
   temperatureOverride?: number;
   topPOverride?: number;
-  maxNewTokensOverride?: number;
-  seedOverride?: number;
+  topKOverride?: number;
+  repetitionPenaltyOverride?: number;
 }
 
 export interface TtsEngine {

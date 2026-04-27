@@ -118,8 +118,8 @@ export async function synthesizePreview(params: {
   /** Advanced dial overrides — analogous to instructOverride. */
   temperatureOverride?: number;
   topPOverride?: number;
-  maxNewTokensOverride?: number;
-  seedOverride?: number;
+  topKOverride?: number;
+  repetitionPenaltyOverride?: number;
 }): Promise<Buffer> {
   const voice = findVoice(params.voice);
   if (!voice) throw new Error(`Unknown voice: ${params.voice}`);
@@ -132,7 +132,7 @@ export async function synthesizePreview(params: {
     instructOverride: params.instructOverride,
     temperatureOverride: params.temperatureOverride,
     topPOverride: params.topPOverride,
-    maxNewTokensOverride: params.maxNewTokensOverride,
-    seedOverride: params.seedOverride,
+    topKOverride: params.topKOverride,
+    repetitionPenaltyOverride: params.repetitionPenaltyOverride,
   });
 }

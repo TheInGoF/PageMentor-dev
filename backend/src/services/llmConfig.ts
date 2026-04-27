@@ -40,18 +40,21 @@ export interface LlmConfig {
    *  problems (Vivian/ZH speakers drift back to Chinese) ~0.3-0.5
    *  helps. */
   qwenTtsTemperature?: string;
-  /** Top-P sampling (0.0-1.0). Empty = Qwen default. */
+  /** Top-P sampling (0.0-1.0). Empty = sidecar ENV default
+   *  `QWEN_TTS_DEFAULT_TOP_P` (0.8). Tighter values (0.7-0.85) hold
+   *  the timbre more stable across chunks. */
   qwenTtsTopP?: string;
-  /** Override for max_new_tokens of the Qwen generate. Empty =
-   *  sidecar default (MAX_NEW_TOKENS, currently 4096). Only raise
-   *  for extremely long chunks; mostly irrelevant since we split
-   *  to ~1500 chars beforehand. */
-  qwenTtsMaxNewTokens?: string;
-  /** Seed override (int string). Empty = sidecar computes a
-   *  deterministic seed from the speaker name (FNV hash) — same
-   *  speaker → same voice across all sessions. Explicitly set
-   *  enables variants of the same preset. */
-  qwenTtsSeedOverride?: string;
+  /** Top-K sampling (1-200). Empty = sidecar ENV default
+   *  `QWEN_TTS_DEFAULT_TOP_K` (40). Caps the long-tail random tokens
+   *  the AR decoder can pick from — lower values reduce drift but
+   *  flatten prosody. */
+  qwenTtsTopK?: string;
+  /** Repetition penalty (≥ 1.0). Empty = sidecar ENV default
+   *  `QWEN_TTS_DEFAULT_REPETITION_PENALTY` (1.05). Values around
+   *  1.05-1.15 fight the looping/garble bug ([Qwen3-TTS issue
+   *  #258](https://github.com/QwenLM/Qwen3-TTS/issues/258)) without
+   *  hurting natural speech. */
+  qwenTtsRepetitionPenalty?: string;
   /** Max. characters per TTS chunk (500-8000). Empty = 4000 default
    *  or ENV PM_TTS_MAX_CHUNK. Smaller values = faster fail-fast on
    *  problems, larger values = better prosody coherence but higher
