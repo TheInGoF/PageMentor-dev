@@ -10,13 +10,13 @@ import { findVoice, engineFor } from "./voices";
 import type { Segment } from "./segment";
 import type { EngineId, Voice } from "./engines/base";
 
-// Two retries was the historical default from when chunks were
-// 30-60s and a transient hiccup was cheap to redo. With chunks up to
-// 4000 chars taking 4-6 minutes on Qwen3-TTS, three attempts can
-// silently consume 20+ minutes of GPU time on the same broken chunk.
-// One retry is the right balance: covers a real transient drop, but
-// fails fast when the chunk genuinely doesn't work.
-const MAX_RETRIES = 1;
+// No retries on Qwen3-TTS chunks. Each attempt costs 4-6 minutes of
+// GPU time at 4000 chars; a retry on a structurally broken chunk
+// burns budget for nothing, and the original failure mode (hidden
+// keep-alive idle drop) is now addressed at the fetch layer with
+// Connection:close + keepalive:false in qwen.ts. If you want one
+// retry back, raise this to 1 — the per-attempt logging stays.
+const MAX_RETRIES = 0;
 
 interface EnginePolicy {
   /** Pause between consecutive chunks. */

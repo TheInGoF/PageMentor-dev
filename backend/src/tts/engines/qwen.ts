@@ -76,6 +76,30 @@ function envMs(name: string, defaultMs: number): number {
 const SYNTH_TIMEOUT_MS = envMs("PM_QWEN_TTS_SYNTH_TIMEOUT_MS", 20 * 60_000);
 const PREVIEW_TIMEOUT_MS = envMs("PM_QWEN_TTS_PREVIEW_TIMEOUT_MS", 5 * 60_000);
 
+/** Long-running fetch headers + options.
+ *
+ *  Qwen3-TTS generates entire chunks (3-6 minutes) before sending any
+ *  response body bytes. With HTTP keep-alive enabled, runtimes
+ *  (notably Bun and undici) close idle connections after ~5 minutes
+ *  even though `AbortSignal.timeout()` says 20 minutes — surfaces as
+ *  "The operation timed out" mid-generation.
+ *
+ *  Forcing `Connection: close` and `keepalive: false` makes the OS
+ *  hold the TCP socket open until the upstream actually responds.
+ *  Cost: a fresh TCP handshake per chunk (~1 ms on a LAN — negligible
+ *  next to the 4-minute generation). */
+function longRunFetchOpts(timeoutMs: number): {
+  headers: Record<string, string>;
+  signal: AbortSignal;
+  keepalive: boolean;
+} {
+  return {
+    headers: { Connection: "close" },
+    signal: AbortSignal.timeout(timeoutMs),
+    keepalive: false,
+  };
+}
+
 const REFRESH_TTL_MS = 5 * 60_000;
 const REFRESH_RETRY_MS = 15_000;
 
@@ -215,10 +239,12 @@ async function callSpeechClone(params: {
   const refBytes = readVoiceRefBytes(params.sample);
   const refB64 = refBytes.toString("base64");
 
+  const longOpts = longRunFetchOpts(params.timeoutMs);
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...longOpts.headers,
       ...authHeaders(),
     },
     body: JSON.stringify({
@@ -236,7 +262,8 @@ async function callSpeechClone(params: {
       top_k: d.topK,
       repetition_penalty: d.repetitionPenalty,
     }),
-    signal: AbortSignal.timeout(params.timeoutMs),
+    signal: longOpts.signal,
+    keepalive: longOpts.keepalive,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -317,10 +344,12 @@ async function callSpeechCloneFromDesign(params: {
   const refBytes = readFileSync(params.design.refPath);
   const refB64 = refBytes.toString("base64");
 
+  const longOpts = longRunFetchOpts(params.timeoutMs);
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...longOpts.headers,
       ...authHeaders(),
     },
     body: JSON.stringify({
@@ -334,7 +363,8 @@ async function callSpeechCloneFromDesign(params: {
       language: qwenLanguageFor(params.design.language),
       seed: params.design.seed,
     }),
-    signal: AbortSignal.timeout(params.timeoutMs),
+    signal: longOpts.signal,
+    keepalive: longOpts.keepalive,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -438,10 +468,12 @@ async function callSpeechDesign(params: {
 
   const instructForQwen = buildDesignInstruct(params.design);
 
+  const longOpts = longRunFetchOpts(params.timeoutMs);
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...longOpts.headers,
       ...authHeaders(),
     },
     body: JSON.stringify({
@@ -458,7 +490,8 @@ async function callSpeechDesign(params: {
       top_k: d.topK,
       repetition_penalty: d.repetitionPenalty,
     }),
-    signal: AbortSignal.timeout(params.timeoutMs),
+    signal: longOpts.signal,
+    keepalive: longOpts.keepalive,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -480,10 +513,12 @@ async function callSpeechPreset(params: {
   const url = baseUrl();
   const d = params.dials ?? {};
 
+  const longOpts = longRunFetchOpts(params.timeoutMs);
   const res = await fetch(`${url}/v1/audio/speech`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...longOpts.headers,
       ...authHeaders(),
     },
     body: JSON.stringify({
@@ -501,7 +536,8 @@ async function callSpeechPreset(params: {
       top_k: d.topK,
       repetition_penalty: d.repetitionPenalty,
     }),
-    signal: AbortSignal.timeout(params.timeoutMs),
+    signal: longOpts.signal,
+    keepalive: longOpts.keepalive,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
