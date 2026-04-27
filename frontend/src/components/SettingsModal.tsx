@@ -1140,6 +1140,24 @@ export function SettingsModal({ open, onClose }: Props) {
                     placeholder="2500"
                   />
                 </div>
+                {(() => {
+                  // Live-warning when the chunk size is outside the
+                  // backend's accepted band [500, 8000]. The server
+                  // silently clamps to the default 2500 in that case
+                  // — easy to miss without a UI hint.
+                  const raw = (llmConfig.ttsMaxChunk ?? "").trim();
+                  if (!raw) return null;
+                  const n = Number(raw);
+                  if (!Number.isFinite(n)) return null;
+                  if (n < 500 || n > 8000) {
+                    return (
+                      <p className="text-[11px] text-red-400 pt-2">
+                        {t("settings.tts.advanced.chunkSizeOutOfRange")}
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
                 <p className="text-[11px] text-neutral-500 pt-2">
                   {t("settings.tts.advanced.hint")}
                 </p>

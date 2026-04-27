@@ -682,6 +682,8 @@ const en: Record<string, string> = {
   "settings.tts.advanced.topK": "Top-K",
   "settings.tts.advanced.repetitionPenalty": "Repetition penalty",
   "settings.tts.advanced.chunkSize": "Chunk size (chars)",
+  "settings.tts.advanced.chunkSizeOutOfRange":
+    "Chunk size must be between 500 and 8000 — values outside this range are silently dropped and the backend falls back to the default 2500.",
   "settings.tts.advanced.hint":
     "Sampling tuning for stable long-form narration: temperature 0.7–0.8 keeps voices natural without too much drift, top-P 0.7–0.85 tightens the timbre, top-K caps long-tail randomness. Repetition penalty around 1.05–1.15 fights the looping/garble bug seen on long voice clones (Qwen3-TTS issue #258). Empty fields fall back to the sidecar's QWEN_TTS_DEFAULT_* values.",
   "settings.design.title": "Designed voices (text-described)",
@@ -1497,6 +1499,8 @@ const de: Record<string, string> = {
   "settings.tts.advanced.topK": "Top-K",
   "settings.tts.advanced.repetitionPenalty": "Repetition Penalty",
   "settings.tts.advanced.chunkSize": "Chunk-Größe (Zeichen)",
+  "settings.tts.advanced.chunkSizeOutOfRange":
+    "Chunk-Größe muss zwischen 500 und 8000 liegen — Werte außerhalb werden stillschweigend verworfen und das Backend fällt auf den Default 2500 zurück.",
   "settings.tts.advanced.hint":
     "Sampling-Tuning für stabile Langform-Erzählung: Temperature 0,7–0,8 hält die Stimme natürlich ohne starken Drift, Top-P 0,7–0,85 strafft das Klangbild, Top-K kappt Long-Tail-Zufallstokens. Repetition Penalty um 1,05–1,15 wirkt gegen den Loop/Garble-Bug langer Voice-Clones (Qwen3-TTS Issue #258). Leere Felder fallen auf die QWEN_TTS_DEFAULT_*-Werte des Sidecar zurück.",
   "settings.design.title": "Designte Stimmen (aus Textbeschreibung)",
