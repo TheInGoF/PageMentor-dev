@@ -538,14 +538,18 @@ export async function preprocessChapterForAudio(params: {
   // and leads to immediate EOS → empty response. 32k is safe and
   // nearly every model accepts it.
   //
-  // num_predict = -1: generate without limit until the model itself
-  // says EOS. Otherwise the text output would be clipped at some
-  // token boundary.
+  // num_predict deliberately a finite, generous integer. The "-1
+  // means unlimited" convention is honoured by some Ollama versions
+  // and silently ignored by others (Mistral builds in particular cut
+  // off at a hidden internal default like 4096, surfacing as
+  // `done_reason=length` plus a truncated/empty response). 10000 is
+  // enough headroom for a 3500-char chunk (~5000 output tokens at
+  // worst) without inviting runaway loops.
   const ollamaOptions = {
     temperature: 0.1,
     top_p: 0.9,
     num_ctx: 32768,
-    num_predict: -1,
+    num_predict: 10000,
   };
 
   // Split long chapters. An 80k-char chapter blows every realistic
@@ -578,7 +582,8 @@ export async function preprocessChapterForAudio(params: {
     if (!result.response || result.response.trim().length < 20) {
       console.warn(
         `[audio-preprocess]${label} empty/short response from ${result.model} ` +
-          `(${result.response.length} chars), input ${chunk.length} chars — retrying after 2s`
+          `(${result.response.length} chars, reason=${result.doneReason ?? "?"}, ` +
+          `output_tokens=${result.outputTokens ?? "?"}), input ${chunk.length} chars — retrying after 2s`
       );
       await new Promise((r) => setTimeout(r, 2000));
       result = await generate({
@@ -591,12 +596,25 @@ export async function preprocessChapterForAudio(params: {
 
     const piece = result.response.trim();
     if (piece.length < 20) {
+      // Surface the actual stop reason. The three common ones:
+      //   - "length"  → hit num_predict; raise QwenTtsMaxNewTokens or
+      //                  shrink chunk size
+      //   - "load"    → model still loading; retry in a few seconds
+      //   - "stop" + 0 tokens → model produced empty content; usually
+      //                  prompt-window overflow or a confused chat
+      //                  template — pick another model
+      const hint =
+        result.doneReason === "length"
+          ? "Model hit num_predict — raise it or shrink chunk size."
+          : result.doneReason === "load"
+          ? "Model still loading on the Ollama side — retry in a moment."
+          : (result.outputTokens ?? 0) === 0
+          ? "Model returned 0 output tokens — likely a context overflow or chat-template mismatch. Try a different model."
+          : "Try a different model or shrink the chunk size.";
       throw new Error(
         `Preprocessor returned only ${piece.length} chars for sub-chunk${label} ` +
-          `(input ${chunk.length} chars, model=${result.model}, raw=${JSON.stringify(
-            result.response.slice(0, 120)
-          )}). Context overfull? Ollama still loading? Retry later ` +
-          `or pick another model in Settings.`
+          `(model=${result.model}, reason=${result.doneReason ?? "?"}, ` +
+          `output_tokens=${result.outputTokens ?? "?"}, input ${chunk.length} chars). ${hint}`
       );
     }
 
