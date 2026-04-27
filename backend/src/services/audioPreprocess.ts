@@ -53,9 +53,11 @@ Konzentriere dich stattdessen auf: Formeln, Zitate, Aufzählungs-Nummerierung (1
 
 ZIEL DER UMFORMUNG
 - Hörer beim Autofahren oder beim Joggen sollen dem Stoff folgen können, ohne dass die Stimme über Symbole, Abkürzungen, Formeln oder Verzeichnis-Notation stolpert.
+- ALLES im Output muss sprechbar sein. Wenn du selbst nicht weißt wie ein Zeichen oder Block laut vorgelesen werden soll: weg damit oder verbalisieren. Im Zweifel: lieber weglassen als unsprechbares Zeichen stehen lassen.
+- KEINE Sternchen ('*') im Output — weder als Aufzählungs-Marker noch als Markdown-Hervorhebung („*wichtig*", „**Hinweis**"). Hervorhebung wird in Audio durch Wortwahl gemacht, nicht durch Symbole. Entferne alle Sternchen ersatzlos; den hervorgehobenen Begriff selbst behältst du natürlich bei.
 - Pausen entstehen ausschließlich durch Punkt und Komma. Der Strichpunkt (;) ist TABU — er bringt die TTS-Engine aus dem Konzept. Wo du Strichpunkt gesetzt hättest: entweder neuer Satz (Punkt) oder Komma.
 - Gedankenstriche (— oder –) sind ebenfalls TABU. Ersetze durch Komma oder neuen Satz.
-- Lange Sätze in kürzere teilen — Faustregel maximal 20 Wörter pro Satz, bei Fachtext eher 15. Ein Hörer kann sich nicht „zurück-scrollen" — jeder Satz muss in sich verständlich sein.
+- SATZLÄNGE-FENSTER: maximal 20 Wörter pro Satz (bei Fachtext eher 15), aber auch nicht durchgehend Telegrammstil. Ein Strom aus 4-Wort-Sätzen klingt monoton und wirkt wie eine Kindersendung. Ziel: Mischung von 8 bis 18 Wörtern, mit gelegentlichem 5-Wort-Satz für Akzent. Ein Hörer kann sich nicht „zurück-scrollen" — jeder Satz muss in sich verständlich sein, aber der Rhythmus darf trotzdem leben.
 
 ================================================================
 1. ABKÜRZUNGEN VOLLSTÄNDIG AUSSCHREIBEN
@@ -225,17 +227,34 @@ Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Wo
 - Strichpunkt (;) NIEMALS verwenden. Gedankenstriche (— oder –) wie Komma oder Punkt behandeln. Horizontale Trennlinien (---, ===, ***) entfernen.
 
 ================================================================
-11. INHALTLICHE INVARIANTEN
+11. ÜBUNGEN UND AUFGABEN ENTFERNEN
 ================================================================
-- KEINE Auslassung von Inhalt. Jeder Satz, jede Definition, jeder Sachverhalt im Original muss im Output erhalten sein.
-- KEINE Vereinfachung der Aussagen — nur der Form, nicht des Inhalts.
+Übungen, Aufgaben, Selbstkontrollen und Klausurfragen gehören NICHT in das gesprochene Hörbuch — der Hörer kann beim Autofahren oder Joggen keine Aufgabe lösen, und die Antwort steht meist erst Seiten später.
+
+Streiche ersatzlos:
+- Aufgaben-Blöcke („Aufgabe 3.2: Berechnen Sie …", „Übung: Skizzieren Sie …", „Frage zur Selbstkontrolle: Was versteht man unter …")
+- Aufzählungen mit Frage-Charakter, die offensichtlich Lernfragen sind („Welche Faktoren beeinflussen X?", wenn der nachfolgende Text die Antwort nicht direkt gibt)
+- „Aufgabe", „Übung", „Selbstüberprüfung", „Selbstkontrolle", „Übungsaufgabe", „Wiederholungsfrage", „Klausurfrage", „Lernkontrolle" als Überschrift oder Marker — Block bis zum nächsten Fließtext-Absatz weg
+- Lösungs-Blöcke („Lösung:", „Lösungshinweis:", „Antwort:") wenn sie zu einer entfernten Aufgabe gehören. Wenn die Lösung selbst Lehrinhalt ist und für sich steht, integriere sie als normalen Fließtext-Absatz ohne den „Lösung:"-Prefix.
+
+NICHT entfernen:
+- Beispiele („Beispiel: Ein Pendler fährt …") — die illustrieren Lehrstoff und gehören rein, nur den „Beispiel:"-Prefix darfst du in einen natürlichen Übergang wandeln („Ein Beispiel hierzu: …").
+- Definitionen, Sätze, Theoreme — bleiben.
+- Rhetorische Fragen im Fließtext, die der Autor selbst beantwortet — bleiben.
+
+================================================================
+12. INHALTLICHE INVARIANTEN
+================================================================
+- INHALT bleibt erhalten, FORMULIERUNG darf sich ändern. Du DARFST Sätze umstrukturieren, splitten, zusammenziehen, andere Verben/Konnektoren wählen — solange jede Aussage, Definition und jeder Sachverhalt aus dem Original im Output zu finden ist und nichts dazu erfunden wird.
+- KEINE Vereinfachung des fachlichen Inhalts — nur der Sprache. „Die Diffusion erfolgt entlang des Konzentrationsgradienten" darf zu „Diffusion verläuft entlang des Konzentrationsgefälles" werden, aber NICHT zu „Stoffe wandern von hoch nach niedrig".
+- KEINE Auslassung außer den explizit erlaubten (Übungen, Captions, Citations, Marker — siehe vorige Punkte).
 - KEINE Ergänzung von eigenem Wissen oder Erklärungen, die nicht im Original stehen.
-- Behalte die Reihenfolge der Sätze.
+- Behalte die Reihenfolge der Inhalte (Sätze dürfen lokal umgestellt werden, aber nicht ein Absatz vor einen anderen).
 - Behalte die Absatzstruktur (doppelte Zeilenumbrüche zwischen Absätzen).
 - Schreibe in derselben Sprache wie das Original (Deutsch bleibt Deutsch).
 
 ================================================================
-12. ANTWORTFORMAT
+13. ANTWORTFORMAT
 ================================================================
 - Gib NUR den umgeformten Text zurück.
 - KEINE Einleitung ("Hier ist der bereinigte Text…" etc.).
@@ -243,6 +262,7 @@ Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Wo
 - KEINE Änderungsliste, KEINE Zusammenfassung der Bearbeitungen, KEIN "Anmerkung:"-Block, KEIN "Hinweis:"-Block, KEIN "Ich habe Folgendes geändert…".
 - KEINE horizontale Trennlinie ("---") gefolgt von einer Erklärung.
 - KEIN Markdown, KEINE Überschriften, KEINE Code-Fences, KEINE Bulletpoints am Ende.
+- KEINE Sternchen ('*') irgendwo im Output — auch nicht für Hervorhebung.
 - Beginne sofort mit dem ersten Wort des Kapitels.
 - Der letzte Satz deiner Antwort ist der letzte Satz des bereinigten Texts. NICHTS danach.
 - Doppelte Zeilenumbrüche zwischen Absätzen, einfacher Zeilenumbruch innerhalb eines Absatzes nicht — alles im selben Absatz auf eine Zeile.
@@ -265,9 +285,11 @@ Focus instead on: formulas, citations, numbered list items (1./2. at line start 
 
 GOAL OF THE TRANSFORMATION
 - A listener while driving or jogging should follow the material without the voice tripping over symbols, abbreviations, formulas, or index-style notation.
+- EVERYTHING in the output must be speakable. If you don't know how a character or block should be read aloud: drop it or verbalize it. When in doubt, prefer dropping unspeakable characters over leaving them in.
+- NO asterisks ('*') anywhere in the output — neither as bullet markers nor as Markdown emphasis ("*important*", "**note**"). Audio expresses emphasis through word choice, not through symbols. Strip every asterisk without replacement; keep the highlighted word itself, of course.
 - Pauses come from periods and commas only. The semicolon (;) is FORBIDDEN — it derails the TTS engine. Where you would use a semicolon: either a new sentence (period) or a comma.
 - Em-dashes (—) and en-dashes (–) are also forbidden. Replace with comma or new sentence.
-- Long sentences must be split — rule of thumb: max 20 words per sentence, technical text max 15. The listener cannot scroll back — every sentence must stand on its own.
+- SENTENCE-LENGTH WINDOW: max 20 words per sentence (technical text max 15), but also not relentless telegram style. A stream of 4-word sentences sounds monotone and infantilizing. Aim for a mix of 8 to 18 words with the occasional 5-word sentence for accent. The listener cannot scroll back — every sentence must stand on its own, but the rhythm should still feel alive.
 
 ================================================================
 1. EXPAND ABBREVIATIONS COMPLETELY
@@ -410,17 +432,34 @@ If a formula is too complex to verbalize cleanly, describe it briefly ("The thir
 - NEVER use semicolons (;). Treat em-dashes (— or –) like commas or periods. Strip horizontal rules (---, ===, ***).
 
 ================================================================
-11. CONTENT INVARIANTS
+11. REMOVE EXERCISES AND ASSIGNMENTS
 ================================================================
-- NO content omission. Every sentence, definition, fact in the original must be present in the output.
-- NO simplification of statements — only of form, not content.
+Exercises, assignments, self-checks, and exam questions do NOT belong in the spoken audiobook — the listener can't solve a problem while driving or jogging, and the answer usually only appears pages later.
+
+Strip without replacement:
+- Exercise blocks ("Exercise 3.2: Compute …", "Task: Sketch …", "Self-check: What is meant by …")
+- Question-style enumerations that are obviously study questions ("Which factors influence X?" when the surrounding text doesn't directly answer)
+- "Exercise", "Task", "Self-check", "Practice problem", "Review question", "Exam question" as a heading or marker — drop the block up to the next plain-text paragraph
+- Solution blocks ("Solution:", "Hint:", "Answer:") when they belong to a removed exercise. If the solution itself is teaching content that stands on its own, fold it into a normal paragraph without the "Solution:" prefix.
+
+Do NOT remove:
+- Examples ("Example: A commuter drives …") — they illustrate the material and stay in. You may turn the "Example:" prefix into a natural transition ("Take the case of …").
+- Definitions, theorems, propositions — keep them.
+- Rhetorical questions in body text where the author answers immediately afterwards — keep them.
+
+================================================================
+12. CONTENT INVARIANTS
+================================================================
+- CONTENT stays, WORDING may change. You ARE allowed to restructure, split, or merge sentences and to pick different verbs/connectors — as long as every statement, definition, and fact from the original is still findable in the output and nothing is invented.
+- NO simplification of the technical content — only of the language. "Diffusion proceeds along the concentration gradient" may become "Diffusion follows the concentration gradient", but NOT "Stuff moves from high to low".
+- NO omissions other than the explicitly allowed ones (exercises, captions, citations, markers — see previous sections).
 - NO addition of your own knowledge or explanations not in the original.
-- Preserve sentence order.
+- Preserve content order (sentences may be locally rearranged, paragraphs may not jump positions).
 - Preserve paragraph structure (double newlines between paragraphs).
 - Write in the same language as the input (English stays English).
 
 ================================================================
-12. RESPONSE FORMAT
+13. RESPONSE FORMAT
 ================================================================
 - Return ONLY the rewritten text.
 - NO preface ("Here is the cleaned text…" etc.).
@@ -428,6 +467,7 @@ If a formula is too complex to verbalize cleanly, describe it briefly ("The thir
 - NO change list, NO summary of edits, NO "Note:" block, NO "Changes:" block, NO "I made the following changes…".
 - NO horizontal rule ("---") followed by an explanation.
 - NO markdown, NO headings, NO code fences, NO bullet points at the end.
+- NO asterisks ('*') anywhere in the output — not even for emphasis.
 - Start immediately with the first word of the chapter.
 - The last sentence of your response is the last sentence of the cleaned text. Nothing after that.
 - Double newlines between paragraphs, no single newlines inside a paragraph — one paragraph on one line.
@@ -723,10 +763,22 @@ function stripProblematicCharsForTts(s: string): string {
     semicolon: (s.match(/;/g) ?? []).length,
     emDash: (s.match(/—/g) ?? []).length,
     enDash: (s.match(/(\S)\s+–\s+(\S)/g) ?? []).length,
+    // Asterisks: any `*` that survived the LLM pass is unspeakable —
+    // typically Markdown emphasis (`*word*`, `**word**`) or stray
+    // bullet markers the model didn't honour. Count them all.
+    asterisk: (s.match(/\*/g) ?? []).length,
   };
 
   const cleaned = s
+    // 1. horizontal rules (incl. `***`) → out
     .replace(/^[ \t]*[-=*_]{3,}[ \t]*$/gm, "")
+    // 2. leading bullet asterisks (`* foo`, `  * foo`) → drop the marker
+    .replace(/^[ \t]*\*+[ \t]+/gm, "")
+    // 3. paired emphasis markers (`**word**`, `*word*`) → keep the word
+    .replace(/\*{1,3}([^\s*][^*]*?[^\s*])\*{1,3}/g, "$1")
+    .replace(/\*{1,3}(\S)\*{1,3}/g, "$1")
+    // 4. any remaining stray `*` (mid-sentence pollution) → out
+    .replace(/\*/g, "")
     .replace(/\s*;\s*/g, ", ")
     .replace(/\s*—\s*/g, ", ")
     .replace(/(\S)\s+–\s+(\S)/g, "$1, $2")
@@ -736,12 +788,16 @@ function stripProblematicCharsForTts(s: string): string {
     .trim();
 
   const total =
-    counts.horizontalRule + counts.semicolon + counts.emDash + counts.enDash;
+    counts.horizontalRule +
+    counts.semicolon +
+    counts.emDash +
+    counts.enDash +
+    counts.asterisk;
   if (total > 0) {
     console.log(
       `[audio-preprocess] stripped ${total} TTS-problem chars: ` +
         `; ×${counts.semicolon}, — ×${counts.emDash}, – ×${counts.enDash}, ` +
-        `--- ×${counts.horizontalRule}`
+        `--- ×${counts.horizontalRule}, * ×${counts.asterisk}`
     );
   }
   return cleaned;
