@@ -542,6 +542,20 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   }
 
+  async function regenerateDesignReference(id: string, label: string) {
+    if (!confirm(t("settings.design.regenRefConfirm", { label }))) return;
+    setDesignBusy(true);
+    try {
+      await api.voiceDesigns.regenerateReference(id);
+      notifyVoicesChanged();
+      toast.show(t("settings.design.regenRefDone"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setDesignBusy(false);
+    }
+  }
+
   function playDesignPreview(id: string) {
     const audio = new Audio(api.voiceDesigns.previewUrl(id));
     audio.play().catch(() =>
@@ -1352,6 +1366,14 @@ export function SettingsModal({ open, onClose }: Props) {
                   </div>
                   <Button variant="ghost" onClick={() => playDesignPreview(v.id)}>
                     {t("settings.voices.preview")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => regenerateDesignReference(v.id, v.label)}
+                    disabled={designBusy}
+                    title={t("settings.design.regenRefTooltip")}
+                  >
+                    {t("settings.design.regenRef")}
                   </Button>
                   <Button
                     variant="ghost"

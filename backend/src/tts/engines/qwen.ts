@@ -26,7 +26,7 @@ import {
   recordChunkTiming,
   type VoiceSample,
 } from "../../services/voiceSamples";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import {
   designRefPath,
   getVoiceDesign,
@@ -497,16 +497,39 @@ async function callSpeechCloneFromDesign(params: {
  */
 export async function ensureDesignReference(
   design: VoiceDesign,
-  timeoutMs: number = 3 * 60_000
+  timeoutMs: number = 3 * 60_000,
+  force: boolean = false
 ): Promise<VoiceDesign> {
-  if (design.refPath && existsSync(design.refPath)) return design;
+  if (!force && design.refPath && existsSync(design.refPath)) {
+    return design;
+  }
+  // force=true: drop the old reference file so previewDesignUnsaved
+  // generates a fresh ~10 s sample. Used by the "Reference neu
+  // erzeugen"-button so old voices can be migrated without manual
+  // delete-and-recreate.
+  if (force && design.refPath && existsSync(design.refPath)) {
+    try {
+      unlinkSync(design.refPath);
+    } catch {
+      // best effort
+    }
+  }
 
-  // Short reference text (~5-7 s audio) — Qwen-Base clone expects
-  // 3-10 s. Longer references produce gibberish in synthesis.
+  // Reference text targeted at ~10-12 s of audio. Qwen-Base clone
+  // accepts 3-10 s, but for long-form narration (chunks > 3 min) a
+  // 6 s reference is too short — the speaker vector loses its anchor
+  // and the AR decoder can fall into looping garble (Qwen3-TTS
+  // issue #258, Stafford 2026 long-form recipe). 200-ish characters
+  // give the model a wider phoneme spread and a stable narration
+  // rhythm to imitate.
+  //
+  // Sentence structure deliberately calm and declarative — the
+  // speaker style is what the clone will imitate across every chunk
+  // it generates.
   const refText =
     design.language === "de"
-      ? "Hallo, dies ist eine Sprachprobe dieser Stimme. So klingt sie beim Vorlesen eines Textes."
-      : "Hello, this is a voice sample. This is how it sounds when reading a book.";
+      ? "Hallo, dies ist eine Sprachprobe dieser Stimme. Sie wird beim Vorlesen eines Textes gleichmäßig und ruhig gesprochen, damit der Klang über längere Passagen hinweg stabil bleibt und natürlich wirkt."
+      : "Hello, this is a voice sample. It is read evenly and calmly so the audiobook stays consistent across long paragraphs and the voice keeps its natural character.";
 
   console.log(
     `[qwen-tts] ensuring reference audio for design ${design.id} — generating via VoiceDesign (one-time)`

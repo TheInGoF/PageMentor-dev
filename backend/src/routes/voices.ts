@@ -253,6 +253,27 @@ voiceRoutes.delete("/design/:id", (c) => {
   return c.json({ ok: true });
 });
 
+// Regenerate the reference audio for an existing design voice. Used
+// after the project's default ref-text was lengthened (~6s → ~10s)
+// so old voices can be migrated without a delete-and-recreate. Drops
+// the old MP3 file + ref_text DB column, generates a fresh sample,
+// and writes the new pair atomically.
+voiceRoutes.post("/design/:id/regenerate-reference", async (c) => {
+  const id = c.req.param("id");
+  const design = getVoiceDesign(id);
+  if (!design) return c.json({ error: "not found" }, 404);
+  try {
+    const updated = await ensureDesignReference(design, 3 * 60_000, true);
+    return c.json({
+      ok: true,
+      hasReference: !!updated.refPath,
+      refTextLength: updated.refText?.length ?? 0,
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
 voiceRoutes.get("/design/:id/preview", async (c) => {
   const id = c.req.param("id");
   const design = getVoiceDesign(id);

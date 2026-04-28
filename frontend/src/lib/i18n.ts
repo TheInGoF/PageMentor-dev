@@ -715,6 +715,12 @@ const en: Record<string, string> = {
   "settings.design.created": "Voice created.",
   "settings.design.deleted": "Voice deleted.",
   "settings.design.deleteConfirm": "Delete designed voice \"{label}\"?",
+  "settings.design.regenRef": "Refresh reference",
+  "settings.design.regenRefTooltip":
+    "Re-record the speaker sample with the current ~10 s reference text. Helps long chapters stay stable; the seed and description stay the same.",
+  "settings.design.regenRefConfirm":
+    "Regenerate the reference audio for \"{label}\"? Takes about a minute and replaces the existing sample.",
+  "settings.design.regenRefDone": "Reference audio refreshed.",
   "settings.design.previewFailed": "Voice preview failed.",
   "settings.design.missingFields":
     "Label and a description of at least 10 characters are required.",
@@ -1532,6 +1538,12 @@ const de: Record<string, string> = {
   "settings.design.created": "Stimme angelegt.",
   "settings.design.deleted": "Stimme gelöscht.",
   "settings.design.deleteConfirm": "Designte Stimme „{label}“ löschen?",
+  "settings.design.regenRef": "Referenz neu erzeugen",
+  "settings.design.regenRefTooltip":
+    "Erzeugt das Sprecher-Sample neu mit dem aktuellen ~10-s-Referenztext. Hilft bei langen Kapiteln, dass die Stimme stabil bleibt — Seed und Beschreibung bleiben gleich.",
+  "settings.design.regenRefConfirm":
+    "Referenz-Audio für „{label}“ neu erzeugen? Dauert etwa eine Minute und ersetzt das bisherige Sample.",
+  "settings.design.regenRefDone": "Referenz-Audio aktualisiert.",
   "settings.design.previewFailed": "Stimm-Vorschau fehlgeschlagen.",
   "settings.design.missingFields":
     "Name und Beschreibung (mindestens 10 Zeichen) sind Pflicht.",

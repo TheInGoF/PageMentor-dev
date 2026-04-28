@@ -771,6 +771,16 @@ export const api = {
     },
     remove: (id: string) =>
       request<{ ok: true }>(`/api/voices/design/${id}`, { method: "DELETE" }),
+    /** Regenerate the reference audio of an existing voice with the
+     *  current default ref-text (lengthened to ~10 s in v1.18.087 to
+     *  stabilise long-form generations). The voice keeps its seed,
+     *  description and gender — only the underlying speaker sample
+     *  is refreshed. Triggers a Sidecar VoiceDesign call. */
+    regenerateReference: (id: string) =>
+      request<{ ok: true; hasReference: boolean; refTextLength: number }>(
+        `/api/voices/design/${id}/regenerate-reference`,
+        { method: "POST" }
+      ),
     previewUrl: (id: string, text?: string) =>
       `/api/voices/design/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
     /** Unsaved preview: rolls a seed (or uses the supplied one) and
