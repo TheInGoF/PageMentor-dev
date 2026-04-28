@@ -52,7 +52,12 @@ type Handler = (ev: ProgressEvent) => void;
 
 const subs = new Map<string, Set<Handler>>();
 const recent = new Map<string, ProgressEvent[]>();
-const BUFFER = 50;
+// Big enough so a SSE re-connect mid-run can still see the
+// `audiobook.start` anchor (used by the UI to compute ETA and total
+// chapter count). With ~5 events per chunk × ~10 chunks per chapter
+// × ~10 chapters, 500 covers the realistic worst case. Each event
+// is ~200 bytes → 100 KB per active run, fine.
+const BUFFER = 500;
 
 export function emit(ev: Omit<ProgressEvent, "ts"> & { ts?: number }): void {
   const full: ProgressEvent = { ts: Date.now(), ...ev } as ProgressEvent;

@@ -200,6 +200,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         // audiobook.start — those should NOT activate the full-book
         // progress panel, otherwise it hangs forever because no
         // audiobook.done ever arrives.
+        //
+        // Edge-case: SSE reconnect after the SSE buffer evicted the
+        // original `audiobook.start`. We don't know if a full-book
+        // run is actually running, so play it safe: do NOT auto-init
+        // bookProgress here — that would falsely show the panel for
+        // a single-chapter generate.
         setBookProgress((prev) =>
           prev
             ? {
@@ -212,15 +218,29 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             : null
         );
       } else if (ev.phase === "audiobook.chapter.progress") {
-        setBookProgress((prev) =>
-          prev
-            ? {
-                ...prev,
-                chunkCurrent: ev.current ?? 0,
-                chunkTotal: ev.total ?? 0,
-              }
-            : prev
-        );
+        setBookProgress((prev) => {
+          if (prev) {
+            return {
+              ...prev,
+              chunkCurrent: ev.current ?? 0,
+              chunkTotal: ev.total ?? 0,
+            };
+          }
+          // SSE reconnect after the buffer evicted `audiobook.start`:
+          // we have neither startedAt nor the chapterChars list, so
+          // ETA stays "—". But re-initialise enough state to at least
+          // show "Chunk X / Y" again so the user knows it's running.
+          // chapter.start events also re-arrive after a reconnect, so
+          // currentChapter is filled in by the next start/done event.
+          return {
+            totalChapters: 0,
+            currentChapter: 0,
+            chunkCurrent: ev.current ?? 0,
+            chunkTotal: ev.total ?? 0,
+            startedAt: 0,
+            chapterChars: [],
+          };
+        });
       } else if (ev.phase === "audiobook.chapter.done") {
         setBookProgress((prev) =>
           prev
@@ -1416,7 +1436,11 @@ function BookProgressPanel({
     startedAt,
     chapterChars,
   } = progress;
-  const elapsedMs = Date.now() - startedAt;
+  // startedAt === 0 happens after an SSE reconnect that missed the
+  // original `audiobook.start` event (e.g. user left the tab and
+  // came back). We don't know when the run actually started, so
+  // suppress the elapsed counter rather than show "57 years ago".
+  const elapsedMs = startedAt > 0 ? Date.now() - startedAt : null;
 
   // Total chars + chars done so far.
   const totalChars = chapterChars.reduce((a, b) => a + b, 0);
@@ -1439,7 +1463,8 @@ function BookProgressPanel({
   // Rate choice: live when we have enough data of our own, otherwise
   // the backend benchmark. Threshold 800 chars = usually ≥ 1 chunk
   // done → enough to lift the live measurement above noise.
-  const liveRate = charsDone >= 800 ? elapsedMs / charsDone : null;
+  const liveRate =
+    elapsedMs !== null && charsDone >= 800 ? elapsedMs / charsDone : null;
   const rate = liveRate ?? benchmarkMsPerChar;
 
   const etaMs =
@@ -1475,9 +1500,13 @@ function BookProgressPanel({
           )}
         </div>
         <div className="text-[11px] text-neutral-500 font-mono flex items-baseline gap-3">
-          <span>
-            {t("audiobook.progress.elapsed", { time: formatDuration(elapsedMs) })}
-          </span>
+          {elapsedMs !== null && (
+            <span>
+              {t("audiobook.progress.elapsed", {
+                time: formatDuration(elapsedMs),
+              })}
+            </span>
+          )}
           {charsPerSec !== null && (
             <span>
               {t("audiobook.progress.rate", { n: charsPerSec })}
