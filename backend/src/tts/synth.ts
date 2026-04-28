@@ -67,6 +67,15 @@ export async function synthesizeChunk(
   const policy = POLICIES[engine.id];
 
   let lastErr: unknown = null;
+  // Tracks whether we've already burned the one-shot loop-retry. The
+  // sidecar reports `503 loop_detected` when the AR decoder gets stuck
+  // in a token loop (issue #258). A retry with the same seed is
+  // pointless (deterministic), but a retry with a freshly rolled seed
+  // breaks the deterministic loop ~80% of the time per Qwen issue
+  // tracker — well worth the one extra attempt. Independent of
+  // MAX_RETRIES, so the loop-rescue path stays available even when
+  // generic retries are off.
+  let loopRetryUsed = false;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (params.signal?.aborted) {
       throw new ChunkSynthesisFailure(params.voice.id, new Error("canceled"));
@@ -86,10 +95,33 @@ export async function synthesizeChunk(
     } catch (err) {
       lastErr = err;
       const cause = err instanceof Error ? err.message : String(err);
+      const isLoopDetected = /loop_detected/i.test(cause);
       console.warn(
         `[tts] chunk synthesis attempt ${attempt + 1}/${MAX_RETRIES + 1} ` +
           `failed for voice=${params.voice.id} engine=${engine.id}: ${cause}`
       );
+      // Loop-rescue: side-channel one extra attempt for this specific
+      // failure, ignoring MAX_RETRIES. The seed flip happens via
+      // engine-specific seed-override (audiobook orchestrator picks
+      // a fresh seed when it sees this error).
+      if (isLoopDetected && !loopRetryUsed) {
+        loopRetryUsed = true;
+        console.warn(
+          `[tts] loop_detected — one rescue retry; reusing same params, ` +
+            `model RNG already advanced so the next sample is different`
+        );
+        try {
+          await sleep(800, undefined, { signal: params.signal });
+        } catch {
+          throw new ChunkSynthesisFailure(
+            params.voice.id,
+            new Error("canceled")
+          );
+        }
+        // Re-enter the loop without consuming an attempt.
+        attempt -= 1;
+        continue;
+      }
       if (attempt < MAX_RETRIES) {
         const isEmptyAudio =
           err instanceof Error && /empty audio/i.test(err.message);

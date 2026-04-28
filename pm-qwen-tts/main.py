@@ -54,6 +54,7 @@ import torch
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
+from transformers import StoppingCriteria, StoppingCriteriaList
 
 # ---------------------------------------------------------------------------
 # Config
@@ -128,6 +129,21 @@ DEFAULT_TOP_K = int(os.environ.get("QWEN_TTS_DEFAULT_TOP_K", "40"))
 DEFAULT_REPETITION_PENALTY = float(
     os.environ.get("QWEN_TTS_DEFAULT_REPETITION_PENALTY", "1.05")
 )
+
+# Loop-detection tunables. The model occasionally falls into a sampling
+# loop where it generates the same handful of audio tokens forever,
+# never reaching EOS (Qwen3-TTS issue #258). The detector inspects the
+# last `LOOP_WINDOW` tokens of the generation; if they only span
+# fewer than `LOOP_MAX_UNIQUE` distinct values, we consider it stuck
+# and stop the generate call early. `LOOP_MIN_TOKENS` keeps the early
+# part of generation (which is naturally low-variance silence/breath
+# tokens) from triggering false positives.
+LOOP_WINDOW = int(os.environ.get("QWEN_TTS_LOOP_WINDOW", "256"))
+LOOP_MAX_UNIQUE = int(os.environ.get("QWEN_TTS_LOOP_MAX_UNIQUE", "20"))
+LOOP_MIN_TOKENS = int(os.environ.get("QWEN_TTS_LOOP_MIN_TOKENS", "1500"))
+LOOP_DETECTION_ENABLED = os.environ.get(
+    "QWEN_TTS_LOOP_DETECTION", "true"
+).lower() in ("1", "true", "yes")
 
 # Hard timeout per generate call. Zombie generations (model loop,
 # NaN, infinite-repeat) otherwise freeze the GPU until container
@@ -422,6 +438,68 @@ def _resolve_sampling(
     }
 
 
+class LoopDetector(StoppingCriteria):
+    """Stops generation early when the AR decoder has fallen into a
+    sampling loop — repeating the same few audio tokens forever
+    without ever emitting EOS (Qwen3-TTS issue #258).
+
+    Diagnostic: look at the most recent ``window`` tokens. A healthy
+    speech stream covers a wide range of audio codebook entries; a
+    looping stream cycles through fewer than ~20 unique values.
+
+    The first ``min_tokens`` of generation are skipped — the prefix is
+    naturally low-variance (silence, breath) and would false-trigger.
+
+    When the criterion fires, ``self.triggered`` is set to True so the
+    caller can distinguish a clean EOS from an early loop-stop. The
+    generation also returns the partial output (everything up to the
+    detection point), which is unusable as audio but useful for
+    debugging the failure pattern.
+    """
+
+    def __init__(
+        self,
+        window: int = LOOP_WINDOW,
+        max_unique: int = LOOP_MAX_UNIQUE,
+        min_tokens: int = LOOP_MIN_TOKENS,
+    ):
+        self.window = window
+        self.max_unique = max_unique
+        self.min_tokens = min_tokens
+        self.triggered = False
+        self.trigger_at_token = 0
+        self.trigger_unique = 0
+
+    def __call__(
+        self, input_ids: torch.LongTensor, scores: Any, **_: Any
+    ) -> bool:
+        seq_len = input_ids.shape[-1]
+        if seq_len < self.min_tokens:
+            return False
+        # Last `window` tokens, flattened. Qwen3-TTS produces
+        # multi-codebook tokens; we treat them as a flat token stream
+        # for the diversity check — a real loop reduces the unique
+        # count across all codebooks at once.
+        last = input_ids[..., -self.window :].reshape(-1)
+        unique = int(torch.unique(last).numel())
+        if unique <= self.max_unique:
+            self.triggered = True
+            self.trigger_at_token = seq_len
+            self.trigger_unique = unique
+            return True
+        return False
+
+
+def _build_stopping_criteria() -> tuple[Optional[StoppingCriteriaList], Optional[LoopDetector]]:
+    """Returns ``(criteria_list, detector)`` if loop detection is on,
+    otherwise ``(None, None)``. The detector instance is returned so
+    callers can check ``.triggered`` after generation."""
+    if not LOOP_DETECTION_ENABLED:
+        return None, None
+    detector = LoopDetector()
+    return StoppingCriteriaList([detector]), detector
+
+
 # ---------------------------------------------------------------------------
 # Audio helpers
 # ---------------------------------------------------------------------------
@@ -692,6 +770,7 @@ def _synth_clone(
         else MAX_NEW_TOKENS
     )
 
+    stopping_criteria, loop_detector = _build_stopping_criteria()
     gen_kwargs: dict[str, Any] = {
         "text": text,
         "language": language,
@@ -699,6 +778,8 @@ def _synth_clone(
         "max_new_tokens": effective_max,
         **_resolve_sampling(temperature, top_p, top_k, repetition_penalty),
     }
+    if stopping_criteria is not None:
+        gen_kwargs["stopping_criteria"] = stopping_criteria
     _ = speed  # speed cannot be set via this path (see older comment)
 
     # Request identifier for log grepping: 8-char hash from text +
@@ -731,6 +812,25 @@ def _synth_clone(
     )
 
     elapsed = time.time() - t0
+    if loop_detector is not None and loop_detector.triggered:
+        log.warning(
+            "synth [%s] LOOP DETECTED at token %d (unique=%d ≤ %d in last %d) — abort after %.1fs",
+            req_hash,
+            loop_detector.trigger_at_token,
+            loop_detector.trigger_unique,
+            LOOP_MAX_UNIQUE,
+            LOOP_WINDOW,
+            elapsed,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"loop_detected: AR decoder cycled through "
+                f"{loop_detector.trigger_unique} tokens in the last "
+                f"{LOOP_WINDOW} (threshold {LOOP_MAX_UNIQUE}) — "
+                f"retry with a different seed"
+            ),
+        )
     if wavs is None or len(wavs) == 0:
         log.error("synth [%s] returned empty waveform after %.1fs", req_hash, elapsed)
         raise HTTPException(status_code=500, detail="model returned empty waveform")
@@ -794,6 +894,7 @@ def _synth_custom(
         if max_new_tokens_override and max_new_tokens_override > 0
         else MAX_NEW_TOKENS
     )
+    stopping_criteria, loop_detector = _build_stopping_criteria()
     gen_kwargs: dict[str, Any] = {
         "text": text,
         "language": language,
@@ -801,6 +902,8 @@ def _synth_custom(
         "max_new_tokens": effective_max,
         **_resolve_sampling(temperature, top_p, top_k, repetition_penalty),
     }
+    if stopping_criteria is not None:
+        gen_kwargs["stopping_criteria"] = stopping_criteria
     if instruct and instruct.strip():
         gen_kwargs["instruct"] = instruct.strip()
 
@@ -831,6 +934,25 @@ def _synth_custom(
     )
 
     elapsed = time.time() - t0
+    if loop_detector is not None and loop_detector.triggered:
+        log.warning(
+            "customvoice [%s] LOOP DETECTED at token %d (unique=%d ≤ %d in last %d) — abort after %.1fs",
+            req_hash,
+            loop_detector.trigger_at_token,
+            loop_detector.trigger_unique,
+            LOOP_MAX_UNIQUE,
+            LOOP_WINDOW,
+            elapsed,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"loop_detected: AR decoder cycled through "
+                f"{loop_detector.trigger_unique} tokens in the last "
+                f"{LOOP_WINDOW} (threshold {LOOP_MAX_UNIQUE}) — "
+                f"retry with a different seed"
+            ),
+        )
     if wavs is None or len(wavs) == 0:
         log.error(
             "customvoice [%s] returned empty waveform after %.1fs",
@@ -888,6 +1010,7 @@ def _synth_design(
         if max_new_tokens_override and max_new_tokens_override > 0
         else MAX_NEW_TOKENS
     )
+    stopping_criteria, loop_detector = _build_stopping_criteria()
     gen_kwargs: dict[str, Any] = {
         "text": text,
         "language": language,
@@ -895,6 +1018,8 @@ def _synth_design(
         "max_new_tokens": effective_max,
         **_resolve_sampling(temperature, top_p, top_k, repetition_penalty),
     }
+    if stopping_criteria is not None:
+        gen_kwargs["stopping_criteria"] = stopping_criteria
 
     req_hash = hashlib.sha256(
         f"{text}|{seed}|{voice_description}".encode("utf-8")
@@ -962,6 +1087,25 @@ def _synth_design(
     )
 
     elapsed = time.time() - t0
+    if loop_detector is not None and loop_detector.triggered:
+        log.warning(
+            "voicedesign [%s] LOOP DETECTED at token %d (unique=%d ≤ %d in last %d) — abort after %.1fs",
+            req_hash,
+            loop_detector.trigger_at_token,
+            loop_detector.trigger_unique,
+            LOOP_MAX_UNIQUE,
+            LOOP_WINDOW,
+            elapsed,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"loop_detected: AR decoder cycled through "
+                f"{loop_detector.trigger_unique} tokens in the last "
+                f"{LOOP_WINDOW} (threshold {LOOP_MAX_UNIQUE}) — "
+                f"retry with a different seed"
+            ),
+        )
     if wavs is None or len(wavs) == 0:
         log.error(
             "voicedesign [%s] returned empty waveform after %.1fs",
@@ -1046,6 +1190,12 @@ async def health():
             "top_p": DEFAULT_TOP_P,
             "top_k": DEFAULT_TOP_K,
             "repetition_penalty": DEFAULT_REPETITION_PENALTY,
+        },
+        "loop_detection": {
+            "enabled": LOOP_DETECTION_ENABLED,
+            "window": LOOP_WINDOW,
+            "max_unique": LOOP_MAX_UNIQUE,
+            "min_tokens": LOOP_MIN_TOKENS,
         },
     }
 

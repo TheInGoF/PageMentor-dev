@@ -154,6 +154,17 @@ services:
       QWEN_TTS_DEFAULT_TOP_P: "0.8"
       QWEN_TTS_DEFAULT_TOP_K: "40"
       QWEN_TTS_DEFAULT_REPETITION_PENALTY: "1.05"
+      # Loop-detection: aborts a generation that has cycled through
+      # fewer than `MAX_UNIQUE` audio tokens in the last `WINDOW`.
+      # Issue #258 (looping garble on long voice clones). Without
+      # this, a stuck generation eats the full GENERATION_TIMEOUT
+      # (~20 min) before failing; with it, the call returns 503
+      # loop_detected after ~30-60 s and the Backend retries once
+      # with a fresh sampling pass.
+      QWEN_TTS_LOOP_DETECTION: "true"
+      QWEN_TTS_LOOP_WINDOW: "256"
+      QWEN_TTS_LOOP_MAX_UNIQUE: "20"
+      QWEN_TTS_LOOP_MIN_TOKENS: "1500"
     deploy:
       resources:
         reservations:
