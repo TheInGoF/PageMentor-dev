@@ -115,6 +115,12 @@ async function ttsFetch(
     headers: Record<string, string>;
     body: string;
     timeoutMs: number;
+    /** Optional cancellation. When the signal aborts (Cancel button
+     *  in the audiobook UI, container shutdown, etc.) the underlying
+     *  http request is destroyed and the promise rejects. Without
+     *  this, a stuck Sidecar generation cannot be cancelled from the
+     *  Backend side — the request hangs until the idle timeout. */
+    signal?: AbortSignal;
   }
 ): Promise<{
   ok: boolean;
@@ -129,6 +135,10 @@ async function ttsFetch(
         `(timeoutMs=${init.timeoutMs})`
     );
     _ttsFetchLogged = true;
+  }
+
+  if (init.signal?.aborted) {
+    throw new Error("TTS request aborted before start");
   }
 
   const u = new URL(url);
@@ -168,6 +178,15 @@ async function ttsFetch(
         res.on("error", (err: Error) => reject(err));
       }
     );
+
+    // AbortSignal → req.destroy() so the Cancel button actually
+    // terminates a running TTS call instead of just flipping UI state.
+    const onAbort = () => {
+      req.destroy(new Error("TTS request aborted"));
+    };
+    if (init.signal) {
+      init.signal.addEventListener("abort", onAbort, { once: true });
+    }
 
     // Idle ceiling — fires when no socket activity for `timeoutMs`.
     // With TCP keepalive on (below), real silence is the only thing
@@ -327,6 +346,7 @@ async function callSpeechClone(params: {
   speed: number;
   timeoutMs: number;
   dials?: AdvancedDials;
+  signal?: AbortSignal;
 }): Promise<Buffer> {
   const url = baseUrl();
   const d = params.dials ?? {};
@@ -355,6 +375,7 @@ async function callSpeechClone(params: {
       repetition_penalty: d.repetitionPenalty,
     }),
     timeoutMs: params.timeoutMs,
+    signal: params.signal,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -425,6 +446,7 @@ async function callSpeechCloneFromDesign(params: {
   text: string;
   design: VoiceDesign;
   timeoutMs: number;
+  signal?: AbortSignal;
 }): Promise<Buffer> {
   if (!params.design.refPath || !existsSync(params.design.refPath)) {
     throw new Error(
@@ -453,6 +475,7 @@ async function callSpeechCloneFromDesign(params: {
       seed: params.design.seed,
     }),
     timeoutMs: params.timeoutMs,
+    signal: params.signal,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -550,6 +573,7 @@ async function callSpeechDesign(params: {
   design: VoiceDesign;
   timeoutMs: number;
   dials?: AdvancedDials;
+  signal?: AbortSignal;
 }): Promise<Buffer> {
   const url = baseUrl();
   const d = params.dials ?? {};
@@ -577,6 +601,7 @@ async function callSpeechDesign(params: {
       repetition_penalty: d.repetitionPenalty,
     }),
     timeoutMs: params.timeoutMs,
+    signal: params.signal,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -594,6 +619,7 @@ async function callSpeechPreset(params: {
   language: string; // "de" | "en"
   timeoutMs: number;
   dials?: AdvancedDials;
+  signal?: AbortSignal;
 }): Promise<Buffer> {
   const url = baseUrl();
   const d = params.dials ?? {};
@@ -620,6 +646,7 @@ async function callSpeechPreset(params: {
       repetition_penalty: d.repetitionPenalty,
     }),
     timeoutMs: params.timeoutMs,
+    signal: params.signal,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -685,6 +712,7 @@ export const qwenEngine: TtsEngine = {
         text,
         design: ready,
         timeoutMs: SYNTH_TIMEOUT_MS,
+        signal: params.signal,
       });
     } else if (presetSpeaker) {
       const instruct = effective("qwenTtsInstruction", "PM_QWEN_TTS_INSTRUCTION");
@@ -702,6 +730,7 @@ export const qwenEngine: TtsEngine = {
         language: params.voice.language,
         timeoutMs: SYNTH_TIMEOUT_MS,
         dials,
+        signal: params.signal,
       });
     } else {
       const sample = resolveSample(params.voice.id);
@@ -726,6 +755,7 @@ export const qwenEngine: TtsEngine = {
         speed: 1.0, // info for the sidecar log, effectively ignored
         timeoutMs: SYNTH_TIMEOUT_MS,
         dials,
+        signal: params.signal,
       });
     }
     console.log(

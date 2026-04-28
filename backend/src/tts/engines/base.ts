@@ -33,6 +33,11 @@ export interface SynthesizeParams {
   rate: string;             // "+0%", "-10%" … (only Edge uses it)
   announce?: string;        // chapter announcement as first sentence
   outPath: string;
+  /** Optional cancellation. When the signal aborts (Cancel button in
+   *  the audiobook UI, container shutdown), the engine destroys the
+   *  in-flight upstream request so the run actually stops instead of
+   *  waiting out the timeout. */
+  signal?: AbortSignal;
 }
 
 export interface SynthesizeResult {

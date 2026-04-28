@@ -80,6 +80,7 @@ export async function synthesizeChunk(
         rate: params.rate,
         announce: params.announce,
         outPath: params.outPath,
+        signal: params.signal,
       });
       return { ...result, engineId: engine.id };
     } catch (err) {
