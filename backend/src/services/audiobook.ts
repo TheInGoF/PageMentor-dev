@@ -164,6 +164,15 @@ export async function generateAudiobook(params: {
   const successfulChapterFiles: string[] = [];
   const chapterDurations: Array<{ title: string; durationMs: number }> = [];
 
+  // Stop the run if we get this many failed chapters in a row. One
+  // bad chapter shouldn't take the whole book down, but if the
+  // sidecar is dead / unreachable / persistently looping, plowing
+  // through 20 more chapters and then building a partial M4B from
+  // what already existed is not what anyone wants.
+  const MAX_CONSECUTIVE_FAILURES = 3;
+  let consecutiveFailures = 0;
+  let abortedDueToFailures = false;
+
   try {
     for (let i = 0; i < chapters.length; i++) {
       if (signal.aborted) throw new AudiobookCanceled();
@@ -299,6 +308,9 @@ export async function generateAudiobook(params: {
           title: ch.title || chapterLabel(lang, ch.number),
           durationMs,
         });
+        // A successful chapter resets the abort counter — runs that
+        // recover after one or two bad chapters carry on.
+        consecutiveFailures = 0;
 
         emit({
           phase: "audiobook.chapter.done",
@@ -326,11 +338,41 @@ export async function generateAudiobook(params: {
           total: chapters.length,
           message,
         });
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          console.error(
+            `[tts] aborting audiobook run — ${consecutiveFailures} consecutive ` +
+              `chapter failures (sidecar likely down or persistently looping). ` +
+              `Last error: ${message}`
+          );
+          abortedDueToFailures = true;
+          break;
+        }
         console.error(`[tts] chapter ${ch.number} failed:`, err);
       }
     }
 
     {
+      if (abortedDueToFailures) {
+        // Don't build a partial M4B from chapters generated before a
+        // sidecar collapse. The user almost never wants "first 2 of 8
+        // chapters as a finished audiobook" — that just looks like
+        // success and they only notice mid-listen. Better: surface the
+        // failure clearly and leave the existing chapter MP3s on disk
+        // so they can rerun "Generate Missing" once the sidecar is
+        // back.
+        emit({
+          phase: "audiobook.failed",
+          docId: doc.id,
+          message:
+            `Aborted after ${MAX_CONSECUTIVE_FAILURES} consecutive ` +
+            `chapter failures — sidecar unreachable or persistently ` +
+            `looping. Existing chapters are kept; rerun once the ` +
+            `sidecar is back.`,
+        });
+        running.delete(params.docId);
+        return;
+      }
       if (successfulChapterFiles.length > 0) {
         emit({
           phase: "audiobook.book.building",
