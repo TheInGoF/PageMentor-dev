@@ -44,19 +44,19 @@ import type {
   SynthesizeResult,
   PreviewParams,
 } from "./base";
-// undici instead of Bun-native fetch for the TTS fetches.
+// undici's low-level `request` API for the TTS fetches.
 //
 // Bun's fetch (hyper-based) closes the underlying TCP connection after
 // ~5 minutes of socket idle, even when `signal: AbortSignal.timeout()`
-// says 20 minutes and `keepalive: false` is set. The timeout ceiling
-// is hardcoded inside Bun's HTTP client and surfaces as a DOMException
-// `TimeoutError` (code 23). The Sidecar happily produces audio for
-// 6 minutes and then sends `200 OK` into a closed socket.
+// says 20 minutes and `keepalive: false` is set. We tried
+// `undici.fetch` in v1.18.082 — same 4:35 timeout, suggesting Bun
+// re-routes the `fetch` symbol or ignores the `dispatcher` option.
 //
-// undici is configurable: we set `bodyTimeout` and `headersTimeout`
-// to match the call's `timeoutMs`, so the only ceiling is the one we
-// asked for.
-import { Agent, fetch as undiciFetch } from "undici";
+// `undici.request` is undici's native low-level entrypoint, not the
+// fetch-shim. Bun cannot intercept it. The dispatcher's bodyTimeout
+// and headersTimeout actually take effect, so the only ceiling on a
+// long TTS call is our explicit AbortSignal.timeout(timeoutMs). */
+import { Agent, request as undiciRequest } from "undici";
 
 const CUSTOM_VOICE_PREFIX = "custom:";
 const DESIGN_VOICE_PREFIX = "design:";
@@ -89,7 +89,7 @@ function envMs(name: string, defaultMs: number): number {
 const SYNTH_TIMEOUT_MS = envMs("PM_QWEN_TTS_SYNTH_TIMEOUT_MS", 20 * 60_000);
 const PREVIEW_TIMEOUT_MS = envMs("PM_QWEN_TTS_PREVIEW_TIMEOUT_MS", 5 * 60_000);
 
-/** Long-running fetch helper for the TTS sidecar.
+/** Long-running TTS sidecar request via undici.request().
  *
  *  Qwen3-TTS doesn't send any response body bytes during the 3-6
  *  minutes it spends generating audio. Bun's native fetch closes the
@@ -98,12 +98,16 @@ const PREVIEW_TIMEOUT_MS = envMs("PM_QWEN_TTS_PREVIEW_TIMEOUT_MS", 5 * 60_000);
  *  code 23) while the Sidecar happily keeps producing audio for the
  *  full duration and then sends `200 OK` into a dead connection.
  *
- *  undici's Agent exposes the timeouts we actually need:
- *    - bodyTimeout    — silence between body chunks
- *    - headersTimeout — wait for the response head
- *  Both get the call's full budget, so the only ceiling on a TTS
- *  call is the AbortSignal we set explicitly. */
-function ttsFetch(
+ *  undici.request is the low-level native API. Bun cannot intercept
+ *  it (unlike `fetch`, which Bun re-routes to its own implementation).
+ *  Setting bodyTimeout + headersTimeout on the Agent actually takes
+ *  effect, so the only ceiling on a long TTS call is our explicit
+ *  AbortSignal.timeout(timeoutMs).
+ *
+ *  Returns a fetch-like wrapper so callers don't need to know whether
+ *  they're talking to undici or fetch. */
+let _ttsFetchLogged = false;
+async function ttsFetch(
   url: string,
   init: {
     method: string;
@@ -118,25 +122,39 @@ function ttsFetch(
   text: () => Promise<string>;
   arrayBuffer: () => Promise<ArrayBuffer>;
 }> {
+  if (!_ttsFetchLogged) {
+    console.log(
+      `[qwen-tts] using undici.request for sidecar calls ` +
+        `(timeoutMs=${init.timeoutMs}, no fetch hijacks)`
+    );
+    _ttsFetchLogged = true;
+  }
   const dispatcher = new Agent({
     bodyTimeout: init.timeoutMs,
     headersTimeout: init.timeoutMs,
-    keepAliveTimeout: 30_000,
+    keepAliveTimeout: 60_000,
     keepAliveMaxTimeout: init.timeoutMs,
   });
-  return undiciFetch(url, {
-    method: init.method,
+  const res = await undiciRequest(url, {
+    method: init.method as "POST",
     headers: init.headers,
     body: init.body,
     signal: AbortSignal.timeout(init.timeoutMs),
     dispatcher,
-  }) as unknown as Promise<{
-    ok: boolean;
-    status: number;
-    statusText: string;
-    text: () => Promise<string>;
-    arrayBuffer: () => Promise<ArrayBuffer>;
-  }>;
+    bodyTimeout: init.timeoutMs,
+    headersTimeout: init.timeoutMs,
+  });
+  return {
+    ok: res.statusCode >= 200 && res.statusCode < 300,
+    status: res.statusCode,
+    statusText: String(res.statusCode),
+    text: () => res.body.text(),
+    arrayBuffer: async () => {
+      const buf = await res.body.arrayBuffer();
+      // undici's body.arrayBuffer() returns ArrayBuffer already.
+      return buf as ArrayBuffer;
+    },
+  };
 }
 
 const REFRESH_TTL_MS = 5 * 60_000;
