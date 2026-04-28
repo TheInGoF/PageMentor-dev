@@ -515,21 +515,20 @@ export async function ensureDesignReference(
     }
   }
 
-  // Reference text targeted at ~10-12 s of audio. Qwen-Base clone
-  // accepts 3-10 s, but for long-form narration (chunks > 3 min) a
-  // 6 s reference is too short — the speaker vector loses its anchor
-  // and the AR decoder can fall into looping garble (Qwen3-TTS
-  // issue #258, Stafford 2026 long-form recipe). 200-ish characters
-  // give the model a wider phoneme spread and a stable narration
-  // rhythm to imitate.
+  // Reference text targeted at ~10 s of audio — the sweet spot for
+  // the Qwen3-TTS speaker encoder (Stafford 2026, bluefermion's
+  // audiobook tool). 6 s is too short and lets the AR decoder fall
+  // into looping garble on long chunks (Qwen3-TTS issue #258), 15+ s
+  // wastes encoder budget on tail audio that gets ignored. 170-ish
+  // characters lands cleanly at 10 s in DE narration.
   //
   // Sentence structure deliberately calm and declarative — the
   // speaker style is what the clone will imitate across every chunk
   // it generates.
   const refText =
     design.language === "de"
-      ? "Hallo, dies ist eine Sprachprobe dieser Stimme. Sie wird beim Vorlesen eines Textes gleichmäßig und ruhig gesprochen, damit der Klang über längere Passagen hinweg stabil bleibt und natürlich wirkt."
-      : "Hello, this is a voice sample. It is read evenly and calmly so the audiobook stays consistent across long paragraphs and the voice keeps its natural character.";
+      ? "Hallo, dies ist eine Sprachprobe dieser Stimme. Sie wird beim Vorlesen ruhig und gleichmäßig gesprochen, damit der Klang über lange Passagen stabil bleibt."
+      : "Hello, this is a voice sample. It is read calmly and evenly so the voice stays consistent across long passages of an audiobook.";
 
   console.log(
     `[qwen-tts] ensuring reference audio for design ${design.id} — generating via VoiceDesign (one-time)`
