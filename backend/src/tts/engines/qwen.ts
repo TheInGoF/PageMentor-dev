@@ -44,19 +44,21 @@ import type {
   SynthesizeResult,
   PreviewParams,
 } from "./base";
-// undici's low-level `request` API for the TTS fetches.
+// node:http for the TTS sidecar calls.
 //
-// Bun's fetch (hyper-based) closes the underlying TCP connection after
-// ~5 minutes of socket idle, even when `signal: AbortSignal.timeout()`
-// says 20 minutes and `keepalive: false` is set. We tried
-// `undici.fetch` in v1.18.082 — same 4:35 timeout, suggesting Bun
-// re-routes the `fetch` symbol or ignores the `dispatcher` option.
+// Three previous attempts (Connection:close + keepalive:false in
+// v1.18.080, undici.fetch in v1.18.082, undici.request in v1.18.083)
+// all died at 4-5 minutes. Bun appears to map both fetch and undici
+// to its own hyper-based client where bodyTimeout / headersTimeout
+// from the user are silently ignored.
 //
-// `undici.request` is undici's native low-level entrypoint, not the
-// fetch-shim. Bun cannot intercept it. The dispatcher's bodyTimeout
-// and headersTimeout actually take effect, so the only ceiling on a
-// long TTS call is our explicit AbortSignal.timeout(timeoutMs). */
-import { Agent, request as undiciRequest } from "undici";
+// node:http is Bun-native (Node compatibility layer, not hyper).
+// `req.setTimeout(ms)` is honored, AND we can reach the underlying
+// socket to enable TCP keepalive — so the Docker conntrack and any
+// upstream NAT box also see "data flowing" every 30s and stop
+// recycling idle connections.
+import * as http from "node:http";
+import { URL } from "node:url";
 
 const CUSTOM_VOICE_PREFIX = "custom:";
 const DESIGN_VOICE_PREFIX = "design:";
@@ -89,23 +91,22 @@ function envMs(name: string, defaultMs: number): number {
 const SYNTH_TIMEOUT_MS = envMs("PM_QWEN_TTS_SYNTH_TIMEOUT_MS", 20 * 60_000);
 const PREVIEW_TIMEOUT_MS = envMs("PM_QWEN_TTS_PREVIEW_TIMEOUT_MS", 5 * 60_000);
 
-/** Long-running TTS sidecar request via undici.request().
+/** Long-running TTS sidecar request via node:http (Bun-native).
  *
  *  Qwen3-TTS doesn't send any response body bytes during the 3-6
- *  minutes it spends generating audio. Bun's native fetch closes the
- *  socket as "idle" after ~5 minutes regardless of `AbortSignal` or
- *  `keepalive: false`, surfacing as a TimeoutError (DOMException
- *  code 23) while the Sidecar happily keeps producing audio for the
- *  full duration and then sends `200 OK` into a dead connection.
+ *  minutes it spends generating audio. Every Bun-routed HTTP path
+ *  we tried (Bun fetch, undici.fetch, undici.request) silently
+ *  dropped the connection after ~5 minutes regardless of timeouts.
+ *  node:http reaches Bun's Node-compat layer instead, where the
+ *  legacy http.request API is fully supported and `setTimeout(ms)`
+ *  is the actual idle ceiling.
  *
- *  undici.request is the low-level native API. Bun cannot intercept
- *  it (unlike `fetch`, which Bun re-routes to its own implementation).
- *  Setting bodyTimeout + headersTimeout on the Agent actually takes
- *  effect, so the only ceiling on a long TTS call is our explicit
- *  AbortSignal.timeout(timeoutMs).
+ *  Plus: we enable TCP keepalive (probe every 30s) on the underlying
+ *  socket. Even if some upstream box (Docker network, NAT, anything
+ *  between this container and the sidecar) tries to recycle a
+ *  silent connection, it will see ACK traffic and keep it alive.
  *
- *  Returns a fetch-like wrapper so callers don't need to know whether
- *  they're talking to undici or fetch. */
+ *  Wrapped in a tiny fetch-shaped object so callers don't change. */
 let _ttsFetchLogged = false;
 async function ttsFetch(
   url: string,
@@ -124,37 +125,73 @@ async function ttsFetch(
 }> {
   if (!_ttsFetchLogged) {
     console.log(
-      `[qwen-tts] using undici.request for sidecar calls ` +
-        `(timeoutMs=${init.timeoutMs}, no fetch hijacks)`
+      `[qwen-tts] using node:http + TCP keepalive(30s) for sidecar calls ` +
+        `(timeoutMs=${init.timeoutMs})`
     );
     _ttsFetchLogged = true;
   }
-  const dispatcher = new Agent({
-    bodyTimeout: init.timeoutMs,
-    headersTimeout: init.timeoutMs,
-    keepAliveTimeout: 60_000,
-    keepAliveMaxTimeout: init.timeoutMs,
-  });
-  const res = await undiciRequest(url, {
-    method: init.method as "POST",
-    headers: init.headers,
-    body: init.body,
-    signal: AbortSignal.timeout(init.timeoutMs),
-    dispatcher,
-    bodyTimeout: init.timeoutMs,
-    headersTimeout: init.timeoutMs,
-  });
-  return {
-    ok: res.statusCode >= 200 && res.statusCode < 300,
-    status: res.statusCode,
-    statusText: String(res.statusCode),
-    text: () => res.body.text(),
-    arrayBuffer: async () => {
-      const buf = await res.body.arrayBuffer();
-      // undici's body.arrayBuffer() returns ArrayBuffer already.
-      return buf as ArrayBuffer;
-    },
+
+  const u = new URL(url);
+  const bodyBuf = Buffer.from(init.body, "utf-8");
+  const headers: Record<string, string> = {
+    ...init.headers,
+    "Content-Length": bodyBuf.length.toString(),
   };
+
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: u.hostname,
+        port: u.port ? Number(u.port) : 80,
+        path: u.pathname + (u.search || ""),
+        method: init.method,
+        headers,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => chunks.push(c));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          const status = res.statusCode ?? 0;
+          resolve({
+            ok: status >= 200 && status < 300,
+            status,
+            statusText: res.statusMessage ?? String(status),
+            text: async () => buf.toString("utf-8"),
+            arrayBuffer: async () =>
+              buf.buffer.slice(
+                buf.byteOffset,
+                buf.byteOffset + buf.byteLength
+              ) as ArrayBuffer,
+          });
+        });
+        res.on("error", (err: Error) => reject(err));
+      }
+    );
+
+    // Idle ceiling — fires when no socket activity for `timeoutMs`.
+    // With TCP keepalive on (below), real silence is the only thing
+    // that triggers this; we want it to be the ONLY ceiling.
+    req.setTimeout(init.timeoutMs, () => {
+      req.destroy(
+        new Error(
+          `TTS request idle for ${init.timeoutMs}ms — sidecar didn't respond`
+        )
+      );
+    });
+
+    // Reach the socket the moment it's assigned and turn on TCP
+    // keepalive with a 30s probe interval. Defeats Docker conntrack
+    // / upstream NAT idle-recycling.
+    req.on("socket", (sock) => {
+      sock.setKeepAlive(true, 30_000);
+      sock.setNoDelay(true);
+    });
+
+    req.on("error", (err: Error) => reject(err));
+    req.write(bodyBuf);
+    req.end();
+  });
 }
 
 const REFRESH_TTL_MS = 5 * 60_000;
