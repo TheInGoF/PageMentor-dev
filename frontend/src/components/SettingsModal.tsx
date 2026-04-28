@@ -1348,39 +1348,51 @@ export function SettingsModal({ open, onClose }: Props) {
               {voiceDesigns.map((v) => (
                 <li
                   key={v.id}
-                  className="flex items-center gap-3 card p-3 bg-bg-elevated"
+                  className="card p-3 bg-bg-elevated flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3"
                 >
-                  <span className="text-base leading-none">
-                    {v.gender === "female" ? "♀" : "♂"}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-neutral-100 truncate">
-                      {v.label}
-                    </div>
-                    <div className="text-[10px] text-neutral-500 truncate">
-                      {v.description}
-                    </div>
-                    <div className="text-[10px] text-neutral-600 font-mono">
-                      {v.language} · seed {v.seed}
+                  <div className="flex items-center gap-3 min-w-0 sm:flex-1">
+                    <span className="text-base leading-none">
+                      {v.gender === "female" ? "♀" : "♂"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-neutral-100 truncate">
+                        {v.label}
+                      </div>
+                      <div className="text-[10px] text-neutral-500 truncate">
+                        {v.description}
+                      </div>
+                      <div className="text-[10px] text-neutral-600 font-mono">
+                        {v.language} · seed {v.seed}
+                      </div>
                     </div>
                   </div>
-                  <Button variant="ghost" onClick={() => playDesignPreview(v.id)}>
-                    {t("settings.voices.preview")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => regenerateDesignReference(v.id, v.label)}
-                    disabled={designBusy}
-                    title={t("settings.design.regenRefTooltip")}
-                  >
-                    {t("settings.design.regenRef")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => deleteDesign(v.id, v.label)}
-                  >
-                    {t("common.delete")}
-                  </Button>
+                  <div className="flex items-center gap-2 sm:gap-1 sm:flex-none">
+                    <Button
+                      variant="ghost"
+                      onClick={() => playDesignPreview(v.id)}
+                      title={t("settings.voices.preview")}
+                      aria-label={t("settings.voices.preview")}
+                    >
+                      ▶
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => regenerateDesignReference(v.id, v.label)}
+                      disabled={designBusy}
+                      title={t("settings.design.regenRefTooltip")}
+                      aria-label={t("settings.design.regenRef")}
+                    >
+                      ↻
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => deleteDesign(v.id, v.label)}
+                      title={t("common.delete")}
+                      aria-label={t("common.delete")}
+                    >
+                      ×
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
