@@ -7,12 +7,14 @@
  */
 
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { effective } from "../services/llmConfig";
 import {
   listLibraries as absListLibraries,
   testConnection as absTestConnection,
   uploadBook as absUploadBook,
 } from "../services/audiobookshelf";
+import { recent as recentLogs, subscribe as subscribeLogs } from "../services/logBus";
 
 export const adminRoutes = new Hono();
 
@@ -99,4 +101,60 @@ adminRoutes.post("/gpu/reset", async (c) => {
       502
     );
   }
+});
+
+// SSE: live merged log stream (backend console + sidecar diagnostics).
+//
+// New connections receive the in-memory ring buffer as a replay,
+// then live updates as `event: log` SSE messages. Heartbeat comments
+// every 20 s keep the connection alive past idle-aware proxies and
+// browsers (same pattern as the audiobook progress stream).
+adminRoutes.get("/logs/stream", (c) => {
+  return streamSSE(c, async (stream) => {
+    // Replay so a freshly opened LogsPage isn't blank.
+    for (const line of recentLogs()) {
+      await stream.writeSSE({
+        event: "log",
+        data: JSON.stringify(line),
+      });
+    }
+
+    const queue: string[] = [];
+    let resolver: (() => void) | null = null;
+    let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+
+    const unsubscribe = subscribeLogs((line) => {
+      queue.push(JSON.stringify(line));
+      if (resolver) {
+        const r = resolver;
+        resolver = null;
+        r();
+      }
+    });
+
+    keepAliveTimer = setInterval(() => {
+      void stream.writeSSE({ event: "ping", data: "" }).catch(() => {});
+    }, 20_000);
+
+    try {
+      // Long-running async-pull loop: wait for the next event, ship it.
+      // Closing the stream (client disconnect) throws and we land in finally.
+      while (true) {
+        if (queue.length === 0) {
+          await new Promise<void>((resolve) => {
+            resolver = resolve;
+          });
+        }
+        while (queue.length > 0) {
+          await stream.writeSSE({
+            event: "log",
+            data: queue.shift()!,
+          });
+        }
+      }
+    } finally {
+      unsubscribe();
+      if (keepAliveTimer) clearInterval(keepAliveTimer);
+    }
+  });
 });

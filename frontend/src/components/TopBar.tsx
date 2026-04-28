@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { Button } from "./ui/Button";
 import { t } from "../lib/i18n";
 import { SearchOverlay } from "./SearchOverlay";
-import { SettingsModal } from "./SettingsModal";
 import { Logo } from "./Logo";
 import { cn } from "../lib/cn";
 
@@ -16,6 +14,12 @@ interface Props {
   onGoDashboard?: () => void;
   onGoLibrary?: () => void;
   onGoModules?: () => void;
+  /** Navigate to the Settings page. Required so the cog icon works on
+   *  every view that mounts the TopBar. */
+  onOpenSettings: () => void;
+  /** Navigate to the Logs page. Optional — only shown when a target
+   *  is wired (typically only when the user has admin context). */
+  onOpenLogs?: () => void;
 }
 
 /**
@@ -38,66 +42,75 @@ export function TopBar({
   onGoDashboard,
   onGoLibrary,
   onGoModules,
+  onOpenSettings,
+  onOpenLogs,
 }: Props) {
-  const [settingsOpen, setSettingsOpen] = useState(false);
   return (
-    <>
-      <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex flex-col gap-2">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Logo size={22} />
-            {(onGoDashboard || onGoLibrary || onGoModules) && (
-              <nav className="flex items-center gap-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-                {onGoDashboard && (
-                  <NavButton
-                    label={t("nav.home")}
-                    active={currentView === "dashboard"}
-                    onClick={onGoDashboard}
-                  />
-                )}
-                {onGoLibrary && (
-                  <NavButton
-                    label={t("nav.library")}
-                    active={currentView === "library"}
-                    onClick={onGoLibrary}
-                  />
-                )}
-                {onGoModules && (
-                  <NavButton
-                    label={t("nav.modules")}
-                    active={currentView === "modules"}
-                    onClick={onGoModules}
-                  />
-                )}
-              </nav>
-            )}
-            <div className="ml-auto flex items-center gap-1 sm:gap-2 shrink-0">
-              {onUpload && (
-                <Button variant="primary" onClick={onUpload}>
-                  + <span className="hidden sm:inline">{t("library.upload")}</span>
-                </Button>
+    <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex flex-col gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <Logo size={22} />
+          {(onGoDashboard || onGoLibrary || onGoModules) && (
+            <nav className="flex items-center gap-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+              {onGoDashboard && (
+                <NavButton
+                  label={t("nav.home")}
+                  active={currentView === "dashboard"}
+                  onClick={onGoDashboard}
+                />
               )}
+              {onGoLibrary && (
+                <NavButton
+                  label={t("nav.library")}
+                  active={currentView === "library"}
+                  onClick={onGoLibrary}
+                />
+              )}
+              {onGoModules && (
+                <NavButton
+                  label={t("nav.modules")}
+                  active={currentView === "modules"}
+                  onClick={onGoModules}
+                />
+              )}
+            </nav>
+          )}
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 shrink-0">
+            {onUpload && (
+              <Button variant="primary" onClick={onUpload}>
+                + <span className="hidden sm:inline">{t("library.upload")}</span>
+              </Button>
+            )}
+            {onOpenLogs && (
               <Button
                 variant="ghost"
-                onClick={() => setSettingsOpen(true)}
+                onClick={onOpenLogs}
                 className="!px-2"
-                title={t("settings.title")}
-                aria-label={t("settings.title")}
+                title={t("logs.title")}
+                aria-label={t("logs.title")}
               >
-                ⚙
+                ☷
               </Button>
-              <Button variant="ghost" onClick={onLogout}>
-                {t("library.logout")}
-              </Button>
-            </div>
-          </div>
-          <div className="w-full">
-            <SearchOverlay onOpenDocument={onOpenDocument} />
+            )}
+            <Button
+              variant="ghost"
+              onClick={onOpenSettings}
+              className="!px-2"
+              title={t("settings.title")}
+              aria-label={t("settings.title")}
+            >
+              ⚙
+            </Button>
+            <Button variant="ghost" onClick={onLogout}>
+              {t("library.logout")}
+            </Button>
           </div>
         </div>
-      </header>
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </>
+        <div className="w-full">
+          <SearchOverlay onOpenDocument={onOpenDocument} />
+        </div>
+      </div>
+    </header>
   );
 }
 

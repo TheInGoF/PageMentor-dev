@@ -10,9 +10,18 @@ interface Props {
   onOpenModules: () => void;
   onOpenDocument: (docId: string) => void;
   onLogout: () => void;
+  onOpenSettings: () => void;
+  onOpenLogs?: () => void;
 }
 
-export function Dashboard({ onOpenLibrary, onOpenModules, onOpenDocument, onLogout }: Props) {
+export function Dashboard({
+  onOpenLibrary,
+  onOpenModules,
+  onOpenDocument,
+  onLogout,
+  onOpenSettings,
+  onOpenLogs,
+}: Props) {
   useLocale();
   const [data, setData] = useState<DashboardData | null>(null);
   const toast = useToast();
@@ -40,6 +49,8 @@ export function Dashboard({ onOpenLibrary, onOpenModules, onOpenDocument, onLogo
         onGoDashboard={() => {}}
         onGoLibrary={onOpenLibrary}
         onGoModules={onOpenModules}
+        onOpenSettings={onOpenSettings}
+        onOpenLogs={onOpenLogs}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">

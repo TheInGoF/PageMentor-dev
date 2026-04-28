@@ -41,9 +41,20 @@ const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = 
 interface Props {
   docId: string;
   onBack: () => void;
+  onOpenDocument: (docId: string) => void;
+  onLogout: () => void;
+  onOpenSettings: () => void;
+  onOpenLogs?: () => void;
 }
 
-export function LearningMenu({ docId, onBack }: Props) {
+export function LearningMenu({
+  docId,
+  onBack,
+  onOpenDocument: _onOpenDocument,
+  onLogout,
+  onOpenSettings,
+  onOpenLogs,
+}: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
@@ -148,6 +159,31 @@ export function LearningMenu({ docId, onBack }: Props) {
                 {` · ${t(`ocr.${doc.ocr_status}`)}`}
               </p>
             )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {onOpenLogs && (
+              <Button
+                variant="ghost"
+                onClick={onOpenLogs}
+                className="!px-2"
+                title={t("logs.title")}
+                aria-label={t("logs.title")}
+              >
+                ☷
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={onOpenSettings}
+              className="!px-2"
+              title={t("settings.title")}
+              aria-label={t("settings.title")}
+            >
+              ⚙
+            </Button>
+            <Button variant="ghost" onClick={onLogout}>
+              {t("library.logout")}
+            </Button>
           </div>
         </div>
         <nav className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto">

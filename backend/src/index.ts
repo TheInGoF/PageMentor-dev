@@ -67,6 +67,12 @@ const PKG_VERSION = ((): string => {
   console.error = (...args: unknown[]) => origError(`[${ts()}] ERROR`, ...args);
 })();
 
+// Wire console.* into the in-memory log bus BEFORE the banner so
+// even the first lines after boot show up in the Logs page.
+import { installLogTap, startSidecarLogPump } from "./services/logTap";
+installLogTap();
+startSidecarLogPump();
+
 // Loud startup banner — makes it immediately visible in the
 // Portainer log that the new build is actually running (Portainer
 // often shows container recreates without a clear signal, even

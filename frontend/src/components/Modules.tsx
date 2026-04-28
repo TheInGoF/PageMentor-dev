@@ -14,9 +14,19 @@ interface Props {
   onGoDashboard: () => void;
   onGoLibrary: () => void;
   onLogout: () => void;
+  onOpenSettings: () => void;
+  onOpenLogs?: () => void;
 }
 
-export function Modules({ onOpenModule, onOpenDocument, onGoDashboard, onGoLibrary, onLogout }: Props) {
+export function Modules({
+  onOpenModule,
+  onOpenDocument,
+  onGoDashboard,
+  onGoLibrary,
+  onLogout,
+  onOpenSettings,
+  onOpenLogs,
+}: Props) {
   useLocale();
   const [modules, setModules] = useState<ModuleListItem[] | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -58,6 +68,8 @@ export function Modules({ onOpenModule, onOpenDocument, onGoDashboard, onGoLibra
         onGoDashboard={onGoDashboard}
         onGoLibrary={onGoLibrary}
         onGoModules={() => {}}
+        onOpenSettings={onOpenSettings}
+        onOpenLogs={onOpenLogs}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">

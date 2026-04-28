@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Modal } from "./ui/Modal";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { getSettings, setSettings, type Settings } from "../lib/settings";
@@ -38,8 +37,9 @@ interface LlmConfig {
 }
 
 interface Props {
-  open: boolean;
-  onClose: () => void;
+  /** Where the back-button takes the user (back to library, modules,
+   *  dashboard, …). Decided by App.tsx based on previous nav state. */
+  onBack: () => void;
 }
 
 type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "ai";
@@ -72,7 +72,7 @@ const RATES: Array<{ value: string; label: string }> = (() => {
   return out;
 })();
 
-export function SettingsModal({ open, onClose }: Props) {
+export function SettingsPage({ onBack }: Props) {
   useLocale();
   const [s, setS] = useState<Settings>(getSettings());
   const [voices, setVoices] = useState<Voice[]>([]);
@@ -566,27 +566,33 @@ export function SettingsModal({ open, onClose }: Props) {
   function save() {
     setSettings(s);
     toast.show(t("settings.saved"), "success");
-    onClose();
+    onBack();
   }
 
   const voicesForLang = voices.filter((v) => v.language === s.defaultLanguage);
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t("settings.title")}
-      size="2xl"
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
+    <div className="min-h-screen bg-bg flex flex-col">
+      {/* Page header — sticky so the title + actions stay visible
+          while the user scrolls through the long settings form. */}
+      <header className="sticky top-0 z-30 bg-bg-elevated border-b border-border">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
+          <Button variant="ghost" onClick={onBack} aria-label={t("common.back")}>
+            ← {t("common.back")}
+          </Button>
+          <h1 className="text-base font-semibold flex-1 truncate">
+            {t("settings.title")}
+          </h1>
+          <Button variant="ghost" onClick={onBack}>
             {t("common.cancel")}
           </Button>
           <Button onClick={save}>{t("common.save")}</Button>
-        </>
-      }
-    >
-      <div className="flex gap-4 -mx-1">
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 py-6">
+          <div className="flex gap-4 -mx-1">
         <nav className="w-40 shrink-0 flex flex-col gap-1 pr-2 border-r border-border">
           {TABS.map((item) => (
             <button
@@ -1630,9 +1636,10 @@ export function SettingsModal({ open, onClose }: Props) {
           </div>
         </section>
         )}
+          </div>
         </div>
-      </div>
-    </Modal>
+      </main>
+    </div>
   );
 }
 

@@ -587,6 +587,19 @@ const en: Record<string, string> = {
   "search.group.documents": "Documents ({n})",
   "search.group.chapters": "Chapters ({n})",
 
+  // Logs page
+  "logs.title": "Logs",
+  "logs.empty": "No log lines yet — keep this tab open while you trigger something.",
+  "logs.connecting": "Connecting to log stream…",
+  "logs.connection.connecting": "connecting",
+  "logs.connection.open": "live",
+  "logs.connection.closed": "disconnected",
+  "logs.pause": "Pause auto-scroll",
+  "logs.resume": "Resume auto-scroll",
+  "logs.clear": "Clear",
+  "logs.filter": "Show",
+  "logs.lines": "lines",
+
   // Settings
   "settings.title": "Settings",
   "settings.tab.general": "General",
@@ -1408,6 +1421,19 @@ const de: Record<string, string> = {
   "search.empty": "Keine Treffer für \u201E{q}\u201C",
   "search.group.documents": "Dokumente ({n})",
   "search.group.chapters": "Kapitel ({n})",
+
+  // Logs page
+  "logs.title": "Logs",
+  "logs.empty": "Noch keine Log-Zeilen — Tab offen lassen während etwas im Hintergrund passiert.",
+  "logs.connecting": "Verbinde mit Log-Stream…",
+  "logs.connection.connecting": "verbinde",
+  "logs.connection.open": "live",
+  "logs.connection.closed": "getrennt",
+  "logs.pause": "Auto-Scroll pausieren",
+  "logs.resume": "Auto-Scroll fortsetzen",
+  "logs.clear": "Leeren",
+  "logs.filter": "Zeige",
+  "logs.lines": "Zeilen",
 
   // Settings
   "settings.title": "Einstellungen",

@@ -66,6 +66,53 @@ logging.basicConfig(
 )
 log = logging.getLogger("qwen-tts")
 
+
+class _RingHandler(logging.Handler):
+    """In-memory ring buffer of recent log records.
+
+    The PageMentor backend pulls /diagnostics/recent-logs every few
+    seconds and forwards new lines into its own SSE stream so the user
+    sees backend + sidecar interleaved in the Logs page without SSHing
+    onto the GPU host.
+    """
+
+    def __init__(self, capacity: int = 500):
+        super().__init__()
+        self.capacity = capacity
+        self.buf: list[dict[str, Any]] = []
+        self._lock = threading.Lock()
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            entry = {
+                "ts": int(record.created * 1000),
+                "level": record.levelname,
+                "message": self.format(record),
+            }
+            with self._lock:
+                self.buf.append(entry)
+                if len(self.buf) > self.capacity:
+                    del self.buf[: len(self.buf) - self.capacity]
+        except Exception:  # noqa: BLE001
+            # never let logging crash the caller
+            pass
+
+    def snapshot(self, since_ts: int = 0) -> list[dict[str, Any]]:
+        with self._lock:
+            if since_ts <= 0:
+                return list(self.buf)
+            return [e for e in self.buf if e["ts"] > since_ts]
+
+
+_log_ring = _RingHandler(capacity=500)
+_log_ring.setLevel(logging.INFO)
+_log_ring.setFormatter(
+    logging.Formatter("%(name)s :: %(message)s")
+)
+# Attach to the root logger so we capture qwen-tts plus everything
+# from libraries (uvicorn, transformers, …) that bubbles up.
+logging.getLogger().addHandler(_log_ring)
+
 MODEL_ID = os.environ.get("QWEN_TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
 # CustomVoice-Modell mit 9 Preset-Stimmen + Instruction-Control (Freitext-
 # Prompt wie "Calm audiobook narrator, slow and clear pacing"). Wird
@@ -1197,6 +1244,24 @@ async def health():
             "max_unique": LOOP_MAX_UNIQUE,
             "min_tokens": LOOP_MIN_TOKENS,
         },
+    }
+
+
+@app.get("/diagnostics/recent-logs")
+async def recent_logs(since: int = 0):
+    """Pull the in-memory log ring for the PageMentor backend's
+    sidecar-log-pump. ``since`` is a unix-ms timestamp; only entries
+    strictly newer are returned. The PageMentor Logs page uses this to
+    interleave sidecar lines into its merged log stream.
+
+    Returns ``{"source": "qwen-tts", "lines": [...]}`` so the backend
+    can also point this endpoint at the arbiter without changing
+    callers — the arbiter is a separate process and would label its
+    own lines ``arbiter``.
+    """
+    return {
+        "source": "qwen-tts",
+        "lines": _log_ring.snapshot(since_ts=since),
     }
 
 
