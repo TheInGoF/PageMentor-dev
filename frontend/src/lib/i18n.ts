@@ -656,7 +656,7 @@ const en: Record<string, string> = {
   "settings.tts.qwenTtsKeyPlaceholder": "Bearer token",
   "settings.tts.resetButton": "Reset GPU swap",
   "settings.tts.resetHint":
-    "Stops the TTS container and unloads all Ollama models. Use when an Ollama ↔ TTS swap gets stuck.",
+    "Hard-restarts the TTS container, and (when OLLAMA_CONTAINER is set on the arbiter) the Ollama container too. Use when either side gets stuck — 504 errors, GPU pegged at 100 %, zombie generations.",
   "settings.tts.resetBusy": "Resetting …",
   "settings.tts.resetDone": "GPU reset done.",
   "settings.tts.instructionLabel": "Preset voice instruction (CustomVoice)",
@@ -1479,7 +1479,7 @@ const de: Record<string, string> = {
   "settings.tts.qwenTtsKeyPlaceholder": "Bearer-Token",
   "settings.tts.resetButton": "GPU-Swap zurücksetzen",
   "settings.tts.resetHint":
-    "Stoppt den TTS-Container und entlädt alle Ollama-Modelle. Nutzen wenn ein Ollama-↔-TTS-Wechsel hängt.",
+    "Hart-Restart des TTS-Containers und (falls OLLAMA_CONTAINER am Arbiter gesetzt ist) auch des Ollama-Containers. Nutzen wenn eine Seite hängt — 504-Fehler, GPU bei 100 %, Zombie-Generationen.",
   "settings.tts.resetBusy": "Setze zurück …",
   "settings.tts.resetDone": "GPU zurückgesetzt.",
   "settings.tts.instructionLabel": "Preset-Stimmen-Instruction (CustomVoice)",

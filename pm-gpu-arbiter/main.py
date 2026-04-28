@@ -58,6 +58,11 @@ TTS_CONTAINER = os.environ.get(
     "TTS_CONTAINER",
     os.environ.get("VIBEVOICE_CONTAINER", "pm-qwen-tts"),
 )
+# Optional: when set, the GPU-reset button issues a hard
+# stop+start on the Ollama container, not just a model unload via
+# /api/ps. Use this when the Ollama process itself wedges (504 on
+# /api/generate, sticks at 100 % GPU, …). Empty = unload-only.
+OLLAMA_CONTAINER = os.environ.get("OLLAMA_CONTAINER", "").strip()
 TTS_API_KEY = os.environ.get(
     "TTS_API_KEY", os.environ.get("VIBEVOICE_API_KEY", "")
 )
@@ -181,6 +186,20 @@ def _start_container_sync(name: str) -> None:
 
 async def _stop_tts() -> None:
     await asyncio.to_thread(_stop_container_sync, TTS_CONTAINER)
+
+
+async def _hard_restart_container(name: str) -> dict[str, str]:
+    """stop → settle → start. Used by the GPU-reset button so the
+    container isn't just stopped (waiting for the next call to bring
+    it up) but is actively brought back to a clean ready state."""
+    before = await asyncio.to_thread(_container_status, name)
+    await asyncio.to_thread(_stop_container_sync, name)
+    # Brief settle so docker has a chance to release the GPU before
+    # we ask it to bring the same container up again.
+    await asyncio.sleep(2)
+    await asyncio.to_thread(_start_container_sync, name)
+    after = await asyncio.to_thread(_container_status, name)
+    return {"before": before, "after": after}
 
 
 async def _start_tts_and_wait() -> None:
@@ -368,9 +387,11 @@ def _tts_headers() -> dict[str, str]:
 
 @app.post("/admin/gpu/reset")
 async def gpu_reset():
-    """Hard reset: stops the TTS container, unloads all Ollama models,
-    discards a scheduled idle stop. Intended as a UI button when the
-    Ollama/Qwen swap is stuck.
+    """Hard reset: hard-restarts the TTS container, hard-restarts or
+    unloads Ollama (depending on `OLLAMA_CONTAINER` env), discards a
+    scheduled idle stop. Intended as a UI button when the
+    Ollama/Qwen swap is stuck (504 on either side, GPU pegged at
+    100 %, zombie generation, …).
 
     We deliberately do NOT take state.lock — if a request is running,
     let it crash (button press = user intent that something is broken).
@@ -383,21 +404,54 @@ async def gpu_reset():
 
     _cancel_pending_tts_stop()
 
+    # 1. TTS container — hard restart (not just stop).
+    # Stopping alone leaves the user with a dead container that only
+    # comes back on the next TTS call. A user clicking "GPU reset"
+    # almost always wants a clean ready state right away, especially
+    # if they're about to retry the chunk that was stuck.
     try:
-        prev = await asyncio.to_thread(_container_status, TTS_CONTAINER)
-        await _stop_tts()
-        now = await asyncio.to_thread(_container_status, TTS_CONTAINER)
-        result["tts_container"] = {"before": prev, "after": now}
+        result["tts_container"] = await _hard_restart_container(TTS_CONTAINER)
     except Exception as e:  # noqa: BLE001
         result["tts_container"] = {"error": repr(e)}
-        log.warning("gpu-reset: tts stop failed: %r", e)
+        log.warning("gpu-reset: tts hard-restart failed: %r", e)
 
-    try:
-        await _unload_all_ollama_models()
-        result["ollama_unload"] = "ok"
-    except Exception as e:  # noqa: BLE001
-        result["ollama_unload"] = {"error": repr(e)}
-        log.warning("gpu-reset: ollama unload failed: %r", e)
+    # 2. Ollama — hard-restart container if OLLAMA_CONTAINER is set,
+    # otherwise the historic model-unload-only behaviour. Container
+    # restart is the right hammer for a wedged Ollama process (504
+    # on /api/generate even though the API is reachable). The
+    # unload-only fallback covers setups where the arbiter doesn't
+    # have docker access to the Ollama container (e.g. Ollama running
+    # outside docker, or on a separate host).
+    if OLLAMA_CONTAINER:
+        try:
+            result["ollama_container"] = await _hard_restart_container(
+                OLLAMA_CONTAINER
+            )
+        except Exception as e:  # noqa: BLE001
+            result["ollama_container"] = {"error": repr(e)}
+            log.warning(
+                "gpu-reset: ollama hard-restart failed: %r — falling back to model unload",
+                e,
+            )
+            try:
+                await _unload_all_ollama_models()
+                result["ollama_unload_fallback"] = "ok"
+            except Exception as e2:  # noqa: BLE001
+                result["ollama_unload_fallback"] = {"error": repr(e2)}
+    else:
+        try:
+            await _unload_all_ollama_models()
+            result["ollama_unload"] = "ok"
+        except Exception as e:  # noqa: BLE001
+            result["ollama_unload"] = {"error": repr(e)}
+            log.warning("gpu-reset: ollama unload failed: %r", e)
+
+    # State.snapshot would still report the old `owner` since we don't
+    # take the lock. Reset it to idle so the next request doesn't think
+    # someone else owns the GPU.
+    state.owner = "idle"
+    state.since = time.time()
+    state.queue_depth = 0
 
     result["elapsed_s"] = round(time.time() - start, 2)
     result["snapshot"] = state.snapshot()

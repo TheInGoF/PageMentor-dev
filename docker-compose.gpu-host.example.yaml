@@ -178,8 +178,10 @@ services:
   #   /api/*      → Ollama   (stops qwen-tts first)
   #   /v1/audio/* → Qwen-TTS (unloads Ollama models + starts qwen-tts
   #                           first, stops it again afterwards)
-  #   /admin/gpu/reset → flushes Ollama models + restarts qwen-tts
-  #                      (exposed via the "GPU reset" button in the UI)
+  #   /admin/gpu/reset → hard-restarts qwen-tts; if OLLAMA_CONTAINER is
+  #                      set, hard-restarts Ollama too — otherwise just
+  #                      unloads its models. Exposed via the "GPU reset"
+  #                      button in the PageMentor UI.
   pm-gpu-arbiter:
     image: ghcr.io/theingof/pm-gpu-arbiter:latest
     container_name: pm-gpu-arbiter
@@ -188,6 +190,11 @@ services:
       - "8790:8790"
     environment:
       OLLAMA_URL: "http://ollama:11434"
+      # Optional: when set, GPU-reset hard-restarts the Ollama
+      # container instead of just calling its model-unload API.
+      # The right hammer when Ollama itself wedges (504 on
+      # /api/generate, GPU pegged at 100 %, …).
+      OLLAMA_CONTAINER: "ollama"
       TTS_UPSTREAM_URL: "http://qwen-tts:8880"
       TTS_CONTAINER: "pm-qwen-tts"
       # The first HF download of the Qwen model can take 5+ min;
