@@ -1638,6 +1638,7 @@ export function SettingsPage({ onBack }: Props) {
         )}
           </div>
         </div>
+        </div>
       </main>
     </div>
   );
