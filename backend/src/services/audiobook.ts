@@ -16,6 +16,7 @@ import {
 import { ensureCover } from "./covers";
 import { emit } from "./events";
 import { pickLang, tLang, chapterLabel } from "../lib/i18n";
+import { effective } from "./llmConfig";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
@@ -67,13 +68,51 @@ export class AudiobookCanceled extends Error {
   }
 }
 
-/** Signals the running worker to stop after the current chunk.
- *  Already-finished chapters are kept. */
+/** Signals the running worker to stop after the current chunk AND
+ *  hard-restarts the TTS sidecar via the GPU arbiter so an in-flight
+ *  Sidecar generation actually terminates. The audiobook loop's
+ *  AbortSignal alone only releases the Backend → Arbiter HTTP call;
+ *  the Sidecar would otherwise keep generating until its 1200 s
+ *  timeout (zombie generation), and a follow-up TTS call could
+ *  collide with leftover state. Already-finished chapter MP3s on
+ *  disk are kept. */
 export function cancelAudiobook(docId: string): boolean {
   const ctrl = running.get(docId);
   if (!ctrl) return false;
   ctrl.abort();
+  // Fire-and-forget — we don't want the cancel HTTP response to
+  // block on the arbiter restart (which can take a few seconds).
+  void resetGpuViaArbiter().catch((err) => {
+    console.warn(
+      "[audiobook] cancel: arbiter reset failed (sidecar may still be running):",
+      err,
+    );
+  });
   return true;
+}
+
+async function resetGpuViaArbiter(): Promise<void> {
+  const base = effective("qwenTtsUrl", "PM_QWEN_TTS_URL");
+  if (!base) {
+    console.warn(
+      "[audiobook] cancel: no arbiter URL configured — Sidecar may " +
+        "keep generating until its own timeout",
+    );
+    return;
+  }
+  const url = base.replace(/\/+$/, "") + "/admin/gpu/reset";
+  const apiKey = effective("qwenTtsApiKey", "PM_QWEN_TTS_API_KEY");
+  const headers: Record<string, string> = {};
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  console.log(`[audiobook] cancel: hard-resetting GPU via ${url}`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) {
+    throw new Error(`arbiter reset ${res.status}`);
+  }
 }
 
 export async function generateAudiobook(params: {

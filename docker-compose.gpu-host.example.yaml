@@ -136,7 +136,12 @@ services:
       QWEN_TTS_MODEL: "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
       QWEN_TTS_DEVICE: "cuda"
       QWEN_TTS_DTYPE: "bfloat16"
-      QWEN_TTS_ATTN_IMPL: "sdpa"       # "flash_attention_2" saves ~15% VRAM but needs a downstream rebuild
+      # Attention implementation. The image ships flash-attn 2.7.2
+      # prebuilt as part of Stage 1, so no downstream rebuild needed.
+      # On Ampere+ (RTX 30/40/50) use flash_attention_2 — ~15% less
+      # VRAM and noticeably faster. On Turing or older (RTX 20xx,
+      # GTX 16xx, …) flash-attn 2 isn't available, fall back to "sdpa".
+      QWEN_TTS_ATTN_IMPL: "flash_attention_2"
       QWEN_TTS_DEFAULT_LANGUAGE: "German"
       # Token / timeout budget. Each character of German narration
       # decodes to roughly 4-5 audio tokens on the 12 Hz codec, so for
