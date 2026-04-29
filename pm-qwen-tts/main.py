@@ -177,6 +177,25 @@ DEFAULT_REPETITION_PENALTY = float(
     os.environ.get("QWEN_TTS_DEFAULT_REPETITION_PENALTY", "1.05")
 )
 
+# Subtalker (the secondary AR head) sampler defaults. Qwen's official
+# `examples/test_model_12hz_base.py` passes these explicitly; without
+# them the subtalker can fall back to greedy decoding and lock into a
+# token cycle independently of the main decoder — the same "looping
+# garble" symptom that issue #258 describes. Values from the upstream
+# example file.
+DEFAULT_SUBTALKER_DOSAMPLE = os.environ.get(
+    "QWEN_TTS_SUBTALKER_DOSAMPLE", "true"
+).lower() in ("1", "true", "yes")
+DEFAULT_SUBTALKER_TEMPERATURE = float(
+    os.environ.get("QWEN_TTS_SUBTALKER_TEMPERATURE", "0.9")
+)
+DEFAULT_SUBTALKER_TOP_P = float(
+    os.environ.get("QWEN_TTS_SUBTALKER_TOP_P", "1.0")
+)
+DEFAULT_SUBTALKER_TOP_K = int(
+    os.environ.get("QWEN_TTS_SUBTALKER_TOP_K", "50")
+)
+
 # Loop-detection tunables. The model occasionally falls into a sampling
 # loop where it generates the same handful of audio tokens forever,
 # never reaching EOS (Qwen3-TTS issue #258). The detector inspects the
@@ -469,11 +488,25 @@ def _resolve_sampling(
 ) -> dict[str, Any]:
     """Builds the sampling kwargs subset for a generate-call.
 
+    The critical bit is ``do_sample=True``: without it HuggingFace's
+    ``generate`` defaults to greedy decoding, which silently ignores
+    temperature / top_p / top_k / repetition_penalty AND is highly
+    prone to AR-decoder loops (issue #258). Every reproducer of the
+    "loops on every chunk regardless of length" symptom traces back
+    to a missing or false ``do_sample`` flag.
+
+    The four ``subtalker_*`` kwargs fan the same configuration into
+    Qwen3-TTS's secondary AR head. The official
+    ``examples/test_model_12hz_base.py`` passes them explicitly; we
+    do too. Without subtalker_dosample=True that head can loop
+    independently of the main decoder.
+
     Anything passed as ``None`` falls back to the ENV-provided default;
     that means an empty App-Settings field hands control back to the
     container's startup ENV instead of leaking a blank to the model.
     """
     return {
+        "do_sample": True,
         "temperature": temperature if temperature is not None else DEFAULT_TEMPERATURE,
         "top_p": top_p if top_p is not None else DEFAULT_TOP_P,
         "top_k": top_k if top_k is not None else DEFAULT_TOP_K,
@@ -482,6 +515,10 @@ def _resolve_sampling(
             if repetition_penalty is not None
             else DEFAULT_REPETITION_PENALTY
         ),
+        "subtalker_dosample": DEFAULT_SUBTALKER_DOSAMPLE,
+        "subtalker_temperature": DEFAULT_SUBTALKER_TEMPERATURE,
+        "subtalker_top_p": DEFAULT_SUBTALKER_TOP_P,
+        "subtalker_top_k": DEFAULT_SUBTALKER_TOP_K,
     }
 
 
@@ -564,8 +601,43 @@ _ref_audio_cache: OrderedDict[str, tuple[np.ndarray, int]] = OrderedDict()
 _ref_audio_cache_lock = threading.Lock()
 
 
+REF_TARGET_SR = 24_000
+
+
+def _resample_to_24khz(arr: np.ndarray, src_sr: int) -> np.ndarray:
+    """Resample mono float32 audio to 24 kHz.
+
+    Qwen3-TTS-12Hz expects its speaker-encoder input at 24 kHz mono
+    float32. The official Qwen test uses raw 24 kHz WAV files and the
+    `yauh/qwen3-tts-german-clones` recipe explicitly runs
+    ``ffmpeg -ar 24000 -ac 1`` before any clone call. Feeding audio
+    at the wrong rate (e.g. a 22.05 kHz MP3 from VoiceDesign) makes
+    the speaker embedding silently corrupt — manifests as the AR
+    decoder cycling through a tiny token set forever ("looping
+    garble", issue #258 et al.).
+
+    scipy.signal.resample_poly uses polyphase filtering — fast and
+    high-quality enough for a 1-time speaker reference.
+    """
+    if src_sr == REF_TARGET_SR:
+        return arr.astype(np.float32, copy=False)
+    from scipy.signal import resample_poly  # noqa: WPS433
+    from math import gcd
+
+    g = gcd(REF_TARGET_SR, src_sr)
+    up = REF_TARGET_SR // g
+    down = src_sr // g
+    out = resample_poly(arr.astype(np.float32), up, down)
+    return out.astype(np.float32, copy=False)
+
+
 def _decode_ref_audio(b64: str) -> tuple[np.ndarray, int]:
-    """base64 (WAV/MP3/FLAC) → (mono float32 numpy, sample_rate).
+    """base64 (WAV/MP3/FLAC) → (mono float32 numpy at 24 kHz, sr=24000).
+
+    Always returns 24 kHz audio — the Qwen3-TTS-12Hz speaker encoder
+    expects this rate, and feeding it the file's native rate (often
+    22.05 kHz MP3 from VoiceDesign) silently corrupts the speaker
+    embedding. See _resample_to_24khz for the longer rationale.
 
     Cached on the raw base64 string (SHA-256). Identical upload at
     chunk N+1 hits the cache and skips parsing entirely.
@@ -609,7 +681,16 @@ def _decode_ref_audio(b64: str) -> tuple[np.ndarray, int]:
     if arr.size == 0:
         raise HTTPException(status_code=400, detail="ref_audio is empty")
 
-    result = (arr.astype(np.float32), int(sr))
+    src_sr = int(sr)
+    if src_sr != REF_TARGET_SR:
+        log.info(
+            "ref_audio resampling %d Hz → %d Hz (samples %d → estimate %d)",
+            src_sr, REF_TARGET_SR, arr.size,
+            int(arr.size * REF_TARGET_SR / src_sr),
+        )
+        arr = _resample_to_24khz(arr.astype(np.float32, copy=False), src_sr)
+
+    result = (arr.astype(np.float32), REF_TARGET_SR)
     with _ref_audio_cache_lock:
         _ref_audio_cache[cache_key] = result
         _ref_audio_cache.move_to_end(cache_key)
@@ -1233,10 +1314,15 @@ async def health():
         "max_new_tokens": MAX_NEW_TOKENS,
         "generation_timeout_s": GENERATION_TIMEOUT_S,
         "sampling_defaults": {
+            "do_sample": True,
             "temperature": DEFAULT_TEMPERATURE,
             "top_p": DEFAULT_TOP_P,
             "top_k": DEFAULT_TOP_K,
             "repetition_penalty": DEFAULT_REPETITION_PENALTY,
+            "subtalker_dosample": DEFAULT_SUBTALKER_DOSAMPLE,
+            "subtalker_temperature": DEFAULT_SUBTALKER_TEMPERATURE,
+            "subtalker_top_p": DEFAULT_SUBTALKER_TOP_P,
+            "subtalker_top_k": DEFAULT_SUBTALKER_TOP_K,
         },
         "loop_detection": {
             "enabled": LOOP_DETECTION_ENABLED,

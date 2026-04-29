@@ -154,6 +154,15 @@ services:
       QWEN_TTS_DEFAULT_TOP_P: "0.8"
       QWEN_TTS_DEFAULT_TOP_K: "40"
       QWEN_TTS_DEFAULT_REPETITION_PENALTY: "1.05"
+      # Subtalker (secondary AR head) sampler. Values from the
+      # upstream Qwen3-TTS test_model_12hz_base.py example. Leaving
+      # subtalker_dosample=false makes the secondary head decode
+      # greedy and trigger token loops independently of the main
+      # decoder — exactly the looping-garble symptom from issue #258.
+      QWEN_TTS_SUBTALKER_DOSAMPLE: "true"
+      QWEN_TTS_SUBTALKER_TEMPERATURE: "0.9"
+      QWEN_TTS_SUBTALKER_TOP_P: "1.0"
+      QWEN_TTS_SUBTALKER_TOP_K: "50"
       # Loop-detection: aborts a generation that has cycled through
       # fewer than `MAX_UNIQUE` audio tokens in the last `WINDOW`.
       # Issue #258 (looping garble on long voice clones). Without

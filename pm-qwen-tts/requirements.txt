@@ -7,4 +7,5 @@ qwen-tts>=0.1          # offizielles Alibaba-Package, zieht transformers
                        # + tokenizers + soundfile automatisch mit
 soundfile>=0.12
 numpy>=1.26,<2.0
+scipy>=1.11             # signal.resample_poly for 24 kHz reference resampling
 pydub>=0.25            # MP3-Encoding der OpenAI-Response-Formate
