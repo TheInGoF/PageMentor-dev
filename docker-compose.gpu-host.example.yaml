@@ -54,6 +54,39 @@ services:
       OLLAMA_MAX_LOADED_MODELS: "2"
       OLLAMA_FLASH_ATTENTION: "1"
       OLLAMA_KV_CACHE_TYPE: "q8_0"
+      # Default context window for ALL models on this Ollama instance.
+      # Ollama's stock default is 4096, which cripples models that
+      # natively support 128k+ — including the Gemma 3 / Qwen 2.5 line
+      # this stack uses. Modelfiles from the registry do NOT set
+      # num_ctx, so this server-side default is the only thing that
+      # raises it (per-call num_ctx in the API also overrides — that's
+      # what PageMentor's audio preprocessor does).
+      #
+      # Pick the value that fits the LARGEST model loaded here. KV-cache
+      # scales linearly with context × layers × hidden, so tune it
+      # against the model that hurts the most. Sizing table below
+      # assumes Q4_K_M weights, q8_0 KV-cache, FlashAttention on,
+      # 24 GB VRAM (RTX 3090 / 4090):
+      #
+      #   ┌──────────────────────────────────────────┬─────────┬─────────┐
+      #   │ largest model on this instance           │ num_ctx │ ~VRAM   │
+      #   ├──────────────────────────────────────────┼─────────┼─────────┤
+      #   │  2 B   (gemma3:e2b, qwen2.5:1.5b)        │ 131072  │  ~6 GB  │
+      #   │  4 B   (gemma3:4b,  qwen2.5:3b)          │ 131072  │ ~12 GB  │
+      #   │  7-8 B (qwen2.5:7b, llama3.1:8b)         │  65536  │ ~18 GB  │
+      #   │  9 B   (gemma2:9b)                       │  32768  │ ~16 GB  │
+      #   │ 12 B   (gemma3:12b)                      │  32768  │ ~18 GB  │
+      #   │ 14 B   (qwen2.5:14b)                     │  16384  │ ~16 GB  │
+      #   │ 27 B   (gemma3:27b) ← this stack default │   8192  │ ~20 GB  │
+      #   │ 32 B+                                    │   4096  │ tight   │
+      #   └──────────────────────────────────────────┴─────────┴─────────┘
+      #
+      # Switching KV-cache to q4_0 roughly doubles the table — at the
+      # cost of noticeable long-context reasoning quality loss.
+      # After changing, verify with `ollama ps` (shows actual context)
+      # and `nvidia-smi` under load. If you see OOM, step the value
+      # down or drop to a smaller model.
+      OLLAMA_CONTEXT_LENGTH: "8192"
     deploy:
       resources:
         reservations:

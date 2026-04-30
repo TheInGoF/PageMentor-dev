@@ -591,32 +591,38 @@ export async function preprocessChapterForAudio(params: {
 
   const system = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
 
-  // num_ctx sized generously — the system prompt is long (~6k
-  // tokens), plus the chapter text (up to ~4k tokens) and the
-  // output (~4k). The Ollama default of 2048 is nowhere near enough
-  // and leads to immediate EOS → empty response. 32k is safe and
-  // nearly every model accepts it.
+  // num_ctx sized generously for modern long-context models
+  // (Gemma 3 e4b @ 128k, Qwen 2.5 @ 128k, Llama 3.1 @ 128k).
+  // 65536 leaves headroom for system prompt (~6k) + input (~12k chars
+  // ≈ 4k tokens) + output (~4k tokens) and still fits comfortably on
+  // a 24 GB GPU with q8_0 KV cache. Smaller models that only support
+  // 32k will silently clamp; we accept the loss because the typical
+  // sub-chunk fits in 32k anyway. The Ollama default of 2048 is
+  // nowhere near enough and leads to immediate EOS → empty response.
   //
   // num_predict deliberately a finite, generous integer. The "-1
   // means unlimited" convention is honoured by some Ollama versions
   // and silently ignored by others (Mistral builds in particular cut
   // off at a hidden internal default like 4096, surfacing as
-  // `done_reason=length` plus a truncated/empty response). 10000 is
-  // enough headroom for a 3500-char chunk (~5000 output tokens at
+  // `done_reason=length` plus a truncated/empty response). 18000 is
+  // enough headroom for a 12000-char chunk (~18000 output tokens at
   // worst) without inviting runaway loops.
   const ollamaOptions = {
     temperature: 0.1,
     top_p: 0.9,
-    num_ctx: 32768,
-    num_predict: 10000,
+    num_ctx: 65536,
+    num_predict: 18000,
   };
 
-  // Split long chapters. An 80k-char chapter blows every realistic
-  // context window — 25k tokens input + 6k prompt + 25k output >
-  // 32k num_ctx limit on most models. We split at paragraph
-  // boundaries (sentence as fallback) into ~3500-char pieces and
-  // concatenate the results.
-  const subChunks = splitForPreprocess(pretreated, 3500);
+  // Split long chapters. With 128k-capable models we can afford much
+  // bigger sub-chunks than the original 3500 — 12000 chars (~4k input
+  // tokens) keeps the LLM in a comfortable working range while
+  // dramatically reducing the number of round trips for typical
+  // 30-50k-char chapters. Splits happen at paragraph boundaries first,
+  // sentence boundaries as fallback. A single sentence longer than
+  // maxChars is now passed through as its own oversize chunk instead
+  // of getting hard-cut mid-word — the model can swallow it.
+  const subChunks = splitForPreprocess(pretreated, 12000);
   if (subChunks.length > 1) {
     console.log(
       `[audio-preprocess] chapter ${row.id} (${pretreated.length} chars) → ` +
@@ -795,17 +801,18 @@ function splitForPreprocess(text: string, maxChars: number): string[] {
   for (const p of paragraphs) {
     if (p.length > maxChars) {
       // Single paragraph too big — split it sentence by sentence.
+      // No hard char-cut anymore: a sentence longer than maxChars is
+      // pushed through as its own oversize chunk. With 128k-capable
+      // models that's not a problem, and it preserves the natural
+      // sentence boundary instead of slicing mid-word.
       if (buf) flush();
       const sentences = p.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) ?? [p];
       let subBuf = "";
       for (const s of sentences) {
         if (s.length > maxChars) {
-          // Single sentence too long — hard cut.
           if (subBuf.trim()) out.push(subBuf.trim());
           subBuf = "";
-          for (let i = 0; i < s.length; i += maxChars) {
-            out.push(s.slice(i, i + maxChars).trim());
-          }
+          out.push(s.trim());
           continue;
         }
         if ((subBuf + s).length > maxChars && subBuf) {
