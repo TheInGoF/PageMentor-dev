@@ -15,7 +15,6 @@ interface Props {
   onGoLibrary: () => void;
   onLogout: () => void;
   onOpenSettings: () => void;
-  onOpenLogs?: () => void;
 }
 
 export function Modules({
@@ -25,7 +24,6 @@ export function Modules({
   onGoLibrary,
   onLogout,
   onOpenSettings,
-  onOpenLogs,
 }: Props) {
   useLocale();
   const [modules, setModules] = useState<ModuleListItem[] | null>(null);
@@ -69,7 +67,6 @@ export function Modules({
         onGoLibrary={onGoLibrary}
         onGoModules={() => {}}
         onOpenSettings={onOpenSettings}
-        onOpenLogs={onOpenLogs}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">

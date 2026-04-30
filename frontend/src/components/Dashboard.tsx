@@ -11,7 +11,6 @@ interface Props {
   onOpenDocument: (docId: string) => void;
   onLogout: () => void;
   onOpenSettings: () => void;
-  onOpenLogs?: () => void;
 }
 
 export function Dashboard({
@@ -20,7 +19,6 @@ export function Dashboard({
   onOpenDocument,
   onLogout,
   onOpenSettings,
-  onOpenLogs,
 }: Props) {
   useLocale();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -50,7 +48,6 @@ export function Dashboard({
         onGoLibrary={onOpenLibrary}
         onGoModules={onOpenModules}
         onOpenSettings={onOpenSettings}
-        onOpenLogs={onOpenLogs}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">

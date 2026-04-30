@@ -7,20 +7,19 @@ import { Dashboard } from "./components/Dashboard";
 import { Modules } from "./components/Modules";
 import { ModuleDetail } from "./components/ModuleDetail";
 import { SettingsPage } from "./components/SettingsPage";
-import { LogsPage } from "./components/LogsPage";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { t, useLocale } from "./lib/i18n";
 
 type AuthState = "checking" | "out" | "in";
-type View = "dashboard" | "library" | "modules" | "settings" | "logs";
+type View = "dashboard" | "library" | "modules" | "settings";
 
 interface NavState {
   view: View;
   openDocId: string | null;
   openModuleId: string | null;
-  /** View we'll return to from settings/logs. Persisted so a reload
+  /** View we'll return to from settings. Persisted so a reload
    *  on /settings keeps the back-target after the page refresh. */
   returnTo: View | null;
 }
@@ -41,7 +40,6 @@ function loadNav(): NavState | null {
       "library",
       "modules",
       "settings",
-      "logs",
     ];
     const view: View = validViews.includes(p.view) ? p.view : "dashboard";
     const returnTo: View | null =
@@ -87,14 +85,14 @@ export function App() {
     saveNav({ view, openDocId, openModuleId, returnTo });
   }, [view, openDocId, openModuleId, returnTo]);
 
-  /** Open settings/logs as a real page. Remembers where the user
-   *  came from so the Back button takes them back to that exact
-   *  view (library / modules / dashboard / a specific document). */
-  function openOverlayPage(target: "settings" | "logs") {
-    if (view !== "settings" && view !== "logs") {
+  /** Open settings as a real page. Remembers where the user came
+   *  from so the Back button takes them back to that exact view
+   *  (library / modules / dashboard / a specific document). */
+  function openSettings() {
+    if (view !== "settings") {
       setReturnTo(view);
     }
-    setView(target);
+    setView("settings");
   }
   function closeOverlayPage() {
     setView(returnTo ?? "dashboard");
@@ -136,12 +134,10 @@ export function App() {
 
   function renderShell() {
     if (auth === "out") return <LoginScreen onSuccess={() => setAuth("in")} />;
-    // Overlay pages (settings / logs) cover everything else — they
-    // come up via the cog/logs icon from any view, and Back returns
-    // to wherever the user was.
+    // Settings is the only overlay page — it includes the Logs tab,
+    // so the Back button returns to wherever the user came from.
     if (view === "settings")
       return <SettingsPage onBack={closeOverlayPage} />;
-    if (view === "logs") return <LogsPage onBack={closeOverlayPage} />;
 
     if (openDocId)
       return (
@@ -150,8 +146,7 @@ export function App() {
           onBack={() => setOpenDocId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
           onLogout={handleLogout}
-          onOpenSettings={() => openOverlayPage("settings")}
-          onOpenLogs={() => openOverlayPage("logs")}
+          onOpenSettings={openSettings}
         />
       );
     if (openModuleId)
@@ -161,8 +156,7 @@ export function App() {
           onBack={() => setOpenModuleId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
           onLogout={handleLogout}
-          onOpenSettings={() => openOverlayPage("settings")}
-          onOpenLogs={() => openOverlayPage("logs")}
+          onOpenSettings={openSettings}
         />
       );
     if (view === "modules")
@@ -173,8 +167,7 @@ export function App() {
           onGoDashboard={() => setView("dashboard")}
           onGoLibrary={() => setView("library")}
           onLogout={handleLogout}
-          onOpenSettings={() => openOverlayPage("settings")}
-          onOpenLogs={() => openOverlayPage("logs")}
+          onOpenSettings={openSettings}
         />
       );
     if (view === "library")
@@ -184,8 +177,7 @@ export function App() {
           onOpen={(id) => setOpenDocId(id)}
           onGoDashboard={() => setView("dashboard")}
           onGoModules={() => setView("modules")}
-          onOpenSettings={() => openOverlayPage("settings")}
-          onOpenLogs={() => openOverlayPage("logs")}
+          onOpenSettings={openSettings}
         />
       );
     return (
@@ -194,8 +186,7 @@ export function App() {
         onOpenModules={() => setView("modules")}
         onOpenDocument={(id) => setOpenDocId(id)}
         onLogout={handleLogout}
-        onOpenSettings={() => openOverlayPage("settings")}
-        onOpenLogs={() => openOverlayPage("logs")}
+        onOpenSettings={openSettings}
       />
     );
   }

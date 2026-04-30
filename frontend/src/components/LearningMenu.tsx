@@ -44,7 +44,6 @@ interface Props {
   onOpenDocument: (docId: string) => void;
   onLogout: () => void;
   onOpenSettings: () => void;
-  onOpenLogs?: () => void;
 }
 
 export function LearningMenu({
@@ -53,7 +52,6 @@ export function LearningMenu({
   onOpenDocument: _onOpenDocument,
   onLogout,
   onOpenSettings,
-  onOpenLogs,
 }: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
@@ -161,17 +159,6 @@ export function LearningMenu({
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {onOpenLogs && (
-              <Button
-                variant="ghost"
-                onClick={onOpenLogs}
-                className="!px-2"
-                title={t("logs.title")}
-                aria-label={t("logs.title")}
-              >
-                ☷
-              </Button>
-            )}
             <Button
               variant="ghost"
               onClick={onOpenSettings}

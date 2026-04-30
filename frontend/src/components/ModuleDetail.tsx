@@ -32,7 +32,6 @@ interface Props {
   onOpenDocument: (docId: string) => void;
   onLogout: () => void;
   onOpenSettings: () => void;
-  onOpenLogs?: () => void;
 }
 
 export function ModuleDetail({
@@ -41,7 +40,6 @@ export function ModuleDetail({
   onOpenDocument,
   onLogout,
   onOpenSettings,
-  onOpenLogs,
 }: Props) {
   useLocale();
   const [data, setData] = useState<ModuleDetailData | null>(null);
@@ -117,17 +115,6 @@ export function ModuleDetail({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {onOpenLogs && (
-              <Button
-                variant="ghost"
-                onClick={onOpenLogs}
-                className="!px-2"
-                title={t("logs.title")}
-                aria-label={t("logs.title")}
-              >
-                ☷
-              </Button>
-            )}
             <Button
               variant="ghost"
               onClick={onOpenSettings}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
+import { LogsContent } from "./LogsPage";
 import { getSettings, setSettings, type Settings } from "../lib/settings";
 import {
   api,
@@ -43,7 +44,7 @@ interface Props {
   onBack: () => void;
 }
 
-type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "ai";
+type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "ai" | "logs";
 
 /** Event name for "voice list has changed" — other components
  *  (audiobook picker) listen for it and reload voices. */
@@ -59,6 +60,7 @@ const TABS: Array<{ id: SettingsTab; labelKey: string }> = [
   { id: "tts", labelKey: "settings.tab.tts" },
   { id: "llm", labelKey: "settings.tab.llm" },
   { id: "ai", labelKey: "settings.tab.ai" },
+  { id: "logs", labelKey: "settings.tab.logs" },
 ];
 
 /** 5%-Schritte von -10 bis +30 — programmatisch, damit das Label-Set
@@ -1800,6 +1802,12 @@ export function SettingsPage({ onBack }: Props) {
               {backendVersion ?? "—"}
             </code>
           </div>
+        </section>
+        )}
+
+        {tab === "logs" && (
+        <section className="flex flex-col gap-3">
+          <LogsContent />
         </section>
         )}
           </div>

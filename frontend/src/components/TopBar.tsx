@@ -15,11 +15,9 @@ interface Props {
   onGoLibrary?: () => void;
   onGoModules?: () => void;
   /** Navigate to the Settings page. Required so the cog icon works on
-   *  every view that mounts the TopBar. */
+   *  every view that mounts the TopBar. The Logs UI lives as a tab
+   *  inside Settings since v1.18.098. */
   onOpenSettings: () => void;
-  /** Navigate to the Logs page. Optional — only shown when a target
-   *  is wired (typically only when the user has admin context). */
-  onOpenLogs?: () => void;
 }
 
 /**
@@ -43,7 +41,6 @@ export function TopBar({
   onGoLibrary,
   onGoModules,
   onOpenSettings,
-  onOpenLogs,
 }: Props) {
   return (
     <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
@@ -79,17 +76,6 @@ export function TopBar({
             {onUpload && (
               <Button variant="primary" onClick={onUpload}>
                 + <span className="hidden sm:inline">{t("library.upload")}</span>
-              </Button>
-            )}
-            {onOpenLogs && (
-              <Button
-                variant="ghost"
-                onClick={onOpenLogs}
-                className="!px-2"
-                title={t("logs.title")}
-                aria-label={t("logs.title")}
-              >
-                ☷
               </Button>
             )}
             <Button

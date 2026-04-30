@@ -23,7 +23,6 @@ interface Props {
   onGoDashboard?: () => void;
   onGoModules?: () => void;
   onOpenSettings: () => void;
-  onOpenLogs?: () => void;
 }
 
 const TYPE_FILTERS: Array<"all" | DocType> = [
@@ -41,7 +40,6 @@ export function Library({
   onGoDashboard,
   onGoModules,
   onOpenSettings,
-  onOpenLogs,
 }: Props) {
   const [docs, setDocs] = useState<Document[] | null>(null);
   const [modules, setModules] = useState<ModuleListItem[]>([]);
@@ -193,7 +191,6 @@ export function Library({
         onGoLibrary={() => {}}
         onGoModules={onGoModules}
         onOpenSettings={onOpenSettings}
-        onOpenLogs={onOpenLogs}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6">

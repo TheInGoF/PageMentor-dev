@@ -2,10 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "./ui/Button";
 import { t } from "../lib/i18n";
 
-interface Props {
-  onBack: () => void;
-}
-
 interface LogLine {
   ts: number;
   source: "pm-app" | "qwen-tts" | "arbiter" | "ollama" | "system";
@@ -16,7 +12,7 @@ interface LogLine {
 const SOURCES = ["pm-app", "qwen-tts", "arbiter", "ollama"] as const;
 
 /**
- * Live log viewer page. Subscribes to /api/admin/logs/stream (SSE)
+ * Live log viewer. Subscribes to /api/admin/logs/stream (SSE)
  * and renders the merged stream (Backend `console.*` + Sidecar
  * diagnostic lines forwarded by the backend) into a single scrolling
  * pane. Auto-scrolls to bottom while new lines come in; pauses when
@@ -25,8 +21,11 @@ const SOURCES = ["pm-app", "qwen-tts", "arbiter", "ollama"] as const;
  * Filter chips toggle source-prefixes so a user can isolate the
  * Sidecar lines during a TTS run, or just the backend during a
  * preprocess debug.
+ *
+ * Embedded as a Settings tab (no own page header). The standalone
+ * `LogsPage` wrapper has been removed in v1.18.098.
  */
-export function LogsPage({ onBack }: Props) {
+export function LogsContent() {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [paused, setPaused] = useState(false);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -90,70 +89,65 @@ export function LogsPage({ onBack }: Props) {
   const visible = lines.filter((l) => !hidden.has(l.source));
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
-      <header className="sticky top-0 z-30 bg-bg-elevated border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center gap-3 flex-wrap">
-          <Button variant="ghost" onClick={onBack} aria-label={t("common.back")}>
-            ← {t("common.back")}
-          </Button>
-          <h1 className="text-base font-semibold flex-1 truncate">
-            {t("logs.title")}
-          </h1>
-          <span
-            className={
-              "text-[11px] font-mono px-2 py-0.5 rounded " +
-              (connected === "open"
-                ? "text-emerald-400 bg-emerald-500/10"
-                : connected === "connecting"
-                ? "text-amber-400 bg-amber-500/10"
-                : "text-red-400 bg-red-500/10")
-            }
-          >
-            {t(`logs.connection.${connected}`)}
-          </span>
-          <Button
-            variant="ghost"
-            onClick={() => setPaused((p) => !p)}
-            title={t(paused ? "logs.resume" : "logs.pause")}
-          >
-            {paused ? "▶" : "⏸"}
-          </Button>
-          <Button variant="ghost" onClick={clearLines} title={t("logs.clear")}>
-            {t("logs.clear")}
-          </Button>
-        </div>
-        <div className="max-w-7xl mx-auto px-6 pb-2 flex items-center gap-2 flex-wrap text-[11px]">
-          <span className="text-neutral-500">{t("logs.filter")}:</span>
-          {SOURCES.map((src) => {
-            const active = !hidden.has(src);
-            return (
-              <button
-                key={src}
-                type="button"
-                onClick={() => toggleSource(src)}
-                className={
-                  "px-2 py-0.5 rounded font-mono transition-colors " +
-                  (active
-                    ? "bg-accent/15 text-accent border border-accent-subtle"
-                    : "bg-bg-elevated text-neutral-500 border border-border line-through")
-                }
-              >
-                {src}
-              </button>
-            );
-          })}
-          <span className="ml-auto text-neutral-500">
-            {visible.length} / {lines.length} {t("logs.lines")}
-          </span>
-        </div>
-      </header>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <h3 className="text-xs uppercase tracking-wide text-neutral-500 flex-1">
+          {t("logs.title")}
+        </h3>
+        <span
+          className={
+            "text-[11px] font-mono px-2 py-0.5 rounded " +
+            (connected === "open"
+              ? "text-emerald-400 bg-emerald-500/10"
+              : connected === "connecting"
+              ? "text-amber-400 bg-amber-500/10"
+              : "text-red-400 bg-red-500/10")
+          }
+        >
+          {t(`logs.connection.${connected}`)}
+        </span>
+        <Button
+          variant="ghost"
+          onClick={() => setPaused((p) => !p)}
+          title={t(paused ? "logs.resume" : "logs.pause")}
+        >
+          {paused ? "▶" : "⏸"}
+        </Button>
+        <Button variant="ghost" onClick={clearLines} title={t("logs.clear")}>
+          {t("logs.clear")}
+        </Button>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+        <span className="text-neutral-500">{t("logs.filter")}:</span>
+        {SOURCES.map((src) => {
+          const active = !hidden.has(src);
+          return (
+            <button
+              key={src}
+              type="button"
+              onClick={() => toggleSource(src)}
+              className={
+                "px-2 py-0.5 rounded font-mono transition-colors " +
+                (active
+                  ? "bg-accent/15 text-accent border border-accent-subtle"
+                  : "bg-bg-elevated text-neutral-500 border border-border line-through")
+              }
+            >
+              {src}
+            </button>
+          );
+        })}
+        <span className="ml-auto text-neutral-500">
+          {visible.length} / {lines.length} {t("logs.lines")}
+        </span>
+      </div>
 
-      <main
+      <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="flex-1 overflow-y-auto bg-black/50"
+        className="card bg-black/60 overflow-y-auto h-[60vh]"
       >
-        <div className="max-w-7xl mx-auto px-4 py-2 font-mono text-[11px] leading-relaxed">
+        <div className="px-3 py-2 font-mono text-[11px] leading-relaxed">
           {visible.length === 0 ? (
             <div className="text-neutral-500 text-center py-8">
               {connected === "open" ? t("logs.empty") : t("logs.connecting")}
@@ -186,7 +180,7 @@ export function LogsPage({ onBack }: Props) {
             ))
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }
