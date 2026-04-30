@@ -292,6 +292,7 @@ function sampleToVoice(s: VoiceSample, idx: number): Voice {
       ? "Qwen3-TTS voice clone · with transcript reference"
       : "Qwen3-TTS voice clone · x-vector only",
     msPerChar: s.msPerChar,
+    showInAudiobook: s.showInAudiobook,
   };
 }
 
@@ -309,6 +310,7 @@ function designToVoice(d: VoiceDesign): Voice {
     flagship: false,
     note: `Qwen3-TTS VoiceDesign · "${hint}${hint.length === 60 ? "…" : ""}"`,
     msPerChar: d.msPerChar,
+    showInAudiobook: d.showInAudiobook,
   };
 }
 
@@ -581,6 +583,7 @@ export async function previewDesignUnsaved(params: {
     samplesCount: 0,
     refPath: null,
     refText: null,
+    showInAudiobook: true,
   };
   return callSpeechDesign({
     text: params.text,

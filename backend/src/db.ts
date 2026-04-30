@@ -258,6 +258,15 @@ export function initDb() {
       "ALTER TABLE voice_samples ADD COLUMN samples_count INTEGER NOT NULL DEFAULT 0"
     );
   }
+  // show_in_audiobook — gates which voices appear in the audiobook
+  // tab's voice picker. With ~30 candidates (9 presets + N user
+  // samples + M design voices) the dropdown becomes unreadable.
+  // Default 1 = visible (existing voices stay visible after upgrade).
+  if (!vsCols.some((c) => c.name === "show_in_audiobook")) {
+    d.exec(
+      "ALTER TABLE voice_samples ADD COLUMN show_in_audiobook INTEGER NOT NULL DEFAULT 1"
+    );
+  }
 
   // voice_designs — text-described voices for the Qwen3-TTS
   // VoiceDesign model. Instead of a reference audio file, this holds
@@ -294,6 +303,11 @@ export function initDb() {
   }
   if (!vdCols.some((c) => c.name === "ref_text")) {
     d.exec("ALTER TABLE voice_designs ADD COLUMN ref_text TEXT");
+  }
+  if (!vdCols.some((c) => c.name === "show_in_audiobook")) {
+    d.exec(
+      "ALTER TABLE voice_designs ADD COLUMN show_in_audiobook INTEGER NOT NULL DEFAULT 1"
+    );
   }
 
   // Cleanup at startup: any documents still in `running` are leftovers

@@ -23,6 +23,11 @@ export interface Voice {
    *  `null` when no measurements exist yet. Used by the frontend
    *  for the initial ETA estimate of an audiobook run. */
   msPerChar?: number | null;
+  /** Whether this voice should appear in the audiobook tab's voice
+   *  picker. Settings can hide voices the user doesn't intend to
+   *  narrate with so the dropdown stays usable. Undefined = visible
+   *  (engines that don't track this stay backwards-compatible). */
+  showInAudiobook?: boolean;
 }
 
 export interface SynthesizeParams {

@@ -57,6 +57,8 @@ export interface VoiceDesign {
   /** Transcript of the reference audio (passed as ref_text to base
    *  clone, improves clone quality). */
   refText: string | null;
+  /** Whether this voice appears in the audiobook tab's voice picker. */
+  showInAudiobook: boolean;
 }
 
 interface Row {
@@ -71,6 +73,7 @@ interface Row {
   samples_count: number;
   ref_path: string | null;
   ref_text: string | null;
+  show_in_audiobook: number | null;
 }
 
 function rowToDesign(r: Row): VoiceDesign {
@@ -86,7 +89,16 @@ function rowToDesign(r: Row): VoiceDesign {
     samplesCount: r.samples_count ?? 0,
     refPath: r.ref_path ?? null,
     refText: r.ref_text ?? null,
+    showInAudiobook: (r.show_in_audiobook ?? 1) === 1,
   };
+}
+
+/** Toggle the audiobook-picker visibility flag. */
+export function setVoiceDesignVisibility(id: string, show: boolean): boolean {
+  const res = db()
+    .prepare("UPDATE voice_designs SET show_in_audiobook = ? WHERE id = ?")
+    .run(show ? 1 : 0, id);
+  return res.changes > 0;
 }
 
 export function listVoiceDesigns(): VoiceDesign[] {

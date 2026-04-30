@@ -26,9 +26,14 @@ const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
 export const audioRoutes = new Hono();
 
-// Voice catalog
+// Voice catalog. By default returns only voices flagged
+// `showInAudiobook=true` (so the audiobook tab's voice picker stays
+// readable). The Settings page passes `?showHidden=1` to also list
+// the ones the user has hidden — needed so toggles can flip them
+// back to visible.
 audioRoutes.get("/voices", (c) => {
-  return c.json({ voices: allVoices() });
+  const showHidden = c.req.query("showHidden") === "1";
+  return c.json({ voices: allVoices(showHidden) });
 });
 
 // Short sample in the requested voice — played on picker click.

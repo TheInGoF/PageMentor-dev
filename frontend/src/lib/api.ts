@@ -73,6 +73,9 @@ export interface Voice {
    *  Updated by the backend via EMA after each successful chunk.
    *  Null means: never synthesized successfully. */
   msPerChar?: number | null;
+  /** True iff this voice is currently selected to appear in the
+   *  audiobook tab's voice picker. Settings can flip this per voice. */
+  showInAudiobook?: boolean;
 }
 
 export interface CustomVoiceMeta {
@@ -84,6 +87,7 @@ export interface CustomVoiceMeta {
   bytes: number;
   seed: number;
   createdAt: string;
+  showInAudiobook?: boolean;
 }
 
 export interface VoiceDesignMeta {
@@ -96,6 +100,12 @@ export interface VoiceDesignMeta {
   createdAt: string;
   msPerChar?: number | null;
   samplesCount?: number;
+  showInAudiobook?: boolean;
+}
+
+export interface PresetVisibility {
+  voice: Voice;
+  visible: boolean;
 }
 
 export interface AudioTrack {
@@ -736,6 +746,14 @@ export const api = {
       request<{ ok: true }>(`/api/voices/custom/${id}`, { method: "DELETE" }),
     previewUrl: (id: string, text?: string) =>
       `/api/voices/custom/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
+    setVisibility: (id: string, showInAudiobook: boolean) =>
+      request<{ ok: true; showInAudiobook: boolean }>(
+        `/api/voices/custom/${id}/visibility`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ showInAudiobook }),
+        }
+      ),
   },
   voiceDesigns: {
     list: () => request<{ voices: VoiceDesignMeta[] }>("/api/voices/design"),
@@ -780,6 +798,26 @@ export const api = {
       request<{ ok: true; hasReference: boolean; refTextLength: number }>(
         `/api/voices/design/${id}/regenerate-reference`,
         { method: "POST" }
+      ),
+    setVisibility: (id: string, showInAudiobook: boolean) =>
+      request<{ ok: true; showInAudiobook: boolean }>(
+        `/api/voices/design/${id}/visibility`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ showInAudiobook }),
+        }
+      ),
+    listPresetVisibility: () =>
+      request<{ presets: PresetVisibility[] }>(
+        "/api/voices/presets/visibility"
+      ),
+    setPresetVisibility: (visible: string[]) =>
+      request<{ ok: true; visible: string[]; hidden: string[] }>(
+        "/api/voices/presets/visibility",
+        {
+          method: "PUT",
+          body: JSON.stringify({ visible }),
+        }
       ),
     previewUrl: (id: string, text?: string) =>
       `/api/voices/design/${id}/preview${text ? `?text=${encodeURIComponent(text)}` : ""}`,
@@ -904,7 +942,10 @@ export const api = {
       request<{ status: string }>(`/api/exam/${sessionId}`, { method: "DELETE" }),
   },
   audio: {
-    voices: () => request<{ voices: Voice[] }>("/api/audio/voices"),
+    voices: (showHidden: boolean = false) =>
+      request<{ voices: Voice[] }>(
+        "/api/audio/voices" + (showHidden ? "?showHidden=1" : "")
+      ),
     previewUrl: (
       voiceId: string,
       opts?: {

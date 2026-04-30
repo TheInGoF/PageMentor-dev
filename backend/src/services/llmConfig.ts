@@ -61,6 +61,12 @@ export interface LlmConfig {
    *  OOM/timeout risk depending on GPU. On the 3090, 4000 wasn't
    *  experimentally stable — 2000-2500 is safer. */
   ttsMaxChunk?: string;
+  /** Comma-separated preset voice IDs that are hidden from the
+   *  audiobook tab's voice picker. Default policy in
+   *  `audioVoiceVisibility` hides the ZH/JP/KR-native presets so the
+   *  picker doesn't drown in 30 entries; the user can override per
+   *  preset in Settings. */
+  hiddenAudiobookPresets?: string;
   /** Audiobookshelf server URL (e.g. http://192.168.188.5:13378).
    *  Empty = ABS integration disabled. */
   absUrl?: string;

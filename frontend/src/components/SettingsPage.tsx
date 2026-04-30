@@ -6,6 +6,7 @@ import {
   api,
   type CustomVoiceMeta,
   type OllamaStatus,
+  type PresetVisibility,
   type Voice,
   type VoiceDesignMeta,
 } from "../lib/api";
@@ -103,6 +104,9 @@ export function SettingsPage({ onBack }: Props) {
     file: File | null;
   }>({ label: "", gender: "female", refText: "", file: null });
   const [voiceDesigns, setVoiceDesigns] = useState<VoiceDesignMeta[]>([]);
+  const [presetVisibility, setPresetVisibility] = useState<PresetVisibility[]>(
+    []
+  );
   const [designDraft, setDesignDraft] = useState<{
     label: string;
     gender: "female" | "male";
@@ -208,6 +212,10 @@ export function SettingsPage({ onBack }: Props) {
       .list()
       .then((r) => setVoiceDesigns(r.voices))
       .catch(() => setVoiceDesigns([]));
+    api.voiceDesigns
+      .listPresetVisibility()
+      .then((r) => setPresetVisibility(r.presets))
+      .catch(() => setPresetVisibility([]));
   }, [open]);
 
   async function saveLlmConfig() {
@@ -553,6 +561,69 @@ export function SettingsPage({ onBack }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
       setDesignBusy(false);
+    }
+  }
+
+  /** Toggle whether a designed voice appears in the audiobook tab's
+   *  voice picker. Optimistic UI update + persistence in one go. */
+  async function toggleDesignVisibility(id: string, show: boolean) {
+    setVoiceDesigns((prev) =>
+      prev.map((v) => (v.id === id ? { ...v, showInAudiobook: show } : v))
+    );
+    try {
+      await api.voiceDesigns.setVisibility(id, show);
+      notifyVoicesChanged();
+    } catch (err) {
+      // Roll back on failure.
+      setVoiceDesigns((prev) =>
+        prev.map((v) =>
+          v.id === id ? { ...v, showInAudiobook: !show } : v
+        )
+      );
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  /** Toggle a single preset voice in/out of the audiobook picker.
+   *  Sends the full visible-list to the backend (replace semantics). */
+  async function togglePresetVisibility(voiceId: string, show: boolean) {
+    const next = presetVisibility.map((p) =>
+      p.voice.id === voiceId ? { ...p, visible: show } : p
+    );
+    setPresetVisibility(next);
+    const visibleIds = next.filter((p) => p.visible).map((p) => p.voice.id);
+    try {
+      await api.voiceDesigns.setPresetVisibility(visibleIds);
+      notifyVoicesChanged();
+    } catch (err) {
+      // Roll back on failure.
+      setPresetVisibility((prev) =>
+        prev.map((p) =>
+          p.voice.id === voiceId ? { ...p, visible: !show } : p
+        )
+      );
+      toast.show(
+        err instanceof Error ? err.message : t("settings.presets.saveFailed"),
+        "error"
+      );
+    }
+  }
+
+  /** Same for user-uploaded voice samples. */
+  async function toggleCustomVisibility(id: string, show: boolean) {
+    setCustomVoices((prev) =>
+      prev.map((v) => (v.id === id ? { ...v, showInAudiobook: show } : v))
+    );
+    try {
+      await api.customVoices.setVisibility(id, show);
+      notifyVoicesChanged();
+    } catch (err) {
+      setCustomVoices((prev) =>
+        prev.map((v) =>
+          v.id === id ? { ...v, showInAudiobook: !show } : v
+        )
+      );
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
   }
 
@@ -1249,6 +1320,24 @@ export function SettingsPage({ onBack }: Props) {
                       {v.refTextPresent && " · mit Transkript"}
                     </div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      toggleCustomVisibility(v.id, !(v.showInAudiobook ?? true))
+                    }
+                    title={t(
+                      v.showInAudiobook === false
+                        ? "settings.voices.unhide"
+                        : "settings.voices.hide"
+                    )}
+                    aria-label={t(
+                      v.showInAudiobook === false
+                        ? "settings.voices.unhide"
+                        : "settings.voices.hide"
+                    )}
+                  >
+                    {v.showInAudiobook === false ? "🙈" : "👁"}
+                  </Button>
                   <Button variant="ghost" onClick={() => playVoicePreview(v.id)}>
                     {t("settings.voices.preview")}
                   </Button>
@@ -1373,6 +1462,24 @@ export function SettingsPage({ onBack }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 sm:gap-1 sm:flex-none">
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        toggleDesignVisibility(v.id, !(v.showInAudiobook ?? true))
+                      }
+                      title={t(
+                        v.showInAudiobook === false
+                          ? "settings.voices.unhide"
+                          : "settings.voices.hide"
+                      )}
+                      aria-label={t(
+                        v.showInAudiobook === false
+                          ? "settings.voices.unhide"
+                          : "settings.voices.hide"
+                      )}
+                    >
+                      {v.showInAudiobook === false ? "🙈" : "👁"}
+                    </Button>
                     <Button
                       variant="ghost"
                       onClick={() => playDesignPreview(v.id)}
@@ -1536,6 +1643,65 @@ export function SettingsPage({ onBack }: Props) {
                 : t("settings.design.saveThisVoice")}
             </Button>
           </div>
+        </section>
+        )}
+
+        {tab === "tts" && (
+        <section className="flex flex-col gap-3">
+          <h3 className="text-xs uppercase tracking-wide text-neutral-500">
+            {t("settings.presets.title")}
+          </h3>
+          <p className="text-[11px] text-neutral-500">
+            {t("settings.presets.subtitle")}
+          </p>
+
+          {presetVisibility.length === 0 ? (
+            <p className="text-xs text-neutral-500 italic">
+              {t("settings.presets.empty")}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {presetVisibility.map((p) => (
+                <li
+                  key={p.voice.id}
+                  className="flex items-center gap-3 card p-3 bg-bg-elevated"
+                >
+                  <span className="text-base leading-none">
+                    {p.voice.gender === "female" ? "♀" : "♂"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-neutral-100 truncate">
+                      {p.voice.label}
+                    </div>
+                    <div className="text-[10px] text-neutral-500 font-mono truncate">
+                      {p.voice.language}
+                      {p.voice.engine ? ` · ${p.voice.engine}` : ""}
+                      {" · "}
+                      {p.voice.id}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      togglePresetVisibility(p.voice.id, !p.visible)
+                    }
+                    title={t(
+                      p.visible
+                        ? "settings.voices.hide"
+                        : "settings.voices.unhide"
+                    )}
+                    aria-label={t(
+                      p.visible
+                        ? "settings.voices.hide"
+                        : "settings.voices.unhide"
+                    )}
+                  >
+                    {p.visible ? "👁" : "🙈"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
         )}
 

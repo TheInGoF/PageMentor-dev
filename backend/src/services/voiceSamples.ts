@@ -48,6 +48,10 @@ export interface VoiceSample {
    *  audiobook run. */
   msPerChar: number | null;
   samplesCount: number;
+  /** Whether this voice appears in the audiobook tab's voice picker.
+   *  With ~30 candidates the dropdown becomes unreadable; users can
+   *  hide voices they don't intend to narrate with. */
+  showInAudiobook: boolean;
 }
 
 interface Row {
@@ -63,6 +67,7 @@ interface Row {
   created_at: string;
   ms_per_char: number | null;
   samples_count: number;
+  show_in_audiobook: number | null;
 }
 
 function rowToSample(r: Row): VoiceSample {
@@ -79,7 +84,16 @@ function rowToSample(r: Row): VoiceSample {
     createdAt: r.created_at,
     msPerChar: r.ms_per_char ?? null,
     samplesCount: r.samples_count ?? 0,
+    showInAudiobook: (r.show_in_audiobook ?? 1) === 1,
   };
+}
+
+/** Toggle the audiobook-picker visibility flag. */
+export function setVoiceSampleVisibility(id: string, show: boolean): boolean {
+  const res = db()
+    .prepare("UPDATE voice_samples SET show_in_audiobook = ? WHERE id = ?")
+    .run(show ? 1 : 0, id);
+  return res.changes > 0;
 }
 
 export function listVoiceSamples(): VoiceSample[] {

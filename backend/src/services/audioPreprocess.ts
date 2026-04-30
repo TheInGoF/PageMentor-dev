@@ -37,6 +37,65 @@ interface ChapterRow {
 
 const SYSTEM_DE = `Du bist ein Lektor, der wissenschaftliche Studientexte für die Vertonung als Hörbuch aufbereitet. Deine Aufgabe: forme den vorgelegten Text so um, dass er von einer TTS-Engine flüssig und natürlich vorgelesen werden kann — ohne den fachlichen Inhalt zu verändern, ohne Auslassungen, ohne Vereinfachungen.
 
+================================================================
+KRITISCHER FAILURE-KATALOG — diese Fehler NIE produzieren
+================================================================
+Diese Fehler haben in der Vergangenheit die TTS-Engine in Endlos-Schleifen
+geschickt und müssen unter allen Umständen vermieden werden:
+
+1) ABSCHNITTS- UND BEISPIEL-NUMMERN BLEIBEN ZIFFERN
+   FALSCH:  "Beispiel zwei Punkt eins"
+   FALSCH:  "Beispiel zwei Komma fünf"
+   FALSCH:  "Abbildung drei Punkt zwei"
+   RICHTIG: "Beispiel 2.1"
+   RICHTIG: "Beispiel 2.5"
+   RICHTIG: "Abbildung 3.2"
+   Begründung: TTS spricht "2.1" korrekt aus. Verbalisierte Form mischt
+   sich mit Dezimalzahlen ("zwei Komma fünf" = 2,5!) und triggert Loops,
+   wenn der Marker mehrfach im Kapitel auftaucht.
+
+2) JAHRESZAHLEN BLEIBEN ZIFFERN — NIEMALS AUSSCHREIBEN
+   FALSCH:  "Maslow neunzehnhundertneunundneunzig"
+   FALSCH:  "Berger zweitausendachtzehn Seite neununddreißig"
+   FALSCH:  "Sprenger zweitausendvierzehn"
+   RICHTIG: "Maslow 1999"
+   RICHTIG: "Berger 2018, Seite 39"
+   RICHTIG: "Sprenger 2014"
+
+3) NIE ZAHLWÖRTER ZUSAMMENKLEBEN
+   FALSCH:  "zweitausendelfteinundzwanzig"   (war "2011/2021")
+   FALSCH:  "Seite hundertvierf"             (war "S. 104 f.")
+   FALSCH:  "zwehaufachtzig"                 (war "2.80")
+   FALSCH:  "Beispiel zwei Punkt zwehaufneun"
+   RICHTIG: "2011 und 2021"   oder einfach "2011, 2021"
+   RICHTIG: "Seite 104 und folgende"
+   RICHTIG: "2.80"
+   Wenn du eine Zahl nicht sauber verbalisieren kannst: ZIFFERN STEHEN
+   LASSEN. Lieber eine Ziffer als ein gemashter Wortbrei.
+
+4) "f." UND "ff." NACH SEITENZAHL = "und folgende"
+   "S. 104 f."  → "Seite 104 und folgende"
+   "S. 22 ff."  → "Seite 22 und folgende"
+   Niemals an die Zahl anschweißen ("hundertvierf"). Niemals als nackten
+   Buchstaben "f" stehen lassen.
+
+5) META-MARKER NICHT REPETITIV WIEDERHOLEN
+   Wenn das Kapitel 30 Beispiele in Folge enthält ("Beispiel 2.1",
+   "Beispiel 2.2", … "Beispiel 2.30"), präfixiere NICHT jeden Eintrag mit
+   "Ein Beispiel hierzu ist Beispiel zwei Punkt X". Diese Wiederholung
+   bringt die TTS-Engine in autoregressive Loops.
+   STATTDESSEN: Marker als Übergang einmal pro Block ("Ein Beispiel:") und
+   bei den nachfolgenden gleichartigen Markern den Marker komplett weglassen
+   und direkt mit dem Beispiel-Inhalt weitermachen.
+
+6) WORTGLEICHE SÄTZE NICHT ZWEIMAL HINTEREINANDER
+   Wenn ein Satz wie "Bedürfnisse nach McClelland sind Leistung, Beziehung
+   und Macht." als Überschrift UND wenige Zeilen später als Fließtext-Satz
+   auftaucht: einen davon umformulieren oder weglassen. Identische Sätze
+   im selben Chunk sind Loop-Trigger.
+
+================================================================
+
 WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchlaufen. Folgende Transformationen wurden schon gemacht — mache sie NICHT rückgängig:
 - Standard-Abkürzungen sind ausgeschrieben: „zum Beispiel" (statt „z. B."), „das heißt" (statt „d. h."), „unter anderem" (statt „u. a."), „in der Regel" (statt „i. d. R."), „beziehungsweise", „circa", „beispielsweise", „gegebenenfalls", „inklusive", „und so weiter", „und andere" etc.
 - Titel vor Namen: „Doktor" / „Professor" / „Sankt" (statt „Dr." / „Prof." / „St.")
@@ -618,19 +677,83 @@ export async function preprocessChapterForAudio(params: {
       );
     }
 
+    // Numeral-bleed guard: small models (Gemma 2B in particular) like
+    // to verbalize section numbers and years to mashed-up word
+    // compounds that make TTS loop. fixGermanNumeralBleed corrects
+    // the recoverable cases ("Beispiel zwei Punkt fünf" → "Beispiel 2.5",
+    // "zweitausendachtzehn" → "2018") and flags the unrecoverable
+    // ones ("zwehaufneun", "hundertvierf") for retry.
+    let firstPass = fixGermanNumeralBleed(piece);
+    let bestPiece = firstPass.text;
+    let bestRejects = firstPass.rejected;
+
+    if (firstPass.rejected.length > 0) {
+      console.warn(
+        `[audio-preprocess]${label} numeral bleed (${firstPass.rejected.length}): ` +
+          `${firstPass.rejected.slice(0, 5).join(", ")}` +
+          `${firstPass.rejected.length > 5 ? ", …" : ""} — retry with feedback`
+      );
+      const retrySystem =
+        system +
+        "\n\n================================================================\n" +
+        "RETRY-FEEDBACK\n" +
+        "================================================================\n" +
+        "Dein vorheriger Versuch produzierte unsprechbare Wort-Mashes:\n" +
+        firstPass.rejected.map((r) => `  - "${r}"`).join("\n") +
+        "\n\nLass an diesen Stellen die ZIFFERN stehen. Verbalisiere Jahres- und " +
+        "Abschnittszahlen NICHT zu deutschen Wort-Compounds. " +
+        '"2018" bleibt "2018", "Beispiel 2.5" bleibt "Beispiel 2.5".\n';
+      const retry = await generate({
+        prompt: chunk,
+        system: retrySystem,
+        model: params.model,
+        options: ollamaOptions,
+      });
+      const retryPiece = retry.response?.trim() ?? "";
+      if (retryPiece.length >= 20) {
+        const retryPass = fixGermanNumeralBleed(retryPiece);
+        if (retryPass.rejected.length < firstPass.rejected.length) {
+          bestPiece = retryPass.text;
+          bestRejects = retryPass.rejected;
+          result = retry;
+          console.log(
+            `[audio-preprocess]${label} retry improved: ` +
+              `${firstPass.rejected.length} → ${retryPass.rejected.length} rejects`
+          );
+        } else {
+          console.warn(
+            `[audio-preprocess]${label} retry did not improve ` +
+              `(${retryPass.rejected.length} rejects), keeping first attempt`
+          );
+        }
+      }
+    }
+
+    if (bestRejects.length > 0) {
+      console.warn(
+        `[audio-preprocess]${label} ${bestRejects.length} unrecoverable garbled tokens persist: ` +
+          bestRejects.join(", ")
+      );
+    }
+
     lastModel = result.model;
-    responses.push(piece);
+    responses.push(bestPiece);
     console.log(
       `[audio-preprocess]${label} done in ${((Date.now() - t0) / 1000).toFixed(1)}s ` +
-        `(input ${chunk.length}c → output ${piece.length}c, model=${result.model})`
+        `(input ${chunk.length}c → output ${bestPiece.length}c, model=${result.model})`
     );
   }
 
   // Join sub-chunk outputs with double newline — matches the
   // paragraph convention used elsewhere in the system.
   const combined = responses.join("\n\n");
+  // Run the numeral-bleed fixer once more on the joined output as a
+  // belt-and-suspenders pass — picks up patterns that span chunk
+  // boundaries (rare but possible when a section ref straddles two
+  // sub-chunks) and re-applies the f./ff. correction after stripWrappers.
+  const numeralFixed = fixGermanNumeralBleed(combined).text;
   const cleaned = stripProblematicCharsForTts(
-    restoreHeadingParagraphs(stripWrappers(combined))
+    restoreHeadingParagraphs(stripWrappers(numeralFixed))
   );
   if (!cleaned || cleaned.length < 20) {
     throw new Error(
@@ -839,6 +962,119 @@ function restoreHeadingParagraphs(text: string): string {
     /^(\d+(?:\.\d+){0,3}\s+[A-ZÄÖÜ][^\n.]{2,80}\.)\s+(?=[A-ZÄÖÜ])/gm,
     "$1\n\n"
   );
+}
+
+/** German number-word → integer (0-99). Used by `fixGermanNumeralBleed`
+ *  to undo the LLM's habit of verbalizing section numbers and years. */
+const GERMAN_NUMBER_WORDS: Record<string, number> = (() => {
+  const map: Record<string, number> = {
+    null: 0,
+    ein: 1, eins: 1, eine: 1, einer: 1, einen: 1, einem: 1,
+    zwei: 2, zwo: 2,
+    drei: 3, vier: 4, fünf: 5, sechs: 6, sieben: 7, acht: 8, neun: 9,
+    zehn: 10, elf: 11, zwölf: 12,
+    dreizehn: 13, vierzehn: 14, fünfzehn: 15, sechzehn: 16,
+    siebzehn: 17, achtzehn: 18, neunzehn: 19,
+  };
+  const tens: Array<[string, number]> = [
+    ["zwanzig", 20], ["dreißig", 30], ["vierzig", 40], ["fünfzig", 50],
+    ["sechzig", 60], ["siebzig", 70], ["achtzig", 80], ["neunzig", 90],
+  ];
+  const ones: Array<[string, number]> = [
+    ["ein", 1], ["zwei", 2], ["drei", 3], ["vier", 4], ["fünf", 5],
+    ["sechs", 6], ["sieben", 7], ["acht", 8], ["neun", 9],
+  ];
+  for (const [tWord, tNum] of tens) {
+    map[tWord] = tNum;
+    for (const [oWord, oNum] of ones) {
+      map[`${oWord}und${tWord}`] = tNum + oNum;
+    }
+  }
+  return map;
+})();
+
+function germanWordToInt(word: string): number | null {
+  const v = GERMAN_NUMBER_WORDS[word.toLowerCase()];
+  return v !== undefined ? v : null;
+}
+
+/** Catches and corrects the specific failure modes Gemma-class models
+ *  produce on German technical text under prompt-window stress:
+ *
+ *    - Section/example refs verbalized to words ("Beispiel zwei Punkt fünf"
+ *      or, worse, "Beispiel zwei Komma fünf") → restore as "Beispiel 2.5".
+ *    - Years verbalized ("zweitausendachtzehn") → restore as "2018".
+ *    - Page f./ff. that survived ("Seite 104 ff.") → "Seite 104 und folgende".
+ *    - Mashed-together garbage compounds ("zweitausendelfteinundzwanzig",
+ *      "zwehaufachtzig", "hundertvierf") — unrecoverable, returned as
+ *      `rejected[]` so the caller can retry the LLM with feedback.
+ *
+ *  Runs per sub-chunk so each chunk gets its own retry chance, and once
+ *  more on the joined output as a final safety net. */
+function fixGermanNumeralBleed(text: string): {
+  text: string;
+  rejected: string[];
+} {
+  const rejected: string[] = [];
+  let result = text;
+
+  // 1) Section refs: "Beispiel zwei Punkt fünf" / "Beispiel zwei Komma fünf"
+  //    → "Beispiel 2.5". Both separators get folded to "." since these are
+  //    section numbers, not decimals.
+  const sectionRefRe =
+    /\b(Beispiel|Beispiele|Abschnitt|Kapitel|Abbildung|Abbildungen|Tabelle|Tabellen|Formel|Formeln|Aufgabe|Aufgaben|Übung|Übungen|Frage|Fragen)\s+([A-Za-zäöüÄÖÜß]+)\s+(?:Punkt|Komma)\s+([A-Za-zäöüÄÖÜß]+)\b/g;
+  result = result.replace(sectionRefRe, (match, kind: string, aWord: string, bWord: string) => {
+    const a = germanWordToInt(aWord);
+    const b = germanWordToInt(bWord);
+    if (a !== null && b !== null) return `${kind} ${a}.${b}`;
+    // Section context confirmed by the noun, but second part is gibberish
+    // ("Beispiel zwei Punkt zwehaufneun") → unrecoverable.
+    if (a !== null && b === null) rejected.push(match);
+    return match;
+  });
+
+  // 2) Verbalized years back to digits.
+  const yearRe =
+    /\b(neunzehnhundert|achtzehnhundert|zweitausend)([a-zäöüß]+)\b/gi;
+  result = result.replace(yearRe, (match, prefix: string, rest: string) => {
+    const lower = prefix.toLowerCase();
+    const century =
+      lower === "neunzehnhundert" ? 1900
+      : lower === "achtzehnhundert" ? 1800
+      : 2000;
+    const offset = germanWordToInt(rest);
+    if (offset !== null && offset >= 0 && offset <= 99) {
+      return String(century + offset);
+    }
+    rejected.push(match);
+    return match;
+  });
+
+  // 3) "Seite 104 f." / "Seite 104 ff." → "Seite 104 und folgende".
+  result = result.replace(
+    /\b(Seite\s+\d+)\s*ff?\.\s*/g,
+    "$1 und folgende ",
+  );
+
+  // 4) Garbled compound patterns that are flat-out unrecoverable.
+  const garbledPatterns: RegExp[] = [
+    // "zwehaufachtzig", "drehaufneun", "viehaufzehn" — fake digit-place
+    // compounds (decimal-point readings gone wrong).
+    /\b(?:zweh|dreh|vieh|fünh|siebh|neuh)auf[a-zäöüß]{2,}\b/gi,
+    // "hundertvierf", "tausendvierf" — page reference cut at "f"
+    // (lost the "olgende" suffix). The space-after variant is fixed
+    // by rule 3 above; this catches the no-space version.
+    /\b(?:hundert|tausend)[a-zäöüß]*vierf\b/gi,
+    // Year-on-year jamming: "zweitausendelfteinundzwanzig",
+    // "neunzehnhundertneunundneunzigzweitausend".
+    /\b(?:zweitausend|neunzehnhundert|achtzehnhundert)[a-zäöüß]{15,}\b/gi,
+  ];
+  for (const re of garbledPatterns) {
+    for (const m of result.matchAll(re)) rejected.push(m[0]);
+  }
+
+  // De-dup rejects so the retry feedback list isn't noisy.
+  return { text: result, rejected: [...new Set(rejected)] };
 }
 
 /** Clear the cache — e.g. when the user changes the model override

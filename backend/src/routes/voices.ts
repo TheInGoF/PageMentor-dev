@@ -14,6 +14,7 @@ import {
   deleteVoiceSample,
   getVoiceSample,
   listVoiceSamples,
+  setVoiceSampleVisibility,
   type Gender,
 } from "../services/voiceSamples";
 import {
@@ -21,11 +22,17 @@ import {
   deleteVoiceDesign,
   getVoiceDesign,
   listVoiceDesigns,
+  setVoiceDesignVisibility,
 } from "../services/voiceDesigns";
 import { writeFileSync } from "node:fs";
 import { synthesizePreview } from "../tts/synth";
 import { previewDesignUnsaved, ensureDesignReference } from "../tts/engines/qwen";
 import { designRefPath, setDesignReference } from "../services/voiceDesigns";
+import {
+  listPresetVisibility,
+  hiddenPresetIds,
+} from "../services/audioVoiceVisibility";
+import { setLlmConfig } from "../services/llmConfig";
 
 export const voiceRoutes = new Hono();
 
@@ -371,6 +378,55 @@ voiceRoutes.delete("/custom/:id", (c) => {
   const ok = deleteVoiceSample(c.req.param("id"));
   if (!ok) return c.json({ error: "not found" }, 404);
   return c.json({ ok: true });
+});
+
+// ---- Audiobook-picker visibility toggles --------------------------
+//
+// Per voice: PATCH ../visibility { showInAudiobook: bool }
+// Per preset list: GET /presets/visibility, PUT /presets/visibility
+//
+// All three feed into `allVoices()` and the audiobook tab's voice
+// picker. Synthesis still works for hidden voices — the UI just
+// filters the dropdown so it's readable with N voices configured.
+voiceRoutes.patch("/custom/:id/visibility", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req
+    .json<{ showInAudiobook?: boolean }>()
+    .catch(() => ({} as { showInAudiobook?: boolean }));
+  const show = body.showInAudiobook !== false;
+  const ok = setVoiceSampleVisibility(id, show);
+  if (!ok) return c.json({ error: "not found" }, 404);
+  return c.json({ ok: true, showInAudiobook: show });
+});
+
+voiceRoutes.patch("/design/:id/visibility", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req
+    .json<{ showInAudiobook?: boolean }>()
+    .catch(() => ({} as { showInAudiobook?: boolean }));
+  const show = body.showInAudiobook !== false;
+  const ok = setVoiceDesignVisibility(id, show);
+  if (!ok) return c.json({ error: "not found" }, 404);
+  return c.json({ ok: true, showInAudiobook: show });
+});
+
+voiceRoutes.get("/presets/visibility", (c) => {
+  return c.json({ presets: listPresetVisibility() });
+});
+
+voiceRoutes.put("/presets/visibility", async (c) => {
+  const body = await c.req
+    .json<{ visible?: string[] }>()
+    .catch(() => ({} as { visible?: string[] }));
+  const visible = new Set(body.visible ?? []);
+  // Hidden = every preset that is NOT in `visible`. Persist as a
+  // comma-separated string in llm-config.
+  const allPresets = listPresetVisibility();
+  const hidden = allPresets
+    .filter((p) => !visible.has(p.voice.id))
+    .map((p) => p.voice.id);
+  setLlmConfig({ hiddenAudiobookPresets: hidden.join(",") });
+  return c.json({ ok: true, hidden, visible: Array.from(visible) });
 });
 
 voiceRoutes.get("/custom/:id/preview", async (c) => {
