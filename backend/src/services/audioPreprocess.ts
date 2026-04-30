@@ -94,6 +94,41 @@ geschickt und müssen unter allen Umständen vermieden werden:
    auftaucht: einen davon umformulieren oder weglassen. Identische Sätze
    im selben Chunk sind Loop-Trigger.
 
+7) ANAPHORISCHE WIEDERHOLUNGEN IN AUFZÄHLUNGEN ZUSAMMENFASSEN
+   Wenn vier Items in einer Auflistung jeweils dieselbe Vorsilbe tragen,
+   kollabiere sie zur Kurzform. Der Bezug ist im Vorsatz schon eingeführt,
+   die Wiederholung treibt den Decoder in Echo-Loops.
+   FALSCH:  "das Bedürfnis nach Leistung, das Bedürfnis nach Macht,
+             das Bedürfnis nach Zugehörigkeit und das Bedürfnis nach Beziehung"
+   FALSCH:  "die Theorie von Maslow, die Theorie von Herzberg und die Theorie
+             von Sprenger"
+   RICHTIG: "Leistung, Macht, Zugehörigkeit und Beziehung"  (Vorsatz hat
+            "Bedürfnisse" schon etabliert)
+   RICHTIG: "die Theorien von Maslow, Herzberg und Sprenger"
+
+8) ENGLISCHE FACHBEGRIFFE EINDEUTSCHEN ODER UMSCHREIBEN
+   Englische Bindestrich-Compounds in deutschem Fließtext sind Tokenizer-
+   Stolperstellen für deutsche TTS-Voices.
+   FALSCH:  "Motivatoren oder Content-Faktoren"
+   FALSCH:  "Hard-Skills versus Soft-Skills"
+   FALSCH:  "die Performance-Indikatoren"
+   RICHTIG: "Motivatoren oder Inhalts-Faktoren"
+   RICHTIG: "harte Fachkompetenzen versus soziale Kompetenzen"
+   RICHTIG: "die Leistungs-Indikatoren"
+   Wenn keine geläufige deutsche Übersetzung existiert (z.B. Eigennamen,
+   Markenbegriffe wie "Coaching", "Feedback", "Burnout"), lasse das Wort
+   stehen — es ist im Deutschen lehnwortlich etabliert.
+
+9) AUFZÄHLUNGEN MIT MEHR ALS VIER KOMMA-ITEMS SPLITTEN
+   Sechs+ Items im selben Atemzug verlieren die Prosodie-Linie und
+   triggern bei Long-Form-TTS Schleifen. Splitte in zwei Sätze.
+   FALSCH:  "Zu den Motivatoren zählen Leistungserfolg, Anerkennung,
+             die Arbeit selbst, Verantwortung, Aufstiegsmöglichkeiten
+             und Entfaltungsmöglichkeiten."
+   RICHTIG: "Zu den Motivatoren zählen Leistungserfolg und Anerkennung.
+             Außerdem die Arbeit selbst, Verantwortung sowie Aufstiegs-
+             und Entfaltungsmöglichkeiten."
+
 ================================================================
 
 WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchlaufen. Folgende Transformationen wurden schon gemacht — mache sie NICHT rückgängig:
@@ -349,6 +384,31 @@ GOAL OF THE TRANSFORMATION
 - Pauses come from periods and commas only. The semicolon (;) is FORBIDDEN — it derails the TTS engine. Where you would use a semicolon: either a new sentence (period) or a comma.
 - Em-dashes (—) and en-dashes (–) are also forbidden. Replace with comma or new sentence.
 - SENTENCE-LENGTH WINDOW: max 20 words per sentence (technical text max 15), but also not relentless telegram style. A stream of 4-word sentences sounds monotone and infantilizing. Aim for a mix of 8 to 18 words with the occasional 5-word sentence for accent. The listener cannot scroll back — every sentence must stand on its own, but the rhythm should still feel alive.
+
+================================================================
+TTS LOOP HAZARDS — patterns that trip the autoregressive decoder
+================================================================
+A) NO ANAPHORIC REPETITION IN ENUMERATIONS
+   When four items in a list share the same prefix, collapse them.
+   The reference is established in the lead-in clause; repeating it
+   drives the decoder into echo loops.
+   WRONG:  "the need for achievement, the need for power, the need
+            for affiliation, and the need for relationship"
+   RIGHT:  "achievement, power, affiliation, and relationship"
+
+B) DON'T STACK MORE THAN FOUR COMMA-ITEMS IN ONE SENTENCE
+   Six+ items in a single breath lose prosodic coherence and trigger
+   long-form loops. Split into two sentences.
+   WRONG:  "Motivators include achievement, recognition, the work
+            itself, responsibility, advancement, and growth."
+   RIGHT:  "Motivators include achievement and recognition. They
+            also include the work itself, responsibility, and
+            opportunities for advancement and growth."
+
+C) NO IDENTICAL SENTENCES TWICE IN THE SAME CHUNK
+   If the same sentence appears as a heading and again as flowing
+   prose, rewrite one or drop it. Identical sentences within one
+   chunk are loop triggers.
 
 ================================================================
 1. EXPAND ABBREVIATIONS COMPLETELY

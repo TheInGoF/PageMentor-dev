@@ -1,6 +1,6 @@
 import { join } from "path";
 import { randomUUID } from "crypto";
-import { existsSync, mkdirSync, rmSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, rmSync, readdirSync, statSync, writeFileSync } from "fs";
 import { createHash } from "crypto";
 import { join as pathJoin } from "path";
 import { db } from "../db";
@@ -834,6 +834,20 @@ async function synthesizeChapter(params: {
         params.onChunk(i + 1, segments.length);
         skippedCount++;
         continue;
+      }
+
+      // Persist the exact text we send to the synth engine alongside
+      // the resulting MP3. Useful for reproducing TTS hangs/loops:
+      // when chunk N fails deterministically, you can grab the .txt
+      // and replay it standalone against the sidecar to bisect.
+      const textDumpPath = join(
+        tmpDir,
+        `chunk-${String(i).padStart(3, "0")}-${cacheKey}.txt`
+      );
+      try {
+        writeFileSync(textDumpPath, plainText, "utf8");
+      } catch (err) {
+        console.warn(`[tts] could not write chunk-text dump:`, err);
       }
 
       const t0 = Date.now();
