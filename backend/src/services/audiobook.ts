@@ -122,7 +122,13 @@ async function resetGpuViaArbiter(reason: string = "cancel"): Promise<void> {
  *  during long-form decode collides with Ollama's resident weights
  *  → first chunk hangs and the watchdog kills the sidecar.
  *  Failures are logged but non-fatal: if VRAM happens to be fine
- *  anyway, the run still has a chance. */
+ *  anyway, the run still has a chance.
+ *
+ *  After the arbiter reset returns, the sidecar still needs ~20-30 s
+ *  to reload the Qwen model. We poll /health until it reports ok=true
+ *  (or give up after 90 s). Without this wait the first synth call
+ *  hits the sidecar mid-boot → 503 → chapter failure → circuit
+ *  breaker trips after three. */
 async function preflightGpuReset(): Promise<void> {
   try {
     await resetGpuViaArbiter("preflight");
@@ -131,7 +137,47 @@ async function preflightGpuReset(): Promise<void> {
       "[audiobook] preflight GPU reset failed — proceeding anyway:",
       err,
     );
+    return;
   }
+  await waitForSidecarReady();
+}
+
+async function waitForSidecarReady(): Promise<void> {
+  const base = effective("qwenTtsUrl", "PM_QWEN_TTS_URL");
+  if (!base) return;
+  const healthUrl = base.replace(/\/+$/, "") + "/health";
+  const apiKey = effective("qwenTtsApiKey", "PM_QWEN_TTS_API_KEY");
+  const headers: Record<string, string> = {};
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  const deadline = Date.now() + 90_000;
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    attempt++;
+    try {
+      const res = await fetch(healthUrl, {
+        method: "GET",
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean };
+        if (body.ok === true) {
+          console.log(
+            `[audiobook] preflight: sidecar ready after ${attempt} health probes`,
+          );
+          return;
+        }
+      }
+    } catch {
+      // connect refused / timeout — sidecar still booting
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  console.warn(
+    "[audiobook] preflight: sidecar not ready after 90 s — proceeding anyway, " +
+      "first chunk may fail",
+  );
 }
 
 export async function generateAudiobook(params: {
