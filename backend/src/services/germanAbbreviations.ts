@@ -99,6 +99,37 @@ const MARKDOWN_STRIP: Rule[] = [
   { pattern: /:\.\s/g, replacement: ": " },
 ];
 
+/** "und/oder" → "oder". Im Originaltext oft als Schrägstrich-Konstrukt
+ *  ("und/oder") oder schon als zwei aufeinanderfolgende Konjunktionen
+ *  ("und oder") nach einem missglückten Cleanup. Beides ist für TTS
+ *  Mist: zwei Konjunktionen direkt nebeneinander verwirren den Decoder
+ *  und triggern bei Qwen-Long-Form Stalls. "oder" allein deckt die
+ *  inklusive Bedeutung im Hörfluss völlig ab. */
+const DE_AND_OR: Rule[] = [
+  { pattern: /\bund\s*\/\s*oder\b/gi, replacement: "oder" },
+  { pattern: /\bund\s+oder\b/gi, replacement: "oder" },
+];
+
+/** Adjektiv-Bindestrich-Compounds zwischen zwei Kleinbuchstaben-
+ *  Wörtern: "technisch-bürokratisch", "kulturell-visionär",
+ *  "rot-grün". Phonetisch beim Hörbuch dieselbe Aussprache wie mit
+ *  Komma, aber für Qwen-Long-Form deutlich unproblematischer (kein
+ *  freistehendes Sonderzeichen). Großgeschriebene Compounds wie
+ *  "Maslow-Pyramide" werden NICHT angefasst — das sind echte
+ *  Bindestrich-Eigennamen, die bleiben.
+ *
+ *  Spezialfall: Adjektive nicht aufbrechen wenn das Adjektiv-Paar
+ *  ein semantisches Compound bildet ("schwarz-weiß", "rot-grün") —
+ *  hier akzeptieren wir den minimalen Aussprache-Unterschied
+ *  zwischen "schwarz, weiß" und "schwarz-weiß", weil sich der
+ *  Bedeutungsverlust im Hörfluss nicht bemerkbar macht. */
+const DE_ADJECTIVE_HYPHEN: Rule[] = [
+  {
+    pattern: /\b([a-zäöüß]+)-([a-zäöüß]+)\b/g,
+    replacement: "$1, $2",
+  },
+];
+
 /** German "Ergänzungsstrich" — Suffix-Bindestrich vor "und/oder/sowie/bzw."
  *  als Kurzform für gemeinsamen Wortstamm:
  *    "Effizienz- und Effektivitätskriterien"  → "Effizienzkriterien und Effektivitäts­kriterien"
@@ -352,6 +383,12 @@ const DE_ALL: Rule[] = [
   // Hyphen-ellipsis BEFORE compound abbreviations so the freestanding
   // hyphen doesn't accidentally match other rules.
   ...DE_HYPHEN_ELLIPSIS,
+  // "und/oder" → "oder" BEFORE adjective-hyphen, so the "/" doesn't
+  // confuse the latter pattern.
+  ...DE_AND_OR,
+  // Adjective-hyphen between lowercase words → comma. Run before
+  // compound abbreviations because some abbreviations contain "-".
+  ...DE_ADJECTIVE_HYPHEN,
   ...DE_COMPOUND,
   ...DE_TITLES,
   ...DE_WITH_NUMBER,

@@ -129,6 +129,27 @@ geschickt und müssen unter allen Umständen vermieden werden:
              Außerdem die Arbeit selbst, Verantwortung sowie Aufstiegs-
              und Entfaltungsmöglichkeiten."
 
+10) KONJUNKTIONEN NICHT IN HOHER DICHTE STAPELN
+    Mehrere "und" / "oder" / "sowie" / "bzw." in einem einzigen Satz
+    erhöhen das Loop-Risiko bei Long-Form-TTS deutlich — der Decoder
+    rutscht in die "noch ein Item, noch ein Item"-Schleife. Pro Satz
+    maximal eine Konjunktion. Splitte sonst in zwei Sätze.
+    FALSCH:  "Der Teamleiter wird durch Wettbewerb und durch das Team
+              gewählt und durch das Management bestätigt sowie nach
+              sechs Monaten neu evaluiert."
+    RICHTIG: "Der Teamleiter wird durch Wettbewerb und durch das Team
+              gewählt. Das Management bestätigt die Wahl. Nach sechs
+              Monaten erfolgt eine Neu-Evaluation."
+
+11) KONSTRUKTE WIE "und/oder" KOMPLETT AUFLÖSEN
+    Schrägstrich-Konjunktionen ("und/oder", "bzw./oder") sind in
+    geschriebenem Text Schreib-Ökonomie, in gesprochenem Text Lärm.
+    Reduziere auf "oder" — die inklusive Bedeutung deckt sie im
+    Hörfluss völlig ab.
+    FALSCH:  "durch Wettbewerb und/oder durch das Team gewählt"
+    FALSCH:  "durch Wettbewerb und oder durch das Team gewählt"
+    RICHTIG: "durch Wettbewerb oder durch das Team gewählt"
+
 ================================================================
 
 WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchlaufen. Folgende Transformationen wurden schon gemacht — mache sie NICHT rückgängig:
