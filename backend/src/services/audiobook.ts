@@ -91,11 +91,11 @@ export function cancelAudiobook(docId: string): boolean {
   return true;
 }
 
-async function resetGpuViaArbiter(): Promise<void> {
+async function resetGpuViaArbiter(reason: string = "cancel"): Promise<void> {
   const base = effective("qwenTtsUrl", "PM_QWEN_TTS_URL");
   if (!base) {
     console.warn(
-      "[audiobook] cancel: no arbiter URL configured — Sidecar may " +
+      `[audiobook] ${reason}: no arbiter URL configured — Sidecar may ` +
         "keep generating until its own timeout",
     );
     return;
@@ -104,7 +104,7 @@ async function resetGpuViaArbiter(): Promise<void> {
   const apiKey = effective("qwenTtsApiKey", "PM_QWEN_TTS_API_KEY");
   const headers: Record<string, string> = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  console.log(`[audiobook] cancel: hard-resetting GPU via ${url}`);
+  console.log(`[audiobook] ${reason}: hard-resetting GPU via ${url}`);
   const res = await fetch(url, {
     method: "POST",
     headers,
@@ -112,6 +112,25 @@ async function resetGpuViaArbiter(): Promise<void> {
   });
   if (!res.ok) {
     throw new Error(`arbiter reset ${res.status}`);
+  }
+}
+
+/** Pre-flight before any TTS run: kick Ollama out of VRAM so Qwen
+ *  has a clean slate. The user often runs Preprocess first (which
+ *  loads gemma3:e4b @128k = ~10-12 GB resident with KEEP_ALIVE),
+ *  then triggers Audiobook — without this reset, Qwen's KV growth
+ *  during long-form decode collides with Ollama's resident weights
+ *  → first chunk hangs and the watchdog kills the sidecar.
+ *  Failures are logged but non-fatal: if VRAM happens to be fine
+ *  anyway, the run still has a chance. */
+async function preflightGpuReset(): Promise<void> {
+  try {
+    await resetGpuViaArbiter("preflight");
+  } catch (err) {
+    console.warn(
+      "[audiobook] preflight GPU reset failed — proceeding anyway:",
+      err,
+    );
   }
 }
 
@@ -192,6 +211,12 @@ export async function generateAudiobook(params: {
       voice: voice?.label ?? voiceId,
     }),
   });
+
+  // Kick Ollama out of VRAM before the first synth touches Qwen.
+  // ~15 s overhead but eliminates the "first-chunk-hangs-then-
+  // watchdog-restarts-sidecar" failure mode the user keeps hitting
+  // after a Preprocess run leaves gemma3:e4b camping in VRAM.
+  await preflightGpuReset();
 
   // Check preprocessor availability once before the loop — avoids
   // N Ollama pings, the `pickProvider()` cache lasts 30 s.
@@ -574,6 +599,9 @@ export async function generateSingleChapterAudio(params: {
     total: 1,
     message: row.title || chapterLabel(pickLang(row.language), row.number),
   });
+
+  // Same VRAM-clearing rationale as in generateAudiobook.
+  await preflightGpuReset();
 
   try {
     const { durationMs } = await synthesizeChapter({
