@@ -99,6 +99,31 @@ const MARKDOWN_STRIP: Rule[] = [
   { pattern: /:\.\s/g, replacement: ": " },
 ];
 
+/** German "Ergänzungsstrich" — Suffix-Bindestrich vor "und/oder/sowie/bzw."
+ *  als Kurzform für gemeinsamen Wortstamm:
+ *    "Effizienz- und Effektivitätskriterien"  → "Effizienzkriterien und Effektivitäts­kriterien"
+ *  in der Schrift völlig korrekt, aber für TTS phonetisch problematisch:
+ *  der freistehende Bindestrich verwirrt den Tokenizer (Pause? Stille?
+ *  Bindestrich-Spelling-out?), und Qwen-Long-Form tendiert an dieser
+ *  Stelle zu Decoder-Stalls.
+ *
+ *  Pragmatische Lösung: Bindestrich entfernen und durch Komma ersetzen.
+ *  Phonetik > Orthographie — TTS bekommt eine saubere kurze Pause statt
+ *  eines mehrdeutigen Sonderzeichens. Bedeutungsverlust („Effizienz" statt
+ *  „Effizienz­kriterien") ist im Hörfluss vernachlässigbar, weil der
+ *  Hörer den Kontext aus dem zweiten Compound-Wort sofort ergänzt.
+ *
+ *  Wortmorphologische Vollexpansion ("Effizienzkriterien und
+ *  Effektivitätskriterien") wäre ideal, scheitert aber ohne deutsche
+ *  Morphologie-Library am sauberen Suffix-Split. */
+const DE_HYPHEN_ELLIPSIS: Rule[] = [
+  {
+    pattern:
+      /\b([A-Za-zÄÖÜäöüß]+)-(\s+(?:und|oder|sowie|bzw\.))\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß]+)/g,
+    replacement: "$1,$2 $3",
+  },
+];
+
 /** Multi-token abbreviations with periods: z. B., d. h., i. d. R., …
  *  Also match variants without a space ("z.B.") and without trailing dot. */
 const DE_COMPOUND: Rule[] = [
@@ -324,6 +349,9 @@ const DE_ALL: Rule[] = [
   // Headers MUST run after MARKDOWN_STRIP — "## Übung 1.7:" first
   // becomes "Übung 1.7:" and only then matches the header pattern.
   ...DE_HEADERS,
+  // Hyphen-ellipsis BEFORE compound abbreviations so the freestanding
+  // hyphen doesn't accidentally match other rules.
+  ...DE_HYPHEN_ELLIPSIS,
   ...DE_COMPOUND,
   ...DE_TITLES,
   ...DE_WITH_NUMBER,
