@@ -115,70 +115,6 @@ async function resetGpuViaArbiter(reason: string = "cancel"): Promise<void> {
   }
 }
 
-/** Pre-flight before any TTS run: kick Ollama out of VRAM so Qwen
- *  has a clean slate. The user often runs Preprocess first (which
- *  loads gemma3:e4b @128k = ~10-12 GB resident with KEEP_ALIVE),
- *  then triggers Audiobook — without this reset, Qwen's KV growth
- *  during long-form decode collides with Ollama's resident weights
- *  → first chunk hangs and the watchdog kills the sidecar.
- *  Failures are logged but non-fatal: if VRAM happens to be fine
- *  anyway, the run still has a chance.
- *
- *  After the arbiter reset returns, the sidecar still needs ~20-30 s
- *  to reload the Qwen model. We poll /health until it reports ok=true
- *  (or give up after 90 s). Without this wait the first synth call
- *  hits the sidecar mid-boot → 503 → chapter failure → circuit
- *  breaker trips after three. */
-async function preflightGpuReset(): Promise<void> {
-  try {
-    await resetGpuViaArbiter("preflight");
-  } catch (err) {
-    console.warn(
-      "[audiobook] preflight GPU reset failed — proceeding anyway:",
-      err,
-    );
-    return;
-  }
-  await waitForSidecarReady();
-}
-
-async function waitForSidecarReady(): Promise<void> {
-  const base = effective("qwenTtsUrl", "PM_QWEN_TTS_URL");
-  if (!base) return;
-  const healthUrl = base.replace(/\/+$/, "") + "/health";
-  const apiKey = effective("qwenTtsApiKey", "PM_QWEN_TTS_API_KEY");
-  const headers: Record<string, string> = {};
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-
-  const deadline = Date.now() + 90_000;
-  let attempt = 0;
-  while (Date.now() < deadline) {
-    attempt++;
-    try {
-      const res = await fetch(healthUrl, {
-        method: "GET",
-        headers,
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { ok?: boolean };
-        if (body.ok === true) {
-          console.log(
-            `[audiobook] preflight: sidecar ready after ${attempt} health probes`,
-          );
-          return;
-        }
-      }
-    } catch {
-      // connect refused / timeout — sidecar still booting
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-  console.warn(
-    "[audiobook] preflight: sidecar not ready after 90 s — proceeding anyway, " +
-      "first chunk may fail",
-  );
-}
 
 export async function generateAudiobook(params: {
   docId: string;
@@ -258,11 +194,12 @@ export async function generateAudiobook(params: {
     }),
   });
 
-  // Kick Ollama out of VRAM before the first synth touches Qwen.
-  // ~15 s overhead but eliminates the "first-chunk-hangs-then-
-  // watchdog-restarts-sidecar" failure mode the user keeps hitting
-  // after a Preprocess run leaves gemma3:e4b camping in VRAM.
-  await preflightGpuReset();
+  // NOTE: kein expliziter Preflight-GPU-Reset hier. Der Arbiter sitzt
+  // vor dem Sidecar und handhabt den Ollama→Qwen-Swap automatisch
+  // beim ersten /v1/audio/*-Request — Reset on demand statt Reset on
+  // start. v1.18.101 hatte das per /admin/gpu/reset getriggert,
+  // landete aber in einer Race-Window, in der Qwen noch nicht wieder
+  // hochgefahren war → 3 fails → Circuit-Breaker. v1.18.106 wieder raus.
 
   // Check preprocessor availability once before the loop — avoids
   // N Ollama pings, the `pickProvider()` cache lasts 30 s.
@@ -646,8 +583,7 @@ export async function generateSingleChapterAudio(params: {
     message: row.title || chapterLabel(pickLang(row.language), row.number),
   });
 
-  // Same VRAM-clearing rationale as in generateAudiobook.
-  await preflightGpuReset();
+  // Kein Preflight-Reset — Arbiter handled den Swap on demand.
 
   try {
     const { durationMs } = await synthesizeChapter({
