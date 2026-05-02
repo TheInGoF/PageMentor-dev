@@ -253,6 +253,25 @@ services:
       # to the old behaviour (stop after every call).
       TTS_IDLE_LINGER_SECONDS: "60"
       PROXY_REQUEST_TIMEOUT: "1800"
+      # Audio-Analyzer: third arbiter consumer (see audio-analyzer service
+      # below). Enabled when the URL/container env vars are set; the
+      # arbiter routes /v1/analyze/* to the analyzer and treats it as a
+      # mutually-exclusive GPU consumer like ollama and qwen-tts.
+      # Requires arbiter image v1.x with audio-analyze mode (see notes
+      # at the bottom of this file).
+      AUDIO_ANALYZER_UPSTREAM_URL: "http://audio-analyzer:8791"
+      AUDIO_ANALYZER_CONTAINER: "pm-audio-analyzer"
+      # Audio-analyzer model load is heavy (~12-14 GB AWQ-4bit, downloads
+      # 12 GB on first run). The first call after a container start can
+      # take 2-3 min while HuggingFace pulls the weights; later loads are
+      # ~30 s from the volume cache. Cap generously to avoid spurious
+      # 504s during first use.
+      AUDIO_ANALYZER_STARTUP_TIMEOUT: "600"
+      # Analyzer is one-shot (load → infer → unload). No idle-linger
+      # benefit because the next call also needs a cold load. Set to 0
+      # explicitly so the arbiter releases the GPU as soon as the
+      # response goes out.
+      AUDIO_ANALYZER_IDLE_LINGER_SECONDS: "0"
     volumes:
       # Docker socket mount so the arbiter can start/stop pm-qwen-tts.
       # Path is identical on Linux and Windows+WSL2.
@@ -260,10 +279,50 @@ services:
     depends_on:
       - ollama
 
+  # Audio-Analyzer: Qwen3-Omni-30B-A3B-Instruct (AWQ-4bit), one-shot
+  # voice-style + transcript description for the voice-clone workflow.
+  #
+  # Workflow: user uploads a voice sample in the PageMentor UI, clicks
+  # "Auto-Vorschlag", backend forwards the audio to the arbiter (which
+  # unloads Ollama + qwen-tts first), the analyzer loads its 30B-A3B
+  # model into ~12-14 GB VRAM, runs ONE inference returning JSON with
+  # transcript + style description, then immediately unloads. Total
+  # wall time per call ~30-45 s, mostly model load.
+  #
+  # Per-request lazy-load + always-unload pattern enforces the user's
+  # "ein Modell gleichzeitig auf der GPU" rule trivially — between calls
+  # the analyzer holds 0 GB VRAM, so other consumers can use the card
+  # without arbitration overhead.
+  #
+  # restart: "no"  → arbiter starts/stops the container around requests.
+  audio-analyzer:
+    image: ghcr.io/theingof/pm-audio-analyzer:latest
+    # Local builds: `docker compose build audio-analyzer`. First build
+    # downloads PyTorch+CUDA base layers, ~5-10 min on a fresh host.
+    build:
+      context: ./pm-audio-analyzer
+    container_name: pm-audio-analyzer
+    restart: "no"
+    ports:
+      - "8791:8791"
+    volumes:
+      - audio-analyzer-hf:/root/.cache/huggingface
+    environment:
+      AUDIO_ANALYZER_MODEL: "cyankiwi/Qwen3-Omni-30B-A3B-Instruct-AWQ-4bit"
+      AUDIO_ANALYZER_MAX_NEW_TOKENS: "512"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   ollama-models:
   docling-cache:
   qwen-tts-hf:
+  audio-analyzer-hf:
 
 # ----------------------------------------------------------------------
 # VRAM budget on a 24 GB card (RTX 3090 / 4090)
@@ -293,11 +352,35 @@ volumes:
 #     - Ollama model  : llama3.2:3b / qwen2.5:7b-q4_K_M
 #     - TTS chunk size: 1500-2500 (Settings → Chunk size)
 #     - Docling       : keep on GPU, it's tiny
+#     - Audio-Analyzer: NOT recommended (Qwen3-Omni-Instruct AWQ-4bit
+#       needs ~12-14 GB, leaves no room for anything during analysis)
 #
 #   8 GB cards (3050 / 4060):
 #     - Ollama model  : llama3.2:3b only; disable summary if too slow
 #     - TTS chunk size: 1500
 #     - Consider CPU Docling to leave room for Qwen
+#     - Audio-Analyzer: not viable
 #
 # All tunables above are exposed in the Settings modal — no rebuilds
 # required when switching models or chunk sizes.
+#
+# ----------------------------------------------------------------------
+# Audio-Analyzer arbiter integration — NOT YET IMPLEMENTED in arbiter
+# ----------------------------------------------------------------------
+# The audio-analyzer service definition above is ready to deploy, but
+# the pm-gpu-arbiter image still needs the third-mode logic before the
+# /v1/analyze/* route gets serialised against ollama/qwen-tts. Until
+# then you can either:
+#
+#   A) Run the analyzer standalone on a different port, hit it directly
+#      from the backend (no GPU sharing safety — make sure no other
+#      consumer is active when you click Auto-Vorschlag).
+#
+#   B) Wait for the arbiter v1.x release which adds AUDIO_ANALYZER_*
+#      handling. The env vars in pm-gpu-arbiter above are pre-staged
+#      and will activate when the new image lands.
+#
+# Validation before committing to the full integration: run
+# `pm-audio-analyzer/test_local.py path/to/sample.wav` directly on the
+# 3090 host (outside Docker) to confirm the model fits and produces
+# usable JSON. ~5 min one-shot test, costs nothing if the answer is no.

@@ -1,0 +1,10 @@
+torch==2.6.0
+transformers>=4.49.0
+accelerate>=1.0.0
+autoawq>=0.2.7
+qwen-omni-utils>=0.0.5
+librosa>=0.10.2
+soundfile>=0.12.1
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
