@@ -13,6 +13,8 @@
 import { randomUUID, randomInt } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { spawn } from "node:child_process";
 import { db } from "../db";
 
 const DATA_DIR = process.env.PM_DATA_DIR || "./data";
@@ -26,6 +28,111 @@ export const ALLOWED_EXTS = new Set([".wav", ".mp3", ".flac", ".ogg", ".m4a"]);
 
 function ensureDir(): void {
   if (!existsSync(VOICE_DIR)) mkdirSync(VOICE_DIR, { recursive: true });
+}
+
+/** ffmpeg-Pipeline auf den User-Upload bevor er als Reference
+ *  gespeichert wird. Bringt das Audio in Qwens Lieblings-Format
+ *  (24 kHz mono WAV) und glaettet zwei Stoerquellen die Qwens
+ *  Speaker-Embedding-Extractor verwirren:
+ *  - leading + trailing Silence (User-Cut-Pause vor/nach dem Sprechen)
+ *  - inkonsistente Lautstaerke (loudnorm auf -23 LUFS)
+ *
+ *  Wir machen KEINE Rauschunterdrueckung — RNNoise/DeepFilterNet
+ *  waeren weitere Pakete, und ein bisschen Mic-Hall stoert Qwen
+ *  weniger als die Compress-Artefakte einer aggressiven Denoise-
+ *  Pipeline. Wer's sauberer braucht, nutzt Adobe Podcast Enhance
+ *  vor dem Upload.
+ *
+ *  Output ist immer .wav unabhaengig vom Eingabe-Format. Die
+ *  Datei-Endung beim Speichern wird entsprechend angepasst. */
+async function cleanupAudioForQwen(
+  inputBytes: Uint8Array,
+  inputExt: string
+): Promise<Uint8Array> {
+  ensureDir();
+  const id = randomUUID();
+  const inPath = join(tmpdir(), `voice-in-${id}${inputExt}`);
+  const outPath = join(tmpdir(), `voice-out-${id}.wav`);
+  writeFileSync(inPath, inputBytes);
+
+  return new Promise((resolve, reject) => {
+    const args = [
+      "-y",
+      "-loglevel",
+      "error",
+      "-i",
+      inPath,
+      "-ac",
+      "1", // mono
+      "-ar",
+      "24000", // Qwen3-TTS-12Hz Sample-Rate
+      "-af",
+      [
+        // Lautstaerke-Normalisierung. EBU-R128, -23 LUFS Standard.
+        "loudnorm=I=-23:TP=-2:LRA=7",
+        // Silence vorne weg.
+        "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-50dB:detection=peak",
+        // Trick fuer trailing-silence: Audio reversen → wieder
+        // start_silence entfernen → wieder reversen. ffmpeg's
+        // silenceremove kann nativ keinen "stop_silence".
+        "areverse",
+        "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-50dB:detection=peak",
+        "areverse",
+      ].join(","),
+      "-c:a",
+      "pcm_s16le", // 16-bit signed PCM, was Qwen erwartet
+      outPath,
+    ];
+
+    const ff = spawn("ffmpeg", args);
+    let stderrBuf = "";
+    ff.stderr.on("data", (d: Buffer) => {
+      stderrBuf += d.toString();
+    });
+    ff.on("error", (err) => {
+      try {
+        unlinkSync(inPath);
+      } catch {
+        /* best effort */
+      }
+      reject(new Error(`ffmpeg spawn failed: ${err.message}`));
+    });
+    ff.on("close", (code) => {
+      try {
+        unlinkSync(inPath);
+      } catch {
+        /* best effort */
+      }
+      if (code !== 0) {
+        try {
+          if (existsSync(outPath)) unlinkSync(outPath);
+        } catch {
+          /* best effort */
+        }
+        reject(
+          new Error(
+            `ffmpeg cleanup failed (code=${code}): ${stderrBuf.slice(0, 400)}`
+          )
+        );
+        return;
+      }
+      try {
+        const cleaned = readFileSync(outPath);
+        unlinkSync(outPath);
+        console.log(
+          `[voice-samples] cleanup ${inputBytes.byteLength}B (${inputExt}) → ` +
+            `${cleaned.byteLength}B (.wav 24kHz mono)`
+        );
+        resolve(new Uint8Array(cleaned));
+      } catch (err) {
+        reject(
+          new Error(
+            `failed to read cleaned audio: ${(err as Error).message}`
+          )
+        );
+      }
+    });
+  });
 }
 
 export type Gender = "female" | "male";
@@ -179,10 +286,13 @@ export interface CreateVoiceSampleResult {
 }
 
 /** Creates a new voice sample entry. Throws on invalid extension or
- *  oversized file. */
-export function createVoiceSample(
+ *  oversized file. Async because the upload bytes go through an
+ *  ffmpeg cleanup pass (24kHz mono WAV + loudnorm + silence-trim)
+ *  before being persisted — this dramatically improves Qwen's
+ *  Speaker-Embedding-Extraction. */
+export async function createVoiceSample(
   input: CreateVoiceSampleInput
-): CreateVoiceSampleResult {
+): Promise<CreateVoiceSampleResult> {
   const label = input.label.trim();
   if (!label) {
     throw new Error("label required");
@@ -205,10 +315,29 @@ export function createVoiceSample(
     );
   }
 
+  // ffmpeg-Cleanup: bringt das Audio in Qwens Lieblings-Format,
+  // glaettet Lautstaerke + Silence. Ergebnis ist immer .wav,
+  // unabhaengig vom Input-Format.
+  let cleanedBytes: Uint8Array;
+  try {
+    cleanedBytes = await cleanupAudioForQwen(input.bytes, ext);
+  } catch (err) {
+    // Fallback: Original-Bytes verwenden wenn Cleanup scheitert.
+    // Nicht ideal, aber besser als der User kann gar nichts hochladen.
+    console.warn(
+      `[voice-samples] cleanup failed, falling back to raw upload:`,
+      err
+    );
+    cleanedBytes = input.bytes;
+  }
+
   ensureDir();
   const id = randomUUID();
-  const refPath = join(VOICE_DIR, `${id}${ext}`);
-  writeFileSync(refPath, input.bytes);
+  // Datei-Endung folgt dem Cleanup-Output. Wenn Cleanup-Bytes ==
+  // Original-Bytes (Fallback), behaelt der File die Original-Endung.
+  const storedExt = cleanedBytes === input.bytes ? ext : ".wav";
+  const refPath = join(VOICE_DIR, `${id}${storedExt}`);
+  writeFileSync(refPath, cleanedBytes);
 
   // 31-bit positive int — fits in SQLite INTEGER and Python
   // `torch.manual_seed()`.
@@ -227,7 +356,7 @@ export function createVoiceSample(
       refPath,
       input.refText?.trim() || null,
       seed,
-      input.bytes.byteLength,
+      cleanedBytes.byteLength,
       0 // We don't determine duration — would be an ffprobe subprocess per upload
     );
 

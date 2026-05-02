@@ -354,7 +354,7 @@ voiceRoutes.post("/custom", async (c) => {
   }
 
   try {
-    const { sample } = createVoiceSample({
+    const { sample } = await createVoiceSample({
       label,
       gender,
       language,
