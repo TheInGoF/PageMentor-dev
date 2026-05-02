@@ -999,14 +999,15 @@ async function synthesizeChapter(params: {
     );
 
     const mergedPath = join(tmpDir, "merged.mp3");
-    // Silence pads: ~250 ms between chunks give Qwen a "thinking
-    // pause" between paragraph groups (the model ignores \n\n and
-    // would otherwise rattle through). ~900 ms at chapter end
-    // provides the break before the next chapter — also for intros
-    // (otherwise the intro text flows seamlessly into chapter 1).
+    // Silence pads zwischen Chunks. 250 ms war zu kurz — der Hoerer
+    // bekommt vom Schnitt nichts mit weil Qwen jeden Chunk mit voller
+    // Energie startet, sodass das Satzende des vorigen Chunks direkt
+    // ins Satzanfang des naechsten kippt. 600 ms entspricht etwa der
+    // natuerlichen Sprech-Pause zwischen Saetzen ("Atem holen"). 1200
+    // ms am Kapitelende = klare Abgrenzung vor dem naechsten Kapitel.
     await concatMp3WithGaps(chunkFiles, mergedPath, {
-      interChunkMs: 250,
-      trailingMs: 900,
+      interChunkMs: 600,
+      trailingMs: 1200,
     });
 
     const cover = coverPathFor(chapter.document_id);
