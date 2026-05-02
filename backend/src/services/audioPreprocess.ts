@@ -33,6 +33,8 @@ interface ChapterRow {
   audio_text: string | null;
   audio_text_model: string | null;
   document_id: string;
+  number: number;
+  title: string;
 }
 
 const SYSTEM_DE = `Du bist ein Lektor, der wissenschaftliche Studientexte für die Vertonung als Hörbuch aufbereitet. Deine Aufgabe: forme den vorgelegten Text so um, dass er von einer TTS-Engine flüssig und natürlich vorgelesen werden kann — ohne den fachlichen Inhalt zu verändern, ohne Auslassungen, ohne Vereinfachungen.
@@ -642,16 +644,22 @@ export async function preprocessChapterForAudio(params: {
   const d = db();
   const row = d
     .prepare(
-      "SELECT id, text, audio_text, audio_text_model, document_id FROM chapters WHERE id = ?"
+      "SELECT id, text, audio_text, audio_text_model, document_id, number, title FROM chapters WHERE id = ?"
     )
-    .get(params.chapterId) as ChapterRow | undefined;
+    .get(params.chapterId) as
+    | (ChapterRow & { number: number; title: string })
+    | undefined;
   if (!row) throw new Error(`Chapter ${params.chapterId} not found`);
+  const chapterLabel = `chapter ${row.number}${row.title ? ` "${row.title.slice(0, 40)}"` : ""}`;
 
   if (
     !params.force &&
     row.audio_text &&
     row.audio_text.trim().length > 0
   ) {
+    console.log(
+      `[audio-preprocess] ${chapterLabel} cache hit (${row.audio_text.length} chars, model=${row.audio_text_model ?? "?"})`
+    );
     return {
       text: row.audio_text,
       model: row.audio_text_model ?? "cached",
@@ -662,6 +670,11 @@ export async function preprocessChapterForAudio(params: {
   if (!row.text || row.text.trim().length < 20) {
     throw new Error("Chapter text too short to preprocess");
   }
+
+  const tStart = Date.now();
+  console.log(
+    `[audio-preprocess] ${chapterLabel} START (${row.text.length} chars source)`
+  );
 
   // Deterministic pre-pass: standard abbreviations, units, symbols,
   // dates/times. Saves the LLM ~150 regex rules it would otherwise
@@ -711,7 +724,7 @@ export async function preprocessChapterForAudio(params: {
   const subChunks = splitForPreprocess(pretreated, 9600);
   if (subChunks.length > 1) {
     console.log(
-      `[audio-preprocess] chapter ${row.id} (${pretreated.length} chars) → ` +
+      `[audio-preprocess] ${chapterLabel} (${pretreated.length} chars) → ` +
         `${subChunks.length} sub-chunks for LLM (~${Math.round(pretreated.length / subChunks.length)} chars each)`
     );
   }
@@ -870,6 +883,12 @@ export async function preprocessChapterForAudio(params: {
     "UPDATE chapters SET audio_text = ?, audio_text_model = ? WHERE id = ?"
   ).run(cleaned, lastModel, params.chapterId);
 
+  const totalSeconds = ((Date.now() - tStart) / 1000).toFixed(1);
+  console.log(
+    `[audio-preprocess] ${chapterLabel} DONE in ${totalSeconds}s ` +
+      `(${row.text.length} → ${cleaned.length} chars, model=${lastModel}, sub-chunks=${subChunks.length})`
+  );
+
   return { text: cleaned, model: lastModel, cached: false };
 }
 
@@ -1004,6 +1023,15 @@ function stripWrappers(s: string): string {
  *  The system prompt also forbids these characters, but smaller
  *  models don't always honor that. */
 function stripProblematicCharsForTts(s: string): string {
+  // Typographische Anführungszeichen — German low/high curly quotes
+  // („…") und ihre englischen Pendants ("…", '…') sind im Qwen-
+  // Tokenizer dünn vertreten, vor allem in Kombination mit ! oder ?
+  // direkt vor dem schließenden Quote ("Gib Gas!"). Beobachtet:
+  // hängender Decoder bei Schulz-von-Thun-Beispielsatz mit
+  // direkter Rede in deutschen Anführungszeichen.
+  // TTS spricht keine Anführungszeichen aus — also einfach ersatzlos
+  // streichen. Der Hörer hört die direkte Rede durch Sprechpausen
+  // und Intonation des Modells, nicht durch verbalisierte Quotes.
   const counts = {
     horizontalRule: (s.match(/^[ \t]*[-=*_]{3,}[ \t]*$/gm) ?? []).length,
     semicolon: (s.match(/;/g) ?? []).length,
@@ -1013,6 +1041,8 @@ function stripProblematicCharsForTts(s: string): string {
     // typically Markdown emphasis (`*word*`, `**word**`) or stray
     // bullet markers the model didn't honour. Count them all.
     asterisk: (s.match(/\*/g) ?? []).length,
+    // Typographische Quotes: alle Varianten matchen.
+    quote: (s.match(/[„""''‚‘‛«»‹›]/g) ?? []).length,
   };
 
   const cleaned = s
@@ -1028,6 +1058,10 @@ function stripProblematicCharsForTts(s: string): string {
     .replace(/\s*;\s*/g, ", ")
     .replace(/\s*—\s*/g, ", ")
     .replace(/(\S)\s+–\s+(\S)/g, "$1, $2")
+    // 5. Typographische Anführungszeichen (alle Varianten) → ersatzlos.
+    //    TTS verbalisiert Quotes nicht, direkte Rede wird durch
+    //    Sprechpausen und Modell-Intonation hörbar.
+    .replace(/[„""''‚‘‛«»‹›]/g, "")
     .replace(/,\s*,/g, ",")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -1038,12 +1072,14 @@ function stripProblematicCharsForTts(s: string): string {
     counts.semicolon +
     counts.emDash +
     counts.enDash +
-    counts.asterisk;
+    counts.asterisk +
+    counts.quote;
   if (total > 0) {
     console.log(
       `[audio-preprocess] stripped ${total} TTS-problem chars: ` +
         `; ×${counts.semicolon}, — ×${counts.emDash}, – ×${counts.enDash}, ` +
-        `--- ×${counts.horizontalRule}, * ×${counts.asterisk}`
+        `--- ×${counts.horizontalRule}, * ×${counts.asterisk}, ` +
+        `quotes ×${counts.quote}`
     );
   }
   return cleaned;

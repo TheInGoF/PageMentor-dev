@@ -119,6 +119,20 @@ export function cancelAudiobook(docId: string): boolean {
   const r = running.get(docId);
   if (!r) return false;
   r.ctrl.abort();
+  // Sofort aus running raus, nicht warten bis der Worker die Abort-
+  // Kette durchgereicht hat. Der Worker kann in einem 20-min-ttsFetch-
+  // Timeout oder einer Ollama-Preprocess-Antwort haengen die unsere
+  // AbortSignal nicht propagiert. Solange `running.has(docId)` true
+  // bleibt, liefert /api/audio/get generating=true und der Generate-
+  // Button bleibt im Frontend disabled — auch nach Cancel-Klick.
+  //
+  // Race-Risk: wenn der User sofort wieder Generate klickt, koennte
+  // der alte Worker noch laufen. Mitigated durch resetGpuViaArbiter
+  // unten — der TTS-Sidecar wird hart neu gestartet, alte Synth-
+  // Calls failen. Beide Workers schreiben in den gleichen audioDir,
+  // aber der neue ueberschreibt den alten beim naechsten Chunk.
+  // Akzeptables Trade-off vs. "UI haengt 60 min nach Cancel".
+  running.delete(docId);
   // Sofort-Event an die UI: nicht warten bis der Worker die Abort-
   // Kette durchgereicht und sein eigenes audiobook.canceled emittiert
   // hat (das kann dauern wenn er in synth oder M4B-Build hängt).
@@ -553,6 +567,13 @@ export async function generateAudiobook(params: {
         }
       }
 
+      const totalSeconds = ((Date.now() - runState.startedAt) / 1000).toFixed(1);
+      console.log(
+        `[audiobook] ALL DONE for doc=${doc.id}: ` +
+          `${chapters.length} chapters processed in ${totalSeconds}s ` +
+          `(${successfulChapterFiles.length} synthesized fresh, ` +
+          `${chapters.length - successfulChapterFiles.length} cached/skipped)`
+      );
       // Vor terminal emit aus running raus, damit Frontend's
       // state-refresh nach dem SSE-Event isGenerating=false sieht
       // (sonst race-condition → "generiere..." haengt).
