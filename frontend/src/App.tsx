@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./lib/api";
 import { LoginScreen } from "./components/LoginScreen";
 import { Library } from "./components/Library";
@@ -63,27 +63,83 @@ function saveNav(n: NavState): void {
   }
 }
 
+/** Initial nav: history.state has priority (set by us on previous
+ *  visits/forward navigation), localStorage is the fallback for the
+ *  very first load. Both can be missing → defaults to dashboard. */
+function initialNav(): NavState {
+  const fromHistory =
+    typeof window !== "undefined" && window.history.state
+      ? (window.history.state as { pmNav?: NavState }).pmNav
+      : undefined;
+  if (fromHistory) return fromHistory;
+  return (
+    loadNav() ?? {
+      view: "dashboard",
+      openDocId: null,
+      openModuleId: null,
+      returnTo: null,
+    }
+  );
+}
+
 export function App() {
   const [auth, setAuth] = useState<AuthState>("checking");
-  const [view, setView] = useState<View>(() => loadNav()?.view ?? "dashboard");
+  const [view, setView] = useState<View>(() => initialNav().view);
   const [openDocId, setOpenDocId] = useState<string | null>(
-    () => loadNav()?.openDocId ?? null
+    () => initialNav().openDocId
   );
   const [openModuleId, setOpenModuleId] = useState<string | null>(
-    () => loadNav()?.openModuleId ?? null
+    () => initialNav().openModuleId
   );
   const [returnTo, setReturnTo] = useState<View | null>(
-    () => loadNav()?.returnTo ?? null
+    () => initialNav().returnTo
   );
+  // Guard, damit popstate-Updates nicht selbst wieder pushState
+  // ausloesen — sonst frisst der History-Stack sich auf.
+  const skipNextHistoryPushRef = useRef(false);
   const locale = useLocale();
 
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
 
+  // Bei jeder internen Nav-Aenderung in den Browser-History-Stack
+  // pushen, damit der native Back-Button (oder Trackpad-Geste, oder
+  // Zurueck-Taste auf der Maus) wieder zur vorherigen Ansicht in der
+  // App fuehrt statt zu Google. Auch in localStorage spiegeln, damit
+  // Reload weiter funktioniert.
   useEffect(() => {
-    saveNav({ view, openDocId, openModuleId, returnTo });
+    const snapshot: NavState = { view, openDocId, openModuleId, returnTo };
+    saveNav(snapshot);
+    if (skipNextHistoryPushRef.current) {
+      // Vorherige State-Aenderung kam aus popstate — wir wollen
+      // diesen Effect-Run NICHT als neuen History-Eintrag pushen.
+      skipNextHistoryPushRef.current = false;
+      return;
+    }
+    try {
+      window.history.pushState({ pmNav: snapshot }, "", window.location.href);
+    } catch {
+      // pushState kann in iframes / Sandboxes blockiert sein —
+      // localStorage-Persistierung oben reicht in dem Fall.
+    }
   }, [view, openDocId, openModuleId, returnTo]);
+
+  // Browser-Back/Forward → State aus dem History-Eintrag
+  // restaurieren statt navigieren-zu-Google.
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const snap = (e.state as { pmNav?: NavState })?.pmNav;
+      if (!snap) return;
+      skipNextHistoryPushRef.current = true;
+      setView(snap.view);
+      setOpenDocId(snap.openDocId);
+      setOpenModuleId(snap.openModuleId);
+      setReturnTo(snap.returnTo);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   /** Open settings as a real page. Remembers where the user came
    *  from so the Back button takes them back to that exact view
