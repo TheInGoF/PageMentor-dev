@@ -775,30 +775,6 @@ export const api = {
         `/api/voices/custom/${id}`,
         { method: "PATCH", body: JSON.stringify(patch) }
       ),
-    /** Distill: rendert das Sample mit dem Standard-Vorschau-Text als
-     *  Qwen-natives MP3 — Vorstufe um aus einer Clone-Stimme eine
-     *  Design-Stimme zu machen. Reroll: einfach ohne seed wieder
-     *  aufrufen, jeder Call wuerfelt einen neuen Seed. Wenn die Take
-     *  passt: blob + seed via api.voiceDesigns.create speichern. */
-    distillPreview: async (
-      id: string,
-      input?: { text?: string; seed?: number }
-    ): Promise<{ blob: Blob; seed: number }> => {
-      const res = await fetch(`/api/voices/custom/${id}/distill/preview`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input ?? {}),
-      });
-      if (!res.ok) {
-        const t = await res.text().catch(() => res.statusText);
-        throw new Error(`Distill ${res.status}: ${t.slice(0, 200)}`);
-      }
-      const seedHeader = res.headers.get("X-Voice-Seed");
-      const seed = seedHeader ? parseInt(seedHeader, 10) : 0;
-      const blob = await res.blob();
-      return { blob, seed };
-    },
   },
   voiceDesigns: {
     list: () => request<{ voices: VoiceDesignMeta[] }>("/api/voices/design"),

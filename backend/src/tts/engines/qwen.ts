@@ -342,44 +342,6 @@ function qwenLanguageFor(lang: string): string {
   return lang === "de" ? "German" : "English";
 }
 
-/** Preview-Pfad fuer den "Distill clone → design"-Workflow. Rendert
- *  einen Standard-Vorschau-Text mit dem User-Sample als Reference,
- *  optional mit Override-Seed (fuer Reroll-Wizard). Output ist ein
- *  Qwen-natives MP3 das danach als VoiceDesign-Reference gespeichert
- *  werden kann (siehe Voice-Edit-Modal "Als Design destillieren").
- *
- *  Warum nicht das Original-Sample als Design-Reference nehmen? Weil
- *  Qwen besser mit selbst gerendertem Audio klarkommt — schaerferes
- *  Speaker-Embedding, geringerer Tempo-Drift zwischen Chunks. Die
- *  destillierte Reference klingt aehnlich (Sammys Klon-Stimme spricht
- *  den Standard-Text), ist aber im Format das Qwen liebt. */
-export async function distillCloneToDesign(params: {
-  sampleId: string;
-  text: string;
-  seed?: number;
-  timeoutMs?: number;
-}): Promise<{ buf: Buffer; seedUsed: number }> {
-  const sample = resolveSample(params.sampleId);
-  if (!sample) {
-    throw new Error(`voice sample ${params.sampleId} not found`);
-  }
-  const seedUsed =
-    params.seed && Number.isFinite(params.seed) && params.seed > 0
-      ? Math.floor(params.seed)
-      : Math.floor(Math.random() * (2 ** 31 - 1)) + 1;
-  const buf = await callSpeechClone({
-    text: params.text,
-    // Override seed locally without mutating the persisted sample.
-    sample: { ...sample, seed: seedUsed },
-    speed: 1.0,
-    timeoutMs: params.timeoutMs ?? PREVIEW_TIMEOUT_MS,
-  });
-  if (buf.length === 0) {
-    throw new Error(`distill returned empty audio for sample=${sample.id}`);
-  }
-  return { buf, seedUsed };
-}
-
 async function callSpeechClone(params: {
   text: string;
   sample: VoiceSample;
