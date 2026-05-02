@@ -296,7 +296,7 @@ services:
   #
   # restart: "no"  → arbiter starts/stops the container around requests.
   audio-analyzer:
-    image: ghcr.io/theingof/pm-audio-analyzer:latest
+    image: ghcr.io/theingof/pm-audio-analyzer-dev:latest
     # Local builds: `docker compose build audio-analyzer`. First build
     # downloads PyTorch+CUDA base layers, ~5-10 min on a fresh host.
     build:
