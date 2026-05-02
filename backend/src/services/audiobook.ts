@@ -80,6 +80,15 @@ export function cancelAudiobook(docId: string): boolean {
   const ctrl = running.get(docId);
   if (!ctrl) return false;
   ctrl.abort();
+  // Sofort-Event an die UI: nicht warten bis der Worker die Abort-
+  // Kette durchgereicht und sein eigenes audiobook.canceled emittiert
+  // hat (das kann dauern wenn er in synth oder M4B-Build hängt).
+  // Frontend räumt seinen "generating"-Status an diesem Event auf.
+  emit({
+    phase: "audiobook.canceled",
+    docId,
+    message: "aborted by user",
+  });
   // Fire-and-forget — we don't want the cancel HTTP response to
   // block on the arbiter restart (which can take a few seconds).
   void resetGpuViaArbiter().catch((err) => {
@@ -369,6 +378,13 @@ export async function generateAudiobook(params: {
         });
       } catch (err) {
         if (err instanceof AudiobookCanceled) throw err;
+        // If the user clicked Cancel mid-synth, ttsFetch throws a
+        // generic "TTS request aborted" error — NOT AudiobookCanceled.
+        // We'd otherwise count it as a sidecar failure, trip the
+        // circuit breaker after 3 chapters, and emit audiobook.failed
+        // instead of audiobook.canceled. The frontend's state-cleanup
+        // hangs on the wrong event → "generiere..." stays forever.
+        if (signal.aborted) throw new AudiobookCanceled();
         // Don't create a failed DB row anymore — useless, only needs
         // manual cleanup. If a previous run left an old file/row for
         // this chapter, clean it up now so the UI shows the chapter
