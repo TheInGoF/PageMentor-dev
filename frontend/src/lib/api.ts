@@ -981,6 +981,19 @@ export const api = {
       request<{ status: string }>(`/api/audio/chapter/${audioId}`, { method: "DELETE" }),
     cancel: (docId: string) =>
       request<{ status: string }>(`/api/audio/cancel/${docId}`, { method: "POST" }),
+    progress: (docId: string) =>
+      request<
+        | { running: false }
+        | {
+            running: true;
+            startedAt: number;
+            totalChapters: number;
+            currentChapter: number;
+            chunkCurrent: number;
+            chunkTotal: number;
+            chapterChars: number[];
+          }
+      >(`/api/audio/progress/${docId}`),
     rebuildM4B: (docId: string) =>
       request<{ ok: true; chapters: number }>(`/api/audio/rebuild-m4b/${docId}`, {
         method: "POST",

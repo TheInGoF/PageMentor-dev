@@ -104,6 +104,30 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   useEffect(() => {
     loadChapterStatus();
   }, [loadChapterStatus]);
+
+  // Rehydrate bookProgress nach Reload aus dem Backend-Run-State,
+  // sodass Status-Panel + ETA + Elapsed nicht auf 0:00 zurückspringen
+  // wenn der User die Seite neu lädt während ein Audiobook generiert.
+  useEffect(() => {
+    api.audio
+      .progress(docId)
+      .then((p) => {
+        if (p.running) {
+          setBookProgress({
+            totalChapters: p.totalChapters,
+            currentChapter: p.currentChapter,
+            chunkCurrent: p.chunkCurrent,
+            chunkTotal: p.chunkTotal,
+            startedAt: p.startedAt,
+            chapterChars: p.chapterChars,
+          });
+        }
+      })
+      .catch(() => {
+        // Backend noch beim Hochfahren oder Endpoint nicht da — kein
+        // Fehler, der Status-Bar bleibt halt leer bis SSE kommt.
+      });
+  }, [docId]);
   useEffect(() => {
     const loadVoicesAndState = () => {
       Promise.all([api.audio.voices(), api.audio.get(docId)])
@@ -1487,9 +1511,12 @@ function BookProgressPanel({
   const etaMs =
     rate !== null ? Math.max(0, Math.round(charsRemaining * rate)) : null;
 
-  // Show the rate in chars/sec so users get a feel for it.
-  const charsPerSec =
-    rate !== null && rate > 0 ? Math.round(1000 / rate) : null;
+  // Show the rate in chars/min — at the typical 10-50 chars/sec
+  // sec-resolution gave choppy single-digit numbers. min-resolution
+  // is more readable and matches user mental model ("X Zeichen pro
+  // Minute").
+  const charsPerMin =
+    rate !== null && rate > 0 ? Math.round(60_000 / rate) : null;
 
   return (
     <div className="card p-4 bg-bg-elevated flex flex-col gap-2 border-accent-subtle">
@@ -1524,9 +1551,9 @@ function BookProgressPanel({
               })}
             </span>
           )}
-          {charsPerSec !== null && (
+          {charsPerMin !== null && (
             <span>
-              {t("audiobook.progress.rate", { n: charsPerSec })}
+              {t("audiobook.progress.rate", { n: charsPerMin })}
             </span>
           )}
           {etaMs !== null && (

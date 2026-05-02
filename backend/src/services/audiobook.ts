@@ -55,10 +55,49 @@ interface Document {
   language: string;
 }
 
-const running = new Map<string, AbortController>();
+/** Progress snapshot per running audiobook. Lives in memory. Frontend
+ *  fetches this on mount via GET /api/audio/progress/:docId so the
+ *  status panel stays correct after a page reload — without it, the
+ *  in-flight chapter index, chunk count and ETA all reset to zero. */
+interface RunState {
+  ctrl: AbortController;
+  startedAt: number;
+  totalChapters: number;
+  currentChapter: number;
+  chunkCurrent: number;
+  chunkTotal: number;
+  /** Char-count per chapter — basis for the ETA calculation
+   *  (remaining chars × ms/char). */
+  chapterChars: number[];
+}
+
+const running = new Map<string, RunState>();
 
 export function isGenerating(docId: string): boolean {
   return running.has(docId);
+}
+
+/** Snapshot for the frontend to rehydrate its progress panel after a
+ *  page reload. Returns null when no run is active. AbortController
+ *  is omitted (not serializable, not needed by the UI). */
+export function getRunProgress(docId: string): {
+  startedAt: number;
+  totalChapters: number;
+  currentChapter: number;
+  chunkCurrent: number;
+  chunkTotal: number;
+  chapterChars: number[];
+} | null {
+  const r = running.get(docId);
+  if (!r) return null;
+  return {
+    startedAt: r.startedAt,
+    totalChapters: r.totalChapters,
+    currentChapter: r.currentChapter,
+    chunkCurrent: r.chunkCurrent,
+    chunkTotal: r.chunkTotal,
+    chapterChars: r.chapterChars,
+  };
 }
 
 export class AudiobookCanceled extends Error {
@@ -77,9 +116,9 @@ export class AudiobookCanceled extends Error {
  *  collide with leftover state. Already-finished chapter MP3s on
  *  disk are kept. */
 export function cancelAudiobook(docId: string): boolean {
-  const ctrl = running.get(docId);
-  if (!ctrl) return false;
-  ctrl.abort();
+  const r = running.get(docId);
+  if (!r) return false;
+  r.ctrl.abort();
   // Sofort-Event an die UI: nicht warten bis der Worker die Abort-
   // Kette durchgereicht und sein eigenes audiobook.canceled emittiert
   // hat (das kann dauern wenn er in synth oder M4B-Build hängt).
@@ -136,7 +175,16 @@ export async function generateAudiobook(params: {
 }): Promise<void> {
   if (running.has(params.docId)) return;
   const abortController = new AbortController();
-  running.set(params.docId, abortController);
+  const runState: RunState = {
+    ctrl: abortController,
+    startedAt: Date.now(),
+    totalChapters: 0,
+    currentChapter: 0,
+    chunkCurrent: 0,
+    chunkTotal: 0,
+    chapterChars: [],
+  };
+  running.set(params.docId, runState);
   const signal = abortController.signal;
 
   const d = db();
@@ -193,6 +241,11 @@ export async function generateAudiobook(params: {
 
   const lang = pickLang(doc.language);
 
+  // Run-State mit Lauf-Metadaten füllen, sodass GET /api/audio/progress
+  // nach Reload eine vollständige Antwort liefern kann.
+  runState.totalChapters = chapters.length;
+  runState.chapterChars = chapters.map((c) => c.text?.length ?? 0);
+
   emit({
     phase: "audiobook.start",
     docId: doc.id,
@@ -234,6 +287,9 @@ export async function generateAudiobook(params: {
       if (signal.aborted) throw new AudiobookCanceled();
       const ch = chapters[i];
       const outFile = chapterFile(audioDir, ch);
+      runState.currentChapter = i + 1;
+      runState.chunkCurrent = 0;
+      runState.chunkTotal = 0;
 
       // Skip check: don't regenerate already-finished chapters.
       // When the user clicks "Generate audiobook" after pre-building
@@ -339,7 +395,9 @@ export async function generateAudiobook(params: {
           rate,
           outFile,
           signal,
-          onChunk: (chunkIdx, chunkTotal) =>
+          onChunk: (chunkIdx, chunkTotal) => {
+            runState.chunkCurrent = chunkIdx;
+            runState.chunkTotal = chunkTotal;
             emit({
               phase: "audiobook.chapter.progress",
               docId: doc.id,
@@ -347,7 +405,8 @@ export async function generateAudiobook(params: {
               chapterNumber: ch.number,
               current: chunkIdx,
               total: chunkTotal,
-            }),
+            });
+          },
         });
 
         upsertAudio({
@@ -576,11 +635,19 @@ export async function generateSingleChapterAudio(params: {
   // `cancelAudiobook(docId)` stops them. If a full-book run is
   // already running we share its controller — one click then
   // cancels both.
-  const alreadyRunning = running.has(row.document_id);
-  const abortController =
-    running.get(row.document_id) ?? new AbortController();
+  const existingRun = running.get(row.document_id);
+  const alreadyRunning = !!existingRun;
+  const abortController = existingRun?.ctrl ?? new AbortController();
   if (!alreadyRunning) {
-    running.set(row.document_id, abortController);
+    running.set(row.document_id, {
+      ctrl: abortController,
+      startedAt: Date.now(),
+      totalChapters: 1,
+      currentChapter: 1,
+      chunkCurrent: 0,
+      chunkTotal: 0,
+      chapterChars: [effectiveText.length],
+    });
   }
 
   const chapterForSynth: Chapter = {
@@ -713,11 +780,19 @@ export async function generateIntroAudio(params: {
     message: tLang(lang, "label.intro"),
   });
 
-  const alreadyRunning = running.has(params.docId);
-  const abortController =
-    running.get(params.docId) ?? new AbortController();
+  const existingRun = running.get(params.docId);
+  const alreadyRunning = !!existingRun;
+  const abortController = existingRun?.ctrl ?? new AbortController();
   if (!alreadyRunning) {
-    running.set(params.docId, abortController);
+    running.set(params.docId, {
+      ctrl: abortController,
+      startedAt: Date.now(),
+      totalChapters: 1,
+      currentChapter: 1,
+      chunkCurrent: 0,
+      chunkTotal: 0,
+      chapterChars: [params.text.length],
+    });
   }
   // Synthetic single chapter. Title is deliberately EMPTY — the
   // user intro text ("Audiobook: Foo. Written by Bar.") is

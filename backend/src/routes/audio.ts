@@ -10,6 +10,7 @@ import {
   generateSingleChapterAudio,
   generateIntroAudio,
   isGenerating,
+  getRunProgress,
   clearAudio,
   clearAudioForChapter,
   cancelAudiobook,
@@ -468,6 +469,14 @@ audioRoutes.delete("/chapter/:audioId", (c) => {
 audioRoutes.post("/cancel/:docId", (c) => {
   const ok = cancelAudiobook(c.req.param("docId"));
   return c.json({ status: ok ? "canceling" : "not-running" });
+});
+
+// Snapshot of the current in-memory run state for frontend rehydration
+// after a page reload. Returns 404 when no generation is active.
+audioRoutes.get("/progress/:docId", (c) => {
+  const snap = getRunProgress(c.req.param("docId"));
+  if (!snap) return c.json({ running: false });
+  return c.json({ running: true, ...snap });
 });
 
 // Builds an M4B from all already-finished chapter MP3s + intro.
