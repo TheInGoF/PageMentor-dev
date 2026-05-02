@@ -257,6 +257,11 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         ev.phase === "audiobook.canceled"
       ) {
         setBookProgress(null);
+        // Auch chapterProgress + busyChapter leeren, sonst bleibt der
+        // Generate-Button bei cancel/fail dauerhaft disabled (der
+        // letzte chapter.progress-Event hängt sonst in der Map).
+        setChapterProgress(new Map());
+        setBusyChapter({});
       }
       // M4B encode progress events (SSE from the backend during
       // book build or rebuild). current = current audio position in
@@ -375,7 +380,19 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     try {
       await api.audio.cancel(docId);
       toast.show(t("audiobook.canceled"), "success");
+      // Sofortige UI-Bereinigung: alle Progress-States leeren, sonst
+      // bleibt der Generate-Button disabled weil der letzte
+      // chapter.progress-Event in der Map weiter als "running" zählt.
+      // Das SSE-canceled-Event räumt zwar bookProgress + state auf,
+      // aber chapterProgress + busyChapter bleiben bisher hängen.
       setBookProgress(null);
+      setChapterProgress(new Map());
+      setBusyChapter({});
+      setIntroBusy(false);
+      // State frisch ziehen — Server hat die Audio-Statusliste bereits
+      // aktualisiert (laufende Chapter auf failed gesetzt).
+      api.audio.get(docId).then(setState).catch(() => {});
+      loadChapterStatus();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
