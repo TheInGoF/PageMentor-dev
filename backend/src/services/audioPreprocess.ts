@@ -844,8 +844,20 @@ export async function preprocessChapterForAudio(params: {
   // boundaries (rare but possible when a section ref straddles two
   // sub-chunks) and re-applies the f./ff. correction after stripWrappers.
   const numeralFixed = fixGermanNumeralBleed(combined).text;
+  // Post-Pass: deterministische Regeln NACH Gemma nochmal anwenden.
+  // Begruendung: Gemma e4b "korrigiert" gelegentlich unsere Pre-Pass-
+  // Aenderungen zurueck (bekanntes LLM-Verhalten — "Friedens, und
+  // Umweltbewegung" sieht orthographisch falsch aus → Modell macht
+  // wieder "Friedens- und Umweltbewegung" draus). Der Post-Pass faengt
+  // diese Reverts zuverlaessig ab. expandAbbreviations ist idempotent,
+  // doppelter Aufruf macht keine zusaetzlichen Aenderungen wenn alles
+  // schon clean ist.
+  const postPassed =
+    params.language === "de"
+      ? expandAbbreviations(numeralFixed, params.language)
+      : numeralFixed;
   const cleaned = stripProblematicCharsForTts(
-    restoreHeadingParagraphs(stripWrappers(numeralFixed))
+    restoreHeadingParagraphs(stripWrappers(postPassed))
   );
   if (!cleaned || cleaned.length < 20) {
     throw new Error(
