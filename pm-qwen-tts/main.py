@@ -925,9 +925,10 @@ def _synth_clone(
         f"{text}|{seed}|{len(ref_audio[0])}".encode("utf-8")
     ).hexdigest()[:8]
     log.info(
-        "clone start [%s] seed=%d lang=%s text[0:60]=%r ref_text[0:60]=%r ref_audio_samples=%d kwargs=%s",
+        "clone start [%s] seed=%d lang=%s text[0:60]=%r ref_text[0:60]=%r ref_audio_samples=%d instruct[0:80]=%r kwargs=%s",
         req_hash, seed, language,
         text[:60], (ref_text or "")[:60], len(ref_audio[0]),
+        (instruct or "")[:80],
         sorted(gen_kwargs.keys()),
     )
     t0 = time.time()
