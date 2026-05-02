@@ -267,6 +267,13 @@ export function initDb() {
       "ALTER TABLE voice_samples ADD COLUMN show_in_audiobook INTEGER NOT NULL DEFAULT 1"
     );
   }
+  // instruct — optional per-voice speaking-style prompt forwarded to
+  // generate_voice_clone. Without it, the clone path drifts in tempo
+  // between chunks. Examples: "Calm narrator, steady pace",
+  // "Slow and clear audiobook narration".
+  if (!vsCols.some((c) => c.name === "instruct")) {
+    d.exec("ALTER TABLE voice_samples ADD COLUMN instruct TEXT");
+  }
 
   // voice_designs — text-described voices for the Qwen3-TTS
   // VoiceDesign model. Instead of a reference audio file, this holds

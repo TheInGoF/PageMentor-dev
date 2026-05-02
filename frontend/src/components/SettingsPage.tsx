@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
+import { Modal } from "./ui/Modal";
 import { LogsContent } from "./LogsPage";
 import { getSettings, setSettings, type Settings } from "../lib/settings";
 import {
@@ -109,6 +110,25 @@ export function SettingsPage({ onBack }: Props) {
   const [presetVisibility, setPresetVisibility] = useState<PresetVisibility[]>(
     []
   );
+  // Edit-modal state. Mutually exclusive — only one voice can be
+  // edited at a time. We hold a copy of the form fields locally so
+  // the user can cancel without dirty-state leakage into the list.
+  const [editSample, setEditSample] = useState<{
+    id: string;
+    label: string;
+    gender: "female" | "male";
+    language: string;
+    refText: string;
+    instruct: string;
+  } | null>(null);
+  const [editDesign, setEditDesign] = useState<{
+    id: string;
+    label: string;
+    gender: "female" | "male";
+    language: string;
+    description: string;
+  } | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
   const [designDraft, setDesignDraft] = useState<{
     label: string;
     gender: "female" | "male";
@@ -634,6 +654,72 @@ export function SettingsPage({ onBack }: Props) {
     audio.play().catch(() =>
       toast.show(t("settings.design.previewFailed"), "error")
     );
+  }
+
+  function openSampleEdit(v: CustomVoiceMeta) {
+    setEditSample({
+      id: v.id,
+      label: v.label,
+      gender: v.gender,
+      language: v.language,
+      refText: v.refText ?? "",
+      instruct: v.instruct ?? "",
+    });
+  }
+
+  function openDesignEdit(v: VoiceDesignMeta) {
+    setEditDesign({
+      id: v.id,
+      label: v.label,
+      gender: v.gender,
+      language: v.language,
+      description: v.description,
+    });
+  }
+
+  async function saveSampleEdit() {
+    if (!editSample) return;
+    setEditBusy(true);
+    try {
+      await api.customVoices.update(editSample.id, {
+        label: editSample.label,
+        gender: editSample.gender,
+        language: editSample.language,
+        refText: editSample.refText.trim() || null,
+        instruct: editSample.instruct.trim() || null,
+      });
+      const r = await api.customVoices.list();
+      setCustomVoices(r.voices);
+      notifyVoicesChanged();
+      setEditSample(null);
+      toast.show(t("common.saved"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setEditBusy(false);
+    }
+  }
+
+  async function saveDesignEdit() {
+    if (!editDesign) return;
+    setEditBusy(true);
+    try {
+      await api.voiceDesigns.update(editDesign.id, {
+        label: editDesign.label,
+        gender: editDesign.gender,
+        language: editDesign.language,
+        description: editDesign.description,
+      });
+      const r = await api.voiceDesigns.list();
+      setVoiceDesigns(r.voices);
+      notifyVoicesChanged();
+      setEditDesign(null);
+      toast.show(t("common.saved"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setEditBusy(false);
+    }
   }
 
   function save() {
@@ -1345,6 +1431,14 @@ export function SettingsPage({ onBack }: Props) {
                   </Button>
                   <Button
                     variant="ghost"
+                    onClick={() => openSampleEdit(v)}
+                    title={t("common.edit")}
+                    aria-label={t("common.edit")}
+                  >
+                    ✏️
+                  </Button>
+                  <Button
+                    variant="ghost"
                     onClick={() => deleteVoiceSample(v.id, v.label)}
                   >
                     {t("common.delete")}
@@ -1498,6 +1592,14 @@ export function SettingsPage({ onBack }: Props) {
                       aria-label={t("settings.design.regenRef")}
                     >
                       ↻
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => openDesignEdit(v)}
+                      title={t("common.edit")}
+                      aria-label={t("common.edit")}
+                    >
+                      ✏️
                     </Button>
                     <Button
                       variant="ghost"
@@ -1814,6 +1916,189 @@ export function SettingsPage({ onBack }: Props) {
         </div>
         </div>
       </main>
+
+      <Modal
+        open={!!editSample}
+        onClose={() => !editBusy && setEditSample(null)}
+        title={t("settings.voices.editTitle")}
+        size="xl"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setEditSample(null)}
+              disabled={editBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={saveSampleEdit} disabled={editBusy}>
+              {editBusy ? t("common.saving") : t("common.save")}
+            </Button>
+          </div>
+        }
+      >
+        {editSample && (
+          <div className="flex flex-col gap-3">
+            <Input
+              label={t("settings.voices.label")}
+              value={editSample.label}
+              onChange={(e) =>
+                setEditSample({ ...editSample, label: e.target.value })
+              }
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-neutral-400">
+                  {t("settings.voices.gender")}
+                </label>
+                <select
+                  className="input"
+                  value={editSample.gender}
+                  onChange={(e) =>
+                    setEditSample({
+                      ...editSample,
+                      gender: e.target.value as "female" | "male",
+                    })
+                  }
+                >
+                  <option value="female">♀ {t("settings.voices.female")}</option>
+                  <option value="male">♂ {t("settings.voices.male")}</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-neutral-400">
+                  {t("settings.design.language")}
+                </label>
+                <select
+                  className="input"
+                  value={editSample.language}
+                  onChange={(e) =>
+                    setEditSample({ ...editSample, language: e.target.value })
+                  }
+                >
+                  <option value="de">Deutsch</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-neutral-400">
+                {t("settings.voices.refText")}
+              </label>
+              <textarea
+                className="input min-h-[60px] resize-y"
+                value={editSample.refText}
+                onChange={(e) =>
+                  setEditSample({ ...editSample, refText: e.target.value })
+                }
+                placeholder={t("settings.voices.refTextPlaceholder")}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-neutral-400">
+                {t("settings.voices.instruct")}
+              </label>
+              <textarea
+                className="input min-h-[80px] resize-y"
+                value={editSample.instruct}
+                onChange={(e) =>
+                  setEditSample({ ...editSample, instruct: e.target.value })
+                }
+                placeholder={t("settings.voices.instructPlaceholder")}
+              />
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.voices.instructHint")}
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!editDesign}
+        onClose={() => !editBusy && setEditDesign(null)}
+        title={t("settings.design.editTitle")}
+        size="xl"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setEditDesign(null)}
+              disabled={editBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={saveDesignEdit} disabled={editBusy}>
+              {editBusy ? t("common.saving") : t("common.save")}
+            </Button>
+          </div>
+        }
+      >
+        {editDesign && (
+          <div className="flex flex-col gap-3">
+            <Input
+              label={t("settings.design.label")}
+              value={editDesign.label}
+              onChange={(e) =>
+                setEditDesign({ ...editDesign, label: e.target.value })
+              }
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-neutral-400">
+                  {t("settings.design.gender")}
+                </label>
+                <select
+                  className="input"
+                  value={editDesign.gender}
+                  onChange={(e) =>
+                    setEditDesign({
+                      ...editDesign,
+                      gender: e.target.value as "female" | "male",
+                    })
+                  }
+                >
+                  <option value="female">♀ {t("settings.voices.female")}</option>
+                  <option value="male">♂ {t("settings.voices.male")}</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-neutral-400">
+                  {t("settings.design.language")}
+                </label>
+                <select
+                  className="input"
+                  value={editDesign.language}
+                  onChange={(e) =>
+                    setEditDesign({ ...editDesign, language: e.target.value })
+                  }
+                >
+                  <option value="de">Deutsch</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-neutral-400">
+                {t("settings.design.description")}
+              </label>
+              <textarea
+                className="input min-h-[120px] resize-y"
+                value={editDesign.description}
+                onChange={(e) =>
+                  setEditDesign({
+                    ...editDesign,
+                    description: e.target.value,
+                  })
+                }
+              />
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.design.editDescHint")}
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

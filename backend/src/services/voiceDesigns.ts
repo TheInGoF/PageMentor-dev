@@ -101,6 +101,54 @@ export function setVoiceDesignVisibility(id: string, show: boolean): boolean {
   return res.changes > 0;
 }
 
+/** Patch text/meta fields on a voice design. Seed and ref audio are
+ *  NOT patchable — they define the voice identity. Description IS
+ *  patchable: editing it slightly drifts the synthesized voice (the
+ *  description is the instruct prompt) but the user has to accept
+ *  that trade-off if they want to refine wording. */
+export interface VoiceDesignPatch {
+  label?: string;
+  gender?: Gender;
+  language?: string;
+  description?: string;
+}
+export function updateVoiceDesign(
+  id: string,
+  patch: VoiceDesignPatch
+): VoiceDesign | null {
+  const design = getVoiceDesign(id);
+  if (!design) return null;
+  const sets: string[] = [];
+  const args: Array<string | number | null> = [];
+  if (patch.label !== undefined) {
+    const v = patch.label.trim();
+    if (!v) throw new Error("label cannot be empty");
+    sets.push("label = ?");
+    args.push(v);
+  }
+  if (patch.gender !== undefined) {
+    sets.push("gender = ?");
+    args.push(patch.gender);
+  }
+  if (patch.language !== undefined) {
+    sets.push("language = ?");
+    args.push(patch.language);
+  }
+  if (patch.description !== undefined) {
+    const v = patch.description.trim();
+    if (v.length < 10) throw new Error("description too short (≥10 chars)");
+    if (v.length > 2000) throw new Error("description too long (≤2000 chars)");
+    sets.push("description = ?");
+    args.push(v);
+  }
+  if (sets.length === 0) return design;
+  args.push(id);
+  db()
+    .prepare(`UPDATE voice_designs SET ${sets.join(", ")} WHERE id = ?`)
+    .run(...args);
+  return getVoiceDesign(id);
+}
+
 export function listVoiceDesigns(): VoiceDesign[] {
   const rows = db()
     .prepare("SELECT * FROM voice_designs ORDER BY created_at DESC")

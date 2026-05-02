@@ -15,7 +15,9 @@ import {
   getVoiceSample,
   listVoiceSamples,
   setVoiceSampleVisibility,
+  updateVoiceSample,
   type Gender,
+  type VoiceSamplePatch,
 } from "../services/voiceSamples";
 import {
   createVoiceDesign,
@@ -23,6 +25,8 @@ import {
   getVoiceDesign,
   listVoiceDesigns,
   setVoiceDesignVisibility,
+  updateVoiceDesign,
+  type VoiceDesignPatch,
 } from "../services/voiceDesigns";
 import { writeFileSync } from "node:fs";
 import { synthesizePreview } from "../tts/synth";
@@ -312,12 +316,15 @@ voiceRoutes.get("/custom", (c) => {
       label: v.label,
       gender: v.gender,
       language: v.language,
+      refText: v.refText,
       refTextPresent: !!v.refText,
+      instruct: v.instruct,
       bytes: v.bytes,
       seed: v.seed,
       createdAt: v.createdAt,
       msPerChar: v.msPerChar,
       samplesCount: v.samplesCount,
+      showInAudiobook: v.showInAudiobook,
     })),
   });
 });
@@ -408,6 +415,44 @@ voiceRoutes.patch("/design/:id/visibility", async (c) => {
   const ok = setVoiceDesignVisibility(id, show);
   if (!ok) return c.json({ error: "not found" }, 404);
   return c.json({ ok: true, showInAudiobook: show });
+});
+
+// Patch the editable text/meta fields on a custom voice. Audio file
+// and seed are immutable — they define the voice identity.
+voiceRoutes.patch("/custom/:id", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req
+    .json<VoiceSamplePatch>()
+    .catch(() => ({} as VoiceSamplePatch));
+  try {
+    const updated = updateVoiceSample(id, body);
+    if (!updated) return c.json({ error: "not found" }, 404);
+    return c.json({ ok: true, sample: updated });
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "patch failed" },
+      400
+    );
+  }
+});
+
+// Patch design fields. Description IS editable (slight voice drift
+// is acceptable for refining wording); seed and ref audio stay frozen.
+voiceRoutes.patch("/design/:id", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req
+    .json<VoiceDesignPatch>()
+    .catch(() => ({} as VoiceDesignPatch));
+  try {
+    const updated = updateVoiceDesign(id, body);
+    if (!updated) return c.json({ error: "not found" }, 404);
+    return c.json({ ok: true, design: updated });
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "patch failed" },
+      400
+    );
+  }
 });
 
 voiceRoutes.get("/presets/visibility", (c) => {

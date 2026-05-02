@@ -52,6 +52,11 @@ export interface VoiceSample {
    *  With ~30 candidates the dropdown becomes unreadable; users can
    *  hide voices they don't intend to narrate with. */
   showInAudiobook: boolean;
+  /** Optional speaking-style prompt forwarded to generate_voice_clone
+   *  as `instruct`. Without it, Qwen drifts in tempo between chunks
+   *  because the reference audio alone doesn't fix prosody. Examples:
+   *  "Calm narrator, steady pace", "Slow audiobook narration". */
+  instruct: string | null;
 }
 
 interface Row {
@@ -68,6 +73,7 @@ interface Row {
   ms_per_char: number | null;
   samples_count: number;
   show_in_audiobook: number | null;
+  instruct: string | null;
 }
 
 function rowToSample(r: Row): VoiceSample {
@@ -85,6 +91,7 @@ function rowToSample(r: Row): VoiceSample {
     msPerChar: r.ms_per_char ?? null,
     samplesCount: r.samples_count ?? 0,
     showInAudiobook: (r.show_in_audiobook ?? 1) === 1,
+    instruct: r.instruct ?? null,
   };
 }
 
@@ -94,6 +101,54 @@ export function setVoiceSampleVisibility(id: string, show: boolean): boolean {
     .prepare("UPDATE voice_samples SET show_in_audiobook = ? WHERE id = ?")
     .run(show ? 1 : 0, id);
   return res.changes > 0;
+}
+
+/** Patch text/meta fields on a voice sample. The audio file and the
+ *  seed are deliberately NOT patchable — changing them would break
+ *  the voice identity. Returns the updated row or null if not found. */
+export interface VoiceSamplePatch {
+  label?: string;
+  gender?: Gender;
+  language?: string;
+  refText?: string | null;
+  instruct?: string | null;
+}
+export function updateVoiceSample(
+  id: string,
+  patch: VoiceSamplePatch
+): VoiceSample | null {
+  const sample = getVoiceSample(id);
+  if (!sample) return null;
+  const sets: string[] = [];
+  const args: Array<string | number | null> = [];
+  if (patch.label !== undefined) {
+    const v = patch.label.trim();
+    if (!v) throw new Error("label cannot be empty");
+    sets.push("label = ?");
+    args.push(v);
+  }
+  if (patch.gender !== undefined) {
+    sets.push("gender = ?");
+    args.push(patch.gender);
+  }
+  if (patch.language !== undefined) {
+    sets.push("language = ?");
+    args.push(patch.language);
+  }
+  if (patch.refText !== undefined) {
+    sets.push("ref_text = ?");
+    args.push(patch.refText?.trim() || null);
+  }
+  if (patch.instruct !== undefined) {
+    sets.push("instruct = ?");
+    args.push(patch.instruct?.trim() || null);
+  }
+  if (sets.length === 0) return sample;
+  args.push(id);
+  db()
+    .prepare(`UPDATE voice_samples SET ${sets.join(", ")} WHERE id = ?`)
+    .run(...args);
+  return getVoiceSample(id);
 }
 
 export function listVoiceSamples(): VoiceSample[] {

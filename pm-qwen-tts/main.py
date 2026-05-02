@@ -878,6 +878,7 @@ def _synth_clone(
     top_p: Optional[float] = None,
     top_k: Optional[int] = None,
     repetition_penalty: Optional[float] = None,
+    instruct: Optional[str] = None,
 ) -> tuple[np.ndarray, int]:
     if _model is None:
         raise HTTPException(
@@ -908,6 +909,13 @@ def _synth_clone(
     }
     if stopping_criteria is not None:
         gen_kwargs["stopping_criteria"] = stopping_criteria
+    # Optional speaking-style prompt — without it, Qwen drifts in
+    # tempo between chunks because the reference audio alone doesn't
+    # fix prosody. The model build accepts `instruct` on the clone
+    # path; if a future Qwen version doesn't, the run loop catches
+    # the TypeError and retries without the kwarg.
+    if instruct and instruct.strip():
+        gen_kwargs["instruct"] = instruct.strip()
     _ = speed  # speed cannot be set via this path (see older comment)
 
     # Request identifier for log grepping: 8-char hash from text +
@@ -929,6 +937,24 @@ def _synth_clone(
             with torch.inference_mode():
                 wavs, sr = _model.generate_voice_clone(**gen_kwargs)
             return wavs, sr
+        except TypeError as te:
+            # Older Qwen3-TTS builds may not accept `instruct` on the
+            # clone path — strip it and retry once. Any other TypeError
+            # is a real bug and re-raises.
+            if "instruct" in gen_kwargs and "instruct" in str(te):
+                log.warning(
+                    "generate_voice_clone [%s] rejected `instruct` kwarg — "
+                    "retrying without it",
+                    req_hash,
+                )
+                gen_kwargs.pop("instruct", None)
+                with torch.inference_mode():
+                    wavs, sr = _model.generate_voice_clone(**gen_kwargs)
+                return wavs, sr
+            log.exception("generate_voice_clone [%s] failed", req_hash)
+            raise HTTPException(
+                status_code=500, detail=f"generation failed: {te}"
+            ) from te
         except Exception as e:  # noqa: BLE001
             log.exception("generate_voice_clone [%s] failed", req_hash)
             raise HTTPException(
@@ -1473,6 +1499,7 @@ def speech(req: SpeechRequest):
             top_k=req.top_k,
             repetition_penalty=req.repetition_penalty,
             max_new_tokens_override=req.max_new_tokens_override,
+            instruct=req.instruct,
         )
     body, ctype = _encode_audio(samples, sr, req.response_format)
     return Response(content=body, media_type=ctype)

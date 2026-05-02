@@ -77,6 +77,7 @@ const en: Record<string, string> = {
   "common.close": "Close",
   "common.delete": "Delete",
   "common.edit": "Edit",
+  "common.saved": "Saved.",
   "common.back": "Back",
   "common.confirm": "OK",
   "common.done": "Done",
@@ -701,6 +702,9 @@ const en: Record<string, string> = {
   "settings.tts.advanced.hint":
     "Sampling tuning for stable long-form narration: temperature 0.7–0.8 keeps voices natural without too much drift, top-P 0.7–0.85 tightens the timbre, top-K caps long-tail randomness. Repetition penalty around 1.05–1.15 fights the looping/garble bug seen on long voice clones (Qwen3-TTS issue #258). Empty fields fall back to the sidecar's QWEN_TTS_DEFAULT_* values.",
   "settings.design.title": "Designed voices (text-described)",
+  "settings.design.editTitle": "Edit designed voice",
+  "settings.design.editDescHint":
+    "Editing the description slightly drifts the voice — seed and reference audio stay frozen, but the model uses the description as `instruct` on every chunk.",
   "settings.design.subtitle":
     "Generate voices from a text description instead of picking a preset or uploading a reference. Uses the Qwen3-TTS VoiceDesign model — a separate ~4 GB model, lazy-loaded on first use.",
   "settings.design.empty": "No designed voices yet. Create one below.",
@@ -763,6 +767,12 @@ const en: Record<string, string> = {
   "settings.voices.missingFields": "Name and audio file are required",
   "settings.voices.hide": "Hide from audiobook picker",
   "settings.voices.unhide": "Show in audiobook picker",
+  "settings.voices.editTitle": "Edit voice",
+  "settings.voices.instruct": "Speaking style (optional)",
+  "settings.voices.instructPlaceholder":
+    "e.g. Calm narrator, steady audiobook pace.",
+  "settings.voices.instructHint":
+    "Forwarded to Qwen as `instruct`. Without it, tempo can drift between chunks even with a clean reference sample.",
   "settings.presets.title": "Built-in voices in audiobook picker",
   "settings.presets.subtitle":
     "Toggle which preset voices appear in the audiobook tab.",
@@ -918,6 +928,7 @@ const de: Record<string, string> = {
   "common.close": "Schließen",
   "common.delete": "Löschen",
   "common.edit": "Bearbeiten",
+  "common.saved": "Gespeichert.",
   "common.back": "Zurück",
   "common.confirm": "OK",
   "common.done": "Fertig",
@@ -1545,6 +1556,9 @@ const de: Record<string, string> = {
   "settings.tts.advanced.hint":
     "Sampling-Tuning für stabile Langform-Erzählung: Temperature 0,7–0,8 hält die Stimme natürlich ohne starken Drift, Top-P 0,7–0,85 strafft das Klangbild, Top-K kappt Long-Tail-Zufallstokens. Repetition Penalty um 1,05–1,15 wirkt gegen den Loop/Garble-Bug langer Voice-Clones (Qwen3-TTS Issue #258). Leere Felder fallen auf die QWEN_TTS_DEFAULT_*-Werte des Sidecar zurück.",
   "settings.design.title": "Designte Stimmen (aus Textbeschreibung)",
+  "settings.design.editTitle": "Designte Stimme bearbeiten",
+  "settings.design.editDescHint":
+    "Beschreibung-Edit verschiebt die Stimme leicht — Seed und Referenz-Audio bleiben fest, aber das Modell nutzt die Beschreibung als `instruct` bei jedem Chunk.",
   "settings.design.subtitle":
     "Erzeugt Stimmen aus einer Freitext-Beschreibung — statt Preset wählen oder Referenz-Audio hochladen. Nutzt das Qwen3-TTS-VoiceDesign-Modell (~4 GB, lazy-load beim ersten Einsatz).",
   "settings.design.empty": "Noch keine designten Stimmen. Unten eine anlegen.",
@@ -1606,6 +1620,12 @@ const de: Record<string, string> = {
   "settings.voices.previewFailed": "Preview fehlgeschlagen — TTS-Sidecar prüfen",
   "settings.voices.hide": "Im Hörbuch-Picker ausblenden",
   "settings.voices.unhide": "Im Hörbuch-Picker einblenden",
+  "settings.voices.editTitle": "Stimme bearbeiten",
+  "settings.voices.instruct": "Sprech-Anweisung (optional)",
+  "settings.voices.instructPlaceholder":
+    "z.B. Ruhige Erzählstimme, gleichmäßiges Hörbuch-Tempo.",
+  "settings.voices.instructHint":
+    "Wird als `instruct` an Qwen weitergereicht. Ohne diese Anweisung kann das Sprech-Tempo zwischen Chunks driften, auch bei sauberem Sample.",
   "settings.presets.title": "Vorgegebene Stimmen im Hörbuch-Picker",
   "settings.presets.subtitle":
     "Wählen, welche Preset-Stimmen im Hörbuch-Tab erscheinen sollen.",

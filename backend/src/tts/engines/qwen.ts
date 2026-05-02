@@ -369,6 +369,11 @@ async function callSpeechClone(params: {
       speed: params.speed,
       ref_audio_b64: refB64,
       ref_text: params.sample.refText ?? undefined,
+      // Per-voice speaking-style prompt — without it the clone path
+      // drifts in tempo between chunks. The sidecar forwards it as
+      // `instruct` to generate_voice_clone (silently ignored if the
+      // model build doesn't accept the kwarg).
+      instruct: params.sample.instruct || undefined,
       language: qwenLanguageFor(params.sample.language),
       seed: params.sample.seed,
       temperature: d.temperature,
@@ -473,6 +478,10 @@ async function callSpeechCloneFromDesign(params: {
       speed: 1.0,
       ref_audio_b64: refB64,
       ref_text: params.design.refText ?? undefined,
+      // Forward the design's description as instruct — it's the same
+      // prompt the original generate_voice_design used, and keeps the
+      // tempo/style consistent across chunks instead of drifting.
+      instruct: params.design.description || undefined,
       language: qwenLanguageFor(params.design.language),
       seed: params.design.seed,
     }),

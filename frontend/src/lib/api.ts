@@ -83,7 +83,11 @@ export interface CustomVoiceMeta {
   label: string;
   gender: "female" | "male";
   language: string;
+  refText?: string | null;
   refTextPresent: boolean;
+  /** Optional speaking-style prompt (passed to generate_voice_clone
+   *  as `instruct`). Empty/null = no style hint. */
+  instruct?: string | null;
   bytes: number;
   seed: number;
   createdAt: string;
@@ -754,6 +758,23 @@ export const api = {
           body: JSON.stringify({ showInAudiobook }),
         }
       ),
+    /** Patch label/gender/language/refText/instruct on an existing
+     *  custom voice. Audio file + seed are immutable (would change
+     *  the voice identity). */
+    update: (
+      id: string,
+      patch: {
+        label?: string;
+        gender?: "female" | "male";
+        language?: string;
+        refText?: string | null;
+        instruct?: string | null;
+      }
+    ) =>
+      request<{ ok: true; sample: CustomVoiceMeta }>(
+        `/api/voices/custom/${id}`,
+        { method: "PATCH", body: JSON.stringify(patch) }
+      ),
   },
   voiceDesigns: {
     list: () => request<{ voices: VoiceDesignMeta[] }>("/api/voices/design"),
@@ -806,6 +827,22 @@ export const api = {
           method: "PATCH",
           body: JSON.stringify({ showInAudiobook }),
         }
+      ),
+    /** Patch label/gender/language/description on an existing design.
+     *  Seed and ref audio are immutable; description IS editable
+     *  (slight voice drift acceptable for refining wording). */
+    update: (
+      id: string,
+      patch: {
+        label?: string;
+        gender?: "female" | "male";
+        language?: string;
+        description?: string;
+      }
+    ) =>
+      request<{ ok: true; design: VoiceDesignMeta }>(
+        `/api/voices/design/${id}`,
+        { method: "PATCH", body: JSON.stringify(patch) }
       ),
     listPresetVisibility: () =>
       request<{ presets: PresetVisibility[] }>(
