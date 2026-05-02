@@ -30,7 +30,11 @@ import {
 } from "../services/voiceDesigns";
 import { writeFileSync } from "node:fs";
 import { synthesizePreview } from "../tts/synth";
-import { previewDesignUnsaved, ensureDesignReference } from "../tts/engines/qwen";
+import {
+  previewDesignUnsaved,
+  ensureDesignReference,
+  distillCloneToDesign,
+} from "../tts/engines/qwen";
 import { designRefPath, setDesignReference } from "../services/voiceDesigns";
 import {
   listPresetVisibility,
@@ -433,6 +437,43 @@ voiceRoutes.patch("/custom/:id", async (c) => {
       { error: err instanceof Error ? err.message : "patch failed" },
       400
     );
+  }
+});
+
+// Distill: render Qwen-native preview of a clone voice speaking the
+// standard preview text. Used by the Voice-Edit-Modal "Als Design
+// destillieren"-Wizard. Returns audio + the seed used (header).
+// User can re-call with random seeds until happy, then save the
+// rendered blob via the regular POST /design endpoint.
+voiceRoutes.post("/custom/:id/distill/preview", async (c) => {
+  const id = c.req.param("id");
+  const sample = getVoiceSample(id);
+  if (!sample) return c.json({ error: "voice sample not found" }, 404);
+
+  const body = await c.req
+    .json<{ text?: string; seed?: number }>()
+    .catch(() => ({} as { text?: string; seed?: number }));
+
+  const text = (body.text ?? "").trim() || defaultPreviewText(sample.language);
+
+  try {
+    const { buf, seedUsed } = await distillCloneToDesign({
+      sampleId: id,
+      text,
+      seed: body.seed,
+      timeoutMs: 5 * 60_000,
+    });
+    return new Response(new Uint8Array(buf), {
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Content-Length": String(buf.length),
+        "X-Voice-Seed": String(seedUsed),
+        "Access-Control-Expose-Headers": "X-Voice-Seed",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
   }
 });
 

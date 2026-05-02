@@ -773,6 +773,17 @@ const en: Record<string, string> = {
     "e.g. Calm narrator, steady audiobook pace.",
   "settings.voices.instructHint":
     "Forwarded to Qwen as `instruct`. Without it, tempo can drift between chunks even with a clean reference sample.",
+  "settings.voices.distill.title": "Distill into a designed voice",
+  "settings.voices.distill.hint":
+    "Render this clone speaking the standard preview text via Qwen. The output becomes a Qwen-native reference: more stable tempo across chunks, identity stays close to the original. Try a few seeds and save the best take.",
+  "settings.voices.distill.label": "Designed voice name",
+  "settings.voices.distill.labelPlaceholder": "e.g. Sammy (designed)",
+  "settings.voices.distill.render": "Render preview",
+  "settings.voices.distill.rendering": "Rendering …",
+  "settings.voices.distill.reroll": "Try another seed",
+  "settings.voices.distill.save": "Save as designed voice",
+  "settings.voices.distill.saved": "Saved \"{label}\" as designed voice.",
+  "settings.voices.distill.labelRequired": "Name required to save.",
   "settings.presets.title": "Built-in voices in audiobook picker",
   "settings.presets.subtitle":
     "Toggle which preset voices appear in the audiobook tab.",
@@ -1626,6 +1637,17 @@ const de: Record<string, string> = {
     "z.B. Ruhige Erzählstimme, gleichmäßiges Hörbuch-Tempo.",
   "settings.voices.instructHint":
     "Wird als `instruct` an Qwen weitergereicht. Ohne diese Anweisung kann das Sprech-Tempo zwischen Chunks driften, auch bei sauberem Sample.",
+  "settings.voices.distill.title": "In Designed Voice destillieren",
+  "settings.voices.distill.hint":
+    "Lasse diese Clone-Stimme den Standard-Vorschau-Text via Qwen sprechen. Das Ergebnis wird Qwen-native Reference: stabileres Tempo über Chunks, Identität bleibt nahe am Original. Mehrere Seeds probieren und die beste Take speichern.",
+  "settings.voices.distill.label": "Designed-Voice-Name",
+  "settings.voices.distill.labelPlaceholder": "z.B. Sammy (Design)",
+  "settings.voices.distill.render": "Vorschau rendern",
+  "settings.voices.distill.rendering": "Rendere …",
+  "settings.voices.distill.reroll": "Anderer Seed",
+  "settings.voices.distill.save": "Als Designed Voice speichern",
+  "settings.voices.distill.saved": "\"{label}\" als Designed Voice gespeichert.",
+  "settings.voices.distill.labelRequired": "Name zum Speichern erforderlich.",
   "settings.presets.title": "Vorgegebene Stimmen im Hörbuch-Picker",
   "settings.presets.subtitle":
     "Wählen, welche Preset-Stimmen im Hörbuch-Tab erscheinen sollen.",

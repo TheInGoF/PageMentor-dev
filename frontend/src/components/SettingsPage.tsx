@@ -129,6 +129,15 @@ export function SettingsPage({ onBack }: Props) {
     description: string;
   } | null>(null);
   const [editBusy, setEditBusy] = useState(false);
+  // Distill-Wizard: rendere die Clone-Stimme als Qwen-natives MP3,
+  // hoere rein, speicher als neue Design-Stimme. Reroll aendert nur
+  // den Seed — die Sample-Reference bleibt die gleiche.
+  const [distillBusy, setDistillBusy] = useState(false);
+  const [distillBlob, setDistillBlob] = useState<Blob | null>(null);
+  const [distillSeed, setDistillSeed] = useState<number | null>(null);
+  const [distillUrl, setDistillUrl] = useState<string | null>(null);
+  const [distillLabel, setDistillLabel] = useState("");
+  const [distillSaving, setDistillSaving] = useState(false);
   const [designDraft, setDesignDraft] = useState<{
     label: string;
     gender: "female" | "male";
@@ -295,6 +304,12 @@ export function SettingsPage({ onBack }: Props) {
       if (designPreviewUrl) URL.revokeObjectURL(designPreviewUrl);
     };
   }, [designPreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (distillUrl) URL.revokeObjectURL(distillUrl);
+    };
+  }, [distillUrl]);
 
   useEffect(() => {
     // Default text per language, only while the user hasn't typed
@@ -665,6 +680,83 @@ export function SettingsPage({ onBack }: Props) {
       refText: v.refText ?? "",
       instruct: v.instruct ?? "",
     });
+    // Distill-State zuruecksetzen — frisches Modal, nichts vom letzten
+    // Voice mitnehmen.
+    if (distillUrl) URL.revokeObjectURL(distillUrl);
+    setDistillBlob(null);
+    setDistillSeed(null);
+    setDistillUrl(null);
+    setDistillLabel(`${v.label} (Design)`);
+  }
+
+  /** Render Sammys Stimme einmal als Qwen-natives MP3 mit dem Standard-
+   *  Vorschau-Text. Jeder Klick wuerfelt einen neuen Seed → Reroll-
+   *  Wizard wie beim VoiceDesign-Erstellen. Audio bleibt im Speicher
+   *  bis User entweder speichert oder Modal schliesst. */
+  async function distillRender() {
+    if (!editSample) return;
+    setDistillBusy(true);
+    try {
+      const { blob, seed } = await api.customVoices.distillPreview(
+        editSample.id
+      );
+      if (distillUrl) URL.revokeObjectURL(distillUrl);
+      const url = URL.createObjectURL(blob);
+      setDistillBlob(blob);
+      setDistillSeed(seed);
+      setDistillUrl(url);
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : t("common.error"),
+        "error"
+      );
+    } finally {
+      setDistillBusy(false);
+    }
+  }
+
+  /** Speichert die destillierte MP3 als neue Voice-Design-Stimme. Die
+   *  description bleibt leer (User kann sie spaeter im Design-Edit
+   *  ergaenzen) — wichtig ist nur dass die Reference-Audio jetzt
+   *  Qwen-nativ ist statt User-Upload. */
+  async function distillSave() {
+    if (!editSample || !distillBlob || distillSeed === null) return;
+    if (!distillLabel.trim()) {
+      toast.show(t("settings.voices.distill.labelRequired"), "error");
+      return;
+    }
+    setDistillSaving(true);
+    try {
+      await api.voiceDesigns.create({
+        label: distillLabel.trim(),
+        gender: editSample.gender,
+        language: editSample.language,
+        description: `Distilled from clone voice ${editSample.label}.`,
+        seed: distillSeed,
+        refBlob: distillBlob,
+      });
+      const r = await api.voiceDesigns.list();
+      setVoiceDesigns(r.voices);
+      notifyVoicesChanged();
+      // Distill-State leeren, Modal bleibt offen damit der User die
+      // Original-Clone-Voice noch weiter editieren kann (oder direkt
+      // schliesst).
+      if (distillUrl) URL.revokeObjectURL(distillUrl);
+      setDistillBlob(null);
+      setDistillSeed(null);
+      setDistillUrl(null);
+      toast.show(
+        t("settings.voices.distill.saved", { label: distillLabel.trim() }),
+        "success"
+      );
+    } catch (err) {
+      toast.show(
+        err instanceof Error ? err.message : t("common.error"),
+        "error"
+      );
+    } finally {
+      setDistillSaving(false);
+    }
   }
 
   function openDesignEdit(v: VoiceDesignMeta) {
@@ -2009,6 +2101,66 @@ export function SettingsPage({ onBack }: Props) {
               <p className="text-[11px] text-neutral-500">
                 {t("settings.voices.instructHint")}
               </p>
+            </div>
+
+            {/* Distill-Wizard: Clone-Voice in Design-Voice umwandeln.
+                Qwen rendert die Stimme einmal mit dem Standard-
+                Vorschau-Text → Qwen-natives Audio → wird als neue
+                Design-Reference gespeichert. Stabilisiert Tempo +
+                Stil ueber Audiobook-Chunks. Identitaet bleibt nahe
+                am Original (war der Render-Input), wird aber von
+                Qwen leicht "interpretiert". */}
+            <div className="card p-3 flex flex-col gap-2 bg-bg/40 border-accent-subtle/30">
+              <h4 className="text-xs font-semibold text-neutral-300">
+                {t("settings.voices.distill.title")}
+              </h4>
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.voices.distill.hint")}
+              </p>
+              <Input
+                label={t("settings.voices.distill.label")}
+                value={distillLabel}
+                onChange={(e) => setDistillLabel(e.target.value)}
+                placeholder={t("settings.voices.distill.labelPlaceholder")}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={distillRender}
+                  disabled={distillBusy || distillSaving}
+                >
+                  {distillBusy
+                    ? t("settings.voices.distill.rendering")
+                    : distillSeed === null
+                    ? t("settings.voices.distill.render")
+                    : t("settings.voices.distill.reroll")}
+                </Button>
+                {distillSeed !== null && (
+                  <span className="text-[11px] text-neutral-500 font-mono">
+                    {t("settings.design.currentSeed", {
+                      seed: String(distillSeed),
+                    })}
+                  </span>
+                )}
+              </div>
+              {distillUrl && (
+                <audio
+                  controls
+                  src={distillUrl}
+                  className="w-full mt-1"
+                  autoPlay
+                />
+              )}
+              {distillBlob && distillSeed !== null && (
+                <Button
+                  onClick={distillSave}
+                  disabled={distillSaving || !distillLabel.trim()}
+                >
+                  {distillSaving
+                    ? t("common.saving")
+                    : t("settings.voices.distill.save")}
+                </Button>
+              )}
             </div>
           </div>
         )}
