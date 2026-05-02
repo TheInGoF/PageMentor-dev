@@ -553,9 +553,14 @@ export async function generateAudiobook(params: {
         }
       }
 
+      // Vor terminal emit aus running raus, damit Frontend's
+      // state-refresh nach dem SSE-Event isGenerating=false sieht
+      // (sonst race-condition → "generiere..." haengt).
+      running.delete(params.docId);
       emit({ phase: "audiobook.done", docId: doc.id, total: chapters.length });
     }
   } catch (err) {
+    running.delete(params.docId);
     if (err instanceof AudiobookCanceled) {
       emit({
         phase: "audiobook.canceled",
@@ -709,6 +714,9 @@ export async function generateSingleChapterAudio(params: {
       }
     }
 
+    // Vor terminal emit aus running raus (race-condition-Fix wie in
+    // generateAudiobook und generateIntroAudio).
+    if (!alreadyRunning) running.delete(row.document_id);
     emit({
       phase: "audiobook.chapter.done",
       docId: row.document_id,
@@ -724,6 +732,7 @@ export async function generateSingleChapterAudio(params: {
 
     return { audioId: audioIdRow?.id ?? "", durationMs };
   } catch (err) {
+    if (!alreadyRunning) running.delete(row.document_id);
     emit({
       phase: "audiobook.chapter.failed",
       docId: row.document_id,
@@ -828,6 +837,12 @@ export async function generateIntroAudio(params: {
           total,
         }),
     });
+    // WICHTIG: vor dem terminal emit aus running rausnehmen, sonst
+    // race-condition mit dem Frontend: SSE chapter.done triggert sofort
+    // einen state-refresh, der `isGenerating(docId)` checkt, was bis
+    // zum Ablaufen des finally-Blocks weiterhin true bleibt → UI hängt
+    // bei "generiere..." obwohl die Datei schon spielbar ist.
+    if (!alreadyRunning) running.delete(params.docId);
     emit({
       phase: "audiobook.chapter.done",
       docId: params.docId,
@@ -837,6 +852,7 @@ export async function generateIntroAudio(params: {
     });
     return { path: outFile, durationMs };
   } catch (err) {
+    if (!alreadyRunning) running.delete(params.docId);
     emit({
       phase: "audiobook.chapter.failed",
       docId: params.docId,
@@ -847,6 +863,8 @@ export async function generateIntroAudio(params: {
     });
     throw err;
   } finally {
+    // Belt-and-suspenders: falls oben aus irgendeinem Grund nicht
+    // gelaufen (sehr seltener Code-Pfad), trotzdem aufraeumen.
     if (!alreadyRunning) running.delete(params.docId);
   }
 }
