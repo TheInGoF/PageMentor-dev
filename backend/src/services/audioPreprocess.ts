@@ -703,7 +703,12 @@ export async function preprocessChapterForAudio(params: {
   // sentence boundaries as fallback. A single sentence longer than
   // maxChars is now passed through as its own oversize chunk instead
   // of getting hard-cut mid-word — the model can swallow it.
-  const subChunks = splitForPreprocess(pretreated, 12000);
+  // 9600 statt 12000: -20% Headroom damit Gemma e4b sauberer
+  // arbeitet. Bei der Obergrenze haben sich gelegentlich Output-
+  // Quality-Drops gezeigt (wahrscheinlich KV-Cache-Druck im
+  // 128k-Setup). 9600 Zeichen ≈ 3200 Input-Tokens, immer noch
+  // genug fuer typische Kapitel mit 1-3 Pässen statt 4-5.
+  const subChunks = splitForPreprocess(pretreated, 9600);
   if (subChunks.length > 1) {
     console.log(
       `[audio-preprocess] chapter ${row.id} (${pretreated.length} chars) → ` +

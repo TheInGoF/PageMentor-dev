@@ -110,22 +110,31 @@ const DE_AND_OR: Rule[] = [
   { pattern: /\bund\s+oder\b/gi, replacement: "oder" },
 ];
 
-/** Adjektiv-Bindestrich-Compounds zwischen zwei Kleinbuchstaben-
- *  Wörtern: "technisch-bürokratisch", "kulturell-visionär",
- *  "rot-grün". Phonetisch beim Hörbuch dieselbe Aussprache wie mit
- *  Komma, aber für Qwen-Long-Form deutlich unproblematischer (kein
- *  freistehendes Sonderzeichen). Großgeschriebene Compounds wie
- *  "Maslow-Pyramide" werden NICHT angefasst — das sind echte
- *  Bindestrich-Eigennamen, die bleiben.
+/** Bindestrich-Compounds zwischen zwei mehrbuchstabigen Wörtern,
+ *  beliebige Groß/Kleinschreibung. Beispiele die wir aufbrechen:
+ *    "technisch-bürokratisch"        (lower-lower)
+ *    "Ziel-Leistungs-Aspekt"         (Upper-Upper-Upper Kette)
+ *    "Maslow-Pyramide"               (Upper-Upper)
+ *    "schwarz-weiß"                  (lower-lower Compound)
+ *    "Effizienz-Effektivität"        (Upper-Upper)
  *
- *  Spezialfall: Adjektive nicht aufbrechen wenn das Adjektiv-Paar
- *  ein semantisches Compound bildet ("schwarz-weiß", "rot-grün") —
- *  hier akzeptieren wir den minimalen Aussprache-Unterschied
- *  zwischen "schwarz, weiß" und "schwarz-weiß", weil sich der
- *  Bedeutungsverlust im Hörfluss nicht bemerkbar macht. */
+ *  Phonetisch beim Hörbuch praktisch dieselbe Aussprache wie mit
+ *  Komma, aber für Qwen-Long-Form deutlich unproblematischer (kein
+ *  freistehender Bindestrich der den Decoder verwirrt → war Loop-
+ *  Trigger bei z.B. "Ziel-Leistungs-Aspekt").
+ *
+ *  Mindestens 2 Buchstaben auf jeder Seite, damit Sonderfälle wie
+ *  "U-Bahn", "B-Schule" (single letter prefix) NICHT zerteilt werden
+ *  und auch "Dipl.-Ing." nicht (Punkt vorm Bindestrich → kein Match).
+ *
+ *  Ketten wie "A-B-C" werden in einer iterativen Schleife behandelt:
+ *  ein single-pass würde nur das erste Bindestrich-Paar matchen, bei
+ *  dem die Position-Cursor-Logik der Regex über das C hinausspringt. */
+const DE_ADJECTIVE_HYPHEN_PATTERN =
+  /\b([\p{L}]{2,})-([\p{L}]{2,})\b/gu;
 const DE_ADJECTIVE_HYPHEN: Rule[] = [
   {
-    pattern: /\b([a-zäöüß]+)-([a-zäöüß]+)\b/g,
+    pattern: DE_ADJECTIVE_HYPHEN_PATTERN,
     replacement: "$1, $2",
   },
 ];
@@ -404,6 +413,17 @@ export function expandGermanAbbreviations(text: string): string {
   let out = text;
   for (const rule of DE_ALL) {
     out = out.replace(rule.pattern, rule.replacement as string);
+  }
+  // Bindestrich-Ketten ("Ziel-Leistungs-Aspekt") brauchen mehrere
+  // Replace-Pässe weil die Regex-Engine pro Pass nur das erste
+  // Bindestrich-Paar in einer Kette matcht (Cursor-Position
+  // springt über das Match hinaus). Loop bis stabil — kappt nach
+  // 5 Iterationen als Safety-Net falls eine Ersetzung versehentlich
+  // wieder etwas matchbares produziert.
+  for (let i = 0; i < 5; i++) {
+    const before = out;
+    out = out.replace(DE_ADJECTIVE_HYPHEN_PATTERN, "$1, $2");
+    if (out === before) break;
   }
   // Collapse double spaces caused by symbol substitutions (the
   // symbols had leading + trailing spaces).
