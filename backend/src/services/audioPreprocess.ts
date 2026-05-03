@@ -190,6 +190,39 @@ geschickt und müssen unter allen Umständen vermieden werden:
     FALSCH:  "durch Wettbewerb und oder durch das Team gewählt"
     RICHTIG: "durch Wettbewerb oder durch das Team gewählt"
 
+12) TOPIC-ANCHORED-REPETITION VERMEIDEN — Pronomen einsetzen
+    Wenn ein Substantiv im selben Absatz fünf oder mehr Mal auftaucht
+    (typisch in Definitionskapiteln: "Die Mimik ... Die Mimik ... Die
+    Mimik ..."), drosselt das den Hörfluss UND triggert bei der TTS-
+    Engine Token-Repetitions-Loops mit Hänger-Risiko.
+    Lösung: ersetze ab dem 4. Vorkommen abwechselnd mit grammatikalisch
+    KORREKTEN deutschen Pronomen (sie/er/es/ihn/ihm/ihrer/derer/diese/
+    jene/dieselbe), die in Genus, Kasus und Numerus zum Antezedens
+    passen. Behalte den ersten + letzten Auftritt als-ist (für
+    Themen-Anker am Anfang/Schluss). Lass keine doppelten Pronomen
+    direkt hintereinander stehen.
+
+    FALSCH (neun Mal "Mimik"):
+      "Die Mimik entsteht durch Reaktion. Wenn wir auf einen Umstand
+       reagieren, entsteht eine Gewohnheit in der Mimik. Wir drücken
+       unsere Reaktion in der Mimik aus. Mimiken graben sich als
+       Falten ein. Bei der Mimik nutzen wir Kinn, Mund, Nase, Augen.
+       Die Mimik drückt unsere Gefühle aus."
+
+    RICHTIG (drei Mal "Mimik" + Pronomen):
+      "Die Mimik entsteht durch Reaktion. Wenn wir auf einen Umstand
+       reagieren, entsteht eine Gewohnheit darin. Wir drücken unsere
+       Reaktion durch sie aus. Solche Gesichtsausdrücke graben sich
+       als Falten ein. Dabei nutzen wir Kinn, Mund, Nase, Augen. Die
+       Mimik drückt damit unsere Gefühle aus."
+
+    Achte auf grammatikalische Korrektheit:
+    - Mimik (feminin)  → sie / ihr / ihrer
+    - Gesicht (neutrum) → es / ihm / dessen
+    - Sprecher (maskulin) → er / ihn / ihm / dessen
+    Bei Mehrdeutigkeit (Hörer könnte Antezedens verwechseln): lass das
+    Substantiv stehen statt zu ersetzen.
+
 ================================================================
 
 WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchlaufen. Folgende Transformationen wurden schon gemacht — mache sie NICHT rückgängig:

@@ -76,7 +76,81 @@ export function segmentText(text: string): Segment[] {
   }
 
   if (buf.length) segments.push({ paragraphs: buf });
-  return segments;
+
+  // Topic-Density-Pass: jeden Chunk pruefen ob ein Substantiv zu oft
+  // wiederholt wird ("Mimik, Mimik, Mimik..." Lehrbuch-Pattern).
+  // Wenn ja: an Satzgrenze halbieren. Schuetzt vor Topic-Anchored-
+  // Loops im Qwen-Decoder ohne Settings-Anpassung pro Lauf.
+  return segments.flatMap((seg) => splitOnTopicDensity(seg));
+}
+
+/** Threshold: Substantiv erscheint mehr als 5x pro 1000c → splitten.
+ *  Empirisch genug um den Loop bei "Mimik"-Kapiteln (7-9x in 1000c)
+ *  und "Stimme"-Kapiteln (9-10x in 1000c) zu verhindern, ohne dass
+ *  normale Texte mit thematischer Wiederholung getroffen werden. */
+const TOPIC_DENSITY_PER_1000C = 5;
+const MIN_SPLIT_CHARS = 400;
+
+function splitOnTopicDensity(seg: Segment): Segment[] {
+  const text = seg.paragraphs.join("\n\n");
+  if (text.length < MIN_SPLIT_CHARS * 2) return [seg];
+
+  const limit = Math.max(
+    TOPIC_DENSITY_PER_1000C,
+    Math.floor((text.length / 1000) * TOPIC_DENSITY_PER_1000C),
+  );
+
+  const counts = countCapitalizedNouns(text);
+  let maxCount = 0;
+  let maxWord = "";
+  for (const [word, count] of counts) {
+    if (count > maxCount) {
+      maxCount = count;
+      maxWord = word;
+    }
+  }
+  if (maxCount <= limit) return [seg];
+
+  // Splitte an Satzgrenze möglichst in der Mitte. Wenn der Segment
+  // mehrere Paragraphen hat, splitte zwischen Paragraphen — sonst
+  // splitte den einzelnen Paragraphen an Satzgrenzen.
+  const paragraphs = seg.paragraphs;
+  if (paragraphs.length >= 2) {
+    const half = Math.ceil(paragraphs.length / 2);
+    const a: Segment = { paragraphs: paragraphs.slice(0, half) };
+    const b: Segment = { paragraphs: paragraphs.slice(half) };
+    console.log(
+      `[segment] topic-density split: "${maxWord}" appears ${maxCount}x in ${text.length}c (limit ${limit}) → 2 sub-chunks`,
+    );
+    return [...splitOnTopicDensity(a), ...splitOnTopicDensity(b)];
+  }
+
+  // Single paragraph: split at sentence boundary near middle.
+  const sentences = paragraphs[0].match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g);
+  if (!sentences || sentences.length < 2) return [seg];
+  const mid = Math.ceil(sentences.length / 2);
+  const a: Segment = { paragraphs: [sentences.slice(0, mid).join("").trim()] };
+  const b: Segment = { paragraphs: [sentences.slice(mid).join("").trim()] };
+  console.log(
+    `[segment] topic-density split: "${maxWord}" appears ${maxCount}x in ${text.length}c (limit ${limit}) → 2 sub-chunks (sentence-level)`,
+  );
+  return [...splitOnTopicDensity(a), ...splitOnTopicDensity(b)];
+}
+
+/** Heuristik: alles was an Wort-Boundary mit Großbuchstaben startet
+ *  und mindestens 4 Zeichen hat, ist mit hoher Wahrscheinlichkeit
+ *  ein deutsches Substantiv (im Deutschen sind Substantive immer
+ *  großgeschrieben). False-Positives bei Eigennamen + Satz-Anfang-
+ *  Wörtern, aber für die Density-Heuristik egal — wenn ein Eigenname
+ *  9x auftaucht ist das Loop-Risiko genauso hoch. */
+function countCapitalizedNouns(text: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  const re = /\b([A-ZÄÖÜ][a-zäöüß]{3,})\b/g;
+  for (const m of text.matchAll(re)) {
+    const word = m[1];
+    counts.set(word, (counts.get(word) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function splitParagraphs(text: string): string[] {
