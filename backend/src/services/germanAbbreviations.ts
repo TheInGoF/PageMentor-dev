@@ -99,6 +99,36 @@ const MARKDOWN_STRIP: Rule[] = [
   { pattern: /:\.\s/g, replacement: ": " },
 ];
 
+/** Acronyms (2-3 Caps) → buchstabenweise mit Leerzeichen, damit TTS
+ *  jeden Buchstaben einzeln spricht statt "ZTI" als ein unaussprechliches
+ *  Pseudowort durchzunudeln.
+ *
+ *  Beispiele die getrennt werden:
+ *    "ZTI"  → "Z T I"   (TTS spricht "Zett Tee Ih")
+ *    "BWL"  → "B W L"   (TTS spricht "Bee Wee Ell")
+ *    "USA"  → "U S A"
+ *    "PDF"  → "P D F"
+ *    "EU"   → "E U"
+ *    "IT"   → "I T"
+ *
+ *  NICHT getrennt:
+ *    "NATO", "NASA", "UEFA"   → 4+ Buchstaben, meistens als Wort gesprochen
+ *    "GmbH"                   → mixed case, wird vom TTS sowieso korrekt
+ *    "Dipl"                   → mixed case
+ *    "Ziel"                   → mixed case
+ *    Einzelbuchstabe          → wird sowieso buchstabiert
+ *
+ *  Edge Case: römische Ziffern wie "VIII" sind 4 Caps → bleiben (gut so,
+ *  TTS macht "Heinrich V I I I" sonst). 2-3 stellige römische Ziffern
+ *  ("II", "III") werden zwar getrennt, aber das ist akzeptabel — "I I"
+ *  liest sich phonetisch genauso wie "II" (beides "Ih Ih"). */
+const DE_CAPS_ACRONYMS: Rule[] = [
+  {
+    pattern: /\b([A-ZÄÖÜ]{2,3})\b/g,
+    replacement: (match: string) => match.split("").join(" "),
+  },
+];
+
 /** "und/oder" → "oder". Im Originaltext oft als Schrägstrich-Konstrukt
  *  ("und/oder") oder schon als zwei aufeinanderfolgende Konjunktionen
  *  ("und oder") nach einem missglückten Cleanup. Beides ist für TTS
@@ -399,6 +429,11 @@ const DE_ALL: Rule[] = [
   // compound abbreviations because some abbreviations contain "-".
   ...DE_ADJECTIVE_HYPHEN,
   ...DE_COMPOUND,
+  // Caps-acronyms NACH compound (sonst würde "z. B." kurz als "z B"
+  // matchen wenn der Rückweg zu "zum Beispiel" noch nicht gelaufen
+  // wäre). Vor SINGLE/TITLES/NUMBERS damit deren Caps-Token-Pattern
+  // nicht von uns zerlegt werden.
+  ...DE_CAPS_ACRONYMS,
   ...DE_TITLES,
   ...DE_WITH_NUMBER,
   ...DE_SINGLE,
@@ -424,6 +459,14 @@ export function expandGermanAbbreviations(text: string): string {
     const before = out;
     out = out.replace(DE_ADJECTIVE_HYPHEN_PATTERN, "$1, $2");
     if (out === before) break;
+  }
+  // Caps-Acronyms NOCHMAL nach dem Hyphen-Loop. Begründung: wenn
+  // "ABS-System" durch den Loop zu "ABS, System" wird, war ABS beim
+  // ersten Caps-Acronym-Pass noch hinter einem Bindestrich gefangen
+  // und wurde nicht erkannt (Word-Boundary-Logik). Jetzt steht's
+  // freistehend und muss buchstabiert werden: "A B S, System".
+  for (const rule of DE_CAPS_ACRONYMS) {
+    out = out.replace(rule.pattern, rule.replacement as string);
   }
   // Collapse double spaces caused by symbol substitutions (the
   // symbols had leading + trailing spaces).
