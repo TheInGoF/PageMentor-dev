@@ -1020,14 +1020,16 @@ async function synthesizeChapter(params: {
     );
 
     const mergedPath = join(tmpDir, "merged.mp3");
-    // Silence pads zwischen Chunks. 250 ms war zu kurz — der Hoerer
-    // bekommt vom Schnitt nichts mit weil Qwen jeden Chunk mit voller
-    // Energie startet, sodass das Satzende des vorigen Chunks direkt
-    // ins Satzanfang des naechsten kippt. 600 ms entspricht etwa der
-    // natuerlichen Sprech-Pause zwischen Saetzen ("Atem holen"). 1200
-    // ms am Kapitelende = klare Abgrenzung vor dem naechsten Kapitel.
+    // Silence pads. 600 ms zwischen Chunks war fuer 1000c-Chunks
+    // optimiert (Paragraph-Boundaries). Bei kleineren Chunks (500c)
+    // fallen die Boundaries oft mitten im Paragraph wo 600 ms zu lang
+    // wirken. 300 ms entspricht der unteren natuerlichen Satz-Pause
+    // (~300 ms beim menschlichen Sprecher) und passt fuer kleinere
+    // Chunks ohne dass groessere Chunks sich gehetzt anhoeren.
+    // 1200 ms am Kapitelende bleibt — klare Abgrenzung, hat sich
+    // bewaehrt.
     await concatMp3WithGaps(chunkFiles, mergedPath, {
-      interChunkMs: 600,
+      interChunkMs: 300,
       trailingMs: 1200,
     });
 
