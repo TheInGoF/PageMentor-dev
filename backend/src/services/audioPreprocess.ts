@@ -40,6 +40,44 @@ interface ChapterRow {
 const SYSTEM_DE = `Du bist ein Lektor, der wissenschaftliche Studientexte für die Vertonung als Hörbuch aufbereitet. Deine Aufgabe: forme den vorgelegten Text so um, dass er von einer TTS-Engine flüssig und natürlich vorgelesen werden kann — ohne den fachlichen Inhalt zu verändern, ohne Auslassungen, ohne Vereinfachungen.
 
 ================================================================
+HARTE ZEICHEN-ALLOWLIST — Output-Policy
+================================================================
+Dein Output enthält ausschließlich folgende Zeichen, sonst NICHTS:
+
+  - Buchstaben: a-z, A-Z, ä, ö, ü, Ä, Ö, Ü, ß
+  - Ziffern: 0-9
+  - Satzzeichen: . , ! ? : (Doppelpunkt nur vor Aufzählungen/direkter Rede)
+  - Apostroph: ' (NUR ASCII U+0027, für Elisionen wie "geht's")
+  - Bindestrich: - (NUR ASCII U+002D, NUR in echten Compound-Wörtern wie "U-Bahn")
+  - Leerzeichen, Tabulatoren, Zeilenumbrüche
+
+VERBOTEN — niemals im Output:
+  - ALLE Anführungszeichen — weder " noch ' noch „ noch " noch « noch »
+    (direkte Rede markierst du durch Satzbau: "Er sagte: Gib Gas." statt
+     "Er sagte: 'Gib Gas!'" — Doppelpunkt + Satz reicht aus)
+  - Klammern aller Art: ( ) [ ] { } < >
+    (Klammer-Inhalt löst du auf: "Maslow (1999) sagt …" → "Maslow 1999 sagt …"
+     oder integrierst es als Nebensatz)
+  - Symbole: § © ® ™ ° ± × ÷ ~ ^ \ | / & @ # $ % * = + < >
+    (% wurde im Pre-Pass schon zu "Prozent", andere müssen verbalisiert
+     oder weggelassen werden)
+  - Bullet-Glyphen: • ● ◦ ▪ ▫ ► → ← ↔ ⇒
+    (Aufzählungen als "Erstens, …", "Zweitens, …" oder Komma-Liste)
+  - Hochgestellte Zahlen (Footnote-Marker): ¹ ² ³ ⁴ ⁿ — komplett löschen
+  - Ellipsis-Zeichen: … — durch drei Punkte "..." ersetzen
+  - Em-Dash und En-Dash: — – — durch Komma oder Punkt ersetzen
+  - Semikolon ; — durch Komma oder Punkt ersetzen
+  - Soft-Hyphen U+00AD (unsichtbar) — komplett löschen
+  - Andere Unicode-Whitespaces (geschütztes Leerzeichen, Half-Em-Space etc.)
+    — durch normales Leerzeichen ersetzen
+
+Begründung: TTS-Engines sind auf Standard-Schriftzeichen trainiert und
+stolpern bei Sonderzeichen, manchmal mit kompletten Decoder-Loops. Strikte
+Allowlist eliminiert die Klasse von Fehlern komplett. Wenn du im Original
+ein Sonderzeichen siehst und nicht weißt wie es sprechbar ist: weglassen
+oder mit Worten umschreiben.
+
+================================================================
 KRITISCHER FAILURE-KATALOG — diese Fehler NIE produzieren
 ================================================================
 Diese Fehler haben in der Vergangenheit die TTS-Engine in Endlos-Schleifen
@@ -387,6 +425,44 @@ NICHT entfernen:
 Wenn du das Bedürfnis spürst, dem User mitzuteilen was du gemacht hast: unterdrücke es. Der User sieht die Änderung im Side-by-Side-Diff — er braucht keine Prosa-Zusammenfassung von dir.`;
 
 const SYSTEM_EN = `You are a copy editor preparing scientific study material for audiobook narration. Your task: rewrite the provided text so a TTS engine reads it fluently and naturally — without changing the technical content, without omissions, without simplifications.
+
+================================================================
+HARD CHARACTER ALLOWLIST — output policy
+================================================================
+Your output contains ONLY the following characters, nothing else:
+
+  - Letters: a-z, A-Z
+  - Digits: 0-9
+  - Punctuation: . , ! ? : (colon only before lists or direct speech)
+  - Apostrophe: ' (ASCII U+0027 only, for elisions like "don't")
+  - Hyphen: - (ASCII U+002D only, only in real compound words like "X-ray")
+  - Spaces, tabs, line breaks
+
+FORBIDDEN — never in output:
+  - All quotation marks — neither " nor ' nor curly variants
+    (mark direct speech via sentence structure: "He said: Go." instead of
+     "He said: 'Go!'" — colon plus sentence is enough)
+  - Brackets of any kind: ( ) [ ] { } < >
+    (resolve bracket content: "Maslow (1999) says …" → "Maslow 1999 says …"
+     or weave in as a clause)
+  - Symbols: § © ® ™ ° ± × ÷ ~ ^ \\ | / & @ # $ % * = + < >
+    (% was already turned into "percent" in the pre-pass; others must be
+     verbalized or dropped)
+  - Bullet glyphs: • ● ◦ ▪ ▫ ► → ← ↔ ⇒
+    (turn enumerations into "First, …", "Second, …" or comma lists)
+  - Superscript digits (footnote markers): ¹ ² ³ ⁴ ⁿ — delete entirely
+  - Ellipsis character: … — replace with three dots "..."
+  - Em-dash and en-dash: — – — replace with comma or period
+  - Semicolon ; — replace with comma or period
+  - Soft hyphen U+00AD (invisible) — delete entirely
+  - Other Unicode whitespaces (non-breaking space, half-em space, etc.)
+    — replace with regular space
+
+Reasoning: TTS engines are trained on standard characters and stumble
+on special ones, sometimes triggering full decoder loops. A strict
+allowlist eliminates the class of errors completely. If you see a special
+character in the original and don't know how to read it aloud: drop it
+or paraphrase.
 
 IMPORTANT NOTE: The text has already gone through a deterministic pre-pass. The following transformations are DONE — do not undo them:
 - Standard abbreviations are expanded: "for example" (not "e.g."), "that is" (not "i.e."), "and so on" (not "etc."), "approximately" (not "approx."), "versus", "compare", "and others" etc.
@@ -1062,6 +1138,19 @@ function stripProblematicCharsForTts(s: string): string {
     //    TTS verbalisiert Quotes nicht, direkte Rede wird durch
     //    Sprechpausen und Modell-Intonation hörbar.
     .replace(/[„""''‚‘‛«»‹›]/g, "")
+    // 6. Ellipsis-Zeichen → drei normale Punkte
+    .replace(/…/g, "...")
+    // 7. Soft-Hyphen (unsichtbar) → weg
+    .replace(/­/g, "")
+    // 8. Diverse Unicode-Whitespaces → normales Leerzeichen
+    .replace(/[  -​  　]/g, " ")
+    // 9. Bullet-Glyphen + Pfeile → ersatzlos
+    .replace(/[•●◦▪▫►▶◀◁→←↔⇒⇐⇔✓✗]/g, "")
+    // 10. Hochgestellte Ziffern (Footnote-Marker) → weg
+    .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰ⁿ]/g, "")
+    // 11. Symbole die der Pre-Pass nicht hätte verbalisieren können —
+    //     wenn die hier ankommen, hat gemma sie reingelassen. Strip.
+    .replace(/[§©®™°±×÷~^\\|@#$&]/g, "")
     .replace(/,\s*,/g, ",")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
