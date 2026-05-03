@@ -174,7 +174,12 @@ DEFAULT_TEMPERATURE = float(os.environ.get("QWEN_TTS_DEFAULT_TEMPERATURE", "0.75
 DEFAULT_TOP_P = float(os.environ.get("QWEN_TTS_DEFAULT_TOP_P", "0.8"))
 DEFAULT_TOP_K = int(os.environ.get("QWEN_TTS_DEFAULT_TOP_K", "40"))
 DEFAULT_REPETITION_PENALTY = float(
-    os.environ.get("QWEN_TTS_DEFAULT_REPETITION_PENALTY", "1.05")
+    # 1.15 statt 1.05 (v1.18.126): Topic-Anchored-Loops bei
+    # repetitiven deutschen Lehrbuch-Texten (z.B. ein Kapitel ueber
+    # die "Stimme" mit 9-10x dem gleichen Wort) triggerten Hangs bei
+    # 1.05. 1.15 senkt die Repeat-Probability genug ohne natuerliche
+    # Aufzaehlungen zu verzerren.
+    os.environ.get("QWEN_TTS_DEFAULT_REPETITION_PENALTY", "1.15")
 )
 
 # Subtalker (the secondary AR head) sampler defaults. Qwen's official

@@ -50,10 +50,14 @@ export interface LlmConfig {
    *  flatten prosody. */
   qwenTtsTopK?: string;
   /** Repetition penalty (≥ 1.0). Empty = sidecar ENV default
-   *  `QWEN_TTS_DEFAULT_REPETITION_PENALTY` (1.05). Values around
-   *  1.05-1.15 fight the looping/garble bug ([Qwen3-TTS issue
-   *  #258](https://github.com/QwenLM/Qwen3-TTS/issues/258)) without
-   *  hurting natural speech. */
+   *  `QWEN_TTS_DEFAULT_REPETITION_PENALTY` (1.15 since v1.18.126).
+   *  Values around 1.10-1.20 fight both the looping/garble bug
+   *  ([Qwen3-TTS issue
+   *  #258](https://github.com/QwenLM/Qwen3-TTS/issues/258)) and
+   *  topic-anchored loops on German textbook chapters with high
+   *  noun repetition density (e.g. a "Stimme" chapter with 9× of
+   *  the same word). Values >1.20 start to artificially substitute
+   *  natural enumerations. */
   qwenTtsRepetitionPenalty?: string;
   /** Max. characters per TTS chunk (500-8000). Empty = 4000 default
    *  or ENV PM_TTS_MAX_CHUNK. Smaller values = faster fail-fast on
