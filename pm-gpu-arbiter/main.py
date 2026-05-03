@@ -27,7 +27,7 @@ from typing import Any, Literal
 import docker
 import docker.errors
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from proxy import proxy_stream
@@ -188,18 +188,51 @@ async def _stop_tts() -> None:
     await asyncio.to_thread(_stop_container_sync, TTS_CONTAINER)
 
 
-async def _hard_restart_container(name: str) -> dict[str, str]:
-    """stop → settle → start. Used by the GPU-reset button so the
-    container isn't just stopped (waiting for the next call to bring
-    it up) but is actively brought back to a clean ready state."""
+async def _hard_restart_container(
+    name: str,
+    wait_url: str | None = None,
+    wait_timeout: float = 90.0,
+) -> dict[str, str]:
+    """stop → settle → start → optional health-poll. Used by the GPU-
+    reset button so the container is actively brought back to a clean
+    READY state, not just to "started".
+
+    Without the wait_url poll, the function returned right after start
+    while the container was still loading its model (~30-60 s for qwen-
+    tts cold-start). The next synth call would then hit a non-ready
+    sidecar → 503 / connection refused → user thinks "reset did
+    nothing"."""
     before = await asyncio.to_thread(_container_status, name)
     await asyncio.to_thread(_stop_container_sync, name)
     # Brief settle so docker has a chance to release the GPU before
     # we ask it to bring the same container up again.
     await asyncio.sleep(2)
     await asyncio.to_thread(_start_container_sync, name)
+
+    healthy = "skipped"
+    if wait_url is not None:
+        assert http_client is not None
+        deadline = time.time() + wait_timeout
+        last_err: str | None = None
+        while time.time() < deadline:
+            try:
+                r = await http_client.get(wait_url, timeout=3.0)
+                if r.status_code == 200:
+                    healthy = f"ok after {wait_timeout - (deadline - time.time()):.1f}s"
+                    break
+            except Exception as e:  # noqa: BLE001
+                last_err = repr(e)
+            await asyncio.sleep(1.5)
+        else:
+            healthy = f"timeout after {wait_timeout:.0f}s (last={last_err})"
+            log.warning(
+                "hard-restart of %s: container started but health-check "
+                "did not pass within %.0fs — last error: %s",
+                name, wait_timeout, last_err,
+            )
+
     after = await asyncio.to_thread(_container_status, name)
-    return {"before": before, "after": after}
+    return {"before": before, "after": after, "healthy": healthy}
 
 
 async def _start_tts_and_wait() -> None:
@@ -410,7 +443,14 @@ async def gpu_reset():
     # almost always wants a clean ready state right away, especially
     # if they're about to retry the chunk that was stuck.
     try:
-        result["tts_container"] = await _hard_restart_container(TTS_CONTAINER)
+        # WAIT bis qwen-tts wieder /health=200 antwortet, sonst hat der
+        # Reset den Sidecar zwar gestoppt+gestartet aber das Modell ist
+        # noch nicht im VRAM und der naechste Synth-Call schlaegt fehl.
+        result["tts_container"] = await _hard_restart_container(
+            TTS_CONTAINER,
+            wait_url=f"{TTS_URL}/health",
+            wait_timeout=float(TTS_STARTUP_TIMEOUT),
+        )
     except Exception as e:  # noqa: BLE001
         result["tts_container"] = {"error": repr(e)}
         log.warning("gpu-reset: tts hard-restart failed: %r", e)
@@ -424,8 +464,13 @@ async def gpu_reset():
     # outside docker, or on a separate host).
     if OLLAMA_CONTAINER:
         try:
+            # Ollama's /api/tags ist die leichteste Probe — antwortet
+            # 200 sobald der Server up ist (Modelle muessen nicht
+            # geladen sein).
             result["ollama_container"] = await _hard_restart_container(
-                OLLAMA_CONTAINER
+                OLLAMA_CONTAINER,
+                wait_url=f"{OLLAMA_URL}/api/tags",
+                wait_timeout=60.0,
             )
         except Exception as e:  # noqa: BLE001
             result["ollama_container"] = {"error": repr(e)}
@@ -467,6 +512,31 @@ async def ollama_proxy(path: str, request: Request):
     assert http_client is not None
     async with own_gpu("llm"):
         return await proxy_stream(http_client, OLLAMA_URL, request, f"api/{path}")
+
+
+@app.get("/diagnostics/{path:path}")
+async def diagnostics_proxy(path: str, request: Request):
+    """Proxiert /diagnostics/* an den qwen-tts Sidecar durch. Damit
+    PageMentor's Logs-Tab via qwenTtsUrl die Sidecar-Diagnostics
+    abrufen kann (insb. /diagnostics/recent-logs fuer den Live-Log-
+    Stream). Ohne diesen Proxy schlug der Backend-Pump auf 404 ein
+    und zeigte keine Sidecar-Logs in der UI an."""
+    assert http_client is not None
+    try:
+        upstream = f"{TTS_URL}/diagnostics/{path}"
+        if request.url.query:
+            upstream += "?" + request.url.query
+        r = await http_client.get(upstream, timeout=5.0)
+        return Response(
+            content=r.content,
+            status_code=r.status_code,
+            media_type=r.headers.get("content-type", "application/json"),
+        )
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse(
+            status_code=503,
+            content={"error": f"diagnostics-proxy: {e!r}"},
+        )
 
 
 @app.api_route(
