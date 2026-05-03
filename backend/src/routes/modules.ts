@@ -67,7 +67,18 @@ moduleRoutes.get("/:id", (c) => {
                  WHERE ch.document_id = documents.id AND a.status = 'done') as audio_done,
               (SELECT COUNT(*) FROM cards c WHERE c.document_id = documents.id) as card_count
        FROM documents WHERE module_id = ?
-       ORDER BY type ASC, created_at ASC`
+       ORDER BY
+         -- Series-Sequenz ist primaerer Sortier-Schluessel: "1" vor
+         -- "2" vor "10". Numerische Werte werden als Zahl sortiert
+         -- (CAST), Strings ohne fuehrende Ziffer landen ans Ende
+         -- (CASE NULL/leer → 9999). Fallback Type+CreatedAt fuer
+         -- Dokumente ohne Sequenz.
+         CASE
+           WHEN series_sequence IS NULL OR TRIM(series_sequence) = '' THEN 9999
+           ELSE CAST(series_sequence AS INTEGER)
+         END ASC,
+         type ASC,
+         created_at ASC`
     )
     .all(id);
 

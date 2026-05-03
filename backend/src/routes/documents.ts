@@ -238,6 +238,7 @@ documentRoutes.patch("/:id", async (c) => {
     thumb_page?: number;
     author?: string | null;
     short_code?: string | null;
+    series_sequence?: string | null;
   }>();
 
   const doc = db().prepare("SELECT id, page_count FROM documents WHERE id = ?").get(id) as
@@ -275,6 +276,18 @@ documentRoutes.patch("/:id", async (c) => {
         ? null
         : body.short_code.trim();
     db().prepare("UPDATE documents SET short_code = ? WHERE id = ?").run(value, id);
+  }
+  if (body.series_sequence !== undefined) {
+    // String fields, weil ABS auch "1.5" / "1a" akzeptiert. Trim +
+    // null bei leer.
+    const value =
+      body.series_sequence === null ||
+      body.series_sequence.trim().length === 0
+        ? null
+        : body.series_sequence.trim();
+    db()
+      .prepare("UPDATE documents SET series_sequence = ? WHERE id = ?")
+      .run(value, id);
   }
   if (body.tags !== undefined) {
     const d = db();

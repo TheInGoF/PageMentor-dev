@@ -121,6 +121,7 @@ interface DocumentMeta {
   doc_title: string | null;
   author: string | null;
   short_code: string | null;
+  series_sequence: string | null;
   module_name: string | null;
   language: string;
 }
@@ -143,7 +144,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
 
   const doc = db()
     .prepare(
-      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.language,
+      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.series_sequence, d.language,
               m.name AS module_name
        FROM documents d
        LEFT JOIN modules m ON m.id = d.module_id
@@ -349,13 +350,23 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
       // explicitly clear description — ABS sometimes parses
       // grouping/©grp from the M4B into the description, and the
       // shortcode should land exclusively in subtitle.
+      const seriesSequence = doc.series_sequence?.trim();
       const metaBody: Record<string, unknown> = {
         metadata: {
           title: bookTitle,
           subtitle: doc.short_code?.trim() || "",
           description: "",
           authors: authorName ? [{ name: authorName }] : undefined,
-          series: seriesName ? [{ name: seriesName }] : undefined,
+          series: seriesName
+            ? [
+                {
+                  name: seriesName,
+                  // sequence ist optional; ABS akzeptiert String (auch
+                  // "1.5" / "1a" moeglich). NULL/leer wird weggelassen.
+                  ...(seriesSequence ? { sequence: seriesSequence } : {}),
+                },
+              ]
+            : undefined,
           genres: ["Audiobook"],
           language: doc.language || "de",
         },
@@ -379,7 +390,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
         );
       } else {
         console.log(
-          `[abs] metadata PATCH ok — series=${JSON.stringify(seriesName)} subtitle=${JSON.stringify(doc.short_code ?? "")}`
+          `[abs] metadata PATCH ok — series=${JSON.stringify(seriesName)} sequence=${JSON.stringify(doc.series_sequence ?? "")} subtitle=${JSON.stringify(doc.short_code ?? "")}`
         );
       }
     } catch (e) {

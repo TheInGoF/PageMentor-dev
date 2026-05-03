@@ -315,6 +315,11 @@ export async function buildM4B(params: {
    *  `mvnm` would be the documented fallback, but ffprobe doesn't
    *  extract it reliably, so we skip it. */
   series?: string;
+  /** Sequence-Position innerhalb der Serie (z.B. "1" fuer das erste
+   *  Heft eines Studiengangs). Wird als track + movement_index in
+   *  den M4B geschrieben (beide ueberleben ffmpeg). ABS liest's via
+   *  ffprobe als format.tags.track / format.tags.movement. */
+  seriesSequence?: string;
   coverPath?: string;
   /** Optional: progress callback during the ffmpeg encode.
    *  `currentMs` = current audio position per ffmpeg, `totalMs` =
@@ -357,6 +362,7 @@ export async function buildM4B(params: {
     artist: params.artist ?? "PageMentor",
     shortCode: params.shortCode,
     series: params.series,
+    seriesSequence: params.seriesSequence,
     chapters: params.chapters,
   });
   writeFileSync(metaPath, meta);
@@ -521,6 +527,7 @@ function buildFfMetadata(params: {
   artist: string;
   shortCode?: string;
   series?: string;
+  seriesSequence?: string;
   chapters: Array<{ title: string; durationMs: number }>;
 }): string {
   // Mapping reality with ffmpeg/MP4: only keys that map to known
@@ -557,6 +564,17 @@ function buildFfMetadata(params: {
     // wrong for a shortcode). `subtitle` is not an MP4-standard
     // atom and ffmpeg discards it — so we skip it.
     lines.push(`grouping=${params.shortCode.trim()}`);
+  }
+  if (params.seriesSequence && params.seriesSequence.trim().length > 0) {
+    // Series-Position als track + movement_index. Beide sind echte
+    // iTunes-Atome (trkn / ©mvi) die ffmpeg's Muxer schreibt. ABS
+    // liest track als Sequence-Number wenn series gesetzt ist.
+    // Numeric only — wenn der User "1.5" / "1a" eingibt, wird der
+    // Wert von ffmpeg zu int gecastet bzw weggelassen. Fuer komplexe
+    // Sequences greift weiterhin der ABS-PATCH (sequence: "1.5"
+    // bleibt erhalten, M4B speichert nur die Integer-Komponente).
+    lines.push(`track=${params.seriesSequence.trim()}`);
+    lines.push(`movement_index=${params.seriesSequence.trim()}`);
   }
   let start = 0;
   for (const ch of params.chapters) {

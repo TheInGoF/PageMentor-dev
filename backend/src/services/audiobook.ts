@@ -51,6 +51,7 @@ interface Document {
   doc_title: string | null;
   author: string | null;
   short_code: string | null;
+  series_sequence: string | null;
   module_name: string | null;
   language: string;
 }
@@ -204,7 +205,7 @@ export async function generateAudiobook(params: {
   const d = db();
   const doc = d
     .prepare(
-      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.language,
+      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.series_sequence, d.language,
               m.name AS module_name
        FROM documents d
        LEFT JOIN modules m ON m.id = d.module_id
@@ -540,6 +541,7 @@ export async function generateAudiobook(params: {
             artist: doc.author ?? undefined,
             shortCode: doc.short_code ?? undefined,
             series: doc.module_name ?? undefined,
+            seriesSequence: doc.series_sequence ?? undefined,
             coverPath: await ensureCover(doc.id),
             onProgress: (currentMs, totalMs) => {
               const now = Date.now();
@@ -1220,7 +1222,7 @@ export async function rebuildM4B(docId: string): Promise<{
   const d = db();
   const doc = d
     .prepare(
-      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.language,
+      `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.series_sequence, d.language,
               m.name AS module_name
        FROM documents d
        LEFT JOIN modules m ON m.id = d.module_id
@@ -1288,6 +1290,7 @@ export async function rebuildM4B(docId: string): Promise<{
     artist: doc.author ?? undefined,
     shortCode: doc.short_code ?? undefined,
     series: doc.module_name ?? undefined,
+    seriesSequence: doc.series_sequence ?? undefined,
     coverPath: await ensureCover(doc.id),
     onProgress: (currentMs, totalMs) => {
       const now = Date.now();

@@ -26,6 +26,10 @@ export interface Document {
    *  number "1", "2", …). Feeds into the M4B download filename and
    *  the metadata (iTunes `grouping` field). */
   short_code?: string | null;
+  /** Position in der Modul-Serie (z.B. "1" fuer das erste Heft).
+   *  Wird als ABS-series.sequence + M4B-track-Atom geschrieben und
+   *  steuert die Sortierung in der Modul-Detail-Ansicht. */
+  series_sequence?: string | null;
   chapter_count?: number;
   card_count?: number;
   audio_done?: number;
@@ -527,6 +531,7 @@ export const api = {
         thumb_page?: number;
         author?: string | null;
         short_code?: string | null;
+        series_sequence?: string | null;
       }
     ) =>
       request<Document>(`/api/documents/${id}`, {

@@ -195,6 +195,14 @@ export function initDb() {
     // M4B filename + metadata (iTunes field `grouping`).
     d.exec("ALTER TABLE documents ADD COLUMN short_code TEXT");
   }
+  if (!docCols.some((c) => c.name === "series_sequence")) {
+    // Position in der Modul-Serie (z.B. "1" fuer das erste Heft eines
+    // Studiengangs). Wird beim Audiobookshelf-Upload als series.sequence
+    // mitgesendet UND als track + movement_index in den M4B-Tag
+    // geschrieben (ueberlebt ABS-Library-Rescan). NULL = keine
+    // Sequenz-Info, Audiobookshelf zeigt Buch ohne Reihenfolge in der Serie.
+    d.exec("ALTER TABLE documents ADD COLUMN series_sequence TEXT");
+  }
   if (!docCols.some((c) => c.name === "audio_intro_text")) {
     // Optional intro text spoken before the first chapter in the
     // audiobook ("Audiobook: ..., Written by ..., ..."). NULL =
