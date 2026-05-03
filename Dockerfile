@@ -32,6 +32,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
  && apt-get install -y --no-install-recommends \
       ffmpeg curl poppler-utils tesseract-ocr \
       tesseract-ocr-deu tesseract-ocr-eng \
+      mp4v2-utils \
       libstdc++6 libc6
 
 WORKDIR /app
