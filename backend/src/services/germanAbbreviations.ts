@@ -101,27 +101,20 @@ const MARKDOWN_STRIP: Rule[] = [
 
 /** Acronyms (2-3 Caps) → buchstabenweise mit Leerzeichen, damit TTS
  *  jeden Buchstaben einzeln spricht statt "ZTI" als ein unaussprechliches
- *  Pseudowort durchzunudeln.
+ *  Pseudowort durchzunudeln. User-Empirie: "T T S" wird vom Decoder
+ *  problemlos verarbeitet, also ist Space-Separation safe.
  *
  *  Beispiele die getrennt werden:
- *    "ZTI"  → "Z T I"   (TTS spricht "Zett Tee Ih")
- *    "BWL"  → "B W L"   (TTS spricht "Bee Wee Ell")
+ *    "ZTI"  → "Z T I"
+ *    "BWL"  → "B W L"
  *    "USA"  → "U S A"
- *    "PDF"  → "P D F"
  *    "EU"   → "E U"
- *    "IT"   → "I T"
  *
  *  NICHT getrennt:
- *    "NATO", "NASA", "UEFA"   → 4+ Buchstaben, meistens als Wort gesprochen
- *    "GmbH"                   → mixed case, wird vom TTS sowieso korrekt
- *    "Dipl"                   → mixed case
- *    "Ziel"                   → mixed case
- *    Einzelbuchstabe          → wird sowieso buchstabiert
- *
- *  Edge Case: römische Ziffern wie "VIII" sind 4 Caps → bleiben (gut so,
- *  TTS macht "Heinrich V I I I" sonst). 2-3 stellige römische Ziffern
- *  ("II", "III") werden zwar getrennt, aber das ist akzeptabel — "I I"
- *  liest sich phonetisch genauso wie "II" (beides "Ih Ih"). */
+ *    "NATO", "NASA"   → 4+ Buchstaben
+ *    "GmbH"           → mixed case
+ *    Einzelbuchstabe  → bleibt
+ */
 const DE_CAPS_ACRONYMS: Rule[] = [
   {
     pattern: /\b([A-ZÄÖÜ]{2,3})\b/g,
@@ -165,7 +158,67 @@ const DE_ADJECTIVE_HYPHEN_PATTERN =
 const DE_ADJECTIVE_HYPHEN: Rule[] = [
   {
     pattern: DE_ADJECTIVE_HYPHEN_PATTERN,
-    replacement: "$1, $2",
+    // Space statt Komma. Komma vor "und" war orthographisch falsch
+    // und liest sich fragmentiert ("Ziel, Leistungs, Aspekt").
+    // Space ergibt natürlichen Phrasen-Klang ("Ziel Leistungs Aspekt")
+    // mit nur dem typischen Mini-Gap zwischen Wörtern.
+    replacement: "$1 $2",
+  },
+];
+
+/** Suffix-Compound-Ketten mit gemeinsamem Wortstamm-Suffix.
+ *  Beispiel: "lern-, arbeits- und entwicklungsfähig" — drei Wörter
+ *  die alle das Suffix "fähig" tragen, im Original-Text aber nur das
+ *  letzte ausgeschrieben. Voll-Expansion zu "lernfähig, arbeitsfähig
+ *  und entwicklungsfähig" macht den Satz semantisch klar.
+ *
+ *  Heuristik: erkenne bekannte deutsche Suffixe am Ende des LETZTEN
+ *  Worts in der Kette und wende sie auf alle Stamm-Wörter davor an.
+ *  Suffix-Liste deckt die häufigsten ab; unbekannte Suffixe lassen
+ *  wir durch (das nachfolgende DE_HYPHEN_ELLIPSIS macht dann den
+ *  "arbeits- und"-Teil zu "arbeits und", besser als nichts). */
+const DE_KNOWN_SUFFIXES = [
+  "fähig", "fähigkeit", "kraft", "los", "weise", "zeit", "raum",
+  "bewegung", "arbeit", "kreis", "system", "modell", "ansatz",
+  "haltung", "verhalten", "kompetenz", "qualität", "kriterien",
+  "werk", "satz", "stand", "sicht", "art", "form", "stil",
+];
+const DE_SUFFIX_CHAIN: Rule[] = [
+  {
+    // "X-, Y- und Z<suffix>" → "Xsuffix, Ysuffix und Zsuffix"
+    // (auch nur "X- und Y<suffix>" → "Xsuffix und Ysuffix")
+    pattern: /\b([a-zäöüß]{2,})-,\s*([a-zäöüß]{2,})-\s+(und|oder|sowie)\s+([a-zäöüß]{2,})\b/gu,
+    replacement: (
+      _full: string,
+      stem1: string,
+      stem2: string,
+      conj: string,
+      lastWord: string
+    ) => {
+      const suffix = DE_KNOWN_SUFFIXES.find((s) => lastWord.endsWith(s));
+      if (suffix) {
+        return `${stem1}${suffix}, ${stem2}${suffix} ${conj} ${lastWord}`;
+      }
+      // Suffix unbekannt: droppe nur die Bindestriche, keine Expansion.
+      return `${stem1}, ${stem2} ${conj} ${lastWord}`;
+    },
+  },
+  {
+    // Kürzere 2er-Variante: "X- und Y<suffix>" → "Xsuffix und Ysuffix"
+    pattern: /\b([a-zäöüß]{2,})-\s+(und|oder|sowie)\s+([a-zäöüß]{2,})\b/gu,
+    replacement: (
+      _full: string,
+      stem: string,
+      conj: string,
+      lastWord: string
+    ) => {
+      const suffix = DE_KNOWN_SUFFIXES.find((s) => lastWord.endsWith(s));
+      if (suffix) {
+        return `${stem}${suffix} ${conj} ${lastWord}`;
+      }
+      // Suffix unbekannt: keine Expansion, nur Strich weg.
+      return `${stem} ${conj} ${lastWord}`;
+    },
   },
 ];
 
@@ -190,7 +243,10 @@ const DE_HYPHEN_ELLIPSIS: Rule[] = [
   {
     pattern:
       /\b([A-Za-zÄÖÜäöüß]+)-(\s+(?:und|oder|sowie|bzw\.))\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß]+)/g,
-    replacement: "$1,$2 $3",
+    // Space statt Komma. Komma vor "und"/"oder" liest sich unnatürlich
+    // ("Freizeit, oder Hobbygruppen"), Space ergibt natürlichen Klang
+    // ("Freizeit oder Hobbygruppen"). Hörer ergänzt das Suffix mental.
+    replacement: "$1$2 $3",
   },
 ];
 
@@ -419,6 +475,11 @@ const DE_ALL: Rule[] = [
   // Headers MUST run after MARKDOWN_STRIP — "## Übung 1.7:" first
   // becomes "Übung 1.7:" and only then matches the header pattern.
   ...DE_HEADERS,
+  // Suffix-Chain BEFORE Hyphen-Ellipsis: erkennt "X-, Y- und Zsuffix"
+  // und expandiert zu "Xsuffix, Ysuffix und Zsuffix" wenn das Suffix
+  // bekannt ist. Wenn nicht, droppe nur die Bindestriche. Hyphen-
+  // Ellipsis räumt danach Reste auf.
+  ...DE_SUFFIX_CHAIN,
   // Hyphen-ellipsis BEFORE compound abbreviations so the freestanding
   // hyphen doesn't accidentally match other rules.
   ...DE_HYPHEN_ELLIPSIS,
