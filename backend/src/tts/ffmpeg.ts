@@ -457,22 +457,19 @@ export async function buildM4B(params: {
     console.log(`[m4b] ffmpeg tail: ${tailLines}`);
   }
 
-  // Subtitle (©st3-Atom) ueber mp4tags nachschreiben. ffmpeg's MP4-
-  // Muxer kann diesen iTunes-Atom nicht ausgeben, Audiobookshelf
-  // braucht ihn aber zwingend fuer das Subtitle-Feld (alle anderen
-  // Atome wie ©nam/©ART/©alb funktionieren via ffmpeg). Ohne diesen
-  // Post-Pass landet subtitle nur per ABS-API-PATCH und wird beim
-  // naechsten Library-Rescan ueberschrieben (file_tag_subtitle leer).
-  if (params.shortCode && params.shortCode.trim().length > 0) {
-    try {
-      await writeSubtitleAtom(params.output, params.shortCode.trim());
-    } catch (err) {
-      console.warn(
-        `[m4b] mp4tags subtitle write failed (subtitle will rely on ABS PATCH only):`,
-        err,
-      );
-    }
-  }
+  // KNOWN LIMITATION: ffmpeg's MP4-Muxer kann den iTunes ©st3-
+  // Subtitle-Atom physisch nicht schreiben (kennt ihn nicht in seiner
+  // Atom-Whitelist). mp4v2-utils (provides mp4tags) wurde in Debian 12
+  // entfernt. AtomicParsley hat keinen direkten --subtitle Flag.
+  // Konsequenz: Subtitle wird NUR via ABS-PATCH-Endpoint gesetzt, ist
+  // aber nach einem ABS-Library-Rescan wieder leer (ABS liest die
+  // File-Tags und sieht kein subtitle → ueberschreibt DB-Wert nicht
+  // mit leer, behaelt also unseren PATCH-Wert solange kein Force-
+  // Rescan kommt).
+  // Empfehlung fuers User-Setup: in ABS Library Settings "Force
+  // re-scan" vermeiden, oder Subtitle nach jedem Re-Scan via API
+  // neu setzen (manuell oder via Re-Upload aus PageMentor).
+  // Kuenftige Loesung: Bun-natives MP4-Box-Writer-Modul integrieren.
 
   // Cleanup — using fs.unlink instead of shell rm (fewer moving parts).
   for (const stale of [merged, metaPath]) {
@@ -489,38 +486,6 @@ export async function buildM4B(params: {
   );
 }
 
-/** Setzt den iTunes-Subtitle-Atom (©st3) im fertig gebauten M4B.
- *  ffmpeg's MP4-Muxer hat diesen Atom nicht in seiner Whitelist
- *  (libavformat/movenc.c kennt ©nam/©ART/©alb/etc, aber nicht ©st3).
- *  mp4tags aus mp4v2-utils kann ihn schreiben. Audiobookshelf liest
- *  via ffprobe → format.tags.subtitle, was wiederum dem ©st3-Atom
- *  entspricht (siehe FFmpeg's mov demuxer). */
-function writeSubtitleAtom(file: string, subtitle: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("mp4tags", ["-s", subtitle, file]);
-    let stderr = "";
-    child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
-    });
-    child.on("error", (err) =>
-      reject(new Error(`mp4tags spawn failed: ${err.message}`))
-    );
-    child.on("close", (code) => {
-      if (code === 0) {
-        console.log(
-          `[m4b] mp4tags subtitle="${subtitle.slice(0, 40)}" → ${file}`
-        );
-        resolve();
-      } else {
-        reject(
-          new Error(
-            `mp4tags exit ${code}${stderr ? ": " + stderr.slice(0, 200) : ""}`
-          )
-        );
-      }
-    });
-  });
-}
 
 function buildFfMetadata(params: {
   title: string;
