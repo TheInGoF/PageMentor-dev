@@ -247,12 +247,26 @@ ZIEL DER UMFORMUNG
 - Gedankenstriche (— oder –) sind ebenfalls TABU. Ersetze durch Komma oder neuen Satz.
 - SATZLÄNGE-FENSTER: maximal 20 Wörter pro Satz (bei Fachtext eher 15), aber auch nicht durchgehend Telegrammstil. Ein Strom aus 4-Wort-Sätzen klingt monoton und wirkt wie eine Kindersendung. Ziel: Mischung von 8 bis 18 Wörtern, mit gelegentlichem 5-Wort-Satz für Akzent. Ein Hörer kann sich nicht „zurück-scrollen" — jeder Satz muss in sich verständlich sein, aber der Rhythmus darf trotzdem leben.
 
-- GRAMMATIK + NATÜRLICHER SPRACHFLUSS: jeder Satz muss vollständig und grammatikalisch korrekt sein (Subjekt + Prädikat, Genus/Kasus/Numerus stimmig, Verb-Position passend). Bei Umformulierungen NICHT Wort-für-Wort am Original kleben — priorisiere wie ein Satz beim Vorlesen klingt. Vermeide:
-  • Halbsätze ohne Verb („Die Mimik. Ein wichtiger Aspekt.")
-  • Satz-Fragmente die ein anderes Substantiv vorausgesetzt brauchen („In der") — wenn du kürzt, schließe den Satz inhaltlich ab
-  • Gestelzte Schreibtisch-Syntax die niemand spricht („Hierbei handelt es sich um...") — natürlicher: „Das ist..." / „Damit ist gemeint..."
-  • Doppelte Verneinung, Anakoluthe, Stilbrüche zwischen Du-/Sie-/Wir-Anrede
-  Im Zweifel: lies dir den Satz innerlich laut vor, bevor du ihn ausgibst. Wenn du beim leisen Mitsprechen stockst → umformulieren.
+- GRAMMATIK + NATÜRLICHER SPRACHFLUSS: jeder Satz im Output muss vollständig und grammatikalisch korrekt sein (Subjekt + Prädikat, Genus/Kasus/Numerus stimmig, Verb-Position passend). Bei Umformulierungen NICHT Wort-für-Wort am Original kleben — priorisiere wie ein Satz beim Vorlesen klingt.
+
+  WICHTIG: Wenn das Original Grammatik-, Rechtschreib- oder Stil-Fehler enthält → KORRIGIERE sie. NICHT löschen, NICHT überspringen. Ein fehlerhafter Satz im Original wird im Output zu einem korrekten Satz mit derselben Aussage. Auslassen ist nur in den explizit erlaubten Fällen zulässig (Übungen, Captions, Citations — siehe Sections 6, 11).
+
+  GRÜSSE, ANREDEN, ANMERKUNGEN UND RANDBEMERKUNGEN BLEIBEN ERHALTEN:
+  • Vorwort-/Einleitungs-Floskeln („Liebe Studierende", „In diesem Heft lernen Sie...")
+  • Schluss-Grüße der Studienleitung („Wir wünschen Ihnen viel Spaß und Erfolg. Ihre Studienleitung.")
+  • Hinweise und Anmerkungen des Autors mitten im Text („Anmerkung:", „Hinweis:", „Übrigens...")
+  • Direkte Anreden an den Lernenden („Sie haben jetzt...", „Wir betrachten nun...")
+  Diese Blöcke übernimmst du als vollständige, korrekte Sätze und stellst sicher, dass jeder Satz mit Punkt, Frage- oder Ausrufezeichen endet (auch wenn das Original kein Schlusszeichen hatte). Anrede ggf. an den umgebenden Stil anpassen, aber den Inhalt NIE weglassen.
+
+  Konkret reparieren statt streichen:
+  • Halbsätze ohne Verb („Die Mimik. Ein wichtiger Aspekt.") → Verb ergänzen („Die Mimik ist ein wichtiger Aspekt.")
+  • Satz-Fragmente die ein anderes Substantiv vorausgesetzt brauchen („In der") → Bezug auflösen oder mit dem Folgesatz verschmelzen
+  • Gestelzte Schreibtisch-Syntax („Hierbei handelt es sich um...") → natürlicher umformulieren („Das ist..." / „Damit ist gemeint...")
+  • Doppelte Verneinung, Anakoluthe → entwirren und sauber neu formulieren
+  • Stilbruch zwischen Du-/Sie-/Wir-Anrede → Anrede vereinheitlichen, NICHT den Block löschen
+  • Sätze ohne Schlusszeichen → Punkt anfügen
+
+  Im Zweifel: lies dir den Satz innerlich laut vor, bevor du ihn ausgibst. Wenn du beim leisen Mitsprechen stockst → umformulieren, nicht weglassen.
 
 ================================================================
 1. ABKÜRZUNGEN VOLLSTÄNDIG AUSSCHREIBEN
@@ -524,7 +538,26 @@ GOAL OF THE TRANSFORMATION
 - Em-dashes (—) and en-dashes (–) are also forbidden. Replace with comma or new sentence.
 - SENTENCE-LENGTH WINDOW: max 20 words per sentence (technical text max 15), but also not relentless telegram style. A stream of 4-word sentences sounds monotone and infantilizing. Aim for a mix of 8 to 18 words with the occasional 5-word sentence for accent. The listener cannot scroll back — every sentence must stand on its own, but the rhythm should still feel alive.
 
-- GRAMMAR + NATURAL FLOW: every sentence must be complete and grammatically correct (subject + verb, agreement in gender/case/number, correct word order). When rewording, do NOT cling to the source word-for-word — prioritize how the sentence sounds read aloud. Avoid sentence fragments lacking a verb, dependent clauses without their antecedent, stilted desk-prose ("It is hereby noted that…"), double negatives, and inconsistent register switches between you/we/one. When in doubt, mentally read the sentence aloud before emitting it; if you stumble, rewrite.
+- GRAMMAR + NATURAL FLOW: every sentence in the output must be complete and grammatically correct (subject + verb, agreement in gender/case/number, correct word order). When rewording, do NOT cling to the source word-for-word — prioritize how the sentence sounds read aloud.
+
+  IMPORTANT: If the source text contains grammar, spelling or style errors → FIX them. Do NOT delete, do NOT skip. A flawed source sentence becomes a correct sentence in the output, with the same meaning preserved. Omission is only allowed in the explicitly permitted cases (exercises, captions, citations — see sections 6, 11).
+
+  GREETINGS, ADDRESSES, NOTES AND SIDE-REMARKS STAY:
+  • Foreword/intro phrases ("Dear students", "In this study unit you will learn...")
+  • Closing greetings from the course supervisors ("We wish you success. Your course leadership.")
+  • Author notes mid-text ("Note:", "Remark:", "By the way...")
+  • Direct addresses to the learner ("You have now...", "We will now consider...")
+  These blocks are carried over as complete, correct sentences. Make sure every sentence ends in a period, question mark or exclamation mark (even if the source omits the final mark). Adapt the address to the surrounding style if needed, but NEVER drop the content.
+
+  Repair instead of strike:
+  • Sentence fragments lacking a verb → add the verb
+  • Dependent clauses without their antecedent → resolve the reference or merge with the next sentence
+  • Stilted desk-prose ("It is hereby noted that…") → rephrase naturally
+  • Double negatives, anacolutha → untangle and rewrite cleanly
+  • Inconsistent register (you/we/one) → unify the register, do NOT delete the block
+  • Sentences without a closing mark → append a period
+
+  When in doubt, mentally read the sentence aloud before emitting it; if you stumble, rewrite — don't omit.
 
 ================================================================
 TTS LOOP HAZARDS — patterns that trip the autoregressive decoder
