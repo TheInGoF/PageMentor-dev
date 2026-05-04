@@ -78,6 +78,24 @@ export function isGenerating(docId: string): boolean {
   return running.has(docId);
 }
 
+/** Garantiert dass ein TTS-Eingabetext mit satzendender Interpunktion
+ *  schliesst. Qwen-TTS interpretiert Texte ohne abschliessenden Punkt
+ *  als unvollendete Aeusserung — das letzte Wort wird mit nicht-
+ *  fallender Intonation gesprochen und klingt abgehackt
+ *  (User-Beobachtung: Intro endet auf "Ihre Studienleitung" ohne
+ *  Punkt → Wort wirkt wie abgebrochen).
+ *  Trailing whitespace + final punctuation muss erhalten bleiben.
+ *  Wenn der Text bereits mit . ! ? endet → unveraendert zurueck. */
+function ensureSentenceEnd(text: string): string {
+  const trimmed = text.replace(/\s+$/, "");
+  if (trimmed.length === 0) return text;
+  const lastChar = trimmed[trimmed.length - 1];
+  if (lastChar === "." || lastChar === "!" || lastChar === "?") return text;
+  // Trailing whitespace bewahren, aber Punkt vor dem whitespace einfuegen.
+  const trailingWs = text.slice(trimmed.length);
+  return trimmed + "." + trailingWs;
+}
+
 /** Snapshot for the frontend to rehydrate its progress panel after a
  *  page reload. Returns null when no run is active. AbortController
  *  is omitted (not serializable, not needed by the UI). */
@@ -949,9 +967,11 @@ async function synthesizeChapter(params: {
         }
       }
       const paragraphText = segments[i].paragraphs.join("\n\n");
-      const plainText = announcement
-        ? `${announcement}.\n\n${paragraphText}`
-        : paragraphText;
+      const plainText = ensureSentenceEnd(
+        announcement
+          ? `${announcement}.\n\n${paragraphText}`
+          : paragraphText
+      );
 
       // Hash-based cache key: when text, voice, or rate change the
       // hash moves and an old file is ignored. The hash is
