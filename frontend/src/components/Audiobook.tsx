@@ -1583,6 +1583,12 @@ function buildIntroDefault(
   const isDe = meta.language === "de";
   const lines: string[] = [];
 
+  // Drop parenthetical suffixes like " (Design)" — they are UI hints
+  // for the picker, not part of the spoken voice name.
+  const spokenVoiceLabel = voice
+    ? voice.label.replace(/\s*\([^)]*\)\s*/g, " ").trim()
+    : "";
+
   if (isDe) {
     lines.push(`Hörbuch: ${meta.title}.`);
     lines.push("");
@@ -1593,10 +1599,10 @@ function buildIntroDefault(
       lines.push(`Aufbereitet durch ${phoneticizeModelName(model, "de")}.`);
     }
     if (voice) {
-      // "Qwen" spelled with double N so Qwen-TTS doesn't say "Kwen".
-      // Model version as a phonetic number.
+      // "Qwen" → "Kwenn" so Qwen-TTS doesn't mispronounce its own
+      // name. Model version as a phonetic number.
       lines.push(
-        `Gesprochen durch Qwenn drei T T S, mit der Stimme ${voice.label}.`
+        `Gesprochen durch Kwenn drei T T S, mit der Stimme ${spokenVoiceLabel}.`
       );
     }
   } else {
@@ -1610,7 +1616,7 @@ function buildIntroDefault(
     }
     if (voice) {
       lines.push(
-        `Narrated by Qwenn three T T S, with the voice ${voice.label}.`
+        `Narrated by Kwenn three T T S, with the voice ${spokenVoiceLabel}.`
       );
     }
   }
@@ -1648,11 +1654,17 @@ function phoneticizeModelName(model: string, lang: "de" | "en"): string {
   );
   // First letter uppercase ("gemma" → "Gemma"), rest lowercase with
   // spaces preserved. Word boundaries as before.
-  return s
+  let result = s
     .split(/\s+/)
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(" ");
+  // Phonetic substitutions for model names that Qwen-TTS otherwise
+  // mispronounces. Done after capitalization so the surrounding
+  // tokens still match cleanly.
+  result = result.replace(/\bGemma\b/g, "Dschemma");
+  result = result.replace(/\bQwen\b/g, "Kwenn");
+  return result;
 }
 
 function IntroEditor({
