@@ -886,7 +886,7 @@ const en: Record<string, string> = {
   "module.modal.icon": "Icon (emoji)",
   "module.modal.iconPlaceholder": "📘",
 
-  "doc.field.author": "Author (used in audiobook intro + ID3 tags)",
+  "doc.field.author": "Author",
   "doc.field.authorPlaceholder": "e.g. First Last",
   "doc.field.shortCode": "Subtitle",
   "doc.field.shortCodePlaceholder": "SE12k / 1 / vol. II",
@@ -1742,7 +1742,7 @@ const de: Record<string, string> = {
   "module.modal.icon": "Icon (Emoji)",
   "module.modal.iconPlaceholder": "📘",
 
-  "doc.field.author": "Autor (wird im Hörbuch-Intro + ID3-Tags genutzt)",
+  "doc.field.author": "Autor",
   "doc.field.authorPlaceholder": "z. B. Vorname Nachname",
   "doc.field.shortCode": "Untertitel",
   "doc.field.shortCodePlaceholder": "SE12k / 1 / Band II",

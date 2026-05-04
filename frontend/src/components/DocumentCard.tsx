@@ -172,6 +172,11 @@ export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit }: Props
             className="font-semibold text-neutral-100 line-clamp-2 leading-snug"
             title={doc.title}
           >
+            {doc.series_sequence && doc.series_sequence.trim() && (
+              <span className="inline-block mr-2 px-1.5 py-0.5 rounded text-accent bg-accent/15 font-bold tabular-nums text-sm align-middle">
+                {doc.series_sequence.trim()}
+              </span>
+            )}
             {doc.title}
           </h3>
           {doc.short_code && (

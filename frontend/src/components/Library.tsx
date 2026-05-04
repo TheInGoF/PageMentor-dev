@@ -148,14 +148,33 @@ export function Library({
 
   const filtered = useMemo(() => {
     if (!docs) return null;
-    return docs.filter((d) => {
+    const list = docs.filter((d) => {
       if (typeFilter !== "all" && d.type !== typeFilter) return false;
       if (moduleFilter === "unassigned" && d.module_id) return false;
       if (moduleFilter !== "all" && moduleFilter !== "unassigned" && d.module_id !== moduleFilter) return false;
       if (activeTags.length && !activeTags.every((tg) => d.tags.includes(tg))) return false;
       return true;
     });
+    // Sortier-Reihenfolge: zuerst nach Modul-Serien-Position (1, 2, 3,
+    // 10) — Hefte ohne Sequenz landen ans Ende. Dann nach Typ +
+    // Erstellungsdatum als Fallback.
+    return list.sort((a, b) => {
+      const seqA = parseSequence(a.series_sequence);
+      const seqB = parseSequence(b.series_sequence);
+      if (seqA !== seqB) return seqA - seqB;
+      if (a.type !== b.type) return a.type.localeCompare(b.type);
+      return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+    });
   }, [docs, typeFilter, moduleFilter, activeTags]);
+
+  /** Series-Sequenz als Zahl fuer Sortierung. NULL/leer → 9999, sodass
+   *  Hefte ohne Nummer ans Ende rutschen. "1.5" / "1a" → parseInt
+   *  liest 1 — gut genug fuer die Sortierung. */
+  function parseSequence(raw: string | null | undefined): number {
+    if (!raw || !raw.trim()) return 9999;
+    const n = parseInt(raw.trim(), 10);
+    return Number.isFinite(n) ? n : 9999;
+  }
 
   function toggleTag(tg: string) {
     setActiveTags((xs) => (xs.includes(tg) ? xs.filter((x) => x !== tg) : [...xs, tg]));

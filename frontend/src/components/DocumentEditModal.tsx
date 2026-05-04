@@ -105,7 +105,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
             />
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-3 items-end">
               <Input
                 label={t("doc.field.author")}
                 value={author}

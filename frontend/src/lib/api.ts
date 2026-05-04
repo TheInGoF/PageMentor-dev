@@ -314,6 +314,8 @@ export interface ModuleDocument {
   language: string;
   page_count: number;
   ocr_status: string;
+  short_code?: string | null;
+  series_sequence?: string | null;
   created_at: string;
   chapter_count: number;
   audio_done: number;
