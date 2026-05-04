@@ -1583,10 +1583,15 @@ function buildIntroDefault(
   const isDe = meta.language === "de";
   const lines: string[] = [];
 
-  // Drop parenthetical suffixes like " (Design)" — they are UI hints
-  // for the picker, not part of the spoken voice name.
+  // Drop UI suffixes from the voice label — they are picker hints,
+  // not part of the spoken voice name. Two formats in use:
+  //   "Siri (Design)"  – parenthetical, e.g. user uploads
+  //   "Siri · Design"  – middle-dot, qwen.ts adds this for designs
   const spokenVoiceLabel = voice
-    ? voice.label.replace(/\s*\([^)]*\)\s*/g, " ").trim()
+    ? voice.label
+        .replace(/\s*[·•]\s*\S.*$/, "")
+        .replace(/\s*\([^)]*\)\s*/g, " ")
+        .trim()
     : "";
 
   if (isDe) {
@@ -1640,13 +1645,19 @@ function phoneticizeModelName(model: string, lang: "de" | "en"): string {
 
   // Digits to words, hyphens/underscores as spaces.
   let s = stem.replace(/[_-]/g, " ");
-  // Numbers 0-9 as a word, multi-digit digit by digit.
+  // Numbers 0-9 as a word, multi-digit digit by digit. Wrap in spaces
+  // so e.g. "gemma4" → "gemma vier" (not "gemmavier") — otherwise the
+  // word boundary is lost and the post-capitalize substitutions for
+  // "Gemma"/"Qwen" don't match.
   s = s.replace(/(\d+)/g, (m) =>
+    " " +
     m
       .split("")
       .map((d) => digits[Number(d)] ?? d)
-      .join(" ")
+      .join(" ") +
+    " "
   );
+  s = s.replace(/\s+/g, " ").trim();
   // Period → spelled-out "Punkt"/"point" so TTS doesn't break the
   // sentence abruptly. Only between letters/words.
   s = s.replace(/(\w) *\. *(\w)/g, (_, a, b) =>
