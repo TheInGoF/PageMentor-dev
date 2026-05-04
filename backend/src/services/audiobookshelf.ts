@@ -158,7 +158,12 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
     throw new Error(tLang(lang, "err.absM4bMissing"));
   }
 
-  const bookTitle = doc.doc_title?.trim() || doc.title;
+  // User-Titel aus PageMentor zuerst (was auch immer im UI gezeigt
+  // wird), doc_title (PDF-Metadaten) nur als Fallback wenn doc.title
+  // leer ist. Frueher umgekehrt — fuehrte dazu dass ABS einen Titel
+  // aus den PDF-Metadaten zeigte den der User in PageMentor nicht
+  // einstellen konnte.
+  const bookTitle = doc.title?.trim() || doc.doc_title?.trim() || "";
   const authorName = doc.author?.trim() || "Unknown";
   const seriesName = doc.module_name?.trim() || "";
 
