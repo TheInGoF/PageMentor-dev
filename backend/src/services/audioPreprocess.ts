@@ -247,6 +247,13 @@ ZIEL DER UMFORMUNG
 - Gedankenstriche (— oder –) sind ebenfalls TABU. Ersetze durch Komma oder neuen Satz.
 - SATZLÄNGE-FENSTER: maximal 20 Wörter pro Satz (bei Fachtext eher 15), aber auch nicht durchgehend Telegrammstil. Ein Strom aus 4-Wort-Sätzen klingt monoton und wirkt wie eine Kindersendung. Ziel: Mischung von 8 bis 18 Wörtern, mit gelegentlichem 5-Wort-Satz für Akzent. Ein Hörer kann sich nicht „zurück-scrollen" — jeder Satz muss in sich verständlich sein, aber der Rhythmus darf trotzdem leben.
 
+- GRAMMATIK + NATÜRLICHER SPRACHFLUSS: jeder Satz muss vollständig und grammatikalisch korrekt sein (Subjekt + Prädikat, Genus/Kasus/Numerus stimmig, Verb-Position passend). Bei Umformulierungen NICHT Wort-für-Wort am Original kleben — priorisiere wie ein Satz beim Vorlesen klingt. Vermeide:
+  • Halbsätze ohne Verb („Die Mimik. Ein wichtiger Aspekt.")
+  • Satz-Fragmente die ein anderes Substantiv vorausgesetzt brauchen („In der") — wenn du kürzt, schließe den Satz inhaltlich ab
+  • Gestelzte Schreibtisch-Syntax die niemand spricht („Hierbei handelt es sich um...") — natürlicher: „Das ist..." / „Damit ist gemeint..."
+  • Doppelte Verneinung, Anakoluthe, Stilbrüche zwischen Du-/Sie-/Wir-Anrede
+  Im Zweifel: lies dir den Satz innerlich laut vor, bevor du ihn ausgibst. Wenn du beim leisen Mitsprechen stockst → umformulieren.
+
 ================================================================
 1. ABKÜRZUNGEN VOLLSTÄNDIG AUSSCHREIBEN
 ================================================================
@@ -516,6 +523,8 @@ GOAL OF THE TRANSFORMATION
 - Pauses come from periods and commas only. The semicolon (;) is FORBIDDEN — it derails the TTS engine. Where you would use a semicolon: either a new sentence (period) or a comma.
 - Em-dashes (—) and en-dashes (–) are also forbidden. Replace with comma or new sentence.
 - SENTENCE-LENGTH WINDOW: max 20 words per sentence (technical text max 15), but also not relentless telegram style. A stream of 4-word sentences sounds monotone and infantilizing. Aim for a mix of 8 to 18 words with the occasional 5-word sentence for accent. The listener cannot scroll back — every sentence must stand on its own, but the rhythm should still feel alive.
+
+- GRAMMAR + NATURAL FLOW: every sentence must be complete and grammatically correct (subject + verb, agreement in gender/case/number, correct word order). When rewording, do NOT cling to the source word-for-word — prioritize how the sentence sounds read aloud. Avoid sentence fragments lacking a verb, dependent clauses without their antecedent, stilted desk-prose ("It is hereby noted that…"), double negatives, and inconsistent register switches between you/we/one. When in doubt, mentally read the sentence aloud before emitting it; if you stumble, rewrite.
 
 ================================================================
 TTS LOOP HAZARDS — patterns that trip the autoregressive decoder
