@@ -495,32 +495,39 @@ function buildFfMetadata(params: {
   seriesSequence?: string;
   chapters: Array<{ title: string; durationMs: number }>;
 }): string {
-  // Mapping reality with ffmpeg/MP4: only keys that map to known
-  // iTunes atoms (©nam, ©ART, ©alb, ©cmt, ©grp, aART,
-  // ©mvn/©mvi, tvsh, …) survive the muxer. `series` and `subtitle`
-  // get discarded. Audiobookshelf reads `album` as series name
-  // in audiobook mode — so we put the series there, and only if
-  // there's no series does album fall back to the title.
+  // Mapping reality with ffmpeg/MP4 + Audiobookshelf:
+  //
+  //   PageMentor-Begriff   →   M4B-Atom   →   ABS-Field
+  //   Buch-Titel (PDF)         ©nam            book.title
+  //   Modul-Name               ©mvn (movement)  series.name
+  //                            tvsh (show)      series.name (fallback)
+  //   Untertitel (shortCode)   ©st3 (NICHT von ffmpeg) → nur via PATCH
+  //   Series-Position          trkn / ©mvi      series.sequence
+  //
+  // FRUEHER (v1.18.131-): album=seriesName. Das war falsch — ABS in
+  // Audiobook-Mode liest album als Buch-Titel und ueberschrieb damit
+  // den korrekten title-Tag. Konsequenz: User sah Modul-Name als
+  // Buch-Titel statt PDF-Titel. JETZT: kein album-Tag mehr,
+  // movement_name + show tragen die Series-Info, title bleibt sauber.
   const lines: string[] = [";FFMETADATA1"];
   lines.push(`title=${params.title}`);
   lines.push(`artist=${params.artist}`);
   // Audiobookshelf takes artist as author, but album_artist is the
   // more official path — belt and suspenders.
   lines.push(`album_artist=${params.artist}`);
+  // album = title (Buch-Titel), NICHT series. Andere Player ohne
+  // Audiobook-Mode zeigen oft album als Haupt-Label — dann ist
+  // book-title als album besser als series-name als album.
+  lines.push(`album=${params.title}`);
   const seriesName = params.series?.trim();
   if (seriesName && seriesName.length > 0) {
-    // Primary: album = series (ABS convention in audiobook mode)
-    lines.push(`album=${seriesName}`);
-    // Additionally: movement_name + show as fallbacks — both map
-    // to real MP4 atoms (©mvn, tvsh). ABS and some other players
-    // read one of these when `series` is missing (always the case
-    // with ffmpeg output).
+    // movement_name + show als echte Series-Carrier. ABS liest beide
+    // als series.name (mvnm und show sind in der Series-Detection-
+    // Liste). Album bleibt Buch-Titel.
     lines.push(`movement_name=${seriesName}`);
     lines.push(`show=${seriesName}`);
   }
-  // No series/module name → album/movement_name/show stay empty.
-  // User preference: rather have no metadata than stuff the title
-  // into a series field incorrectly.
+  // No series/module name → album bleibt Buch-Titel, movement/show leer.
   lines.push(`genre=Audiobook`);
   if (params.shortCode && params.shortCode.trim().length > 0) {
     // Only `grouping` — that's a real iTunes atom (©grp) and is
