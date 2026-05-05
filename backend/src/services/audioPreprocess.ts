@@ -27,6 +27,39 @@ import { db } from "../db";
 import { generate, isAvailable as llmAvailable } from "./llm";
 import { expandAbbreviations } from "./germanAbbreviations";
 
+/**
+ * Strips leading section/sub-section numbering at paragraph starts
+ * ("4.6 Angesichts...", "12.3.1 Die Methode...") so the TTS engine
+ * doesn't read them aloud and doesn't get loop-anchored on a series
+ * of "vier Punkt sechs", "vier Punkt sieben" tokens.
+ *
+ * Constraints by design:
+ *  - Only at line start (paragraph beginning), not inline ("Beispiel
+ *    4.6" inside a sentence stays untouched — Gemma needs that for
+ *    cross-references).
+ *  - Up to 4 levels deep: "4", "4.6", "4.6.1", "4.6.1.2".
+ *  - Followed by whitespace and an uppercase word (heading-/sentence-
+ *    starter), so we don't accidentally chew off a numeric list item
+ *    that's actually content ("4. Schritt: Wasser kochen").
+ *  - Trailing dot allowed and stripped as well ("4.6. Angesichts").
+ *
+ * Idempotent — re-running on stripped text is a no-op.
+ */
+export function stripLeadingSectionNumbers(text: string): string {
+  // ^[ \t]*           leading whitespace on a line
+  // (?:\d+(?:\.\d+){0,3})  number with up to 4 levels (4, 4.6, 4.6.1.2)
+  // \.?               optional trailing dot ("4.6.")
+  // [ \t]+            mandatory whitespace before the heading text
+  // (?=[A-ZÄÖÜ])      lookahead — must be followed by an uppercase
+  //                   letter so we keep numeric list items like
+  //                   "1. schritt: ..." (rare in our texts) and
+  //                   numeric-only lines.
+  return text.replace(
+    /^[ \t]*\d+(?:\.\d+){0,3}\.?[ \t]+(?=[A-ZÄÖÜ])/gm,
+    ""
+  );
+}
+
 interface ChapterRow {
   id: string;
   text: string;
@@ -234,6 +267,7 @@ WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchla
 - Uhrzeiten: „14 Uhr 30" (statt „14:30")
 - Datum: „12. März 2024" (statt „12.03.2024")
 - Bullet-Marker (-, *, •) am Zeilenanfang sind entfernt.
+- Führende Section-Nummerierung am Absatzanfang ist entfernt: „4.6 Angesichts…" steht jetzt als „Angesichts…", „12.3.1 Die Methode…" als „Die Methode…". Inline-Verweise wie „Beispiel 4.6" bleiben unverändert. Rekonstruiere die Nummern NICHT — sie haben im gesprochenen Text keinen Mehrwert und triggern bei Folge-Markern Loops.
 
 → Schreibe NICHT „z. B." zurück wenn du „zum Beispiel" siehst. Lasse diese Transformationen unverändert.
 
@@ -525,6 +559,7 @@ IMPORTANT NOTE: The text has already gone through a deterministic pre-pass. The 
 - Units after numbers: "5 kilograms" (not "5 kg"), "10 meters", "3 square meters", "100 kilowatt-hours" etc.
 - Symbols: "%" → "percent", "°C" → "degrees Celsius", "$" → "dollars", "≈" → "approximately", "≥" → "greater than or equal to", "∑" → "sum", "∫" → "integral" etc.
 - Bullet markers (-, *, •) at line start are already stripped.
+- Leading section numbering at paragraph start is already removed: "4.6 In view of…" is now "In view of…", "12.3.1 The method…" is "The method…". Inline references like "Example 4.6" are kept as-is. Do NOT reconstruct the numbers — they add no value when spoken and trigger loops on consecutive markers.
 
 → Do NOT revert to "e.g." if you see "for example". Leave these transformations untouched.
 
@@ -832,7 +867,8 @@ export async function preprocessChapterForAudio(params: {
   // have to apply. The prompt was adjusted — it now knows these
   // transformations are already done and shouldn't undo them
   // (e.g. don't shorten "zum Beispiel" back to "z. B.").
-  const pretreated = expandAbbreviations(row.text, params.language);
+  const expanded = expandAbbreviations(row.text, params.language);
+  const pretreated = stripLeadingSectionNumbers(expanded);
 
   const system = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
 
@@ -1020,8 +1056,12 @@ export async function preprocessChapterForAudio(params: {
     params.language === "de"
       ? expandAbbreviations(numeralFixed, params.language)
       : numeralFixed;
+  // Section-number stripping erneut anwenden — falls Gemma die
+  // führenden Marker rekonstruiert hat (haben wir per Prompt verboten,
+  // aber LLMs sind so).
+  const sectionStripped = stripLeadingSectionNumbers(postPassed);
   const cleaned = stripProblematicCharsForTts(
-    restoreHeadingParagraphs(stripWrappers(postPassed))
+    restoreHeadingParagraphs(stripWrappers(sectionStripped))
   );
   if (!cleaned || cleaned.length < 20) {
     throw new Error(
