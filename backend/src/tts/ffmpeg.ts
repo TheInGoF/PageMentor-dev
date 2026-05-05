@@ -471,6 +471,15 @@ export async function buildM4B(params: {
   // neu setzen (manuell oder via Re-Upload aus PageMentor).
   // Kuenftige Loesung: Bun-natives MP4-Box-Writer-Modul integrieren.
 
+  // Apple-Books-Atome via AtomicParsley nachziehen — ffmpeg's MP4-
+  // Muxer schreibt `stik` (iTunes media type) und `pgap` (gapless)
+  // nicht zuverlaessig. Apple Books erkennt eine M4B nur dann als
+  // Audiobook, wenn `stik=2` gesetzt ist (sonst wird sie als Music
+  // einsortiert oder gar nicht importiert). AtomicParsley ist das
+  // Standard-Tool fuer iTunes-Atome und exit-codet sauber wenn die
+  // Datei nicht beschrieben werden kann.
+  await applyAppleBooksAtoms(params.output);
+
   // Cleanup — using fs.unlink instead of shell rm (fewer moving parts).
   for (const stale of [merged, metaPath]) {
     if (existsSync(stale)) {
@@ -486,6 +495,49 @@ export async function buildM4B(params: {
   );
 }
 
+
+/**
+ * Sets the iTunes-specific MP4 atoms that Apple Books needs to
+ * recognize the file as an audiobook:
+ *   - stik=2 (Audiobook media type)
+ *   - pgap=true (gapless playback between chapters)
+ *
+ * AtomicParsley overwrites the file in place (`--overWrite`). If the
+ * binary is missing or the call fails, we log a warning and continue —
+ * the M4B is still valid for everything except Apple Books, so the
+ * pipeline shouldn't hard-fail on this. Audiobookshelf, VLC, ffmpeg,
+ * Plex etc. don't depend on `stik`.
+ */
+async function applyAppleBooksAtoms(file: string): Promise<void> {
+  if (!existsSync(file)) {
+    console.warn(`[m4b] applyAppleBooksAtoms: file missing ${file}`);
+    return;
+  }
+  const beforeSize = statSync(file).size;
+  try {
+    const { stderr } = await run(
+      "AtomicParsley",
+      [file, "--stik", "Audiobook", "--gapless", "true", "--overWrite"],
+      { logPrefix: "[m4b:atoms]" }
+    );
+    const afterSize = statSync(file).size;
+    // AtomicParsley sometimes leaves a temp file like
+    // `name-temp-XXXX.m4b` if --overWrite couldn't replace in place
+    // (e.g. permissions). Verify size delta is reasonable.
+    const delta = Math.abs(afterSize - beforeSize);
+    console.log(
+      `[m4b] AtomicParsley stik=Audiobook ok (${beforeSize} → ${afterSize} bytes, Δ ${delta})`
+    );
+    if (stderr.trim().length > 0) {
+      console.log(`[m4b] AtomicParsley stderr: ${stderr.trim().slice(-200)}`);
+    }
+  } catch (err) {
+    console.warn(
+      `[m4b] AtomicParsley failed (${(err as Error).message}). ` +
+        `M4B still works for ABS/VLC/Plex but Apple Books may not import it.`
+    );
+  }
+}
 
 function buildFfMetadata(params: {
   title: string;
