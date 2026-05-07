@@ -1610,6 +1610,12 @@ function buildIntroDefault(
         `Gesprochen durch Kwenn drei T T S, mit der Stimme ${spokenVoiceLabel}.`
       );
     }
+    // Branding closer. "Peigementor" — German "ei" forces /aɪ/, so
+    // the TTS lands close to the intended English "page" sound.
+    // Written as one word so Qwen treats it as a foreign proper
+    // noun and doesn't drift between English/German pronunciations
+    // the way "Page Mentor" did across runs.
+    lines.push(`Erstellt mit Peigementor.`);
   } else {
     lines.push(`Audiobook: ${meta.title}.`);
     lines.push("");
@@ -1624,6 +1630,7 @@ function buildIntroDefault(
         `Narrated by Kwenn three T T S, with the voice ${spokenVoiceLabel}.`
       );
     }
+    lines.push(`Created with Peigementor.`);
   }
   return lines.join("\n");
 }
