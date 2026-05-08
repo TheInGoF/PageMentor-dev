@@ -339,7 +339,7 @@ async function buildChunksForDocument(docId: string): Promise<void> {
   const embedder = await resolveEmbedder();
   if (!embedder) {
     console.log(
-      `[pipeline] ${docId}: no Ollama reachable for embeddings — chunks without vectors.`
+      `[pipeline] ${docId}: TEI embedding server unreachable — chunks stored without vectors.`
     );
     return;
   }

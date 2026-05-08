@@ -1,60 +1,40 @@
 /**
- * Embedding generation. Two backends supported:
+ * Embedding generation via HuggingFace TEI (Text Embeddings Inference).
  *
- *  1. **TEI** (HuggingFace Text Embeddings Inference) — preferred when
- *     `PM_TEI_URL` is set. Required for jina-embeddings-v3 (which
- *     Ollama can't run because there's no GGUF). TEI exposes
- *     task-specific LoRA prefixes (`retrieval.passage` for indexing,
- *     `retrieval.query` for search) which give jina-v3 its DE-retrieval
- *     edge over v2.
+ * Single backend by design. We previously had an Ollama fallback for
+ * jina-v2-base-de / bge-m3 / nomic-embed-text, but the fallback path
+ * could silently mix incompatible vectors into the same DB if TEI was
+ * briefly down — different models live in different vector spaces.
+ * Better to fail loud and force the operator to fix TEI than to dilute
+ * the corpus.
  *
- *  2. **Ollama** — fallback when TEI is not configured or unreachable.
- *     Uses `/api/embeddings` with one of the preferred models in the
- *     list below.
+ * TEI must be reachable via `PM_TEI_URL` (or the `teiUrl` setting in
+ * the LLM config). It serves jina-embeddings-v3, which has task-
+ * specific LoRA adapters: pass `"passage"` when indexing chunks,
+ * `"query"` when embedding a search query — that's what makes v3
+ * meaningfully better than v2 on German MTEB retrieval.
  *
- * Storage in SQLite as BLOB: Float32 array binary. 768 dim × 4 bytes =
- * 3 KB / chunk (jina-v2). 1024 dim = 4 KB / chunk (jina-v3, bge-m3).
- * Brute-force cosine over 10 k chunks ~100 ms in JS — fine until we
- * actually move to Qdrant.
+ * Storage in SQLite as Float32 BLOB. jina-v3 = 1024 dim × 4 bytes =
+ * 4 KB / chunk. Brute-force cosine over 10 k chunks is ~100 ms in JS,
+ * fine until we move to Qdrant for 100k+ corpora.
  *
- * IMPORTANT: switching backends or models changes the vector space and
- * makes existing embeddings incomparable. The DB column
- * `chunks.embedding_model` records what produced each row; the reindex
- * endpoint compares against the current embedder and re-embeds rows
- * that don't match.
+ * Switching models or task IDs changes the vector space and makes
+ * existing rows incomparable. The DB column `chunks.embedding_model`
+ * records what produced each row; the reembed endpoint re-embeds rows
+ * that don't match the currently active embedder string.
  */
 
-import { effective, getLlmConfig } from "./llmConfig";
+import { effective } from "./llmConfig";
 
-const ENV_DEFAULT = process.env.PM_EMBED_MODEL || "";
-
-const PREFERRED_EMBED_MODELS = [
-  "jina/jina-embeddings-v2-base-de",
-  "bge-m3",
-  "nomic-embed-text",
-];
-
-const FALLBACK_MODEL = "nomic-embed-text";
-
-export type EmbedBackend = "ollama" | "tei";
-
-/** Task hint forwarded to TEI for jina-v3-style models that have
- *  task-specific LoRA adapters. Ollama ignores this. */
 export type EmbedTask = "passage" | "query";
 
 export interface EmbedderConfig {
-  backend: EmbedBackend;
   url: string;
-  /** Model identifier as stored in `chunks.embedding_model`. For TEI
-   *  we prefix with `tei:` so it's unambiguous which backend produced
-   *  the vector — `tei:jinaai/jina-embeddings-v3` ≠ `jina/jina-embeddings-v2-base-de`
-   *  even though both are "jina". */
+  /** Model identifier as stored in `chunks.embedding_model`, prefixed
+   *  with `tei:` so it's unambiguous. Example:
+   *  `tei:jinaai/jina-embeddings-v3`. */
   model: string;
 }
-
-// ---------------------------------------------------------------------
-// TEI backend
-// ---------------------------------------------------------------------
 
 interface TeiInfo {
   modelId: string;
@@ -78,10 +58,37 @@ function teiTaskId(task: EmbedTask): string {
   return task === "query" ? "retrieval.query" : "retrieval.passage";
 }
 
-async function embedTextTei(
+/** Resolves the active embedder. Returns null when TEI is not
+ *  configured or unreachable — callers must handle that as a hard
+ *  failure (no fallback). */
+export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
+  const teiUrl = effective("teiUrl", "PM_TEI_URL");
+  if (!teiUrl) {
+    console.warn(
+      "[embeddings] no TEI configured (set teiUrl in settings or PM_TEI_URL env)"
+    );
+    return null;
+  }
+  const info = await teiInfo(teiUrl);
+  if (!info) {
+    console.warn(`[embeddings] TEI at ${teiUrl} unreachable`);
+    return null;
+  }
+  const model = `tei:${info.modelId}`;
+  console.log(`[embeddings] using ${model} on ${teiUrl}`);
+  return { url: teiUrl, model };
+}
+
+/** Embeds a single text. `task` selects the jina-v3 LoRA adapter:
+ *   - `"passage"` (default): indexing chunks
+ *   - `"query"`: retrieval queries (questions, search inputs)
+ *
+ *  Always pair `passage` (index time) with `query` (search time);
+ *  mixing tasks within a corpus loses the v3 retrieval edge. */
+export async function embedText(
   text: string,
   embedder: EmbedderConfig,
-  task: EmbedTask
+  task: EmbedTask = "passage"
 ): Promise<Float32Array> {
   const url = embedder.url.replace(/\/+$/, "");
   const res = await fetch(`${url}/embed`, {
@@ -89,10 +96,6 @@ async function embedTextTei(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       inputs: [text],
-      // The `task` field is jina-v3-specific; TEI forwards it to the
-      // model's LoRA selector. Servers running other models simply
-      // ignore the field, so this is safe even if the user runs TEI
-      // with a non-jina model.
       task: teiTaskId(task),
     }),
     signal: AbortSignal.timeout(15_000),
@@ -102,142 +105,14 @@ async function embedTextTei(
     throw new Error(`tei embed ${res.status}: ${body.slice(0, 200)}`);
   }
   const data = (await res.json()) as number[][] | { embeddings?: number[][] };
-  // TEI native /embed returns `[[...]]`. The OpenAI-compat path returns
-  // `{embeddings: [[...]]}`. We handle both shapes so a misconfigured
-  // proxy doesn't bring everything down.
+  // Native /embed returns `[[...]]`. The OpenAI-compat path returns
+  // `{embeddings: [[...]]}`. Accept both so a misconfigured proxy in
+  // front of TEI doesn't bring everything down.
   const arr = Array.isArray(data) ? data : data.embeddings;
   if (!Array.isArray(arr) || arr.length === 0 || !Array.isArray(arr[0])) {
     throw new Error("tei embed returned empty response");
   }
   return new Float32Array(arr[0]);
-}
-
-// ---------------------------------------------------------------------
-// Ollama backend
-// ---------------------------------------------------------------------
-
-async function ollamaTagNames(url: string): Promise<string[]> {
-  try {
-    const res = await fetch(`${url}/api/tags`, {
-      signal: AbortSignal.timeout(2500),
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { models?: Array<{ name: string }> };
-    return (data.models ?? []).map((m) => m.name);
-  } catch {
-    return [];
-  }
-}
-
-function matchInstalled(wanted: string, installed: string[]): string | null {
-  if (installed.includes(wanted)) return wanted;
-  const tagged = installed.find(
-    (n) => n === wanted || n.startsWith(wanted + ":")
-  );
-  return tagged ?? null;
-}
-
-function pickEmbedModel(installed: string[]): string {
-  if (ENV_DEFAULT) {
-    const found = matchInstalled(ENV_DEFAULT, installed);
-    if (found) return found;
-    return ENV_DEFAULT;
-  }
-  for (const model of PREFERRED_EMBED_MODELS) {
-    const found = matchInstalled(model, installed);
-    if (found) return found;
-  }
-  return FALLBACK_MODEL;
-}
-
-async function embedTextOllama(
-  text: string,
-  embedder: EmbedderConfig
-): Promise<Float32Array> {
-  const res = await fetch(`${embedder.url}/api/embeddings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: embedder.model, prompt: text }),
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`ollama embed failed ${res.status}: ${body.slice(0, 200)}`);
-  }
-  const data = (await res.json()) as { embedding?: number[] };
-  if (!Array.isArray(data.embedding) || data.embedding.length === 0) {
-    throw new Error("ollama embed returned empty embedding");
-  }
-  return new Float32Array(data.embedding);
-}
-
-// ---------------------------------------------------------------------
-// Resolver — picks TEI if reachable, Ollama otherwise.
-// ---------------------------------------------------------------------
-
-/** Determines the active embedding backend. TEI takes priority when
- *  configured AND reachable. Falls back to Ollama (existing chain) so
- *  installs without TEI keep working unchanged. */
-export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
-  // 1. TEI — if configured. Failure to reach a *configured* TEI is a
-  //    soft warning + fallback, not a hard error. Reason: during a
-  //    container restart the TEI box may be briefly down; we'd rather
-  //    serve a (compatible) Ollama embed than crash the pipeline.
-  const teiUrl = effective("teiUrl", "PM_TEI_URL");
-  if (teiUrl) {
-    const info = await teiInfo(teiUrl);
-    if (info) {
-      const model = `tei:${info.modelId}`;
-      console.log(`[embeddings] using ${model} on ${teiUrl}`);
-      return { backend: "tei", url: teiUrl, model };
-    }
-    console.warn(
-      `[embeddings] TEI configured at ${teiUrl} but unreachable, falling back to Ollama`
-    );
-  }
-
-  // 2. Ollama chain — same logic as before.
-  try {
-    const cfg = getLlmConfig();
-    const candidates = [
-      cfg.ollamaUrlPc,
-      cfg.ollamaUrlMac,
-      cfg.ollamaUrl,
-      process.env.PM_OLLAMA_URL,
-      "http://host.docker.internal:11434",
-    ].filter((u): u is string => !!u && u.trim().length > 0);
-
-    for (const url of candidates) {
-      const installed = await ollamaTagNames(url);
-      if (installed.length === 0) continue;
-      const model = pickEmbedModel(installed);
-      console.log(
-        `[embeddings] using ${model} on ${url}` +
-          (installed.includes(model) ? "" : " (NOT INSTALLED — pull first)")
-      );
-      return { backend: "ollama", url, model };
-    }
-  } catch {
-    // fall through
-  }
-  return null;
-}
-
-/** Embeds a text. `task` controls the TEI LoRA prefix:
- *   - `"passage"` (default): for indexing chunks
- *   - `"query"`: for retrieval queries (questions, search inputs)
- *
- *  Ollama ignores `task` — it doesn't have task-specific adapters. Pass
- *  it anyway so call sites are explicit and a future Ollama → TEI
- *  switch doesn't degrade quality silently. */
-export async function embedText(
-  text: string,
-  embedder: EmbedderConfig,
-  task: EmbedTask = "passage"
-): Promise<Float32Array> {
-  if (embedder.backend === "tei") {
-    return embedTextTei(text, embedder, task);
-  }
-  return embedTextOllama(text, embedder);
 }
 
 // ---------------------------------------------------------------------

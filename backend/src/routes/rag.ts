@@ -45,7 +45,7 @@ async function retrieveTopK(params: {
 }): Promise<{ hits: RetrievalHit[]; embedderModel: string }> {
   const embedder = await resolveEmbedder();
   if (!embedder) {
-    throw new Error("ollama_unreachable");
+    throw new Error("embedder_unreachable");
   }
   const queryEmb = await embedText(params.query, embedder, "query");
 
@@ -173,9 +173,9 @@ ragRoutes.post("/query", async (c) => {
   try {
     result = await retrieveTopK({ docId: body.docId, query, topK });
   } catch (err) {
-    if ((err as Error).message === "ollama_unreachable") {
+    if ((err as Error).message === "embedder_unreachable") {
       return c.json(
-        { error: "No Ollama reachable for embedding the query. Configure it in Settings." },
+        { error: "Embedding server (TEI) unreachable. Configure DS_TEI_URL in Settings or check the TEI container." },
         503
       );
     }
@@ -269,7 +269,7 @@ ragRoutes.post("/answer/stream", async (c) => {
         write({ type: "done", model, content: full });
       } catch (err) {
         const msg =
-          (err as Error).message === "ollama_unreachable"
+          (err as Error).message === "embedder_unreachable"
             ? language === "de"
               ? "Ollama ist nicht erreichbar — keine RAG-Antwort möglich. Konfiguriere die LLM-Kette in den Einstellungen."
               : "Ollama is unreachable — no RAG answer possible. Configure the LLM chain in Settings."
@@ -298,7 +298,7 @@ ragRoutes.post("/answer/stream", async (c) => {
 ragRoutes.post("/reembed", async (c) => {
   const embedder = await resolveEmbedder();
   if (!embedder) {
-    return c.json({ error: "No Ollama reachable." }, 503);
+    return c.json({ error: "TEI embedding server unreachable." }, 503);
   }
 
   const rows = db()
