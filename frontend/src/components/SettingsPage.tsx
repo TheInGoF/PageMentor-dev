@@ -20,6 +20,7 @@ interface LlmConfig {
   ollamaUrlMac?: string;
   ollamaUrl?: string;
   ollamaModel?: string;
+  teiUrl?: string;
   anthropicModel?: string;
   anthropicApiKeyPresent?: boolean;
   openaiModel?: string;
@@ -248,6 +249,7 @@ export function SettingsPage({ onBack }: Props) {
         ollamaUrlMac: llmConfig.ollamaUrlMac ?? "",
         ollamaUrl: llmConfig.ollamaUrl ?? "",
         ollamaModel: llmConfig.ollamaModel ?? "",
+        teiUrl: llmConfig.teiUrl ?? "",
         anthropicModel: llmConfig.anthropicModel ?? "",
         openaiModel: llmConfig.openaiModel ?? "",
         googleModel: llmConfig.googleModel ?? "",
@@ -1035,6 +1037,13 @@ export function SettingsPage({ onBack }: Props) {
             value={llmConfig.ollamaModel ?? ""}
             onChange={(e) => setLlmConfig({ ...llmConfig, ollamaModel: e.target.value })}
             placeholder="auto"
+          />
+          <Input
+            label={t("settings.llm.teiUrl")}
+            type="url"
+            value={llmConfig.teiUrl ?? ""}
+            onChange={(e) => setLlmConfig({ ...llmConfig, teiUrl: e.target.value })}
+            placeholder="http://192.168.188.6:8080"
           />
 
           <ApiProviderBlock

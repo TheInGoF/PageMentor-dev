@@ -17,6 +17,7 @@ llmConfigRoutes.put("/", async (c) => {
     ollamaUrlMac?: string;
     ollamaUrl?: string;
     ollamaModel?: string;
+    teiUrl?: string;
     anthropicApiKey?: string;
     anthropicModel?: string;
     openaiApiKey?: string;

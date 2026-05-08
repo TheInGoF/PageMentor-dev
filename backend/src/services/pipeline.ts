@@ -351,7 +351,7 @@ async function buildChunksForDocument(docId: string): Promise<void> {
   );
   for (const { chunk, id } of withIds) {
     try {
-      const emb = await embedText(chunk.text, embedder);
+      const emb = await embedText(chunk.text, embedder, "passage");
       updateEmbedding.run(embeddingToBuffer(emb), embedder.model, id);
       okCount++;
     } catch (err) {

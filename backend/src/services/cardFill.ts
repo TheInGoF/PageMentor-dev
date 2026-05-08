@@ -185,7 +185,7 @@ export async function fillAnswerFromChunks(params: {
 
   let queryEmb: Float32Array;
   try {
-    queryEmb = await embedText(params.question, params.embedder);
+    queryEmb = await embedText(params.question, params.embedder, "query");
   } catch {
     return null;
   }

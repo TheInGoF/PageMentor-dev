@@ -47,7 +47,7 @@ async function retrieveTopK(params: {
   if (!embedder) {
     throw new Error("ollama_unreachable");
   }
-  const queryEmb = await embedText(params.query, embedder);
+  const queryEmb = await embedText(params.query, embedder, "query");
 
   const sql = `
     SELECT ch.id, ch.document_id, ch.chapter_id, ch.chunk_index, ch.text,
@@ -319,7 +319,7 @@ ragRoutes.post("/reembed", async (c) => {
   let fail = 0;
   for (const row of rows) {
     try {
-      const emb = await embedText(row.text, embedder);
+      const emb = await embedText(row.text, embedder, "passage");
       update.run(Buffer.from(emb.buffer, emb.byteOffset, emb.byteLength), embedder.model, row.id);
       ok++;
     } catch {

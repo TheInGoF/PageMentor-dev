@@ -18,6 +18,11 @@ export interface LlmConfig {
   ollamaUrlMac?: string;
   ollamaUrl?: string;
   ollamaModel?: string;
+  /** URL of a HuggingFace TEI (Text Embeddings Inference) server, used
+   *  as the embedding backend in preference over Ollama when set. TEI
+   *  exposes jina-v3 + task-specific LoRA prefixes which Ollama can't
+   *  do. Example: `http://192.168.188.6:8080`. ENV: `PM_TEI_URL`. */
+  teiUrl?: string;
   anthropicApiKey?: string;
   anthropicModel?: string;
   openaiApiKey?: string;
