@@ -256,6 +256,39 @@ geschickt und müssen unter allen Umständen vermieden werden:
     Bei Mehrdeutigkeit (Hörer könnte Antezedens verwechseln): lass das
     Substantiv stehen statt zu ersetzen.
 
+13) LANGE ZAHLENREIHEN PARAPHRASIEREN — NICHT WÖRTLICH AUFLISTEN
+    Dies ist ein Hörbuch. Der Hörer kann keine Tabelle abscannen. Eine
+    Reihe von fünf oder mehr Zahlenwerten in Folge (Wahrscheinlichkeiten,
+    Häufigkeiten, Messwerte, Koeffizienten) ist beim Vorlesen sinnlos
+    UND triggert bei der TTS-Engine garantiert Loops, weil das Muster
+    „null Komma X" Token-Wiederholung mit hoher Dichte ist.
+
+    Regel: AB FÜNF ZAHLEN IN FOLGE wird paraphrasiert, nicht aufgezählt.
+
+    FALSCH:  "Die Auftrittswahrscheinlichkeiten P von x 1 bis P von
+              x 8 sind 0,7, 0,2, 0,05, 0,015, 0,012, 0,011, 0,007 und
+              0,005."
+    RICHTIG: "Die Auftrittswahrscheinlichkeiten reichen von 0,7 für das
+              häufigste Symbol bis hinunter zu 0,005 für das seltenste,
+              mit stark abnehmender Verteilung."
+    RICHTIG: "Die Wahrscheinlichkeiten liegen zwischen 0,7 und 0,005,
+              wobei das erste Symbol mit Abstand am häufigsten ist."
+
+    Wenn die exakten Werte für das Verständnis essentiell sind (z. B.
+    Beispiel-Rechnung danach), nenne nur die Eckwerte (höchster /
+    niedrigster) und füge hinzu „die vollständige Verteilung steht im
+    Skript". Lieber unvollständig im Audio als loop-trigger.
+
+    IDENTITÄTS-MAPPINGS GANZ WEGLASSEN: Aufzählungen der Form
+    „x 1 gleich 1, x 2 gleich 2, x 3 gleich 3 bis x N gleich N" haben
+    null Informationsgehalt im Audio. Komplett streichen, ggf. ersetzen
+    durch „die Symbole tragen ihre Indizes als Werte" oder ähnliches.
+
+    Tabellen-Dumps (mehrere Spalten als Komma-Listen) erkennst du oft
+    daran dass mehrere Zahlen-Reihen direkt aufeinander folgen. Solche
+    Blöcke fasst du in EINEM Satz zusammen, mit Verweis auf die
+    Tabelle, statt sie zu reproduzieren.
+
 ================================================================
 
 WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchlaufen. Folgende Transformationen wurden schon gemacht — mache sie NICHT rückgängig:
@@ -618,6 +651,34 @@ C) NO IDENTICAL SENTENCES TWICE IN THE SAME CHUNK
    If the same sentence appears as a heading and again as flowing
    prose, rewrite one or drop it. Identical sentences within one
    chunk are loop triggers.
+
+D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
+   This is an audiobook. The listener cannot scan a table. A row of
+   five or more numeric values (probabilities, frequencies, measured
+   values) is pointless when read aloud AND reliably triggers TTS
+   loops because the "zero point X" pattern is dense token repetition.
+
+   Rule: FIVE OR MORE NUMBERS IN A ROW → paraphrase, don't enumerate.
+
+   WRONG: "The probabilities P(x_1) through P(x_8) are 0.7, 0.2, 0.05,
+           0.015, 0.012, 0.011, 0.007, and 0.005."
+   RIGHT: "The probabilities range from 0.7 for the most common symbol
+           down to 0.005 for the rarest, with sharply decreasing
+           frequency."
+
+   When exact values matter for a subsequent calculation, give only the
+   endpoints (highest / lowest) and add "full distribution in the
+   script". Better incomplete in audio than a loop trigger.
+
+   DROP IDENTITY MAPPINGS ENTIRELY: enumerations of the form
+   "x_1 = 1, x_2 = 2, …, x_N = N" carry zero information when spoken.
+   Cut them, or replace with "the symbols take their indices as values"
+   or similar.
+
+   Table dumps (multiple columns rendered as comma lists) are usually
+   recognizable by several numeric rows in succession. Summarize such
+   blocks in one sentence with a pointer to the table, don't reproduce
+   them.
 
 ================================================================
 1. EXPAND ABBREVIATIONS COMPLETELY
