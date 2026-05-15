@@ -263,7 +263,18 @@ geschickt und müssen unter allen Umständen vermieden werden:
     UND triggert bei der TTS-Engine garantiert Loops, weil das Muster
     „null Komma X" Token-Wiederholung mit hoher Dichte ist.
 
-    Regel: AB FÜNF ZAHLEN IN FOLGE wird paraphrasiert, nicht aufgezählt.
+    Die Regel greift unabhängig von der SCHREIBWEISE:
+      ❌ "0,7, 0,2, 0,05, 0,015, 0,012, 0,011, 0,007, 0,005"
+      ❌ "null Komma sieben, null Komma zwei, null Komma null fünf, …"
+      ❌ "0.7, 0.2, 0.05" (englisch-formatiert)
+    Alle drei Formen produzieren beim Synthesizer dieselben loop-
+    anfälligen Token-Sequenzen — die ausgeschriebene Form ist sogar
+    schlimmer, weil sie das Muster bereits in den Modell-Tokens
+    vorzeichnet. Komma und Punkt zählen hier als DEZIMALTRENNER innerhalb
+    der Zahlen, NICHT als Satzzeichen am Satzende.
+
+    Regel: AB FÜNF ZAHLEN IN FOLGE wird paraphrasiert, nicht aufgezählt —
+    egal ob als Ziffer oder als Wort geschrieben.
 
     FALSCH:  "Die Auftrittswahrscheinlichkeiten P von x 1 bis P von
               x 8 sind 0,7, 0,2, 0,05, 0,015, 0,012, 0,011, 0,007 und
@@ -658,7 +669,18 @@ D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
    values) is pointless when read aloud AND reliably triggers TTS
    loops because the "zero point X" pattern is dense token repetition.
 
-   Rule: FIVE OR MORE NUMBERS IN A ROW → paraphrase, don't enumerate.
+   The rule applies regardless of NOTATION:
+     ❌ "0.7, 0.2, 0.05, 0.015, 0.012, 0.011, 0.007, 0.005"
+     ❌ "zero point seven, zero point two, zero point zero five, …"
+     ❌ "0,7, 0,2, 0,05" (German-formatted decimals)
+   All three forms produce the same loop-prone token sequences in the
+   synthesizer — the spelled-out form is actually worse because it
+   bakes the pattern directly into the model tokens. Decimal point /
+   comma here means the SEPARATOR within a number, NOT sentence-ending
+   punctuation.
+
+   Rule: FIVE OR MORE NUMBERS IN A ROW → paraphrase, don't enumerate —
+   whether written as digits or words.
 
    WRONG: "The probabilities P(x_1) through P(x_8) are 0.7, 0.2, 0.05,
            0.015, 0.012, 0.011, 0.007, and 0.005."
