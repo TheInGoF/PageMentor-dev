@@ -2,12 +2,17 @@
 # workstation with an NVIDIA GPU, e.g. RTX 3090, 24 GB VRAM).
 #
 # This stack does NOT run on the Synology — it runs on the GPU host
-# next to PageMentor. It boots four services:
+# next to PageMentor. It boots the shared AI services for both
+# PageMentor AND the sibling project doc_storage:
 #
-#   - ollama          ← LLM + embeddings
-#   - docling         ← GPU PDF extraction
-#   - qwen-tts        ← voice-clone TTS (Qwen3-TTS-Flash 1.7B Base)
-#   - pm-gpu-arbiter  ← serialises GPU access between ollama and qwen-tts
+#   - ollama          ← LLM + embeddings   (shared — arbiter mediates)
+#   - docling         ← GPU PDF extraction (shared — both call directly)
+#   - qwen-tts        ← voice-clone TTS    (PageMentor only)
+#   - audio-analyzer  ← voice description  (PageMentor only)
+#   - pm-gpu-arbiter  ← serialises GPU access (ollama / qwen-tts / analyzer)
+#   - tei             ← jina-embeddings-v3 (doc_storage only, permanent VRAM,
+#                                            does NOT use arbiter — see notes)
+#   - qdrant          ← vector DB          (doc_storage only, CPU-only)
 #
 # The arbiter is the only endpoint PageMentor (on the NAS) talks to —
 # port 8790. It transparently forwards requests to ollama (11434) or
@@ -27,9 +32,13 @@
 #
 #   3. `docker compose pull && docker compose up -d`
 #
-#   4. Open firewall on the host: ports 8790 (arbiter) and 5001
-#      (docling) must be reachable from the NAS IP. Ports 11434 and
-#      8880 can stay private — the NAS does NOT talk to them directly.
+#   4. Open firewall on the host. Ports needed from the NAS IP:
+#        - 8790 (arbiter)    — PageMentor + doc_storage Ollama traffic
+#        - 5001 (docling)    — PageMentor + doc_storage PDF extraction
+#        - 8080 (tei)        — doc_storage embeddings
+#        - 6333 (qdrant)     — doc_storage vector DB
+#      Ports 11434 (ollama) and 8880 (qwen-tts) stay private — the NAS
+#      never talks to them directly.
 #
 #   5. In PageMentor → Settings → Local TTS → Arbiter URL, set
 #      `http://<gpu-host-ip>:8790`. And → LLM → Ollama URL to
@@ -114,8 +123,16 @@ services:
       ollama pull jina/jina-embeddings-v2-base-de &&
       ollama pull nomic-embed-text &&
       ollama pull gemma3:27b &&
-      ollama pull llama3.1:8b
+      ollama pull llama3.1:8b &&
+      ollama pull qwen3:8b &&
+      ollama pull qwen3:14b
       "
+    # Why qwen3 here too: the sibling project doc_storage uses qwen3:8b
+    # (classify + rerank) and qwen3:14b (RAG answers with /think). They
+    # share THIS Ollama instance via the arbiter — pulling once means
+    # both projects can pick them from the Settings dropdown without
+    # touching the host. Ollama is content-addressed so models pulled
+    # later (via UI or `ollama pull` on the host) coexist fine.
     restart: "no"
 
   docling:
@@ -318,11 +335,77 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # ------------------------------------------------------------------
+  # Shared-with-doc_storage additions. Both are ADDITIVE — PageMentor
+  # itself doesn't talk to either service, so removing them changes
+  # nothing for PageMentor. They live here because they share VRAM /
+  # disk with the rest of the GPU host and belong in the same compose
+  # for operational sanity (one `docker compose up -d`).
+  # ------------------------------------------------------------------
+
+  # HuggingFace TEI hosting jina-embeddings-v3. doc_storage uses this
+  # for chunk + query embeddings (retrieval.passage / retrieval.query
+  # adapter). Permanently resident in VRAM (~1.1 GB) — does NOT go
+  # through pm-gpu-arbiter on purpose:
+  #
+  #   - The model never swaps, so there's no swap to serialise.
+  #   - Going through the arbiter would only burn 50–100 ms per call
+  #     while blocking nothing.
+  #   - Embeddings are called at high frequency during ingest
+  #     (batches of 32 chunks). Queueing them behind Ollama would
+  #     stall doc_storage's whole upload pipeline whenever PageMentor
+  #     starts an LLM generation.
+  #
+  # VRAM math on the 24 GB 3090:
+  #   24 GB total
+  # - 1.1 GB TEI permanent
+  # - up to ~20 GB single active Ollama model (Arbiter ensures only
+  #     one is loaded at a time across both projects)
+  # = ~3 GB headroom for Docling / qwen-tts on-demand pages.
+  # Verify with `nvidia-smi` after first qwen-tts call.
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:1.5
+    container_name: pm-tei
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      MODEL_ID: jinaai/jina-embeddings-v3
+      # TEI's default batch ceiling — leave headroom under it on the
+      # client side (doc_storage caps at 32, well below).
+      MAX_CLIENT_BATCH_SIZE: "64"
+      MAX_CONCURRENT_REQUESTS: "32"
+    volumes:
+      - tei-cache:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Qdrant vector DB — holds the jina-v3 chunk embeddings for
+  # doc_storage's RAG retrieval. CPU-only, ~50 MB RAM idle, no VRAM
+  # contention. Storage grows with corpus size (~1.5 KB per vector at
+  # 1024 dim + payload). Open port 6333 in the host firewall so the
+  # NAS-side doc_storage backend can reach it.
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: pm-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
 volumes:
   ollama-models:
   docling-cache:
   qwen-tts-hf:
   audio-analyzer-hf:
+  tei-cache:        # jina-embeddings-v3 weights (~1.1 GB after first start)
+  qdrant-data:      # doc_storage's vector DB; grows with corpus
 
 # ----------------------------------------------------------------------
 # VRAM budget on a 24 GB card (RTX 3090 / 4090)
