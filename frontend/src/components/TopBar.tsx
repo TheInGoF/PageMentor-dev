@@ -4,7 +4,7 @@ import { SearchOverlay } from "./SearchOverlay";
 import { Logo } from "./Logo";
 import { cn } from "../lib/cn";
 
-export type TopView = "dashboard" | "library" | "modules";
+export type TopView = "dashboard" | "library" | "modules" | "tutor";
 
 interface Props {
   onLogout: () => void;
@@ -14,6 +14,7 @@ interface Props {
   onGoDashboard?: () => void;
   onGoLibrary?: () => void;
   onGoModules?: () => void;
+  onGoTutor?: () => void;
   /** Navigate to the Settings page. Required so the cog icon works on
    *  every view that mounts the TopBar. The Logs UI lives as a tab
    *  inside Settings since v1.18.098. */
@@ -40,6 +41,7 @@ export function TopBar({
   onGoDashboard,
   onGoLibrary,
   onGoModules,
+  onGoTutor,
   onOpenSettings,
 }: Props) {
   return (
@@ -47,7 +49,7 @@ export function TopBar({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex flex-col gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Logo size={22} />
-          {(onGoDashboard || onGoLibrary || onGoModules) && (
+          {(onGoDashboard || onGoLibrary || onGoModules || onGoTutor) && (
             <nav className="flex items-center gap-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
               {onGoDashboard && (
                 <NavButton
@@ -68,6 +70,13 @@ export function TopBar({
                   label={t("nav.modules")}
                   active={currentView === "modules"}
                   onClick={onGoModules}
+                />
+              )}
+              {onGoTutor && (
+                <NavButton
+                  label={t("nav.tutor")}
+                  active={currentView === "tutor"}
+                  onClick={onGoTutor}
                 />
               )}
             </nav>

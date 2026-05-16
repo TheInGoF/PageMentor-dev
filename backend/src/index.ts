@@ -11,6 +11,7 @@ import { searchRoutes } from "./routes/search";
 import { summaryRoutes } from "./routes/summaries";
 import { dashboardRoutes } from "./routes/dashboard";
 import { llmConfigRoutes } from "./routes/llmConfig";
+import { tutorRoutes } from "./routes/tutor";
 import { moduleRoutes } from "./routes/modules";
 import { ragRoutes } from "./routes/rag";
 import { voiceRoutes } from "./routes/voices";
@@ -106,6 +107,7 @@ app.route("/api/modules", moduleRoutes);
 app.route("/api/rag", ragRoutes);
 app.route("/api/voices", voiceRoutes);
 app.route("/api/admin", adminRoutes);
+app.route("/api/tutor", tutorRoutes);
 
 // Static frontend (production)
 app.use("/*", serveStatic({ root: "./public" }));

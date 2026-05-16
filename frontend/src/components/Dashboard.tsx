@@ -8,6 +8,7 @@ import { TopBar } from "./TopBar";
 interface Props {
   onOpenLibrary: () => void;
   onOpenModules: () => void;
+  onOpenTutor?: () => void;
   onOpenDocument: (docId: string) => void;
   onLogout: () => void;
   onOpenSettings: () => void;
@@ -16,6 +17,7 @@ interface Props {
 export function Dashboard({
   onOpenLibrary,
   onOpenModules,
+  onOpenTutor,
   onOpenDocument,
   onLogout,
   onOpenSettings,
@@ -47,6 +49,7 @@ export function Dashboard({
         onGoDashboard={() => {}}
         onGoLibrary={onOpenLibrary}
         onGoModules={onOpenModules}
+        onGoTutor={onOpenTutor}
         onOpenSettings={onOpenSettings}
       />
 

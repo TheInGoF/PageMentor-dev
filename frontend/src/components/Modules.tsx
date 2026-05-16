@@ -13,6 +13,7 @@ interface Props {
   onOpenDocument: (docId: string) => void;
   onGoDashboard: () => void;
   onGoLibrary: () => void;
+  onGoTutor?: () => void;
   onLogout: () => void;
   onOpenSettings: () => void;
 }
@@ -22,6 +23,7 @@ export function Modules({
   onOpenDocument,
   onGoDashboard,
   onGoLibrary,
+  onGoTutor,
   onLogout,
   onOpenSettings,
 }: Props) {
@@ -66,6 +68,7 @@ export function Modules({
         onGoDashboard={onGoDashboard}
         onGoLibrary={onGoLibrary}
         onGoModules={() => {}}
+        onGoTutor={onGoTutor}
         onOpenSettings={onOpenSettings}
       />
 

@@ -6,6 +6,7 @@ import { LearningMenu } from "./components/LearningMenu";
 import { Dashboard } from "./components/Dashboard";
 import { Modules } from "./components/Modules";
 import { ModuleDetail } from "./components/ModuleDetail";
+import { TutorPage } from "./components/TutorPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -13,7 +14,7 @@ import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 import { t, useLocale } from "./lib/i18n";
 
 type AuthState = "checking" | "out" | "in";
-type View = "dashboard" | "library" | "modules" | "settings";
+type View = "dashboard" | "library" | "modules" | "tutor" | "settings";
 
 interface NavState {
   view: View;
@@ -39,6 +40,7 @@ function loadNav(): NavState | null {
       "dashboard",
       "library",
       "modules",
+      "tutor",
       "settings",
     ];
     const view: View = validViews.includes(p.view) ? p.view : "dashboard";
@@ -63,10 +65,28 @@ function saveNav(n: NavState): void {
   }
 }
 
-/** Initial nav: history.state has priority (set by us on previous
- *  visits/forward navigation), localStorage is the fallback for the
- *  very first load. Both can be missing → defaults to dashboard. */
+/** Initial nav: URL params have absolute priority (deep links from the
+ *  tutor's source pills open `?openDoc=<id>` in a new tab and must
+ *  land directly in the document). History.state is next (set by us
+ *  on previous visits/forward navigation), localStorage is the
+ *  fallback for the very first load. Default = dashboard. */
 function initialNav(): NavState {
+  if (typeof window !== "undefined") {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const openDoc = params.get("openDoc");
+      if (openDoc) {
+        return {
+          view: "library",
+          openDocId: openDoc,
+          openModuleId: null,
+          returnTo: null,
+        };
+      }
+    } catch {
+      // bad URL — ignore and fall through
+    }
+  }
   const fromHistory =
     typeof window !== "undefined" && window.history.state
       ? (window.history.state as { pmNav?: NavState }).pmNav
@@ -222,6 +242,7 @@ export function App() {
           onOpenDocument={(id) => setOpenDocId(id)}
           onGoDashboard={() => setView("dashboard")}
           onGoLibrary={() => setView("library")}
+          onGoTutor={() => setView("tutor")}
           onLogout={handleLogout}
           onOpenSettings={openSettings}
         />
@@ -233,14 +254,35 @@ export function App() {
           onOpen={(id) => setOpenDocId(id)}
           onGoDashboard={() => setView("dashboard")}
           onGoModules={() => setView("modules")}
+          onGoTutor={() => setView("tutor")}
           onOpenModule={(id) => setOpenModuleId(id)}
           onOpenSettings={openSettings}
+        />
+      );
+    if (view === "tutor")
+      return (
+        <TutorPage
+          onLogout={handleLogout}
+          onGoDashboard={() => setView("dashboard")}
+          onGoLibrary={() => setView("library")}
+          onGoModules={() => setView("modules")}
+          onOpenSettings={openSettings}
+          onOpenDocument={(id) => setOpenDocId(id)}
+          onOpenDocumentSource={(docId, page) => {
+            // Open the document's PDF reader in a new tab at the
+            // cited page so the chat remains visible.
+            const url = `${window.location.origin}/?openDoc=${encodeURIComponent(
+              docId
+            )}&page=${page}`;
+            window.open(url, "_blank", "noopener,noreferrer");
+          }}
         />
       );
     return (
       <Dashboard
         onOpenLibrary={() => setView("library")}
         onOpenModules={() => setView("modules")}
+        onOpenTutor={() => setView("tutor")}
         onOpenDocument={(id) => setOpenDocId(id)}
         onLogout={handleLogout}
         onOpenSettings={openSettings}

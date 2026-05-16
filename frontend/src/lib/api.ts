@@ -1207,7 +1207,75 @@ export const api = {
     remove: (id: string) =>
       request<{ status: string }>(`/api/modules/${id}`, { method: "DELETE" }),
   },
+  tutor: {
+    listSessions: () =>
+      request<{ sessions: TutorSession[] }>("/api/tutor/sessions"),
+    createSession: (moduleId: string | null) =>
+      request<{ session: TutorSession }>("/api/tutor/sessions", {
+        method: "POST",
+        body: JSON.stringify({ moduleId }),
+      }),
+    getSession: (id: string) =>
+      request<{ session: TutorSession; messages: TutorMessage[] }>(
+        `/api/tutor/sessions/${id}`
+      ),
+    rename: (id: string, title: string) =>
+      request<{ status: string }>(`/api/tutor/sessions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      }),
+    remove: (id: string) =>
+      request<{ status: string }>(`/api/tutor/sessions/${id}`, {
+        method: "DELETE",
+      }),
+    ask: (sessionId: string, question: string) =>
+      request<{ answer: TutorAnswer }>(
+        `/api/tutor/sessions/${sessionId}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify({ question }),
+        }
+      ),
+  },
 };
+
+export interface TutorSession {
+  id: string;
+  title: string | null;
+  module_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TutorMessage {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  /** For role=user: raw text. For role=assistant: JSON-stringified
+   *  TutorAnswer — parse before rendering. */
+  content: string;
+  created_at: string;
+}
+
+export interface TutorSource {
+  n: number;
+  docId: string;
+  docTitle: string;
+  docShortCode: string | null;
+  chapterId: string | null;
+  chapterNumber: number | null;
+  chapterTitle: string | null;
+  startPage: number;
+  endPage: number;
+  snippet: string;
+}
+
+export interface TutorAnswer {
+  shortAnswer: string;
+  reasoning: string;
+  sources: TutorSource[];
+  model: string;
+}
 
 /** Subscribe to SSE progress events. Returns an unsubscribe function. */
 export function subscribeProgress(

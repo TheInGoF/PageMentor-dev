@@ -243,6 +243,32 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_chunks_chapter ON chunks(chapter_id);
   `);
 
+  // Tutor chat — module-scoped Q&A with the learning materials. Each
+  // session is bound to one module (or NULL for "all modules"); each
+  // message either user-authored (plain text) or assistant-generated
+  // (JSON with the three sections + source list, stored as TEXT for
+  // simplicity — the frontend parses it back).
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      module_id TEXT REFERENCES modules(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_session
+      ON chat_messages(session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated
+      ON chat_sessions(updated_at DESC);
+  `);
+
   // Voice samples for Qwen3-TTS voice clone. User uploads a 3-10 s
   // reference WAV/MP3, we store the file in the data volume and keep
   // metadata in this table. The fixed seed (rolled at upload) ensures
