@@ -4,7 +4,6 @@ import {
   subscribeProgress,
   type Document,
   type ProgressEvent,
-  type RagSource,
 } from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
 import { Button } from "./ui/Button";
@@ -15,7 +14,6 @@ import { PdfModal } from "./PdfModal";
 import { Cards } from "./Cards";
 import { ExamTrainer } from "./ExamTrainer";
 import { Summaries } from "./Summaries";
-import { RagQA } from "./RagQA";
 import { DocumentOverview } from "./DocumentOverview";
 import { cn } from "../lib/cn";
 
@@ -25,8 +23,7 @@ export type Tab =
   | "audiobook"
   | "exercises"
   | "exam"
-  | "summary"
-  | "qa";
+  | "summary";
 
 const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = [
   { id: "overview", labelKey: "learn.tab.overview", requiresExtraction: false },
@@ -35,7 +32,6 @@ const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = 
   { id: "exercises", labelKey: "learn.tab.exercises", requiresExtraction: true },
   { id: "exam", labelKey: "learn.tab.exam", requiresExtraction: true },
   { id: "summary", labelKey: "learn.tab.summary", requiresExtraction: true },
-  { id: "qa", labelKey: "learn.tab.qa", requiresExtraction: true },
 ];
 
 interface Props {
@@ -232,18 +228,6 @@ export function LearningMenu({
         {tab === "exercises" && extractionDone && <Cards docId={docId} />}
         {tab === "exam" && extractionDone && <ExamTrainer docId={docId} />}
         {tab === "summary" && extractionDone && <Summaries docId={docId} />}
-        {tab === "qa" && extractionDone && (
-          <RagQA
-            docId={docId}
-            onOpenSource={(src: RagSource) =>
-              setPdfSource({
-                docId: src.document_id,
-                initialPage: src.start_page,
-                title: src.document_title || src.chapter_title,
-              })
-            }
-          />
-        )}
       </main>
       <PdfModal source={pdfSource} onClose={() => setPdfSource(null)} />
     </div>
