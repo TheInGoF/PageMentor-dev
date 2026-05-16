@@ -95,8 +95,18 @@ function withGemmaLock<T>(label: string, fn: () => Promise<T>): Promise<T> {
     console.log(
       `[audio-preprocess] ${label} waiting in Gemma queue (position ${ticket - 1})`
     );
+  } else {
+    console.log(`[audio-preprocess] ${label} acquiring Gemma lock`);
   }
-  const next = gemmaQueue.then(fn, fn);
+  const wrapped = async () => {
+    console.log(`[audio-preprocess] ${label} lock acquired, calling LLM`);
+    try {
+      return await fn();
+    } finally {
+      console.log(`[audio-preprocess] ${label} releasing Gemma lock`);
+    }
+  };
+  const next = gemmaQueue.then(wrapped, wrapped);
   // Don't let one rejection poison the chain — the next caller should
   // still get a clean slot. We swallow the error here; the original
   // promise (`next`) still rejects to its own caller.
