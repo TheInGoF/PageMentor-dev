@@ -1867,151 +1867,107 @@ export function clearAudioTextCacheForDocument(documentId: string): void {
 //
 // Stattdessen: kurzer, single-purpose Prompt mit konkretem Beispiel.
 // Few-shot via vollständigem Vorher/Nachher schlägt jede prosa-Regel.
-const INTRO_SYSTEM_DE = `Du bekommst den kurzen Intro-Block eines Hörbuchs (5 bis 8 Zeilen mit Titel, Autor, Modellname, Stimme, Branding). Deine EINZIGE Aufgabe: Modell- und Produktnamen so umschreiben, dass die TTS-Engine sie korrekt ausspricht. Alles andere übernimmst du eins zu eins.
+const INTRO_SYSTEM_DE = `Du designst einen Hörbuch-Intro-Text (5 bis 8 Zeilen mit Titel, Autor, Modellname, Stimme, Branding). Aufgabe: Modell- und Produktnamen so vokalisieren dass die TTS-Engine sie korrekt spricht. Alles andere lässt du unverändert.
 
-LINE-PRESERVATION-CONTRACT (das ist wichtiger als alle anderen Regeln):
+LINE-PRESERVATION-CONTRACT (überschreibt alles andere):
 - Der Output hat GENAU dieselbe Anzahl Zeilen wie der Input, in derselben Reihenfolge.
-- Eine Input-Zeile ohne Modell- oder Produktname wird ZEICHENGENAU 1:1 in den Output kopiert.
-- Du DARFST keine Zeile weglassen, auch wenn sie dir redundant vorkommt.
-- Du DARFST keine Zeile hinzufügen, auch wenn sie thematisch passen würde.
-- Du DARFST keine Zeile umformulieren, kürzen oder umsortieren, wenn sie keinen Modellnamen enthält. Titel wie "Prof. Dr.-Ing." bleiben "Prof. Dr.-Ing." (sind im Input bereits korrekt vorbehandelt).
+- Leerzeilen bleiben Leerzeilen.
+- Du löschst nichts. Du fügst nichts hinzu. Du formulierst nichts um was nicht ausspracherelevant ist.
+- Personen-Titel ("Prof. Dr.-Ing.") bleiben wie im Input — Pre-Pass hat das schon korrekt normalisiert.
 
-PHONETISCHE SUBSTITUTIONEN (nur diese, analog für ähnliche Modell-Namen):
-- "Qwen3-TTS"             -> "Kwenn drei T T S"
-- "Qwen2.5-TTS"           -> "Kwenn zwei Komma fünf T T S"
-- "Qwen"                  -> "Kwenn"
-- "Gemma"                 -> "Dschemma"
-- "gemma4:e4b"            -> "Dschemma vier"   (Versions-Suffix nach ":" wegfallen)
-- "gemma3:e4b"            -> "Dschemma drei"
-- "gemma4:26b"            -> "Dschemma vier"
-- "Llama3.1:8b"           -> "Lama drei Punkt eins"
-- "PageMentor"            -> "Peigementor"     (deutsches "ei" zwingt /aI/)
-- "TTS" als eigenes Wort  -> "T T S"
-Modell-Versionsziffern als Wort ausschreiben ("drei" statt "3"). Versions-Tag nach Doppelpunkt (":e4b", ":26b") wegfallen.
+VOKALISIERUNGS-REGELN:
+
+1. MODELLNAMEN MIT VERSIONS-SUFFIX:
+   Lass das technische Suffix nach dem Doppelpunkt weg — es ist für den Hörer keine Information.
+     "gemma4:e4b"      → "Gemma 4"
+     "llama3.1:70b"    → "Llama 3.1"
+     "qwen3:14b"       → "Qwen 3"
+   Die Versionsziffer BLEIBT als Ziffer (TTS spricht "3" als "drei").
+
+2. AKRONYME (2–5 Großbuchstaben in Folge):
+   Mit Leerzeichen trennen, damit die TTS sie Buchstabe-für-Buchstabe spricht statt zu raten.
+     "TTS"  → "T T S"
+     "API"  → "A P I"
+     "USB"  → "U S B"
+   AUSNAHME: bekannte Wort-Akronyme bleiben als Wort: "NATO", "UNESCO", "RAM", "WLAN".
+
+3. ZWEI SPEZIFISCHE PHONETISCHE SUBSTITUTIONEN (empirisch verifiziert):
+   Folgende zwei Modellnamen trifft Qwen-TTS bei deutscher Stimme regelhaft falsch — wir geben die phonetische Form vor:
+     "Qwen"  → "Kwenn"     (sonst stolperts deutsche TTS, sagt "Kw-en" statt "Kwen")
+     "Gemma" → "Dschemma"  (sonst hartes deutsches /g/ statt englisches /dʒ/)
+
+   Diese zwei sind die EINZIGEN Eigennamen-Substitutionen die du machst. NICHT auf andere Namen extrapolieren.
+
+4. NICHT RATEN BEI ANDEREN EIGENNAMEN.
+   Personen-Namen (Autor), Orts-Namen, Marken-Namen, Buch-Titel, Stimmen-Namen, Produkt-Namen die NICHT in Regel 3 stehen → übernimmst du UNVERÄNDERT. Du weißt nicht wie die TTS sie tatsächlich ausspricht. Wenn die Aussprache schlecht ist, kann der User das im Intro-Editor manuell fixen — das ist NICHT deine Verantwortung.
+
+   Konkret: "PageMentor" bleibt "PageMentor" (frühere "Peigementor"-Version machte es nicht besser, nur seltsamer). "Llama" bleibt "Llama". "Mazda" bleibt "Mazda".
 
 OUTPUT-FORMAT:
-- Reiner Text. Eine Output-Zeile pro Input-Zeile. Leerzeilen bleiben Leerzeilen.
-- KEIN Kommentar, KEINE Erklärung, KEINE Anführungszeichen drumherum, KEINE Markdown-Formatierung.
-- Du gibst nur den transformierten Intro-Text aus, sonst nichts.
-
-BEISPIEL 1 (typischer Fall):
-
-INPUT:
-Hörbuch: Codierung.
-
-Von Prof. Dr.-Ing. Thomas Zimmermann.
-Aufbereitet durch gemma4:e4b.
-Gesprochen durch Qwen3-TTS, mit der Stimme Testi 2.
-Erstellt mit PageMentor.
-
-OUTPUT:
-Hörbuch: Codierung.
-
-Von Prof. Dr.-Ing. Thomas Zimmermann.
-Aufbereitet durch Dschemma vier.
-Gesprochen durch Kwenn drei T T S, mit der Stimme Testi 2.
-Erstellt mit Peigementor.
-
-BEISPIEL 2 (wenig zu tun, fast alles 1:1):
-
-INPUT:
-Hörbuch: Grundlagen der Statistik.
-
-Von Frau Dr. Maria Schmidt.
-Aufbereitet ohne KI-Hilfe.
-Gesprochen von einem professionellen Sprecher.
-Erstellt mit PageMentor.
-
-OUTPUT:
-Hörbuch: Grundlagen der Statistik.
-
-Von Frau Dr. Maria Schmidt.
-Aufbereitet ohne KI-Hilfe.
-Gesprochen von einem professionellen Sprecher.
-Erstellt mit Peigementor.
-
-(Nur eine Substitution — "PageMentor" -> "Peigementor". Alle anderen Zeilen unverändert.)
+- Reiner Text, eine Output-Zeile pro Input-Zeile, Leerzeilen bleiben Leerzeilen.
+- Jede nicht-leere Zeile endet mit Punkt, Frage- oder Ausrufezeichen.
+- Kein Kommentar, keine Erklärung, keine Anführungszeichen drumherum, keine Markdown-Formatierung.
+- Du gibst NUR den transformierten Intro-Text aus, sonst nichts.
 
 VERBOTEN — typische Fehlermuster die du NICHT machst:
-1. Eine Zeile streichen weil "sie dir redundant erscheint" (z.B. die TTS-Zeile fehlt im Output).
-2. Eine Zeile umformulieren obwohl kein Modellname drin ist (z.B. "Prof. Dr.-Ing." -> "Professor" weg-kürzen).
-3. Eine neue Zeile erfinden die nicht im Input stand (z.B. "Erstellt durch Dschemma vier." dazudichten).
+1. Eine Zeile streichen weil sie dir redundant erscheint.
+2. Eine Zeile umformulieren obwohl kein Modellname drin ist (z.B. "Prof. Dr.-Ing." → "Professor" kürzen).
+3. Eine neue Zeile erfinden die nicht im Input stand.
 4. Zeilen umsortieren oder zusammenfassen.
+5. Einen Eigennamen phonetisieren der nicht in Regel 3 explizit gelistet ist.
 
-Im Zweifel: Input-Zeile 1:1 in den Output kopieren.`;
+Im Zweifel: 1:1 kopieren.`;
 
-const INTRO_SYSTEM_EN = `You receive the short intro block of an audiobook (5 to 8 lines with title, author, model name, voice, branding). Your ONLY job: rewrite model and product names so the TTS engine pronounces them correctly. Everything else you carry over one-for-one.
+const INTRO_SYSTEM_EN = `You design the intro block of an audiobook (5 to 8 lines with title, author, model name, voice, branding). Your job: vocalize model and product names so the TTS engine pronounces them correctly. Everything else stays unchanged.
 
 LINE-PRESERVATION CONTRACT (this overrides everything else):
 - The output has EXACTLY the same number of lines as the input, in the same order.
-- An input line without a model or product name is copied character-for-character to the output.
-- You MUST NOT drop a line, even if it feels redundant.
-- You MUST NOT add a line, even if it would thematically fit.
-- You MUST NOT rephrase, shorten, or reorder a line that contains no model name. Titles like "Prof. Dr.-Ing." stay "Prof. Dr.-Ing." (the input is already correctly normalized).
+- Blank lines stay blank.
+- You do not drop, add, reword, or reorder anything that isn't pronunciation-relevant.
+- Personal titles ("Prof. Dr.-Ing.") stay as in the input — the pre-pass already normalised them.
 
-PHONETIC SUBSTITUTIONS (only these, apply analogously to similar model names):
-- "Qwen3-TTS"             -> "Kwenn three T T S"
-- "Qwen2.5-TTS"           -> "Kwenn two point five T T S"
-- "Qwen"                  -> "Kwenn"
-- "Gemma"                 -> "Jemma"
-- "gemma4:e4b"            -> "Jemma four"      (drop the ":..." version tag)
-- "gemma3:e4b"            -> "Jemma three"
-- "gemma4:26b"            -> "Jemma four"
-- "Llama3.1:8b"           -> "Llama three point one"
-- "PageMentor"            -> "Peigementor"     (German "ei" forces /eI/)
-- "TTS" standalone        -> "T T S"
-Spell model version digits as words ("three" instead of "3"). Drop version suffixes after the colon (":e4b", ":26b").
+VOCALIZATION RULES:
+
+1. MODEL NAMES WITH VERSION SUFFIX:
+   Drop the technical suffix after the colon — it carries no information for the listener.
+     "gemma4:e4b"    -> "Gemma 4"
+     "llama3.1:70b"  -> "Llama 3.1"
+     "qwen3:14b"     -> "Qwen 3"
+   The version digit STAYS a digit (TTS reads "3" as "three").
+
+2. ACRONYMS (2–5 capitals in a row):
+   Separate with spaces so the TTS spells letter-by-letter instead of guessing.
+     "TTS" -> "T T S"
+     "API" -> "A P I"
+     "USB" -> "U S B"
+   EXCEPTION: well-known word acronyms stay as words: "NATO", "UNESCO", "RAM", "WLAN".
+
+3. TWO SPECIFIC PHONETIC SUBSTITUTIONS (empirically verified):
+   Qwen-TTS with a German voice consistently mispronounces these two model names — we hard-substitute:
+     "Qwen"  -> "Kwenn"     (otherwise the German TTS says "Kw-en" instead of "Kwen")
+     "Gemma" -> "Jemma"     (otherwise hard German /g/ instead of English /dʒ/)
+
+   These are the ONLY proper-noun substitutions you make. Do NOT extrapolate to other names.
+
+4. DO NOT GUESS ON OTHER PROPER NOUNS.
+   Author names, place names, brand names, book titles, voice names, product names NOT listed in rule 3 → copy them UNCHANGED. You don't know how the TTS will actually pronounce them. If pronunciation is bad, the user can fix it manually in the intro editor — that is NOT your responsibility.
+
+   Concretely: "PageMentor" stays "PageMentor" (the older "Peigementor" substitution didn't make it better, just stranger). "Llama" stays "Llama". "Mazda" stays "Mazda".
 
 OUTPUT FORMAT:
-- Plain text. One output line per input line. Blank lines stay blank.
-- NO comments, NO explanation, NO quotation marks around the output, NO Markdown.
-- You output only the transformed intro text, nothing else.
-
-EXAMPLE 1 (typical case):
-
-INPUT:
-Audiobook: Coding.
-
-By Prof. Dr.-Ing. Thomas Zimmermann.
-Prepared with gemma4:e4b.
-Narrated by Qwen3-TTS, with the voice Testi 2.
-Created with PageMentor.
-
-OUTPUT:
-Audiobook: Coding.
-
-By Prof. Dr.-Ing. Thomas Zimmermann.
-Prepared with Jemma four.
-Narrated by Kwenn three T T S, with the voice Testi 2.
-Created with Peigementor.
-
-EXAMPLE 2 (little to do, almost all 1:1):
-
-INPUT:
-Audiobook: Statistics 101.
-
-By Dr. Maria Schmidt.
-Prepared without AI.
-Narrated by a professional speaker.
-Created with PageMentor.
-
-OUTPUT:
-Audiobook: Statistics 101.
-
-By Dr. Maria Schmidt.
-Prepared without AI.
-Narrated by a professional speaker.
-Created with Peigementor.
-
-(Only one substitution — "PageMentor" -> "Peigementor". Every other line unchanged.)
+- Plain text, one output line per input line, blank lines stay blank.
+- Every non-empty line ends in a period, question mark, or exclamation mark.
+- No comments, no explanation, no quotation marks around the output, no Markdown.
+- You output ONLY the transformed intro text, nothing else.
 
 FORBIDDEN — typical failure modes you do NOT produce:
-1. Dropping a line because "it seemed redundant" (e.g. the TTS line missing from output).
+1. Dropping a line because it seemed redundant.
 2. Rephrasing a line that contains no model name (e.g. "Prof. Dr.-Ing." shortened to "Professor").
-3. Inventing a new line that wasn't in the input (e.g. adding "Created with Jemma four.").
+3. Inventing a new line that wasn't in the input.
 4. Reordering or merging lines.
+5. Phoneticizing a proper noun that isn't explicitly listed in rule 3.
 
-When in doubt: copy the input line verbatim.`;
+When in doubt: copy verbatim.`;
 
 export interface IntroPreprocessResult {
   text: string;
