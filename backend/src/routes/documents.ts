@@ -152,6 +152,13 @@ documentRoutes.post("/upload", async (c) => {
   const language = (form.get("language") as string) || "de";
   const type = (form.get("type") as string) || "studienheft";
   const tags = (form.get("tags") as string) || "";
+  // Optional module assignment. Empty string and "none" both map to
+  // NULL (no module). We do NOT validate that the module exists — if
+  // the user picked one that was just deleted, the FK is permissive
+  // (column allows NULL on delete-cascade).
+  const moduleRaw = (form.get("module") as string) || "";
+  const moduleId =
+    moduleRaw === "" || moduleRaw === "none" ? null : moduleRaw;
 
   if (!file) return c.json({ error: tt(c, "err.missingFile") }, 400);
 
@@ -168,10 +175,20 @@ documentRoutes.post("/upload", async (c) => {
 
   db()
     .prepare(
-      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type, ocr_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'awaiting-extraction')`
+      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type, module_id, ocr_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting-extraction')`
     )
-    .run(id, title, file.name, relPath, file.type || "application/pdf", buf.length, language, type);
+    .run(
+      id,
+      title,
+      file.name,
+      relPath,
+      file.type || "application/pdf",
+      buf.length,
+      language,
+      type,
+      moduleId
+    );
 
   // Tags
   if (tags.trim()) {

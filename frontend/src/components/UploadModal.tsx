@@ -4,7 +4,7 @@ import { Button } from "./ui/Button";
 import { TagInput } from "./TagInput";
 import { api } from "../lib/api";
 import { t } from "../lib/i18n";
-import type { DocType } from "../lib/api";
+import type { DocType, ModuleListItem } from "../lib/api";
 import { getSettings } from "../lib/settings";
 
 interface Props {
@@ -23,6 +23,8 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [type, setType] = useState<DocType>("studienheft");
   const [language, setLanguage] = useState("de");
+  const [moduleId, setModuleId] = useState("");
+  const [modules, setModules] = useState<ModuleListItem[]>([]);
   const [tags, setTags] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
@@ -30,13 +32,23 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
   const dropRef = useRef<HTMLLabelElement>(null);
 
   useEffect(() => {
-    if (open) setLanguage(getSettings().defaultLanguage);
+    if (open) {
+      setLanguage(getSettings().defaultLanguage);
+      // Module-Liste lazy laden — alle Modals tun das so. Wenn der
+      // Endpoint fehlschlägt bleibt das Dropdown leer ("ohne Modul"),
+      // der Upload geht trotzdem durch.
+      api.modules
+        .list()
+        .then(setModules)
+        .catch(() => setModules([]));
+    }
   }, [open]);
 
   function reset() {
     setFiles([]);
     setType("studienheft");
     setLanguage(getSettings().defaultLanguage);
+    setModuleId("");
     setTags("");
     setBusy(false);
     setProgress(null);
@@ -69,6 +81,7 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
       form.set("type", type);
       form.set("language", language);
       form.set("tags", tags);
+      if (moduleId) form.set("module", moduleId);
       try {
         await api.documents.upload(form);
         uploaded++;
@@ -201,6 +214,22 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-neutral-400">{t("upload.module")}</label>
+          <select
+            className="input"
+            value={moduleId}
+            onChange={(e) => setModuleId(e.target.value)}
+          >
+            <option value="">{t("upload.moduleNone")}</option>
+            {modules.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.icon ? `${m.icon} ${m.name}` : m.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <TagInput
