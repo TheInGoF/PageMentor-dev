@@ -22,6 +22,7 @@ interface Props {
   onOpen: (docId: string) => void;
   onGoDashboard?: () => void;
   onGoModules?: () => void;
+  onOpenModule?: (id: string) => void;
   onOpenSettings: () => void;
 }
 
@@ -39,6 +40,7 @@ export function Library({
   onOpen,
   onGoDashboard,
   onGoModules,
+  onOpenModule,
   onOpenSettings,
 }: Props) {
   const [docs, setDocs] = useState<Document[] | null>(null);
@@ -176,6 +178,42 @@ export function Library({
     return Number.isFinite(n) ? n : 9999;
   }
 
+  /** Gruppiert die gefilterten Hefte nach Modul-Zugehörigkeit für die
+   *  Render-Schleife. "unassigned" (kein Modul gesetzt) kommt zuerst,
+   *  danach die Module in ihrer sort_order — so wie auch die Module-
+   *  Übersichtsseite sie listet. Module ohne Dokumente in der aktuellen
+   *  Filter-Auswahl werden übersprungen, damit nicht 20 leere
+   *  Überschriften erscheinen. */
+  const grouped = useMemo(() => {
+    if (!filtered) return null;
+    const byModule = new Map<string | null, Document[]>();
+    for (const d of filtered) {
+      const key = d.module_id ?? null;
+      const arr = byModule.get(key);
+      if (arr) arr.push(d);
+      else byModule.set(key, [d]);
+    }
+    const sections: Array<{
+      key: string;
+      module: ModuleListItem | null;
+      docs: Document[];
+    }> = [];
+    const unassigned = byModule.get(null);
+    if (unassigned && unassigned.length > 0) {
+      sections.push({ key: "__unassigned", module: null, docs: unassigned });
+    }
+    const sortedModules = [...modules].sort(
+      (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+    );
+    for (const m of sortedModules) {
+      const docs = byModule.get(m.id);
+      if (docs && docs.length > 0) {
+        sections.push({ key: m.id, module: m, docs });
+      }
+    }
+    return sections;
+  }, [filtered, modules]);
+
   function toggleTag(tg: string) {
     setActiveTags((xs) => (xs.includes(tg) ? xs.filter((x) => x !== tg) : [...xs, tg]));
   }
@@ -285,21 +323,32 @@ export function Library({
           </div>
         )}
 
-        {!filtered ? (
+        {!filtered || !grouped ? (
           <div className="text-sm text-neutral-500">{t("common.loading")}</div>
         ) : filtered.length === 0 ? (
           <EmptyState onUpload={() => setUploadOpen(true)} hasAny={(docs?.length ?? 0) > 0} />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((d) => (
-              <DocumentCard
-                key={d.id}
-                doc={d}
-                liveEvent={liveEvents[d.id]}
-                onOpen={() => onOpen(d.id)}
-                onDelete={() => handleDelete(d)}
-                onEdit={() => setEditDoc(d)}
-              />
+          <div className="flex flex-col gap-8">
+            {grouped.map((section) => (
+              <section key={section.key} className="flex flex-col gap-3">
+                <ModuleSectionHeader
+                  module={section.module}
+                  count={section.docs.length}
+                  onOpenModule={onOpenModule}
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {section.docs.map((d) => (
+                    <DocumentCard
+                      key={d.id}
+                      doc={d}
+                      liveEvent={liveEvents[d.id]}
+                      onOpen={() => onOpen(d.id)}
+                      onDelete={() => handleDelete(d)}
+                      onEdit={() => setEditDoc(d)}
+                    />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
@@ -351,6 +400,64 @@ function ModuleChip({
       style={active && color ? { borderColor: color, color } : undefined}
     >
       {label}
+    </button>
+  );
+}
+
+/** Zwischen-Überschrift pro Modul-Sektion in der Library. Bei
+ *  echten Modulen klickbar als Schnellverweis auf die Modul-Detailseite,
+ *  bei der "ohne Modul"-Sektion nur statische Überschrift. */
+function ModuleSectionHeader({
+  module: m,
+  count,
+  onOpenModule,
+}: {
+  module: ModuleListItem | null;
+  count: number;
+  onOpenModule?: (id: string) => void;
+}) {
+  if (!m) {
+    return (
+      <div className="flex items-baseline gap-2 border-b border-border pb-1.5">
+        <span className="text-base">📂</span>
+        <h2 className="text-sm font-semibold text-neutral-300">
+          {t("library.section.unassigned")}
+        </h2>
+        <span className="text-xs text-neutral-500">({count})</span>
+      </div>
+    );
+  }
+  const clickable = !!onOpenModule;
+  return (
+    <button
+      type="button"
+      onClick={clickable ? () => onOpenModule!(m.id) : undefined}
+      disabled={!clickable}
+      className={
+        "flex items-baseline gap-2 border-b pb-1.5 text-left transition-colors " +
+        (clickable
+          ? "border-border hover:border-border-strong group cursor-pointer"
+          : "border-border cursor-default")
+      }
+      style={{ borderBottomColor: m.color }}
+      title={clickable ? t("library.section.openModule") : undefined}
+    >
+      <span className="text-base">{m.icon}</span>
+      <h2
+        className="text-sm font-semibold transition-colors"
+        style={{ color: m.color }}
+      >
+        {m.name}
+      </h2>
+      {m.semester && (
+        <span className="text-xs text-neutral-500">· {m.semester}</span>
+      )}
+      <span className="text-xs text-neutral-500">({count})</span>
+      {clickable && (
+        <span className="ml-auto text-xs text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity">
+          {t("library.section.openModule")} →
+        </span>
+      )}
     </button>
   );
 }

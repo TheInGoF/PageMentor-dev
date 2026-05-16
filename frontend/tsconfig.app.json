@@ -1,26 +1,34 @@
 {
   "compilerOptions": {
+    // composite enables Project-References (root tsconfig.json
+    // references this file). composite implies declaration: true and
+    // forbids noEmit, so we emit declarations only — Vite handles the
+    // actual JS bundling. Everything lands in node_modules/.tmp and is
+    // gitignored.
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "outDir": "./node_modules/.tmp/app",
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": false,
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
+    // paths are resolved relative to this tsconfig file. baseUrl was
+    // deprecated in TS 6 and removed in 7 — no longer needed since
+    // TS 5.0 implicit baseUrl behaviour for paths.
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"]

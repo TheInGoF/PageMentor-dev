@@ -1692,3 +1692,220 @@ export function clearAudioTextCacheForDocument(documentId: string): void {
     )
     .run(documentId);
 }
+
+// ---------------------------------------------------------------------
+// Intro preprocessing
+// ---------------------------------------------------------------------
+//
+// The audiobook intro is a short, hand-curated block (5–7 lines, e.g.
+// "Audiobook: …. Written by …. Prepared with …. Narrated by …. Created
+// with PageMentor."). The user types and stores it in human-readable
+// form ("Qwen3-TTS", "gemma3:e4b", "PageMentor"). Before TTS we send it
+// through Gemma so model + brand names get spelled phonetically the way
+// Qwen-TTS can actually pronounce them ("Kwenn drei T T S",
+// "Peigementor"). Result is cached in `audio_intro_text_tts`, mirroring
+// the chapter cache, with the same "manual-edit" model marker for
+// human overrides.
+//
+// The chapter prompt is reused so the user gets the same TTS-cleaning
+// guarantees, but the intro is structurally different (5 short lines,
+// no exercises, no formulas, no failure-catalog hazards), so we append
+// an override block that pins the structure and tells Gemma to leave
+// the closer as-is.
+
+const INTRO_OVERRIDE_DE = `
+
+================================================================
+INTRO-MODUS — diese Regeln überschreiben das obige
+================================================================
+Du bekommst KEIN Kapitel, sondern den kurzen Intro-Block des Hörbuchs
+(typischerweise 5 bis 8 kurze Zeilen). Für diesen Block gilt:
+
+1. STRUKTUR ERHALTEN. Jede Zeile des Inputs bleibt eine eigene Zeile
+   im Output, in derselben Reihenfolge. Nichts zusammenfassen, nichts
+   weglassen, nichts hinzudichten. Auch der abschließende Branding-
+   Satz ("Erstellt mit PageMentor." / "Created with PageMentor.")
+   bleibt unverändert als letzte Zeile stehen.
+
+2. PHONETISIEREN VON MODELL- UND PRODUKTNAMEN. Genau das ist deine
+   eigentliche Aufgabe — der Rest des Texts ist normalerweise schon
+   sprechbar. Wende folgende Substitutionen an, wenn sie im Input
+   vorkommen:
+     - "Qwen"                  -> "Kwenn"
+     - "Qwen3-TTS"             -> "Kwenn drei T T S"
+     - "Qwen2.5-TTS"           -> "Kwenn zwei Komma fünf T T S"
+     - "Gemma"                 -> "Dschemma"
+     - "gemma3:e4b" / ähnlich  -> "Dschemma drei"  (Versions-Tag droppen)
+     - "gemma4:26b" / ähnlich  -> "Dschemma vier"  (Versions-Tag droppen)
+     - "Llama3.1:8b" / ähnlich -> "Lama drei Punkt eins"
+     - "PageMentor"            -> "Peigementor"  (deutsche "ei" zwingt
+                                  Qwen auf /aI/ und trifft das engl. "page")
+     - "TTS" als eigenes Wort  -> "T T S"
+   Andere Modellnamen analog phonetisieren — Ziffern als Wort
+   ausschreiben ("drei" statt "3"), Versions-Suffixe nach Doppelpunkt
+   (":26b", ":8b", ":e4b") weglassen.
+
+3. SATZ- UND ZEILENLÄNGE BLEIBEN, WIE SIE SIND. Die "max 20 Wörter
+   pro Satz"-Regel und die Aufzählungs-Regeln gelten für Intros NICHT.
+   Eine Intro-Zeile darf kurz sein ("Von Max Mustermann."). Splitte
+   nichts und füge keine Konjunktionen ein.
+
+4. KEINE EXERCISES-/CITATION-/FORMEL-LOGIK. Der Intro enthält nichts
+   davon — wende keine der entsprechenden Regeln an. Auch der
+   "Failure-Katalog" (Section-Numbers, Jahreszahlen, Zahlenreihen) ist
+   hier irrelevant.
+
+5. AUSGABE-FORMAT. Reiner Text, eine Zeile pro Input-Zeile, Leerzeilen
+   bleiben Leerzeilen, jeder nicht-leere Satz endet mit Punkt /
+   Frage- / Ausrufezeichen. Keine Anführungszeichen, keine Klammern.
+`;
+
+const INTRO_OVERRIDE_EN = `
+
+================================================================
+INTRO MODE — these rules override the above
+================================================================
+You are NOT processing a chapter, but the short intro block of the
+audiobook (typically 5–8 short lines). For this block:
+
+1. KEEP THE STRUCTURE. Each input line stays its own line in the
+   output, in the same order. Do not summarize, drop, or invent
+   anything. The closing brand line ("Created with PageMentor." /
+   "Erstellt mit PageMentor.") stays as the final line as-is.
+
+2. PHONETICIZE MODEL AND PRODUCT NAMES. This is your actual job for
+   intros — most of the rest is already speakable. Apply:
+     - "Qwen"                  -> "Kwenn"
+     - "Qwen3-TTS"             -> "Kwenn three T T S"
+     - "Qwen2.5-TTS"           -> "Kwenn two point five T T S"
+     - "Gemma"                 -> "Jemma"
+     - "gemma3:e4b" / similar  -> "Jemma three"  (drop version tag)
+     - "gemma4:26b" / similar  -> "Jemma four"   (drop version tag)
+     - "Llama3.1:8b" / similar -> "Llama three point one"
+     - "PageMentor"            -> "Peigementor"  (forces /eI/ vowel
+                                  so Qwen lands close to "page")
+     - "TTS" standalone        -> "T T S"
+   Analogous treatment for other model names — spell digits as words
+   ("three" instead of "3"), drop version suffixes after the colon
+   (":26b", ":8b", ":e4b").
+
+3. SENTENCE- AND LINE-LENGTH STAY AS-IS. The "max 20 words per
+   sentence" rule and enumeration rules do NOT apply to intros. A
+   short intro line ("By Max Mustermann.") is fine. Do not split and
+   do not insert conjunctions.
+
+4. NO EXERCISE/CITATION/FORMULA LOGIC. The intro contains none of
+   these — do not apply those rules. The failure catalog (section
+   numbers, years, numeric series) is irrelevant here.
+
+5. OUTPUT FORMAT. Plain text, one output line per input line, blank
+   lines stay blank, every non-empty sentence ends with period,
+   question, or exclamation mark. No quotation marks, no brackets.
+`;
+
+export interface IntroPreprocessResult {
+  text: string;
+  model: string;
+  cached: boolean;
+}
+
+/**
+ * Returns the TTS-ready intro text. Cache hit returns immediately;
+ * otherwise runs Gemma once and persists the result alongside the
+ * raw `audio_intro_text`. Mirrors `preprocessChapterForAudio` but
+ * skips the chunking / numeral-bleed loop — intros are short and
+ * structurally trivial.
+ */
+export async function preprocessIntroForAudio(params: {
+  docId: string;
+  model?: string;
+  force?: boolean;
+}): Promise<IntroPreprocessResult> {
+  const d = db();
+  const row = d
+    .prepare(
+      "SELECT id, language, audio_intro_text, audio_intro_text_tts, audio_intro_text_tts_model FROM documents WHERE id = ?"
+    )
+    .get(params.docId) as
+    | {
+        id: string;
+        language: string;
+        audio_intro_text: string | null;
+        audio_intro_text_tts: string | null;
+        audio_intro_text_tts_model: string | null;
+      }
+    | undefined;
+  if (!row) throw new Error(`Document ${params.docId} not found`);
+  if (!row.audio_intro_text || row.audio_intro_text.trim().length === 0) {
+    throw new Error("Intro text is empty");
+  }
+
+  if (
+    !params.force &&
+    row.audio_intro_text_tts &&
+    row.audio_intro_text_tts.trim().length > 0
+  ) {
+    return {
+      text: row.audio_intro_text_tts,
+      model: row.audio_intro_text_tts_model ?? "cached",
+      cached: true,
+    };
+  }
+
+  const introLabel = `intro ${params.docId.slice(0, 8)}`;
+  return withGemmaLock(introLabel, async () => {
+    const tStart = Date.now();
+    const sourceText = row.audio_intro_text!;
+    console.log(
+      `[audio-preprocess] ${introLabel} START (${sourceText.length} chars source)`
+    );
+
+    const baseSystem = row.language === "de" ? SYSTEM_DE : SYSTEM_EN;
+    const override =
+      row.language === "de" ? INTRO_OVERRIDE_DE : INTRO_OVERRIDE_EN;
+    const system = baseSystem + override;
+
+    const ollamaOptions = {
+      temperature: 0.1,
+      top_p: 0.9,
+      num_ctx: 8192,
+      num_predict: 2048,
+    };
+
+    const result = await generate({
+      prompt: sourceText,
+      system,
+      model: params.model,
+      options: ollamaOptions,
+    });
+
+    const piece = result.response?.trim() ?? "";
+    if (piece.length < 5) {
+      throw new Error(
+        `Intro preprocessor returned only ${piece.length} chars ` +
+          `(model=${result.model}, reason=${result.doneReason ?? "?"}).`
+      );
+    }
+
+    d.prepare(
+      "UPDATE documents SET audio_intro_text_tts = ?, audio_intro_text_tts_model = ? WHERE id = ?"
+    ).run(piece, result.model, params.docId);
+
+    console.log(
+      `[audio-preprocess] ${introLabel} DONE in ${((Date.now() - tStart) / 1000).toFixed(1)}s ` +
+        `(${sourceText.length} -> ${piece.length} chars, model=${result.model})`
+    );
+
+    return { text: piece, model: result.model, cached: false };
+  });
+}
+
+/** Clear the cached TTS intro — called when the user edits the raw
+ *  intro text so the next generate triggers a fresh Gemma run. */
+export function clearAudioIntroTtsCache(docId: string): void {
+  db()
+    .prepare(
+      "UPDATE documents SET audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?"
+    )
+    .run(docId);
+}

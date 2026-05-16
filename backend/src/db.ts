@@ -210,6 +210,17 @@ export function initDb() {
     // edits this in the Audiobook tab via the intro box.
     d.exec("ALTER TABLE documents ADD COLUMN audio_intro_text TEXT");
   }
+  if (!docCols.some((c) => c.name === "audio_intro_text_tts")) {
+    // Gemma-cleaned TTS variant of audio_intro_text. User stores the
+    // readable form ("Qwen3-TTS", "PageMentor") in audio_intro_text;
+    // the preprocessor turns model names and brand names into Qwen-
+    // pronounceable phonetics ("Kwenn drei T T S", "Peigementor") and
+    // caches the result here. NULL = not yet preprocessed; the next
+    // generate call falls back to the raw intro text. Cleared when
+    // audio_intro_text changes.
+    d.exec("ALTER TABLE documents ADD COLUMN audio_intro_text_tts TEXT");
+    d.exec("ALTER TABLE documents ADD COLUMN audio_intro_text_tts_model TEXT");
+  }
 
   // chunks table for RAG. Per chunk roughly 800 tokens of text + a
   // 768-float32 embedding (3 KB) from nomic-embed-text. Brute-force

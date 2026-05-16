@@ -233,6 +233,7 @@ export function App() {
           onOpen={(id) => setOpenDocId(id)}
           onGoDashboard={() => setView("dashboard")}
           onGoModules={() => setView("modules")}
+          onOpenModule={(id) => setOpenModuleId(id)}
           onOpenSettings={openSettings}
         />
       );

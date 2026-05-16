@@ -19,6 +19,8 @@ import {
 import {
   preprocessChapterForAudio,
   clearAudioTextCache,
+  preprocessIntroForAudio,
+  clearAudioIntroTtsCache,
 } from "../services/audioPreprocess";
 import { subscribe, getRecent } from "../services/events";
 import { tt } from "../lib/i18n";
@@ -173,7 +175,11 @@ audioRoutes.get("/chapter-status/:docId", (c) => {
   });
 });
 
-// Set / read / delete intro text.
+// Set / read / delete intro text. The intro lives in two columns:
+//   audio_intro_text     -> human-readable raw text the user edits
+//   audio_intro_text_tts -> Gemma-cleaned phonetic version for TTS
+// Edits to the raw text invalidate the cached TTS version so the next
+// generate call runs Gemma fresh.
 audioRoutes.put("/intro/:docId", async (c) => {
   const docId = c.req.param("docId");
   const body = await c.req
@@ -189,24 +195,110 @@ audioRoutes.put("/intro/:docId", async (c) => {
       ? null
       : body.text.trim();
   db()
-    .prepare("UPDATE documents SET audio_intro_text = ? WHERE id = ?")
+    .prepare(
+      "UPDATE documents SET audio_intro_text = ?, audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?"
+    )
     .run(value, docId);
   return c.json({ docId, text: value });
 });
 
-// Generate intro MP3 (uses the current audio_intro_text).
+// Run Gemma on the current intro and cache the phonetic version.
+// `force=true` ignores the cache.
+audioRoutes.post("/intro/:docId/preprocess", async (c) => {
+  const docId = c.req.param("docId");
+  const body = await c.req
+    .json<{ model?: string; force?: boolean }>()
+    .catch(() => ({} as { model?: string; force?: boolean }));
+
+  try {
+    const result = await preprocessIntroForAudio({
+      docId,
+      model: body.model,
+      force: body.force ?? false,
+    });
+    return c.json({
+      docId,
+      text: result.text,
+      model: result.model,
+      cached: result.cached,
+    });
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : tt(c, "err.ttsFailed") },
+      500
+    );
+  }
+});
+
+// Read the cleaned intro — if there isn't one yet, returns the raw
+// text with `cleaned: false` so the frontend has something to show.
+audioRoutes.get("/intro/:docId/preprocessed", (c) => {
+  const row = db()
+    .prepare(
+      "SELECT id, audio_intro_text, audio_intro_text_tts, audio_intro_text_tts_model FROM documents WHERE id = ?"
+    )
+    .get(c.req.param("docId")) as
+    | {
+        id: string;
+        audio_intro_text: string | null;
+        audio_intro_text_tts: string | null;
+        audio_intro_text_tts_model: string | null;
+      }
+    | undefined;
+  if (!row) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+  return c.json({
+    docId: row.id,
+    originalText: row.audio_intro_text ?? "",
+    audioText: row.audio_intro_text_tts,
+    model: row.audio_intro_text_tts_model,
+    cleaned: !!row.audio_intro_text_tts,
+  });
+});
+
+// Manual edit of the cleaned intro. Empty / null clears the cache so
+// the next preprocess call runs Gemma again.
+audioRoutes.patch("/intro/:docId/preprocessed", async (c) => {
+  const docId = c.req.param("docId");
+  const body = await c.req
+    .json<{ text?: string | null }>()
+    .catch(() => ({} as { text?: string | null }));
+  const exists = db()
+    .prepare("SELECT id FROM documents WHERE id = ?")
+    .get(docId);
+  if (!exists) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+
+  if (body.text == null || body.text.trim().length === 0) {
+    clearAudioIntroTtsCache(docId);
+    return c.json({ docId, cleared: true });
+  }
+  db()
+    .prepare(
+      "UPDATE documents SET audio_intro_text_tts = ?, audio_intro_text_tts_model = ? WHERE id = ?"
+    )
+    .run(body.text.trim(), "manual-edit", docId);
+  return c.json({ docId, saved: true, length: body.text.trim().length });
+});
+
+// Generate intro MP3. Uses the cached TTS version when present —
+// otherwise runs Gemma on the fly so the audio always comes out of
+// the phonetic variant, never the raw "Qwen3-TTS"/"PageMentor" form.
 audioRoutes.post("/intro/:docId/generate", async (c) => {
   const docId = c.req.param("docId");
   const body = await c.req
-    .json<{ voice?: string; rate?: string }>()
-    .catch(() => ({} as { voice?: string; rate?: string }));
+    .json<{ voice?: string; rate?: string; model?: string }>()
+    .catch(() => ({} as { voice?: string; rate?: string; model?: string }));
 
   const doc = db()
     .prepare(
-      "SELECT id, language, audio_intro_text FROM documents WHERE id = ?"
+      "SELECT id, language, audio_intro_text, audio_intro_text_tts FROM documents WHERE id = ?"
     )
     .get(docId) as
-    | { id: string; language: string; audio_intro_text: string | null }
+    | {
+        id: string;
+        language: string;
+        audio_intro_text: string | null;
+        audio_intro_text_tts: string | null;
+      }
     | undefined;
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
   if (!doc.audio_intro_text || doc.audio_intro_text.trim().length === 0) {
@@ -215,9 +307,29 @@ audioRoutes.post("/intro/:docId/generate", async (c) => {
   const voiceId = body.voice || defaultVoiceFor(doc.language);
   if (!voiceId) return c.json({ error: "No voice available" }, 400);
 
+  let ttsText = doc.audio_intro_text_tts;
+  if (!ttsText || ttsText.trim().length === 0) {
+    try {
+      const pre = await preprocessIntroForAudio({
+        docId,
+        model: body.model,
+      });
+      ttsText = pre.text;
+    } catch (err) {
+      // Gemma not available or failed — fall back to the raw text so
+      // the user at least gets audio, even if the model name is
+      // mispronounced. We log so the failure isn't silent.
+      console.warn(
+        `[tts] intro preprocess failed, falling back to raw text:`,
+        err instanceof Error ? err.message : err
+      );
+      ttsText = doc.audio_intro_text;
+    }
+  }
+
   generateIntroAudio({
     docId,
-    text: doc.audio_intro_text,
+    text: ttsText,
     voiceId,
     rate: body.rate,
   }).catch((err) => console.error(`[tts] intro generation failed:`, err));

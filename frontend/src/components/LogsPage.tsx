@@ -145,9 +145,9 @@ export function LogsContent() {
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="card bg-black/60 overflow-y-auto h-[60vh]"
+        className="card bg-black/60 overflow-auto h-[60vh]"
       >
-        <div className="px-3 py-2 font-mono text-[11px] leading-relaxed">
+        <div className="px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-nowrap">
           {visible.length === 0 ? (
             <div className="text-neutral-500 text-center py-8">
               {connected === "open" ? t("logs.empty") : t("logs.connecting")}
@@ -173,7 +173,7 @@ export function LogsContent() {
                 >
                   {line.level}
                 </span>
-                <span className="text-neutral-200 break-all">
+                <span className="text-neutral-200">
                   {line.message}
                 </span>
               </div>

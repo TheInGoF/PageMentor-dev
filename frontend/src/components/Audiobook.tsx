@@ -12,6 +12,7 @@ import { useToast } from "./ui/Toast";
 import { cn } from "../lib/cn";
 import { getSettings } from "../lib/settings";
 import { AudioTextEditModal } from "./AudioTextEditModal";
+import { IntroTextEditModal } from "./IntroTextEditModal";
 import { t } from "../lib/i18n";
 
 interface Props {
@@ -74,6 +75,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     Record<string, "preprocess" | "generate" | undefined>
   >({});
   const [editChapterId, setEditChapterId] = useState<string | null>(null);
+  const [editIntroOpen, setEditIntroOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [m4bBusy, setM4bBusy] = useState(false);
@@ -490,6 +492,26 @@ export function Audiobook({ docId, documentLanguage }: Props) {
       toast.show(t("audiobook.intro.audioDeleted"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  async function preprocessIntro(force: boolean) {
+    setIntroBusy(true);
+    try {
+      const res = await api.audio.preprocessIntro(docId, {
+        force,
+        model: getSettings().defaultOllamaModel || undefined,
+      });
+      toast.show(
+        res.cached
+          ? t("audiobook.intro.preprocessCached")
+          : t("audiobook.intro.preprocessDone", { model: res.model }),
+        "success"
+      );
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setIntroBusy(false);
     }
   }
 
@@ -926,6 +948,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         onSave={saveIntroText}
         onGenerate={generateIntroAudio}
         onDeleteAudio={deleteIntroAudio}
+        onPreprocess={preprocessIntro}
+        onEditTts={() => setEditIntroOpen(true)}
       />
 
       <KindFilterBar
@@ -960,6 +984,14 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             setEditChapterId(null);
             loadChapterStatus();
           }}
+        />
+      )}
+
+      {editIntroOpen && (
+        <IntroTextEditModal
+          docId={docId}
+          onClose={() => setEditIntroOpen(false)}
+          onSaved={() => setEditIntroOpen(false)}
         />
       )}
 
@@ -1571,9 +1603,13 @@ function BookProgressPanel({
 // Intro editor
 // ---------------------------------------------------------------------
 
-/** Default intro suggestion. Each line ends with punctuation (. or
- *  comma), otherwise Edge rattles everything through without pauses
- *  — newlines alone don't give the TTS engine breath pauses. */
+/** Default intro suggestion as readable plain text. Names ("Qwen3-TTS",
+ *  "gemma4:26b", "PageMentor") stay in their canonical form — the
+ *  backend Gemma pre-pass turns them into TTS-pronounceable phonetics
+ *  ("Kwenn drei T T S", "Dschemma vier", "Peigementor") right before
+ *  synthesis. That keeps the editor readable and lets the user fix
+ *  spelling mistakes without having to know about the phonetic
+ *  transformations the TTS engine needs. */
 function buildIntroDefault(
   meta: { title: string; author: string | null; language: string } | null,
   voice: Voice | null,
@@ -1601,21 +1637,14 @@ function buildIntroDefault(
       lines.push(`Von ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Aufbereitet durch ${phoneticizeModelName(model, "de")}.`);
+      lines.push(`Aufbereitet durch ${model}.`);
     }
     if (voice) {
-      // "Qwen" → "Kwenn" so Qwen-TTS doesn't mispronounce its own
-      // name. Model version as a phonetic number.
       lines.push(
-        `Gesprochen durch Kwenn drei T T S, mit der Stimme ${spokenVoiceLabel}.`
+        `Gesprochen durch Qwen3-TTS, mit der Stimme ${spokenVoiceLabel}.`
       );
     }
-    // Branding closer. "Peigementor" — German "ei" forces /aɪ/, so
-    // the TTS lands close to the intended English "page" sound.
-    // Written as one word so Qwen treats it as a foreign proper
-    // noun and doesn't drift between English/German pronunciations
-    // the way "Page Mentor" did across runs.
-    lines.push(`Erstellt mit Peigementor.`);
+    lines.push(`Erstellt mit PageMentor.`);
   } else {
     lines.push(`Audiobook: ${meta.title}.`);
     lines.push("");
@@ -1623,66 +1652,16 @@ function buildIntroDefault(
       lines.push(`By ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Prepared with ${phoneticizeModelName(model, "en")}.`);
+      lines.push(`Prepared with ${model}.`);
     }
     if (voice) {
       lines.push(
-        `Narrated by Kwenn three T T S, with the voice ${spokenVoiceLabel}.`
+        `Narrated by Qwen3-TTS, with the voice ${spokenVoiceLabel}.`
       );
     }
-    lines.push(`Created with Peigementor.`);
+    lines.push(`Created with PageMentor.`);
   }
   return lines.join("\n");
-}
-
-/** Convert model names like `gemma4:26b` into readable intro
- *  phonetics: `gemma4:26b` → "Gemma Vier", `llama3.1:8b` → "Lama
- *  drei Punkt eins". Otherwise the TTS engine would say
- *  "gemma-vier-doppelpunkt-sechsundzwanzig-b", which sounds bad. */
-function phoneticizeModelName(model: string, lang: "de" | "en"): string {
-  // Everything after the colon (":26b", ":8b") is the parameter
-  // size — unnecessary for humans, annoying for emphasis. Strip.
-  let stem = model.split(":")[0] ?? model;
-  // Strip provider prefix like "jina/jina-embeddings-v2-base-de".
-  stem = stem.includes("/") ? stem.split("/").pop()! : stem;
-
-  const digitsDe = ["null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun"];
-  const digitsEn = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
-  const digits = lang === "de" ? digitsDe : digitsEn;
-
-  // Digits to words, hyphens/underscores as spaces.
-  let s = stem.replace(/[_-]/g, " ");
-  // Numbers 0-9 as a word, multi-digit digit by digit. Wrap in spaces
-  // so e.g. "gemma4" → "gemma vier" (not "gemmavier") — otherwise the
-  // word boundary is lost and the post-capitalize substitutions for
-  // "Gemma"/"Qwen" don't match.
-  s = s.replace(/(\d+)/g, (m) =>
-    " " +
-    m
-      .split("")
-      .map((d) => digits[Number(d)] ?? d)
-      .join(" ") +
-    " "
-  );
-  s = s.replace(/\s+/g, " ").trim();
-  // Period → spelled-out "Punkt"/"point" so TTS doesn't break the
-  // sentence abruptly. Only between letters/words.
-  s = s.replace(/(\w) *\. *(\w)/g, (_, a, b) =>
-    lang === "de" ? `${a} Punkt ${b}` : `${a} point ${b}`
-  );
-  // First letter uppercase ("gemma" → "Gemma"), rest lowercase with
-  // spaces preserved. Word boundaries as before.
-  let result = s
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
-  // Phonetic substitutions for model names that Qwen-TTS otherwise
-  // mispronounces. Done after capitalization so the surrounding
-  // tokens still match cleanly.
-  result = result.replace(/\bGemma\b/g, "Dschemma");
-  result = result.replace(/\bQwen\b/g, "Kwenn");
-  return result;
 }
 
 function IntroEditor({
@@ -1694,6 +1673,8 @@ function IntroEditor({
   onSave,
   onGenerate,
   onDeleteAudio,
+  onPreprocess,
+  onEditTts,
 }: {
   intro: {
     text: string | null;
@@ -1711,6 +1692,8 @@ function IntroEditor({
   onSave: (text: string | null) => void;
   onGenerate: () => void;
   onDeleteAudio: () => void;
+  onPreprocess: (force: boolean) => void;
+  onEditTts: () => void;
 }) {
   const [draft, setDraft] = useState<string>("");
   const [open, setOpen] = useState<boolean>(false);
@@ -1773,6 +1756,26 @@ function IntroEditor({
               </Button>
             )}
             <div className="flex-1" />
+            {hasIntro && !dirty && (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => onPreprocess(false)}
+                  disabled={busy}
+                >
+                  {busy
+                    ? t("audiobook.intro.preprocessBusy")
+                    : t("audiobook.intro.preprocess")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={onEditTts}
+                  disabled={busy}
+                >
+                  {t("audiobook.intro.viewEdit")}
+                </Button>
+              </>
+            )}
             {hasIntro && intro.audioUrl && (
               <Button variant="outline" onClick={onDeleteAudio} disabled={busy}>
                 {t("audiobook.intro.deleteAudio")}

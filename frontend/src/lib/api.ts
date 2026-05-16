@@ -161,6 +161,14 @@ export interface PreprocessedChapter {
   cleaned: boolean;
 }
 
+export interface PreprocessedIntro {
+  docId: string;
+  originalText: string;
+  audioText: string | null;
+  model: string | null;
+  cleaned: boolean;
+}
+
 export interface AudiobookIntro {
   text: string | null;
   audioUrl: string | null;
@@ -1108,6 +1116,26 @@ export const api = {
         { method: "DELETE" }
       ),
     introUrl: (docId: string) => `/api/audio/intro/${docId}/file`,
+    preprocessIntro: (
+      docId: string,
+      body?: { model?: string; force?: boolean }
+    ) =>
+      request<{
+        docId: string;
+        text: string;
+        model: string;
+        cached: boolean;
+      }>(`/api/audio/intro/${docId}/preprocess`, {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      }),
+    getPreprocessedIntro: (docId: string) =>
+      request<PreprocessedIntro>(`/api/audio/intro/${docId}/preprocessed`),
+    savePreprocessedIntro: (docId: string, text: string | null) =>
+      request<{ docId: string; saved?: boolean; cleared?: boolean; length?: number }>(
+        `/api/audio/intro/${docId}/preprocessed`,
+        { method: "PATCH", body: JSON.stringify({ text }) }
+      ),
   },
   rag: {
     answerStream: async (

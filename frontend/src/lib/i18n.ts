@@ -109,6 +109,8 @@ const en: Record<string, string> = {
   "library.filter.type": "Type",
   "library.filter.module": "Module",
   "library.filter.module.unassigned": "Unassigned",
+  "library.section.unassigned": "No module",
+  "library.section.openModule": "Open module",
   "nav.home": "Home",
   "nav.library": "Library",
   "nav.modules": "Modules",
@@ -365,6 +367,15 @@ const en: Record<string, string> = {
   "audiobook.intro.deleteAudioConfirm":
     "Delete the generated intro MP3? Text stays, you can regenerate later.",
   "audiobook.intro.audioDeleted": "Intro audio removed",
+  "audiobook.intro.preprocess": "Clean for TTS (Gemma)",
+  "audiobook.intro.preprocessAgain": "Re-clean for TTS",
+  "audiobook.intro.preprocessBusy": "Cleaning intro …",
+  "audiobook.intro.preprocessDone": "Intro cleaned with {model}",
+  "audiobook.intro.preprocessCached": "Intro already cleaned — loaded from cache",
+  "audiobook.intro.viewEdit": "View / Edit TTS version",
+  "audiobook.intro.editTitle": "Intro TTS text",
+  "audiobook.intro.editSubtitle":
+    "Left: your readable intro text. Right: the phonetic version Gemma prepared for Qwen-TTS (model names like 'Qwen3-TTS' become 'Kwenn drei T T S'). Edit on the right to override Gemma; reset drops the cleaned version so the next 'Clean' re-runs Gemma.",
   "audiobook.voice.empty": "Pick a voice first",
   "audiobook.kindFilter.title": "Bulk filter by chapter type",
   "audiobook.kindFilter.hint":
@@ -963,6 +974,8 @@ const de: Record<string, string> = {
   "library.filter.type": "Typ",
   "library.filter.module": "Modul",
   "library.filter.module.unassigned": "Ohne Modul",
+  "library.section.unassigned": "Ohne Modul",
+  "library.section.openModule": "Modul öffnen",
   "nav.home": "Startseite",
   "nav.library": "Bibliothek",
   "nav.modules": "Module",
@@ -1220,6 +1233,15 @@ const de: Record<string, string> = {
   "audiobook.intro.deleteAudioConfirm":
     "Generierte Intro-MP3 löschen? Der Text bleibt, du kannst sie später neu erzeugen.",
   "audiobook.intro.audioDeleted": "Intro-Audio entfernt",
+  "audiobook.intro.preprocess": "Für TTS bereinigen (Gemma)",
+  "audiobook.intro.preprocessAgain": "Erneut bereinigen",
+  "audiobook.intro.preprocessBusy": "Bereinige Intro …",
+  "audiobook.intro.preprocessDone": "Intro bereinigt mit {model}",
+  "audiobook.intro.preprocessCached": "Intro bereits bereinigt — aus Cache geladen",
+  "audiobook.intro.viewEdit": "TTS-Version ansehen / editieren",
+  "audiobook.intro.editTitle": "Intro-TTS-Text",
+  "audiobook.intro.editSubtitle":
+    "Links: dein lesbarer Intro-Text. Rechts: die phonetische Version, die Gemma für Qwen-TTS aufbereitet hat (Modellnamen wie „Qwen3-TTS\" werden zu „Kwenn drei T T S\"). Editiere rechts, um Gemma zu übersteuern; Zurücksetzen verwirft die Cache-Version — beim nächsten „Bereinigen\" läuft Gemma neu.",
   "audiobook.voice.empty": "Erst eine Stimme wählen",
   "audiobook.kindFilter.title": "Sammelfilter nach Kapitel-Typ",
   "audiobook.kindFilter.hint":
