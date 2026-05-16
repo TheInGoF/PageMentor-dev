@@ -60,6 +60,54 @@ export function stripLeadingSectionNumbers(text: string): string {
   );
 }
 
+// ---------------------------------------------------------------------
+// Global Gemma serialisation
+// ---------------------------------------------------------------------
+//
+// Why a module-level queue: Gemma3:e4b saturates a single 3090 with one
+// inference pass — running two preprocess calls in parallel does NOT
+// shorten total wall time (40s+40s ≈ 80s parallel = 80s sequential),
+// it just splits the GPU's attention. Worse, batched inference at
+// num_ctx=65536 evicts KV-cache slots prematurely and degrades the
+// model's instruction-following on the long failure-catalog prompt —
+// exactly the kind of drift that put loop-triggering chunks into the
+// audiobook before.
+//
+// Sources of accidental parallelism in this codebase:
+//   - Two audiobook jobs for different docs run concurrently (the
+//     `running` map in audiobook.ts is keyed by docId, not globally).
+//   - Bulk-preprocess from the UI fires sequentially per chapter, but
+//     a user could trigger it alongside an audiobook job on another
+//     document.
+//   - Ollama's `OLLAMA_NUM_PARALLEL` (default 4) opens multiple
+//     inference slots on the server side if requests arrive together.
+//
+// Solution: every preprocess body that hits Gemma chains onto a single
+// global promise. Cache-hits skip the queue (they don't touch the LLM
+// at all), so the serialisation never blocks already-cached chapters.
+let gemmaQueue: Promise<unknown> = Promise.resolve();
+let gemmaQueueDepth = 0;
+
+function withGemmaLock<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  gemmaQueueDepth++;
+  const ticket = gemmaQueueDepth;
+  if (ticket > 1) {
+    console.log(
+      `[audio-preprocess] ${label} waiting in Gemma queue (position ${ticket - 1})`
+    );
+  }
+  const next = gemmaQueue.then(fn, fn);
+  // Don't let one rejection poison the chain — the next caller should
+  // still get a clean slot. We swallow the error here; the original
+  // promise (`next`) still rejects to its own caller.
+  gemmaQueue = next
+    .catch(() => undefined)
+    .finally(() => {
+      gemmaQueueDepth--;
+    });
+  return next;
+}
+
 interface ChapterRow {
   id: string;
   text: string;
@@ -1041,6 +1089,9 @@ export async function preprocessChapterForAudio(params: {
     throw new Error("Chapter text too short to preprocess");
   }
 
+  // Everything below this point hits Gemma. Serialise globally —
+  // see `withGemmaLock` for the rationale.
+  return withGemmaLock(chapterLabel, async () => {
   const tStart = Date.now();
   console.log(
     `[audio-preprocess] ${chapterLabel} START (${row.text.length} chars source)`
@@ -1272,6 +1323,7 @@ export async function preprocessChapterForAudio(params: {
   );
 
   return { text: cleaned, model: lastModel, cached: false };
+  }); // withGemmaLock
 }
 
 /** Splits a text into ≤ `maxChars` pieces preferring paragraph and
