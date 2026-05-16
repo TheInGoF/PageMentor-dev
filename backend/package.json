@@ -1,6 +1,6 @@
 {
   "name": "pagementor-backend",
-  "version": "1.18.160",
+  "version": "1.18.161",
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",

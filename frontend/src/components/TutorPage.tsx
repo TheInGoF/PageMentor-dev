@@ -23,6 +23,7 @@ import {
 } from "../lib/api";
 import { t } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { renderMarkdown } from "../lib/markdown";
 
 interface Props {
   onLogout: () => void;
@@ -362,14 +363,14 @@ function MessageBubble({
         <h3 className="text-xs font-semibold text-accent uppercase tracking-wide mb-1">
           {t("tutor.section.shortAnswer")}
         </h3>
-        <p className="text-sm whitespace-pre-wrap">{answer.shortAnswer}</p>
+        <div className="text-sm">{renderMarkdown(answer.shortAnswer)}</div>
       </section>
       {answer.reasoning && (
         <section>
           <h3 className="text-xs font-semibold text-accent uppercase tracking-wide mb-1">
             {t("tutor.section.reasoning")}
           </h3>
-          <p className="text-sm whitespace-pre-wrap">{answer.reasoning}</p>
+          <div className="text-sm">{renderMarkdown(answer.reasoning)}</div>
         </section>
       )}
       {answer.sources.length > 0 && (
