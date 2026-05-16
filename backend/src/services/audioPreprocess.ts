@@ -141,6 +141,43 @@ Drei Konsequenzen daraus, die du IMMER mit-denken musst:
 Deine eigentliche Aufgabe: forme den vorgelegten Text so um, dass er von einer TTS-Engine flüssig und natürlich vorgelesen werden kann — ohne den fachlichen Inhalt zu verändern, ohne Auslassungen, ohne Vereinfachungen.
 
 ================================================================
+INHALT-PRESERVATION-CONTRACT — höher gewichtet als jede andere Regel
+================================================================
+Du DARFST den TEXT (Formulierung) ändern, NICHT den INHALT.
+
+ERLAUBT (das ist deine Aufgabe):
+- Sätze umformulieren, splitten, zusammenziehen, andere Verben/Konnektoren wählen
+- Abkürzungen ausschreiben, Symbole verbalisieren, Formeln in Worte überführen
+- Wiederholungs-Pronominalisierung (Mimik-Pattern), Zahlenreihen-Paraphrasen,
+  Schema-Echo-Aufbrechen (siehe Failure-Katalog)
+- Übungen/Captions/Inline-Citations ersatzlos streichen (siehe Section 6, 11)
+
+VERBOTEN (jeder einzelne Punkt kostet uns Hörer-Vertrauen):
+1. EINEN ABSATZ KOMPLETT WEGLASSEN, weil er dir „nicht so wichtig" oder
+   „redundant" vorkommt. Auch Vorwort-Anreden, Schluss-Grüße, Studienleitungs-
+   Floskeln, Anmerkungen, scheinbare Boilerplate BLEIBEN — wenn sie nicht
+   explizit in einer "ersatzlos streichen"-Regel stehen.
+
+2. EINEN SATZ ERFINDEN, der im Input nicht steht. Auch nicht „der hilft dem
+   Hörer beim Verständnis" oder „der schließt die Lücke". Keine eigenen
+   Erklärungen, keine eigenen Beispiele, keine eigenen Zusammenfassungen.
+
+3. EINEN INHALT VEREINFACHEN über das sprachliche Niveau hinaus. „Die
+   Diffusion erfolgt entlang des Konzentrationsgradienten" → „Diffusion
+   verläuft entlang des Konzentrationsgefälles" ist OK. → „Stoffe wandern
+   von hoch nach niedrig" ist VERBOTEN (Fachgehalt weg).
+
+4. ABSÄTZE UMSORTIEREN. Lokale Satz-Umstellungen innerhalb eines Absatzes
+   sind erlaubt, aber kein Absatz wandert vor einen anderen.
+
+5. DIE SPRACHE WECHSELN. Deutsch bleibt Deutsch, English stays English.
+   Englische Fachbegriffe im deutschen Text werden eindeutscht (Section 8),
+   aber der Fließtext bleibt in der Originalsprache.
+
+Im Zweifel: lieber eine umständliche Formulierung beibehalten als einen
+Inhalt zu kürzen oder eine Aussage „glattzubügeln".
+
+================================================================
 HARTE ZEICHEN-ALLOWLIST — Output-Policy
 ================================================================
 Dein Output enthält ausschließlich folgende Zeichen, sonst NICHTS:
@@ -414,6 +451,43 @@ geschickt und müssen unter allen Umständen vermieden werden:
     Blöcke fasst du in EINEM Satz zusammen, mit Verweis auf die
     Tabelle, statt sie zu reproduzieren.
 
+    BIT-/ZIFFERN-SEQUENZEN (Mathe-/Info-Hörbuch-Spezialfall):
+    Folgen von Einzelziffern wie Bits ("0 1 0 0 1 1 1 0 1 0") oder
+    kleinen Integer-Werten ("1 2 3 4 5") sind besonders gefährlich:
+    Section 5 würde sie als „Ziffern unter 13 ausschreiben" → „null,
+    eins, null, null, eins, eins, eins, null, eins, null" verwandeln,
+    was eine 10-Wort-Loop-Bombe ist. FÜR SEQUENZEN gilt Section 5
+    NICHT — Regel 13 sticht.
+
+    Stattdessen je nach Länge und Zweck:
+
+    a) BIT-SEQUENZ DIE NUR EIN BEISPIEL ILLUSTRIERT (Transformation
+       wird gleich beschrieben) → die Transformations-REGEL
+       paraphrasieren, nicht das Ergebnis.
+       FALSCH:  "Bei doppelter Wiederholung wird aus null, eins, null,
+                 null, eins, eins, eins, null, eins, null die Folge
+                 null, null, eins, eins, null, null, null, null, eins,
+                 eins, eins, eins, eins, eins, null, null, eins, eins,
+                 null, null."
+       RICHTIG: "Bei doppelter Wiederholung wird aus jedem Bit ein
+                 Doppel-Bit: aus null wird null-null, aus eins wird
+                 eins-eins. Aus der zehn Bit langen Beispielfolge
+                 entsteht so eine zwanzig Bit lange Sequenz."
+
+    b) BIT-SEQUENZ MIT BIS ZU ACHT BIT, deren exakter Inhalt für die
+       Argumentation wichtig ist → als Wort-Sequenz beibehalten, aber
+       in EINEN Satz packen und Länge ansagen. Die TTS kommt mit 8
+       Tokens noch sauber durch.
+       OK: "Die acht Bit lange Folge null, eins, eins, null, eins,
+            null, null, eins wird übertragen."
+
+    c) BIT-SEQUENZ LÄNGER ALS ACHT → IMMER paraphrasieren, niemals
+       Wort-für-Wort. Auch nicht „weil der Hörer es nachvollziehen
+       soll" — er kann das im Skript nachlesen.
+
+    Identische Logik gilt für Integer-Folgen ("1, 2, 3, 4, 5, 6, 7, 8")
+    und Spalten-Werte aus Tabellen.
+
 ================================================================
 
 WICHTIGER HINWEIS: Der Text hat bereits einen deterministischen Pre-Pass durchlaufen. Folgende Transformationen wurden schon gemacht — mache sie NICHT rückgängig:
@@ -683,6 +757,43 @@ Three consequences you must keep in mind throughout:
 Your actual task: rewrite the provided text so a TTS engine reads it fluently and naturally — without changing the technical content, without omissions, without simplifications.
 
 ================================================================
+CONTENT-PRESERVATION CONTRACT — outweighs every other rule
+================================================================
+You MAY change WORDING. You MUST NOT change CONTENT.
+
+ALLOWED (this is your job):
+- Rewording, splitting, merging sentences; alternative verbs/connectives.
+- Expanding abbreviations, verbalizing symbols, turning formulas into words.
+- Repetition-pronominalization (Mimik pattern), numeric-series paraphrase,
+  schema-echo breakup (see failure catalog).
+- Cutting exercises / captions / inline citations (see sections 6, 11).
+
+FORBIDDEN (each item costs us listener trust):
+1. DROPPING A PARAGRAPH because it feels "not that important" or
+   "redundant". Foreword greetings, closing salutations, instructor notes,
+   apparent boilerplate ALL STAY — unless an explicit "cut without
+   replacement" rule covers them.
+
+2. INVENTING A SENTENCE that isn't in the input. Not even one that
+   "helps the listener" or "bridges a gap". No own explanations, no
+   own examples, no own summaries.
+
+3. SIMPLIFYING CONTENT below its technical level. "Diffusion occurs
+   along the concentration gradient" → "diffusion follows the
+   concentration slope" is OK. → "stuff moves from high to low" is
+   FORBIDDEN (technical depth lost).
+
+4. REORDERING PARAGRAPHS. Local sentence rearrangement inside a
+   paragraph is fine, but no paragraph migrates ahead of another.
+
+5. SWITCHING LANGUAGE. German stays German, English stays English.
+   English loan words in German text are Germanized (Section 8), but
+   the body text stays in its original language.
+
+When in doubt: keep an awkward phrasing rather than shortening or
+"smoothing over" a statement.
+
+================================================================
 HARD CHARACTER ALLOWLIST — output policy
 ================================================================
 Your output contains ONLY the following characters, nothing else:
@@ -860,6 +971,40 @@ D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
    recognizable by several numeric rows in succession. Summarize such
    blocks in one sentence with a pointer to the table, don't reproduce
    them.
+
+   BIT / SINGLE-DIGIT SEQUENCES (math / CS audiobook special case):
+   Sequences of single digits like bits ("0 1 0 0 1 1 1 0 1 0") or
+   small integers ("1 2 3 4 5") are particularly dangerous: section 5
+   would spell them out ("digits under 13 → words") producing "zero,
+   one, zero, zero, one, one, one, zero, one, zero" — a 10-token loop
+   bomb. SECTION 5 DOES NOT APPLY TO SEQUENCES — rule D wins.
+
+   Instead, depending on length and purpose:
+
+   a) BIT SEQUENCE IS JUST AN EXAMPLE ILLUSTRATING A TRANSFORMATION
+      that you describe right after → paraphrase the rule, not the
+      result.
+      WRONG: "Doubling gives from zero, one, zero, zero, one, one,
+              one, zero, one, zero the sequence zero, zero, one, one,
+              zero, zero, zero, zero, one, one, one, one, one, one,
+              zero, zero, one, one, zero, zero."
+      RIGHT: "Doubling turns every bit into a pair: a zero becomes
+              zero-zero, a one becomes one-one. From the 10-bit
+              example sequence you get a 20-bit one."
+
+   b) BIT SEQUENCE UP TO EIGHT BITS whose exact content matters for
+      the argument → keep as a word sequence, but put it in ONE
+      sentence and announce the length. The TTS can handle 8 tokens
+      cleanly.
+      OK: "The 8-bit sequence zero, one, one, zero, one, zero, zero,
+           one is transmitted."
+
+   c) BIT SEQUENCE LONGER THAN EIGHT → ALWAYS paraphrase, never
+      word-for-word. Not even "so the listener can follow" — the
+      script is there for that.
+
+   The same logic applies to integer ranges ("1, 2, 3, 4, 5, 6, 7, 8")
+   and column values from tables.
 
 ================================================================
 1. EXPAND ABBREVIATIONS COMPLETELY
@@ -1724,7 +1869,14 @@ export function clearAudioTextCacheForDocument(documentId: string): void {
 // Few-shot via vollständigem Vorher/Nachher schlägt jede prosa-Regel.
 const INTRO_SYSTEM_DE = `Du bekommst den kurzen Intro-Block eines Hörbuchs (5 bis 8 Zeilen mit Titel, Autor, Modellname, Stimme, Branding). Deine EINZIGE Aufgabe: Modell- und Produktnamen so umschreiben, dass die TTS-Engine sie korrekt ausspricht. Alles andere übernimmst du eins zu eins.
 
-PHONETISCHE SUBSTITUTIONEN (Beispielsweise, analog für ähnliche Modell-Namen):
+LINE-PRESERVATION-CONTRACT (das ist wichtiger als alle anderen Regeln):
+- Der Output hat GENAU dieselbe Anzahl Zeilen wie der Input, in derselben Reihenfolge.
+- Eine Input-Zeile ohne Modell- oder Produktname wird ZEICHENGENAU 1:1 in den Output kopiert.
+- Du DARFST keine Zeile weglassen, auch wenn sie dir redundant vorkommt.
+- Du DARFST keine Zeile hinzufügen, auch wenn sie thematisch passen würde.
+- Du DARFST keine Zeile umformulieren, kürzen oder umsortieren, wenn sie keinen Modellnamen enthält. Titel wie "Prof. Dr.-Ing." bleiben "Prof. Dr.-Ing." (sind im Input bereits korrekt vorbehandelt).
+
+PHONETISCHE SUBSTITUTIONEN (nur diese, analog für ähnliche Modell-Namen):
 - "Qwen3-TTS"             -> "Kwenn drei T T S"
 - "Qwen2.5-TTS"           -> "Kwenn zwei Komma fünf T T S"
 - "Qwen"                  -> "Kwenn"
@@ -1737,14 +1889,12 @@ PHONETISCHE SUBSTITUTIONEN (Beispielsweise, analog für ähnliche Modell-Namen):
 - "TTS" als eigenes Wort  -> "T T S"
 Modell-Versionsziffern als Wort ausschreiben ("drei" statt "3"). Versions-Tag nach Doppelpunkt (":e4b", ":26b") wegfallen.
 
-OUTPUT-REGELN:
-- Jede Input-Zeile wird genau eine Output-Zeile, in derselben Reihenfolge.
-- Leerzeilen bleiben Leerzeilen.
-- Jeder nicht-leere Satz endet mit Punkt, Frage- oder Ausrufezeichen.
+OUTPUT-FORMAT:
+- Reiner Text. Eine Output-Zeile pro Input-Zeile. Leerzeilen bleiben Leerzeilen.
 - KEIN Kommentar, KEINE Erklärung, KEINE Anführungszeichen drumherum, KEINE Markdown-Formatierung.
 - Du gibst nur den transformierten Intro-Text aus, sonst nichts.
 
-BEISPIEL:
+BEISPIEL 1 (typischer Fall):
 
 INPUT:
 Hörbuch: Codierung.
@@ -1760,11 +1910,46 @@ Hörbuch: Codierung.
 Von Prof. Dr.-Ing. Thomas Zimmermann.
 Aufbereitet durch Dschemma vier.
 Gesprochen durch Kwenn drei T T S, mit der Stimme Testi 2.
-Erstellt mit Peigementor.`;
+Erstellt mit Peigementor.
+
+BEISPIEL 2 (wenig zu tun, fast alles 1:1):
+
+INPUT:
+Hörbuch: Grundlagen der Statistik.
+
+Von Frau Dr. Maria Schmidt.
+Aufbereitet ohne KI-Hilfe.
+Gesprochen von einem professionellen Sprecher.
+Erstellt mit PageMentor.
+
+OUTPUT:
+Hörbuch: Grundlagen der Statistik.
+
+Von Frau Dr. Maria Schmidt.
+Aufbereitet ohne KI-Hilfe.
+Gesprochen von einem professionellen Sprecher.
+Erstellt mit Peigementor.
+
+(Nur eine Substitution — "PageMentor" -> "Peigementor". Alle anderen Zeilen unverändert.)
+
+VERBOTEN — typische Fehlermuster die du NICHT machst:
+1. Eine Zeile streichen weil "sie dir redundant erscheint" (z.B. die TTS-Zeile fehlt im Output).
+2. Eine Zeile umformulieren obwohl kein Modellname drin ist (z.B. "Prof. Dr.-Ing." -> "Professor" weg-kürzen).
+3. Eine neue Zeile erfinden die nicht im Input stand (z.B. "Erstellt durch Dschemma vier." dazudichten).
+4. Zeilen umsortieren oder zusammenfassen.
+
+Im Zweifel: Input-Zeile 1:1 in den Output kopieren.`;
 
 const INTRO_SYSTEM_EN = `You receive the short intro block of an audiobook (5 to 8 lines with title, author, model name, voice, branding). Your ONLY job: rewrite model and product names so the TTS engine pronounces them correctly. Everything else you carry over one-for-one.
 
-PHONETIC SUBSTITUTIONS (examples, apply analogously to similar model names):
+LINE-PRESERVATION CONTRACT (this overrides everything else):
+- The output has EXACTLY the same number of lines as the input, in the same order.
+- An input line without a model or product name is copied character-for-character to the output.
+- You MUST NOT drop a line, even if it feels redundant.
+- You MUST NOT add a line, even if it would thematically fit.
+- You MUST NOT rephrase, shorten, or reorder a line that contains no model name. Titles like "Prof. Dr.-Ing." stay "Prof. Dr.-Ing." (the input is already correctly normalized).
+
+PHONETIC SUBSTITUTIONS (only these, apply analogously to similar model names):
 - "Qwen3-TTS"             -> "Kwenn three T T S"
 - "Qwen2.5-TTS"           -> "Kwenn two point five T T S"
 - "Qwen"                  -> "Kwenn"
@@ -1777,14 +1962,12 @@ PHONETIC SUBSTITUTIONS (examples, apply analogously to similar model names):
 - "TTS" standalone        -> "T T S"
 Spell model version digits as words ("three" instead of "3"). Drop version suffixes after the colon (":e4b", ":26b").
 
-OUTPUT RULES:
-- Each input line becomes exactly one output line, in the same order.
-- Blank lines stay blank.
-- Every non-empty sentence ends with a period, question mark, or exclamation mark.
+OUTPUT FORMAT:
+- Plain text. One output line per input line. Blank lines stay blank.
 - NO comments, NO explanation, NO quotation marks around the output, NO Markdown.
 - You output only the transformed intro text, nothing else.
 
-EXAMPLE:
+EXAMPLE 1 (typical case):
 
 INPUT:
 Audiobook: Coding.
@@ -1800,7 +1983,35 @@ Audiobook: Coding.
 By Prof. Dr.-Ing. Thomas Zimmermann.
 Prepared with Jemma four.
 Narrated by Kwenn three T T S, with the voice Testi 2.
-Created with Peigementor.`;
+Created with Peigementor.
+
+EXAMPLE 2 (little to do, almost all 1:1):
+
+INPUT:
+Audiobook: Statistics 101.
+
+By Dr. Maria Schmidt.
+Prepared without AI.
+Narrated by a professional speaker.
+Created with PageMentor.
+
+OUTPUT:
+Audiobook: Statistics 101.
+
+By Dr. Maria Schmidt.
+Prepared without AI.
+Narrated by a professional speaker.
+Created with Peigementor.
+
+(Only one substitution — "PageMentor" -> "Peigementor". Every other line unchanged.)
+
+FORBIDDEN — typical failure modes you do NOT produce:
+1. Dropping a line because "it seemed redundant" (e.g. the TTS line missing from output).
+2. Rephrasing a line that contains no model name (e.g. "Prof. Dr.-Ing." shortened to "Professor").
+3. Inventing a new line that wasn't in the input (e.g. adding "Created with Jemma four.").
+4. Reordering or merging lines.
+
+When in doubt: copy the input line verbatim.`;
 
 export interface IntroPreprocessResult {
   text: string;
