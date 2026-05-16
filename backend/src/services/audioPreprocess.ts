@@ -70,7 +70,17 @@ interface ChapterRow {
   title: string;
 }
 
-const SYSTEM_DE = `Du bist ein Lektor, der wissenschaftliche Studientexte für die Vertonung als Hörbuch aufbereitet. Deine Aufgabe: forme den vorgelegten Text so um, dass er von einer TTS-Engine flüssig und natürlich vorgelesen werden kann — ohne den fachlichen Inhalt zu verändern, ohne Auslassungen, ohne Vereinfachungen.
+const SYSTEM_DE = `Du designst einen HÖRBUCH-Text. Nicht eine Zusammenfassung, keine Übersetzung, keine Markdown-Aufbereitung — einen Text der laut vorgelesen wird und den der Hörer beim Autofahren, Joggen oder Spülen versteht, ohne zurückspulen zu können. Dieses Mindset gilt für jede einzelne Entscheidung, die du im Folgenden triffst.
+
+Drei Konsequenzen daraus, die du IMMER mit-denken musst:
+
+1. JEDER Satz wird gesprochen. Tabellen, Formeln, Verzeichnis-Notation, Zahlenreihen — was beim Lesen funktioniert, klingt beim Hören oft sinnlos oder bringt die TTS-Engine in Schleifen. Wenn du einen Block siehst, frage dich: „Würde das ein menschlicher Sprecher in diesem Stil aussprechen, oder würde er paraphrasieren?" — und tu dasselbe.
+
+2. Der Hörer hat KEINEN visuellen Anker. Querverweise auf Abbildungen / Tabellen / Seitenzahlen verpuffen. Hervorhebungen durch Fettdruck / Kursiv / Klammern existieren nicht. Wiederholungen, die im Druck als Strukturierung erkennbar wären, klingen im Audio wie eine kaputte Aufnahme.
+
+3. Die TTS-Engine ist autoregressiv und stürzt bei dichten Wiederholungs-Mustern in Loops. Das ist KEIN theoretisches Risiko — wir haben konkret Chunks die deshalb abbrechen müssen. Deine Variation in Wortwahl, Pronomen-Ersatz und Satzstruktur sind deshalb Pflicht, nicht Stil-Bonus.
+
+Deine eigentliche Aufgabe: forme den vorgelegten Text so um, dass er von einer TTS-Engine flüssig und natürlich vorgelesen werden kann — ohne den fachlichen Inhalt zu verändern, ohne Auslassungen, ohne Vereinfachungen.
 
 ================================================================
 HARTE ZEICHEN-ALLOWLIST — Output-Policy
@@ -255,6 +265,52 @@ geschickt und müssen unter allen Umständen vermieden werden:
     - Sprecher (maskulin) → er / ihn / ihm / dessen
     Bei Mehrdeutigkeit (Hörer könnte Antezedens verwechseln): lass das
     Substantiv stehen statt zu ersetzen.
+
+    SPEZIALFALL — MEHRTEILIGE FACHBEGRIFFE / FORMEL-OPERATOREN:
+    Wenn der wiederkehrende Begriff kein einzelnes Substantiv ist,
+    sondern eine Operator-Argument-Konstruktion wie „Transinformation
+    von X nach Y", „Entropie von X", „Wahrscheinlichkeit von x i",
+    „Funktion f von x" — funktioniert reine Pronominalisierung NICHT
+    (zu mehrdeutig). Stattdessen ab dem 3. Vorkommen die ARGUMENTE
+    WEGLASSEN und nur den Kopf-Begriff verwenden, weil der Bezug aus
+    dem Vorsatz eh schon eingeführt ist.
+
+    FALSCH (vier Mal "Transinformation von X nach Y"):
+      "Die Transinformation von X nach Y ist maximal. Die
+       Transinformation von X nach Y wird in Bit gemessen. Wir
+       definieren mit der Transinformation den Informationsfluss. Der
+       Informationsfluss Phi ist die Transinformation von X nach Y
+       bezogen auf die Symboldauer."
+
+    RICHTIG (Kopf-Begriff nach Etablierung):
+      "Die Transinformation von X nach Y ist maximal. Sie wird in Bit
+       gemessen. Mit ihr definieren wir den Informationsfluss. Der
+       Informationsfluss Phi ist die Transinformation, bezogen auf die
+       Symboldauer."
+
+    Weitere Beispiele:
+    - „Entropie von X und Entropie von Y" → „beide Entropien" /
+      „die Entropien beider Variablen"
+    - „Gleichverteilung der Quellensymbole … Gleichverteilung der
+      Senkensymbole" → „beide Verteilungen sind gleich"
+    - „Wahrscheinlichkeit von x 1, Wahrscheinlichkeit von x 2, …" →
+      „die Wahrscheinlichkeiten der Symbole" (Aufzählung paraphrasieren
+      siehe auch Regel 13)
+
+    SEKUNDÄRREGEL — SCHEMA-ECHO BEI PARALLELEN DEFINITIONS-SÄTZEN:
+    Drei oder mehr Sätze direkt hintereinander mit derselben
+    Schablone („X ist Y", „A wird in B gemessen", „M ist die N
+    von O") sind ebenfalls Loop-Trigger, auch ohne lexikalische
+    Wiederholung — der Decoder verfängt sich im rhythmischen
+    Echo. Brich das Schema mindestens einmal pro Block auf
+    (Nebensatz, Aufzählung, Frage).
+
+    FALSCH:
+      "Phi ist die Transinformation pro Sekunde. Tau ist die
+       Symboldauer. H ist die Entropie."
+    RICHTIG:
+      "Phi steht für die Transinformation pro Sekunde, während Tau
+       die Symboldauer angibt und H die Entropie."
 
 13) LANGE ZAHLENREIHEN PARAPHRASIEREN — NICHT WÖRTLICH AUFLISTEN
     Dies ist ein Hörbuch. Der Hörer kann keine Tabelle abscannen. Eine
@@ -556,7 +612,17 @@ NICHT entfernen:
 
 Wenn du das Bedürfnis spürst, dem User mitzuteilen was du gemacht hast: unterdrücke es. Der User sieht die Änderung im Side-by-Side-Diff — er braucht keine Prosa-Zusammenfassung von dir.`;
 
-const SYSTEM_EN = `You are a copy editor preparing scientific study material for audiobook narration. Your task: rewrite the provided text so a TTS engine reads it fluently and naturally — without changing the technical content, without omissions, without simplifications.
+const SYSTEM_EN = `You are designing an AUDIOBOOK text. Not a summary, not a translation, not a Markdown render — a text that will be read aloud and that the listener has to understand while driving, jogging, or doing dishes, with no way to scroll back. This mindset governs every single decision below.
+
+Three consequences you must keep in mind throughout:
+
+1. EVERY sentence will be spoken. Tables, formulas, index notation, numeric series — what works when read often sounds pointless when heard, or sends the TTS engine into loops. When you see such a block, ask yourself: "would a human narrator speak this verbatim, or would they paraphrase?" — and do the same.
+
+2. The listener has NO visual anchor. Cross-references to figures, tables, page numbers evaporate. Emphasis via bold / italic / brackets doesn't exist. Repetitions that look like helpful structuring in print sound like a broken recording in audio.
+
+3. The TTS engine is autoregressive and breaks down on dense repetition patterns. This is NOT a theoretical risk — we have concrete chunks that abort because of it. Your variation in word choice, pronoun substitution, and sentence structure are therefore mandatory, not style bonuses.
+
+Your actual task: rewrite the provided text so a TTS engine reads it fluently and naturally — without changing the technical content, without omissions, without simplifications.
 
 ================================================================
 HARD CHARACTER ALLOWLIST — output policy
@@ -662,6 +728,41 @@ C) NO IDENTICAL SENTENCES TWICE IN THE SAME CHUNK
    If the same sentence appears as a heading and again as flowing
    prose, rewrite one or drop it. Identical sentences within one
    chunk are loop triggers.
+
+C2) MULTI-PART TECHNICAL TERMS — DROP ARGUMENTS AFTER FIRST INTRO
+   When the repeated term is not a single noun but an operator-with-
+   arguments construction ("mutual information of X and Y", "entropy
+   of X", "probability of x_i", "function f of x"), pronominalization
+   is too ambiguous. Instead, after the first mention drop the
+   arguments and use only the head term — the binding is established.
+
+   WRONG (four times "mutual information of X and Y"):
+     "The mutual information of X and Y is maximal. The mutual
+      information of X and Y is measured in bits. We use the mutual
+      information of X and Y to define information flow. The
+      information flow Phi is the mutual information of X and Y
+      relative to the symbol duration."
+
+   RIGHT:
+     "The mutual information of X and Y is maximal. It is measured
+      in bits. With it we define information flow. The information
+      flow Phi is the mutual information, relative to the symbol
+      duration."
+
+   Same trick works for "entropy of X and entropy of Y" → "both
+   entropies"; for repeated "probability of x_i" → "the symbol
+   probabilities" (and then paraphrase per rule D below).
+
+C3) NO SCHEMA ECHO IN PARALLEL DEFINITION SENTENCES
+   Three or more sentences in a row using the same template ("X is
+   Y", "A is measured in B", "M is the N of O") trigger loops by
+   rhythmic echo even without lexical repetition. Break the schema at
+   least once per block (subordinate clause, enumeration, question).
+
+   WRONG: "Phi is mutual information per second. Tau is symbol
+           duration. H is entropy."
+   RIGHT: "Phi stands for mutual information per second, while Tau
+           gives the symbol duration and H the entropy."
 
 D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
    This is an audiobook. The listener cannot scan a table. A row of
@@ -986,12 +1087,19 @@ export async function preprocessChapterForAudio(params: {
   // sentence boundaries as fallback. A single sentence longer than
   // maxChars is now passed through as its own oversize chunk instead
   // of getting hard-cut mid-word — the model can swallow it.
-  // 9600 statt 12000: -20% Headroom damit Gemma e4b sauberer
-  // arbeitet. Bei der Obergrenze haben sich gelegentlich Output-
-  // Quality-Drops gezeigt (wahrscheinlich KV-Cache-Druck im
-  // 128k-Setup). 9600 Zeichen ≈ 3200 Input-Tokens, immer noch
-  // genug fuer typische Kapitel mit 1-3 Pässen statt 4-5.
-  const subChunks = splitForPreprocess(pretreated, 9600);
+  // Chunk-Größe historie:
+  //   12000  ursprünglich, große Sprünge, Output-Quality-Drops
+  //    9600  -20% Headroom, immer noch zu viele Detail-Regel-Misses
+  //          bei Topic-Anchored-Repetition und Schema-Echo
+  //    6000  jetziger Wert. ~2000 Input-Tokens. Gemma e4b hält die
+  //          12+ kritischen Regeln aus dem Failure-Katalog auf
+  //          dieser Länge konsistent ein; bei 9600 driftet sie ab
+  //          dem mittleren Drittel des Chunks. Kostet ~1.5x mehr
+  //          LLM-Calls pro Kapitel — bei den Gemma-Latenzen auf
+  //          einer 3090 ist das ein paar Sekunden mehr pro Heft,
+  //          dafür halbiert sich die Wahrscheinlichkeit dass ein
+  //          Chunk im TTS-Loop landet.
+  const subChunks = splitForPreprocess(pretreated, 6000);
   if (subChunks.length > 1) {
     console.log(
       `[audio-preprocess] ${chapterLabel} (${pretreated.length} chars) → ` +
