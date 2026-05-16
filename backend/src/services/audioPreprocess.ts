@@ -1713,95 +1713,94 @@ export function clearAudioTextCacheForDocument(documentId: string): void {
 // an override block that pins the structure and tells Gemma to leave
 // the closer as-is.
 
-const INTRO_OVERRIDE_DE = `
+// Standalone Intro-Prompt: bewusst KEIN Anbau an SYSTEM_DE/EN. Das
+// Chapter-Prompt ist ~6000 Zeichen mit Hörbuch-Mindset + 13-teiligem
+// Failure-Katalog. Gemma e4b kann das nicht als "wird gleich
+// überschrieben"-Kontext lesen — sie rutscht stattdessen in helpful-
+// assistant-Modus und kommentiert den Text, statt ihn zu transformieren
+// (Real-Case: Output war "Hört sich an wie ein Einführungskapitel.").
+//
+// Stattdessen: kurzer, single-purpose Prompt mit konkretem Beispiel.
+// Few-shot via vollständigem Vorher/Nachher schlägt jede prosa-Regel.
+const INTRO_SYSTEM_DE = `Du bekommst den kurzen Intro-Block eines Hörbuchs (5 bis 8 Zeilen mit Titel, Autor, Modellname, Stimme, Branding). Deine EINZIGE Aufgabe: Modell- und Produktnamen so umschreiben, dass die TTS-Engine sie korrekt ausspricht. Alles andere übernimmst du eins zu eins.
 
-================================================================
-INTRO-MODUS — diese Regeln überschreiben das obige
-================================================================
-Du bekommst KEIN Kapitel, sondern den kurzen Intro-Block des Hörbuchs
-(typischerweise 5 bis 8 kurze Zeilen). Für diesen Block gilt:
+PHONETISCHE SUBSTITUTIONEN (Beispielsweise, analog für ähnliche Modell-Namen):
+- "Qwen3-TTS"             -> "Kwenn drei T T S"
+- "Qwen2.5-TTS"           -> "Kwenn zwei Komma fünf T T S"
+- "Qwen"                  -> "Kwenn"
+- "Gemma"                 -> "Dschemma"
+- "gemma4:e4b"            -> "Dschemma vier"   (Versions-Suffix nach ":" wegfallen)
+- "gemma3:e4b"            -> "Dschemma drei"
+- "gemma4:26b"            -> "Dschemma vier"
+- "Llama3.1:8b"           -> "Lama drei Punkt eins"
+- "PageMentor"            -> "Peigementor"     (deutsches "ei" zwingt /aI/)
+- "TTS" als eigenes Wort  -> "T T S"
+Modell-Versionsziffern als Wort ausschreiben ("drei" statt "3"). Versions-Tag nach Doppelpunkt (":e4b", ":26b") wegfallen.
 
-1. STRUKTUR ERHALTEN. Jede Zeile des Inputs bleibt eine eigene Zeile
-   im Output, in derselben Reihenfolge. Nichts zusammenfassen, nichts
-   weglassen, nichts hinzudichten. Auch der abschließende Branding-
-   Satz ("Erstellt mit PageMentor." / "Created with PageMentor.")
-   bleibt unverändert als letzte Zeile stehen.
+OUTPUT-REGELN:
+- Jede Input-Zeile wird genau eine Output-Zeile, in derselben Reihenfolge.
+- Leerzeilen bleiben Leerzeilen.
+- Jeder nicht-leere Satz endet mit Punkt, Frage- oder Ausrufezeichen.
+- KEIN Kommentar, KEINE Erklärung, KEINE Anführungszeichen drumherum, KEINE Markdown-Formatierung.
+- Du gibst nur den transformierten Intro-Text aus, sonst nichts.
 
-2. PHONETISIEREN VON MODELL- UND PRODUKTNAMEN. Genau das ist deine
-   eigentliche Aufgabe — der Rest des Texts ist normalerweise schon
-   sprechbar. Wende folgende Substitutionen an, wenn sie im Input
-   vorkommen:
-     - "Qwen"                  -> "Kwenn"
-     - "Qwen3-TTS"             -> "Kwenn drei T T S"
-     - "Qwen2.5-TTS"           -> "Kwenn zwei Komma fünf T T S"
-     - "Gemma"                 -> "Dschemma"
-     - "gemma3:e4b" / ähnlich  -> "Dschemma drei"  (Versions-Tag droppen)
-     - "gemma4:26b" / ähnlich  -> "Dschemma vier"  (Versions-Tag droppen)
-     - "Llama3.1:8b" / ähnlich -> "Lama drei Punkt eins"
-     - "PageMentor"            -> "Peigementor"  (deutsche "ei" zwingt
-                                  Qwen auf /aI/ und trifft das engl. "page")
-     - "TTS" als eigenes Wort  -> "T T S"
-   Andere Modellnamen analog phonetisieren — Ziffern als Wort
-   ausschreiben ("drei" statt "3"), Versions-Suffixe nach Doppelpunkt
-   (":26b", ":8b", ":e4b") weglassen.
+BEISPIEL:
 
-3. SATZ- UND ZEILENLÄNGE BLEIBEN, WIE SIE SIND. Die "max 20 Wörter
-   pro Satz"-Regel und die Aufzählungs-Regeln gelten für Intros NICHT.
-   Eine Intro-Zeile darf kurz sein ("Von Max Mustermann."). Splitte
-   nichts und füge keine Konjunktionen ein.
+INPUT:
+Hörbuch: Codierung.
 
-4. KEINE EXERCISES-/CITATION-/FORMEL-LOGIK. Der Intro enthält nichts
-   davon — wende keine der entsprechenden Regeln an. Auch der
-   "Failure-Katalog" (Section-Numbers, Jahreszahlen, Zahlenreihen) ist
-   hier irrelevant.
+Von Prof. Dr.-Ing. Thomas Zimmermann.
+Aufbereitet durch gemma4:e4b.
+Gesprochen durch Qwen3-TTS, mit der Stimme Testi 2.
+Erstellt mit PageMentor.
 
-5. AUSGABE-FORMAT. Reiner Text, eine Zeile pro Input-Zeile, Leerzeilen
-   bleiben Leerzeilen, jeder nicht-leere Satz endet mit Punkt /
-   Frage- / Ausrufezeichen. Keine Anführungszeichen, keine Klammern.
-`;
+OUTPUT:
+Hörbuch: Codierung.
 
-const INTRO_OVERRIDE_EN = `
+Von Prof. Dr.-Ing. Thomas Zimmermann.
+Aufbereitet durch Dschemma vier.
+Gesprochen durch Kwenn drei T T S, mit der Stimme Testi 2.
+Erstellt mit Peigementor.`;
 
-================================================================
-INTRO MODE — these rules override the above
-================================================================
-You are NOT processing a chapter, but the short intro block of the
-audiobook (typically 5–8 short lines). For this block:
+const INTRO_SYSTEM_EN = `You receive the short intro block of an audiobook (5 to 8 lines with title, author, model name, voice, branding). Your ONLY job: rewrite model and product names so the TTS engine pronounces them correctly. Everything else you carry over one-for-one.
 
-1. KEEP THE STRUCTURE. Each input line stays its own line in the
-   output, in the same order. Do not summarize, drop, or invent
-   anything. The closing brand line ("Created with PageMentor." /
-   "Erstellt mit PageMentor.") stays as the final line as-is.
+PHONETIC SUBSTITUTIONS (examples, apply analogously to similar model names):
+- "Qwen3-TTS"             -> "Kwenn three T T S"
+- "Qwen2.5-TTS"           -> "Kwenn two point five T T S"
+- "Qwen"                  -> "Kwenn"
+- "Gemma"                 -> "Jemma"
+- "gemma4:e4b"            -> "Jemma four"      (drop the ":..." version tag)
+- "gemma3:e4b"            -> "Jemma three"
+- "gemma4:26b"            -> "Jemma four"
+- "Llama3.1:8b"           -> "Llama three point one"
+- "PageMentor"            -> "Peigementor"     (German "ei" forces /eI/)
+- "TTS" standalone        -> "T T S"
+Spell model version digits as words ("three" instead of "3"). Drop version suffixes after the colon (":e4b", ":26b").
 
-2. PHONETICIZE MODEL AND PRODUCT NAMES. This is your actual job for
-   intros — most of the rest is already speakable. Apply:
-     - "Qwen"                  -> "Kwenn"
-     - "Qwen3-TTS"             -> "Kwenn three T T S"
-     - "Qwen2.5-TTS"           -> "Kwenn two point five T T S"
-     - "Gemma"                 -> "Jemma"
-     - "gemma3:e4b" / similar  -> "Jemma three"  (drop version tag)
-     - "gemma4:26b" / similar  -> "Jemma four"   (drop version tag)
-     - "Llama3.1:8b" / similar -> "Llama three point one"
-     - "PageMentor"            -> "Peigementor"  (forces /eI/ vowel
-                                  so Qwen lands close to "page")
-     - "TTS" standalone        -> "T T S"
-   Analogous treatment for other model names — spell digits as words
-   ("three" instead of "3"), drop version suffixes after the colon
-   (":26b", ":8b", ":e4b").
+OUTPUT RULES:
+- Each input line becomes exactly one output line, in the same order.
+- Blank lines stay blank.
+- Every non-empty sentence ends with a period, question mark, or exclamation mark.
+- NO comments, NO explanation, NO quotation marks around the output, NO Markdown.
+- You output only the transformed intro text, nothing else.
 
-3. SENTENCE- AND LINE-LENGTH STAY AS-IS. The "max 20 words per
-   sentence" rule and enumeration rules do NOT apply to intros. A
-   short intro line ("By Max Mustermann.") is fine. Do not split and
-   do not insert conjunctions.
+EXAMPLE:
 
-4. NO EXERCISE/CITATION/FORMULA LOGIC. The intro contains none of
-   these — do not apply those rules. The failure catalog (section
-   numbers, years, numeric series) is irrelevant here.
+INPUT:
+Audiobook: Coding.
 
-5. OUTPUT FORMAT. Plain text, one output line per input line, blank
-   lines stay blank, every non-empty sentence ends with period,
-   question, or exclamation mark. No quotation marks, no brackets.
-`;
+By Prof. Dr.-Ing. Thomas Zimmermann.
+Prepared with gemma4:e4b.
+Narrated by Qwen3-TTS, with the voice Testi 2.
+Created with PageMentor.
+
+OUTPUT:
+Audiobook: Coding.
+
+By Prof. Dr.-Ing. Thomas Zimmermann.
+Prepared with Jemma four.
+Narrated by Kwenn three T T S, with the voice Testi 2.
+Created with Peigementor.`;
 
 export interface IntroPreprocessResult {
   text: string;
@@ -1860,16 +1859,20 @@ export async function preprocessIntroForAudio(params: {
       `[audio-preprocess] ${introLabel} START (${sourceText.length} chars source)`
     );
 
-    const baseSystem = row.language === "de" ? SYSTEM_DE : SYSTEM_EN;
-    const override =
-      row.language === "de" ? INTRO_OVERRIDE_DE : INTRO_OVERRIDE_EN;
-    const system = baseSystem + override;
+    // Standalone Intro-Prompt — NICHT mit SYSTEM_DE/EN konkatenieren.
+    // Siehe Kommentar an INTRO_SYSTEM_DE: das Chapter-Prompt ist zu
+    // dominant und kippt Gemma e4b in Kommentar-Modus.
+    const system =
+      row.language === "de" ? INTRO_SYSTEM_DE : INTRO_SYSTEM_EN;
 
     const ollamaOptions = {
-      temperature: 0.1,
+      // Substitutionsaufgabe — Variation hilft hier nicht, schadet
+      // potentiell (Gemma könnte "kreativ" was umformulieren).
+      // 0.0 ist deterministisch genug für reine Lookup-Ersetzungen.
+      temperature: 0.0,
       top_p: 0.9,
-      num_ctx: 8192,
-      num_predict: 2048,
+      num_ctx: 4096,
+      num_predict: 1024,
     };
 
     const result = await generate({
