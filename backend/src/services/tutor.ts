@@ -26,7 +26,12 @@ import {
 } from "./embeddings";
 import { generate } from "./llm";
 
-const TOP_K = 8;
+// Top-K für Retrieval. 8 war oft zu knapp wenn die User-Frage mehrere
+// Modelle gleichzeitig referenziert (z.B. "Analysiere mit TZI und
+// Vier-Seiten-Modell" — die Chunks für jedes Modell liegen in
+// verschiedenen Kapiteln). 12 gibt mehr Headroom, num_ctx 32k
+// verträgt das locker (~9k chars Snippet-Text bei MAX_CHUNK_CHARS).
+const TOP_K = 12;
 const MAX_HISTORY_TURNS = 5;
 const MAX_CHUNK_CHARS = 1200;
 
@@ -282,6 +287,17 @@ MARKDOWN-FORMATIERUNG ERWÜNSCHT (das Frontend rendert sie):
 
 Nicht übertreiben — kein Fett-Spam, jede Liste muss inhaltlich Sinn ergeben.
 
+LÄNGE — sei prägnant:
+- Kurzlösung: 1–3 Sätze. Keine Ausnahmen.
+- Lösungsweg: so kurz wie möglich, so lang wie nötig. Faustregel ~300 Wörter; bei mehrteiligen Klausur-Aufgaben (mehrere Modelle, mehrere Teilfragen) auch mal 500. Wenn drei Sätze ausreichen → drei Sätze. Vermeide:
+  • Erläuterung von Selbstverständlichkeiten (\"Wir betrachten die Situation als ein Kommunikationssystem\")
+  • Wiederholung der Frage
+  • Listen die nur aus zwei Items bestehen
+  • Theorie-Vorspann der nicht direkt für die Anwendung gebraucht wird
+- Quellen: eine Zeile pro Quelle, mehr nicht.
+
+Im Zweifel: kürzer ist besser. Verbose ≠ Qualität — Klarheit und Treffgenauigkeit sind das Ziel.
+
 Antwortsprache: ausschließlich Deutsch. Quellen-Zitate aus den Auszügen bleiben in der Original-Sprache.`;
 
 const SYSTEM_PROMPT_EN = `You are a study tutor. The student is asking a question about their own study materials and you have the most relevant excerpts from their own booklets.
@@ -332,6 +348,17 @@ MARKDOWN FORMATTING IS ENCOURAGED, the frontend renders it:
 - ### sub-headings only if the section is genuinely structured (rare)
 
 Don't overdo it — no bold spam, every list must be meaningfully grouped.
+
+LENGTH — be concise:
+- Short answer: 1–3 sentences. No exceptions.
+- Reasoning: as short as possible, as long as necessary. Rule of thumb ~300 words; for multi-part exam tasks (several models, several sub-questions) up to ~500. If three sentences suffice → three sentences. Avoid:
+  • Explaining the obvious (\"We treat the situation as a communication system\")
+  • Restating the question
+  • Lists with only two items
+  • Theory preamble that isn't directly needed for the application
+- Sources: one line per source, no more.
+
+When in doubt: shorter is better. Verbose ≠ quality — clarity and precision are the goal.
 
 Response language: English only. Source quotes from the excerpts stay in the original language.`;
 
@@ -508,8 +535,13 @@ export async function ask(params: {
     system: systemPrompt,
     options: {
       temperature: 0.2,
+      // num_ctx hoch genug für 12 Chunks (~14k chars) + history +
+      // 4k predict, alles in 32k ist locker.
       num_ctx: 32768,
-      num_predict: 2048,
+      // 2048 war oft zu kurz für strukturierte Anwendungs-Antworten —
+      // User sah Output mit "und" mitten im Satz abbrechen. 4096 lässt
+      // ~3000 Wörter zu, deckt auch ausführliche Klausur-Aufgaben ab.
+      num_predict: 4096,
     },
   });
 
