@@ -20,6 +20,9 @@ CLAUDE.md
 ICON-SETUP.md
 PLAN*
 01-To-Do.md
+memory/
+bun.lock
+bun.lockb
 
 # Python caches (sidecar containers)
 __pycache__/
