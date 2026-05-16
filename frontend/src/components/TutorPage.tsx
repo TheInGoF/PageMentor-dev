@@ -82,19 +82,10 @@ export function TutorPage(props: Props) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  async function startNewSession() {
-    try {
-      const r = await api.tutor.createSession(pendingModuleId || null);
-      setSessions((cur) => [r.session, ...cur]);
-      setActiveId(r.session.id);
-      setMessages([]);
-    } catch (err) {
-      toast.show(
-        (err as Error).message || t("tutor.errors.createFailed"),
-        "error"
-      );
-    }
-  }
+  // No explicit "new session" function — handleAsk lazily creates one
+  // when the user sends the first message of a fresh chat, using the
+  // currently selected module. Avoids two side-by-side code paths for
+  // "create then send" vs "send".
 
   async function handleAsk(e: FormEvent) {
     e.preventDefault();
