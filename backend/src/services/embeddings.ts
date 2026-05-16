@@ -1,18 +1,28 @@
 /**
- * Embedding generation via HuggingFace TEI (Text Embeddings Inference).
+ * Embedding generation via an OpenAI-compatible embedding server.
+ *
+ * We target `infinity` (michaelf34/infinity) as the deployed backend
+ * because it supports jina-v3's `trust_remote_code` architecture
+ * (XLM-RoBERTa with LoRA adapters), which HuggingFace's own TEI
+ * cannot host — TEI is a pure Rust binary without a Python
+ * interpreter. The PageMentor config field stays named `teiUrl` /
+ * `PM_TEI_URL` for backward compatibility, but the protocol is
+ * OpenAI's `/v1/embeddings`, not TEI's native `/embed`.
+ *
+ * Any other OpenAI-compatible embedding server (Ollama's
+ * `/v1/embeddings`, vLLM, llama.cpp server, …) also works, as long as
+ * it accepts `{model, input}` and returns `{data: [{embedding}]}`.
  *
  * Single backend by design. We previously had an Ollama fallback for
  * jina-v2-base-de / bge-m3 / nomic-embed-text, but the fallback path
- * could silently mix incompatible vectors into the same DB if TEI was
- * briefly down — different models live in different vector spaces.
- * Better to fail loud and force the operator to fix TEI than to dilute
- * the corpus.
+ * could silently mix incompatible vectors into the same DB if the
+ * embedding server was briefly down — different models live in
+ * different vector spaces. Better to fail loud and force the operator
+ * to fix the embed server than to dilute the corpus.
  *
- * TEI must be reachable via `PM_TEI_URL` (or the `teiUrl` setting in
- * the LLM config). It serves jina-embeddings-v3, which has task-
- * specific LoRA adapters: pass `"passage"` when indexing chunks,
- * `"query"` when embedding a search query — that's what makes v3
- * meaningfully better than v2 on German MTEB retrieval.
+ * jina-v3 has task-specific LoRA adapters: pass `"passage"` when
+ * indexing chunks, `"query"` when embedding a search query — that's
+ * what makes v3 meaningfully better than v2 on German MTEB retrieval.
  *
  * Storage in SQLite as Float32 BLOB. jina-v3 = 1024 dim × 4 bytes =
  * 4 KB / chunk. Brute-force cosine over 10 k chunks is ~100 ms in JS,
@@ -36,19 +46,25 @@ export interface EmbedderConfig {
   model: string;
 }
 
-interface TeiInfo {
+interface EmbedderInfo {
   modelId: string;
 }
 
-async function teiInfo(url: string): Promise<TeiInfo | null> {
+/** Health probe using OpenAI's `/models` endpoint. Returns the first
+ *  loaded model id — for our infinity setup that's the only model on
+ *  the server, so it's also the one we'll embed against. */
+async function probeEmbedder(url: string): Promise<EmbedderInfo | null> {
   try {
-    const res = await fetch(`${url.replace(/\/+$/, "")}/info`, {
+    const res = await fetch(`${url.replace(/\/+$/, "")}/models`, {
       signal: AbortSignal.timeout(2500),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { model_id?: string };
-    if (!data.model_id) return null;
-    return { modelId: data.model_id };
+    const data = (await res.json()) as {
+      data?: Array<{ id?: string }>;
+    };
+    const modelId = data.data?.[0]?.id;
+    if (!modelId) return null;
+    return { modelId };
   } catch {
     return null;
   }
@@ -58,61 +74,74 @@ function teiTaskId(task: EmbedTask): string {
   return task === "query" ? "retrieval.query" : "retrieval.passage";
 }
 
-/** Resolves the active embedder. Returns null when TEI is not
- *  configured or unreachable — callers must handle that as a hard
- *  failure (no fallback). */
+/** Resolves the active embedder. Returns null when the embed server
+ *  is not configured or unreachable — callers must handle that as a
+ *  hard failure (no fallback). */
 export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
-  const teiUrl = effective("teiUrl", "PM_TEI_URL");
-  if (!teiUrl) {
+  const url = effective("teiUrl", "PM_TEI_URL");
+  if (!url) {
     console.warn(
-      "[embeddings] no TEI configured (set teiUrl in settings or PM_TEI_URL env)"
+      "[embeddings] no embedding server configured (set teiUrl in settings or PM_TEI_URL env)"
     );
     return null;
   }
-  const info = await teiInfo(teiUrl);
+  const info = await probeEmbedder(url);
   if (!info) {
-    console.warn(`[embeddings] TEI at ${teiUrl} unreachable`);
+    console.warn(`[embeddings] embedding server at ${url} unreachable`);
     return null;
   }
+  // Keep the `tei:` prefix in the DB tag for backward compatibility
+  // — existing rows reference it and the reembed endpoint matches on
+  // exact string. The underlying server is now infinity, but the tag
+  // namespace stays stable.
   const model = `tei:${info.modelId}`;
-  console.log(`[embeddings] using ${model} on ${teiUrl}`);
-  return { url: teiUrl, model };
+  console.log(`[embeddings] using ${model} on ${url}`);
+  return { url, model };
 }
 
-/** Embeds a single text. `task` selects the jina-v3 LoRA adapter:
+/** Embeds a single text via OpenAI-compatible `/v1/embeddings`.
+ *
+ *  `task` selects the jina-v3 LoRA adapter:
  *   - `"passage"` (default): indexing chunks
  *   - `"query"`: retrieval queries (questions, search inputs)
  *
- *  Always pair `passage` (index time) with `query` (search time);
- *  mixing tasks within a corpus loses the v3 retrieval edge. */
+ *  The `task` field is non-OpenAI but infinity forwards it to jina-v3.
+ *  Servers that don't recognize the field ignore it silently — safe to
+ *  always send. Always pair `passage` (index time) with `query` (search
+ *  time); mixing tasks within a corpus loses the v3 retrieval edge. */
 export async function embedText(
   text: string,
   embedder: EmbedderConfig,
   task: EmbedTask = "passage"
 ): Promise<Float32Array> {
   const url = embedder.url.replace(/\/+$/, "");
-  const res = await fetch(`${url}/embed`, {
+  // Strip our internal `tei:` prefix to recover the bare HF model id
+  // that the server expects in the `model` field.
+  const modelId = embedder.model.replace(/^tei:/, "");
+  const res = await fetch(`${url}/v1/embeddings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      inputs: [text],
+      model: modelId,
+      input: [text],
       task: teiTaskId(task),
     }),
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`tei embed ${res.status}: ${body.slice(0, 200)}`);
+    throw new Error(
+      `embed server ${res.status}: ${body.slice(0, 200)}`
+    );
   }
-  const data = (await res.json()) as number[][] | { embeddings?: number[][] };
-  // Native /embed returns `[[...]]`. The OpenAI-compat path returns
-  // `{embeddings: [[...]]}`. Accept both so a misconfigured proxy in
-  // front of TEI doesn't bring everything down.
-  const arr = Array.isArray(data) ? data : data.embeddings;
-  if (!Array.isArray(arr) || arr.length === 0 || !Array.isArray(arr[0])) {
-    throw new Error("tei embed returned empty response");
+  const data = (await res.json()) as {
+    data?: Array<{ embedding?: number[] }>;
+  };
+  const vec = data.data?.[0]?.embedding;
+  if (!Array.isArray(vec) || vec.length === 0) {
+    throw new Error("embed server returned empty embedding");
   }
-  return new Float32Array(arr[0]);
+  return new Float32Array(vec);
 }
 
 // ---------------------------------------------------------------------

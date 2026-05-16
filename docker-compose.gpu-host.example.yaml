@@ -10,8 +10,9 @@
 #   - qwen-tts        ← voice-clone TTS    (PageMentor only)
 #   - audio-analyzer  ← voice description  (PageMentor only)
 #   - pm-gpu-arbiter  ← serialises GPU access (ollama / qwen-tts / analyzer)
-#   - tei             ← jina-embeddings-v3 (doc_storage only, permanent VRAM,
-#                                            does NOT use arbiter — see notes)
+#   - infinity        ← jina-embeddings-v3 (shared by PM + doc_storage,
+#                                            permanent VRAM, does NOT use
+#                                            arbiter — see notes)
 #   - qdrant          ← vector DB          (doc_storage only, CPU-only)
 #
 # The arbiter is the only endpoint PageMentor (on the NAS) talks to —
@@ -35,7 +36,7 @@
 #   4. Open firewall on the host. Ports needed from the NAS IP:
 #        - 8790 (arbiter)    — PageMentor + doc_storage Ollama traffic
 #        - 5001 (docling)    — PageMentor + doc_storage PDF extraction
-#        - 8080 (tei)        — doc_storage embeddings
+#        - 8080 (infinity)   — PM + doc_storage embeddings
 #        - 6333 (qdrant)     — doc_storage vector DB
 #      Ports 11434 (ollama) and 8880 (qwen-tts) stay private — the NAS
 #      never talks to them directly.
@@ -343,10 +344,11 @@ services:
   # for operational sanity (one `docker compose up -d`).
   # ------------------------------------------------------------------
 
-  # HuggingFace TEI hosting jina-embeddings-v3. doc_storage uses this
-  # for chunk + query embeddings (retrieval.passage / retrieval.query
-  # adapter). Permanently resident in VRAM (~1.1 GB) — does NOT go
-  # through pm-gpu-arbiter on purpose:
+  # infinity-embedding hosting jina-embeddings-v3. Both PageMentor
+  # and doc_storage hit this for chunk + query embeddings with
+  # task-specific LoRA adapters (retrieval.passage / retrieval.query).
+  # Permanently resident in VRAM (~1.1 GB) — does NOT go through
+  # pm-gpu-arbiter on purpose:
   #
   #   - The model never swaps, so there's no swap to serialise.
   #   - Going through the arbiter would only burn 50–100 ms per call
@@ -356,27 +358,42 @@ services:
   #     stall doc_storage's whole upload pipeline whenever PageMentor
   #     starts an LLM generation.
   #
+  # Why infinity and not HuggingFace TEI? TEI is a pure Rust binary
+  # and can't host models that need `trust_remote_code` — jina-v3
+  # uses a custom XLMRobertaLoRA architecture loaded from
+  # `jinaai/xlm-roberta-flash-implementation`. TEI fails the
+  # config.json parse with "missing field model_type" and never gets
+  # the model loaded. infinity has a Python runtime, accepts
+  # trust_remote_code, and exposes the OpenAI-compatible
+  # `/v1/embeddings` endpoint which both projects' clients speak.
+  #
   # VRAM math on the 24 GB 3090:
   #   24 GB total
-  # - 1.1 GB TEI permanent
+  # - 1.1 GB infinity permanent
   # - up to ~20 GB single active Ollama model (Arbiter ensures only
   #     one is loaded at a time across both projects)
   # = ~3 GB headroom for Docling / qwen-tts on-demand pages.
   # Verify with `nvidia-smi` after first qwen-tts call.
-  tei:
-    image: ghcr.io/huggingface/text-embeddings-inference:1.5
-    container_name: pm-tei
+  infinity:
+    image: michaelf34/infinity:0.0.76
+    container_name: pm-infinity
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "8080:7997"   # external port 8080 (PM_TEI_URL convention), internal 7997
+    command:
+      - "v2"
+      - "--model-id"
+      - "jinaai/jina-embeddings-v3"
+      - "--engine"
+      - "torch"
+      - "--port"
+      - "7997"
+      - "--batch-size"
+      - "32"
     environment:
-      MODEL_ID: jinaai/jina-embeddings-v3
-      # TEI's default batch ceiling — leave headroom under it on the
-      # client side (doc_storage caps at 32, well below).
-      MAX_CLIENT_BATCH_SIZE: "64"
-      MAX_CONCURRENT_REQUESTS: "32"
+      HF_HOME: /app/.cache
     volumes:
-      - tei-cache:/data
+      - infinity-cache:/app/.cache
     deploy:
       resources:
         reservations:
@@ -404,7 +421,7 @@ volumes:
   docling-cache:
   qwen-tts-hf:
   audio-analyzer-hf:
-  tei-cache:        # jina-embeddings-v3 weights (~1.1 GB after first start)
+  infinity-cache:   # jina-embeddings-v3 weights (~1.1 GB after first start)
   qdrant-data:      # doc_storage's vector DB; grows with corpus
 
 # ----------------------------------------------------------------------
