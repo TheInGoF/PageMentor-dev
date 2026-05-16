@@ -7,10 +7,10 @@
  * cannot host — TEI is a pure Rust binary without a Python
  * interpreter. The PageMentor config field stays named `teiUrl` /
  * `PM_TEI_URL` for backward compatibility, but the protocol is
- * OpenAI's `/v1/embeddings`, not TEI's native `/embed`.
+ * OpenAI's `/embeddings`, not TEI's native `/embed`.
  *
  * Any other OpenAI-compatible embedding server (Ollama's
- * `/v1/embeddings`, vLLM, llama.cpp server, …) also works, as long as
+ * `/embeddings`, vLLM, llama.cpp server, …) also works, as long as
  * it accepts `{model, input}` and returns `{data: [{embedding}]}`.
  *
  * Single backend by design. We previously had an Ollama fallback for
@@ -99,7 +99,7 @@ export async function resolveEmbedder(): Promise<EmbedderConfig | null> {
   return { url, model };
 }
 
-/** Embeds a single text via OpenAI-compatible `/v1/embeddings`.
+/** Embeds a single text via OpenAI-compatible `/embeddings`.
  *
  *  `task` selects the jina-v3 LoRA adapter:
  *   - `"passage"` (default): indexing chunks
@@ -118,7 +118,7 @@ export async function embedText(
   // Strip our internal `tei:` prefix to recover the bare HF model id
   // that the server expects in the `model` field.
   const modelId = embedder.model.replace(/^tei:/, "");
-  const res = await fetch(`${url}/v1/embeddings`, {
+  const res = await fetch(`${url}/embeddings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
