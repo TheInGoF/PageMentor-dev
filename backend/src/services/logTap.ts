@@ -248,6 +248,27 @@ function stripAnsi(s: string): string {
 // stderr too, so we can't trust the stream alone. Sniff the message
 // for the standard level marker first, fall back to stream-based
 // classification only when no marker is present.
+// Docker healthcheck pings and a couple of other periodic chatter
+// patterns flood the Logs page faster than anything useful. We drop
+// them at the pump rather than in the UI so the in-memory ring buffer
+// stays full of signal. If we ever need them back (e.g. for a "why
+// is docling unhealthy?" debug session), comment this filter out.
+const NOISE_PATTERNS: RegExp[] = [
+  // GET /health from docling/uvicorn — happens 2x every 30 s,
+  // bigger than every functional log message combined.
+  / - "GET \/health HTTP\/1\.\d" 200\b/,
+  // Likewise GET /healthz on some services.
+  / - "GET \/healthz HTTP\/1\.\d" 200\b/,
+  // RapidOCR/onnxruntime startup ack — fires for every chunk that
+  // triggers an OCR pass, nothing actionable.
+  /\[RapidOCR\] base\.py:\d+: Using engine_name: onnxruntime/,
+];
+
+function isNoiseLine(msg: string): boolean {
+  for (const re of NOISE_PATTERNS) if (re.test(msg)) return true;
+  return false;
+}
+
 function inferLevelFromMessage(
   msg: string,
   stream: "stdout" | "stderr"
@@ -321,6 +342,13 @@ function startDockerContainerPump(params: {
       for (const l of data.lines ?? []) {
         if (l.ts <= sinceTs) continue;
         const cleaned = stripAnsi(l.message);
+        if (isNoiseLine(cleaned)) {
+          // Still advance sinceTs so we don't refetch the same line
+          // over and over — we're skipping it on purpose, not because
+          // we lost it.
+          if (l.ts > sinceTs) sinceTs = l.ts;
+          continue;
+        }
         publish({
           ts: l.ts,
           // Container-name → known LogSource if we have a mapping,
