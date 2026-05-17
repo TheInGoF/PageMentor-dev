@@ -25,6 +25,11 @@
 import { randomUUID } from "node:crypto";
 import { db } from "../db";
 import { generate, isAvailable as llmAvailable } from "./llm";
+// Shared with audioPreprocess — serialises every Gemma call across
+// the whole process. Without it, parallel "Vorbereiten"-clicks (or a
+// batch run before frontend serialisation kicks in) burst the GPU
+// arbiter into a flapping state with parallel model loads.
+import { withGemmaLock } from "./gemmaLock";
 
 export type CardTextType = "qa_pairs" | "content";
 
@@ -263,6 +268,12 @@ export async function preprocessChapterForCards(params: {
     throw new Error("llm_unavailable");
   }
 
+  // Everything below hits Gemma — wrap in the shared lock so we never
+  // run two preprocess calls in parallel (neither across card+audio
+  // preprocess, nor across multiple chapters from a batch run, nor
+  // from rapid clicks in the UI).
+  return withGemmaLock(`card ${label}`, async () => {
+
   const tStart = Date.now();
   console.log(
     `[card-preprocess] ${label} START (${row.text.length} chars source)`
@@ -322,6 +333,7 @@ export async function preprocessChapterForCards(params: {
     `[card-preprocess] ${label} DONE in ${totalS}s (content mode, ${outText.length} chars)`
   );
   return { type: "content", text: outText, model: outModel, cached: false };
+  }); // withGemmaLock
 }
 
 function safeParsePairs(json: string): QaPair[] | undefined {

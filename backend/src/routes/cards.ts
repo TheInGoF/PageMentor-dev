@@ -954,7 +954,12 @@ cardRoutes.post("/preprocess/:chapterId", async (c) => {
     if (msg.startsWith("Chapter ") && msg.includes(" not found")) {
       return c.json({ error: msg }, 404);
     }
-    console.error("[cards] preprocess failed:", err);
+    // Make the failure actually loggable. console.error on a raw Error
+    // object printed "{}" in the logs because our log-tap only spreads
+    // arrays; here we serialise the .stack explicitly so the trace is
+    // visible in PageMentor's Logs page.
+    const stack = err instanceof Error ? err.stack ?? msg : msg;
+    console.error(`[cards] preprocess failed (chapter=${chapterId}): ${stack}`);
     return c.json({ error: msg }, 500);
   }
 });

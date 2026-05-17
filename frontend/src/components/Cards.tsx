@@ -876,14 +876,37 @@ function PreprocessModal({
 }) {
   const [chapters, setChapters] = useState<Chapter[] | null>(null);
   const [status, setStatus] = useState<Record<string, PrepStatus>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Batch-Run state. activeChapterId = currently-processing chapter so
+  // we can highlight its row; batchRunning = disable selection
+  // controls while the queue is draining.
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
+    null
+  );
+  // Used as an abort signal — flipping to true mid-batch makes the
+  // for-loop exit after the current chapter finishes (we don't kill
+  // an in-flight LLM call, just stop queueing further chapters).
+  const cancelRef = useRef(false);
   const toast = useToast();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Reset batch state when modal closes so a re-open starts fresh.
+      cancelRef.current = false;
+      setBatchRunning(false);
+      setActiveChapterId(null);
+      setBatchProgress(null);
+      return;
+    }
     api.chapters
       .list(docId)
       .then(async (chs) => {
         setChapters(chs);
+        // Default-Selection: alle Kapitel angehakt — typische Use-Case
+        // ist "ganzes Heft vorbereiten", User dehakt nur Ausnahmen.
+        setSelected(new Set(chs.map((c) => c.id)));
         // Lade aktuellen Preprocess-Status für jedes Kapitel parallel.
         const entries = await Promise.all(
           chs.map(async (ch) => {
@@ -907,6 +930,23 @@ function PreprocessModal({
       .catch(() => setChapters([]));
   }, [open, docId]);
 
+  function toggleSelect(chapterId: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(chapterId)) next.delete(chapterId);
+      else next.add(chapterId);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    if (!chapters) return;
+    setSelected(new Set(chapters.map((c) => c.id)));
+  }
+  function selectNone() {
+    setSelected(new Set());
+  }
+
   async function runPreprocess(chapterId: string, force: boolean) {
     setStatus((s) => ({ ...s, [chapterId]: { state: "running" } }));
     try {
@@ -928,7 +968,55 @@ function PreprocessModal({
           message: err instanceof Error ? err.message : "Fehler",
         },
       }));
+      throw err;
     }
+  }
+
+  async function runBatch() {
+    if (!chapters) return;
+    const queue = chapters.filter((c) => selected.has(c.id));
+    if (queue.length === 0) {
+      toast.show(t("cards.prep.batch.empty"), "info");
+      return;
+    }
+    cancelRef.current = false;
+    setBatchRunning(true);
+    setBatchProgress({ current: 0, total: queue.length });
+    let ok = 0;
+    let failed = 0;
+    for (let i = 0; i < queue.length; i++) {
+      if (cancelRef.current) break;
+      const ch = queue[i];
+      setActiveChapterId(ch.id);
+      setBatchProgress({ current: i + 1, total: queue.length });
+      try {
+        // force=true für "Erneut vorbereiten" wenn schon ein Cache da
+        // ist — sonst wäre der Batch ein No-Op auf bereits prepared
+        // Kapiteln. Nutzer kann ja immer dehaken wenn nicht gewünscht.
+        const existing = status[ch.id];
+        const force =
+          existing?.state === "ready" || existing?.state === "result";
+        await runPreprocess(ch.id, force);
+        ok++;
+      } catch {
+        failed++;
+        // Weitermachen mit dem nächsten Kapitel — einzelne Fehler
+        // sollen den ganzen Batch nicht aufhalten.
+      }
+    }
+    setActiveChapterId(null);
+    setBatchRunning(false);
+    setBatchProgress(null);
+    toast.show(
+      cancelRef.current
+        ? t("cards.prep.batch.cancelled", { ok, failed, total: queue.length })
+        : t("cards.prep.batch.done", { ok, failed }),
+      failed > 0 ? "info" : "success"
+    );
+  }
+
+  function cancelBatch() {
+    cancelRef.current = true;
   }
 
   async function importQa(chapterId: string) {
@@ -947,16 +1035,74 @@ function PreprocessModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        if (batchRunning) {
+          if (!confirm(t("cards.prep.batch.closeConfirm"))) return;
+          cancelRef.current = true;
+        }
+        onClose();
+      }}
       title={t("cards.prep.title")}
       footer={
-        <Button variant="ghost" onClick={onClose}>
-          {t("common.close")}
-        </Button>
+        batchRunning ? (
+          <>
+            <span className="text-xs text-neutral-500 mr-auto">
+              {batchProgress
+                ? t("cards.prep.batch.progress", {
+                    current: batchProgress.current,
+                    total: batchProgress.total,
+                  })
+                : null}
+            </span>
+            <Button variant="ghost" onClick={cancelBatch}>
+              {t("cards.prep.batch.cancel")}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              {t("common.close")}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={runBatch}
+              disabled={selected.size === 0}
+            >
+              {t("cards.prep.batch.run", { n: selected.size })}
+            </Button>
+          </>
+        )
       }
     >
       <div className="flex flex-col gap-3">
         <p className="text-xs text-neutral-500">{t("cards.prep.description")}</p>
+        {chapters && chapters.length > 0 && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-neutral-500">{t("cards.prep.batch.selectLabel")}</span>
+            <button
+              type="button"
+              onClick={selectAll}
+              disabled={batchRunning}
+              className="px-2 py-0.5 rounded border border-border text-neutral-300 hover:border-border-strong disabled:opacity-50"
+            >
+              {t("cards.prep.batch.selectAll")}
+            </button>
+            <button
+              type="button"
+              onClick={selectNone}
+              disabled={batchRunning}
+              className="px-2 py-0.5 rounded border border-border text-neutral-300 hover:border-border-strong disabled:opacity-50"
+            >
+              {t("cards.prep.batch.selectNone")}
+            </button>
+            <span className="ml-auto text-neutral-500">
+              {t("cards.prep.batch.selectedCount", {
+                n: selected.size,
+                total: chapters.length,
+              })}
+            </span>
+          </div>
+        )}
         {!chapters && (
           <div className="text-sm text-neutral-500">{t("common.loading")}</div>
         )}
@@ -969,25 +1115,42 @@ function PreprocessModal({
           <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">
             {chapters.map((ch) => {
               const st = status[ch.id] ?? { state: "unknown" };
+              const isSelected = selected.has(ch.id);
+              const isActive = activeChapterId === ch.id;
               return (
                 <div
                   key={ch.id}
-                  className="border border-border rounded p-3 flex flex-col gap-2"
+                  className={cn(
+                    "border rounded p-3 flex flex-col gap-2 transition-colors",
+                    isActive
+                      ? "border-accent bg-accent/5"
+                      : isSelected
+                        ? "border-border"
+                        : "border-border/40 opacity-60"
+                  )}
                 >
-                  <div className="flex items-baseline gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(ch.id)}
+                      disabled={batchRunning}
+                      className="accent-accent"
+                      aria-label={`select chapter ${ch.number}`}
+                    />
                     <span className="text-xs text-neutral-500 tabular-nums">
                       {String(ch.number).padStart(2, "0")}
                     </span>
-                    <span className="text-sm text-neutral-100 truncate">
+                    <span className="text-sm text-neutral-100 truncate flex-1">
                       {ch.title || `Kapitel ${ch.number}`}
                     </span>
                     <PrepBadge status={st} />
                   </div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap pl-7">
                     <Button
                       variant="outline"
-                      onClick={() => runPreprocess(ch.id, st.state === "ready")}
-                      disabled={st.state === "running"}
+                      onClick={() => runPreprocess(ch.id, st.state === "ready").catch(() => {})}
+                      disabled={st.state === "running" || batchRunning}
                       className="!py-1 !px-2 text-xs"
                     >
                       {st.state === "running"
@@ -1001,6 +1164,7 @@ function PreprocessModal({
                       <Button
                         variant="primary"
                         onClick={() => importQa(ch.id)}
+                        disabled={batchRunning}
                         className="!py-1 !px-2 text-xs"
                       >
                         {t("cards.prep.importQa")}
