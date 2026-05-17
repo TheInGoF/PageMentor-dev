@@ -648,6 +648,10 @@ export const api = {
         `/api/cards/import-qa/${chapterId}`,
         { method: "POST", body: JSON.stringify({ difficulty }) }
       ),
+    deleteAll: (docId: string) =>
+      request<{ deleted: number }>(`/api/cards/all/${docId}`, {
+        method: "DELETE",
+      }),
     exportUrl: (docId: string, format: "csv" | "json" = "csv") =>
       `/api/cards/export/${docId}?format=${format}`,
     importCsv: (docId: string, file: File) => {

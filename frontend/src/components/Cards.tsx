@@ -138,6 +138,35 @@ export function Cards({ docId }: Props) {
               {t("cards.prep")}
             </Button>
             {(stats?.total ?? 0) > 0 && (
+              <Button
+                variant="ghost"
+                onClick={async () => {
+                  if (!confirm(t("cards.deleteAllConfirm", { n: stats?.total ?? 0 }))) return;
+                  setBusy(true);
+                  try {
+                    const r = await api.cards.deleteAll(docId);
+                    toast.show(
+                      t("cards.deleteAllDone", { n: r.deleted }),
+                      "success"
+                    );
+                    await load();
+                  } catch (err) {
+                    toast.show(
+                      err instanceof Error ? err.message : t("common.error"),
+                      "error"
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                disabled={busy}
+                title={t("cards.deleteAllTitle")}
+                className="text-accent hover:text-accent"
+              >
+                {t("cards.deleteAll")}
+              </Button>
+            )}
+            {(stats?.total ?? 0) > 0 && (
               <a
                 href={api.cards.exportUrl(docId, "csv")}
                 download

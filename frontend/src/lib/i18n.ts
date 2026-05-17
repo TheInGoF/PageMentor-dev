@@ -443,6 +443,12 @@ const en: Record<string, string> = {
   "cards.aiGenerated": "{n} cards generated with {model}",
   "cards.generate": "✨ Generate cards",
   "cards.generateTitle": "Extract from markers, then fill gaps with AI",
+  "cards.deleteAll": "🗑 Delete all",
+  "cards.deleteAllTitle":
+    "Wipe every card for this document (and its SM-2 progress). Used before re-importing via the new Q&A flow.",
+  "cards.deleteAllConfirm":
+    "Delete all {n} cards for this document? This also wipes the SM-2 review progress.",
+  "cards.deleteAllDone": "{n} cards deleted.",
   "cards.prep": "🧪 Prepare chapter",
   "cards.prepTitle":
     "Classify a chapter (exam vs. lecture text) and clean up formulas / extract Q&A pairs for downstream card generation",
@@ -1326,6 +1332,12 @@ const de: Record<string, string> = {
   "cards.aiGenerated": "{n} Karten mit {model} generiert",
   "cards.generate": "✨ Karten generieren",
   "cards.generateTitle": "Aus Markern ziehen, dann offene Antworten per KI belegen",
+  "cards.deleteAll": "🗑 Alle löschen",
+  "cards.deleteAllTitle":
+    "Alle Karten dieses Dokuments löschen (inkl. SM-2-Lernfortschritt). Sinnvoll vor erneutem Import über den neuen Q&A-Flow.",
+  "cards.deleteAllConfirm":
+    "Alle {n} Karten dieses Dokuments wirklich löschen? Der SM-2-Lernfortschritt geht damit ebenfalls verloren.",
+  "cards.deleteAllDone": "{n} Karten gelöscht.",
   "cards.prep": "🧪 Kapitel vorbereiten",
   "cards.prepTitle":
     "Kapitel klassifizieren (Klausur vs Lehrtext) und Formeln aufbereiten / Q&A-Paare extrahieren für die Karten-Generierung",

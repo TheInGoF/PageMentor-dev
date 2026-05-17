@@ -365,6 +365,21 @@ cardRoutes.delete("/:id", (c) => {
   return c.json({ status: "ok" });
 });
 
+/** Hard reset: wipe ALL cards (and their progress) for a document.
+ *  Used by the Cards-Tab "Alle Karten löschen"-Button to clear out
+ *  garbage from older regex-extraction runs before re-importing via
+ *  the new qa_pairs preprocess flow. */
+cardRoutes.delete("/all/:docId", (c) => {
+  const docId = c.req.param("docId");
+  const d = db();
+  // progress rows are ON DELETE CASCADE in the schema, so deleting
+  // cards drops their SM-2 state with them.
+  const res = d
+    .prepare("DELETE FROM cards WHERE document_id = ?")
+    .run(docId);
+  return c.json({ deleted: res.changes ?? 0 });
+});
+
 // Cards due for review (next_review <= now OR never reviewed).
 cardRoutes.get("/due/:docId", (c) => {
   const rows = db()
