@@ -165,7 +165,10 @@ async function resolveOllamaModel(
   requested: string | undefined
 ): Promise<string> {
   const available = await ollamaTags(url);
-  if (requested && available.includes(requested)) return requested;
+  if (requested && available.includes(requested)) {
+    console.log(`[llm] using requested model "${requested}" (matched in /api/tags at ${url})`);
+    return requested;
+  }
 
   if (requested) {
     // Try a pull — Ollama will fetch the model if it's available
@@ -193,9 +196,19 @@ async function resolveOllamaModel(
     );
   }
 
-  // No model requested — pick the first generative one (soft default).
+  // No model requested — log this LOUDLY so the user notices that
+  // Settings → Default Ollama Model is empty. Then pick the first
+  // generative one as a soft default.
   const generative = available.filter((n) => !isEmbeddingModel(n));
-  if (generative.length > 0) return generative[0];
+  if (generative.length > 0) {
+    console.warn(
+      `[llm] no model pinned (Settings → Default Ollama Model is empty), ` +
+        `auto-picked "${generative[0]}" from /api/tags at ${url}. ` +
+        `Available generative models: [${generative.join(", ")}]. ` +
+        `Set the field to suppress this warning.`
+    );
+    return generative[0];
+  }
 
   console.warn(
     `[llm] no generative models found at ${url}; falling back to "llama3.2:3b"`
