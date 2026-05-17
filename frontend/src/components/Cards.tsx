@@ -92,8 +92,18 @@ export function Cards({ docId }: Props) {
     const unsub = subscribeProgress(docId, (ev) => {
       if (!ev.phase.startsWith("cards.")) return;
       setBuild((prev) => reduceBuild(prev, ev));
-      if (ev.phase === "cards.done" || ev.phase === "cards.canceled") {
-        // The DB has changed — reload list + stats.
+      // Live-reload list + stats on every progress hop so the user sees
+      // cards appearing as they're extracted, not just at the end.
+      // cards.chapter / cards.progress fire often; load() is cheap (one
+      // SELECT each). cards.done / canceled / failed also reload to be
+      // sure.
+      if (
+        ev.phase === "cards.progress" ||
+        ev.phase === "cards.chapter" ||
+        ev.phase === "cards.done" ||
+        ev.phase === "cards.canceled" ||
+        ev.phase === "cards.failed"
+      ) {
         void load();
       }
     });
@@ -137,7 +147,20 @@ export function Cards({ docId }: Props) {
     }
   }
 
-  async function buildAll() {
+  async function buildResume() {
+    // Resume: keep what we have, walk un-processed chapters.
+    setBuild({ ...INITIAL_BUILD, active: true });
+    try {
+      await api.cards.build(docId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("common.error");
+      toast.show(msg, "error");
+      setBuild({ ...INITIAL_BUILD, error: msg, finished: "failed" });
+    }
+  }
+
+  async function buildRebuild() {
+    // Confirm + wipe + start over.
     if (
       stats &&
       stats.total > 0 &&
@@ -146,7 +169,7 @@ export function Cards({ docId }: Props) {
       return;
     setBuild({ ...INITIAL_BUILD, active: true });
     try {
-      await api.cards.build(docId);
+      await api.cards.build(docId, { rebuild: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : t("common.error");
       toast.show(msg, "error");
@@ -198,11 +221,23 @@ export function Cards({ docId }: Props) {
                 {t("cards.build.cancel")}
               </Button>
             ) : (
-              <Button onClick={buildAll} disabled={busy}>
-                {stats && stats.total > 0
-                  ? t("cards.build.rerun")
-                  : t("cards.build.start")}
-              </Button>
+              <>
+                <Button onClick={buildResume} disabled={busy}>
+                  {stats && stats.total > 0
+                    ? t("cards.build.resume")
+                    : t("cards.build.start")}
+                </Button>
+                {stats && stats.total > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={buildRebuild}
+                    disabled={busy}
+                    title={t("cards.build.rerunTitle")}
+                  >
+                    {t("cards.build.rerun")}
+                  </Button>
+                )}
+              </>
             )}
             {(stats?.total ?? 0) > 0 && !build.active && (
               <Button

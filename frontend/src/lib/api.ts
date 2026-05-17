@@ -616,8 +616,14 @@ export const api = {
      *  of the document. Returns immediately; progress streams over the
      *  per-document SSE channel (phases cards.start, cards.chapter,
      *  cards.chunk, cards.progress, cards.done / failed / canceled). */
-    build: (docId: string) =>
-      request<{ status: string }>(`/api/cards/build/${docId}`, { method: "POST" }),
+    /** Start (or resume) the build. With rebuild=true wipes existing
+     *  ai_generated cards first; otherwise resumes by skipping chapters
+     *  that already have cards from a previous run. */
+    build: (docId: string, opts?: { rebuild?: boolean }) =>
+      request<{ status: string; rebuild?: boolean }>(
+        `/api/cards/build/${docId}${opts?.rebuild ? "?rebuild=true" : ""}`,
+        { method: "POST" }
+      ),
     buildStatus: (docId: string) =>
       request<{ active: boolean }>(`/api/cards/build/${docId}`),
     buildCancel: (docId: string) =>

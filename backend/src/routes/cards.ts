@@ -337,13 +337,18 @@ cardRoutes.post("/build/:docId", (c) => {
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
   if (isCardBuildActive(docId)) return c.json({ status: "busy" }, 409);
 
-  void runCardBuild(docId).catch((err) =>
+  // Query flag ?rebuild=true → wipe + start over (used by the
+  // "Karten neu bauen" button). Default = resume, skipping chapters
+  // that already have ai_generated cards from a previous (partial) run.
+  const rebuild = c.req.query("rebuild") === "true";
+
+  void runCardBuild(docId, { rebuild }).catch((err) =>
     console.error(
       `[cards.build] ${docId} crashed:`,
       err instanceof Error ? err.stack : err
     )
   );
-  return c.json({ status: "started" }, 202);
+  return c.json({ status: "started", rebuild }, 202);
 });
 
 cardRoutes.get("/build/:docId", (c) => {

@@ -445,7 +445,10 @@ const en: Record<string, string> = {
   "cards.subtitle":
     "Gemma walks every chapter, extracts the exercises and worked examples it finds in the text, and assembles them as flashcards. SM-2 spaced repetition tracks your progress.",
   "cards.build.start": "Build cards",
-  "cards.build.rerun": "Rebuild cards",
+  "cards.build.resume": "Resume build",
+  "cards.build.rerun": "Rebuild from scratch",
+  "cards.build.rerunTitle":
+    "Wipe every AI card and walk every chapter again from the top.",
   "cards.build.cancel": "Cancel after current",
   "cards.build.canceling": "Cancelling after the current chunk …",
   "cards.build.replaceConfirm":
@@ -1283,7 +1286,10 @@ const de: Record<string, string> = {
   "cards.subtitle":
     "Gemma geht jedes Kapitel durch, holt die Übungen und ausgearbeiteten Beispiele aus dem Text und legt sie als Karten an. SM-2 Spaced Repetition verfolgt deinen Lernfortschritt.",
   "cards.build.start": "Karten bauen",
-  "cards.build.rerun": "Karten neu bauen",
+  "cards.build.resume": "Build fortsetzen",
+  "cards.build.rerun": "Komplett neu bauen",
+  "cards.build.rerunTitle":
+    "Alle KI-Karten löschen und jedes Kapitel von vorne durchgehen.",
   "cards.build.cancel": "Nach aktuellem Chunk abbrechen",
   "cards.build.canceling": "Bricht nach dem aktuellen Chunk ab …",
   "cards.build.replaceConfirm":

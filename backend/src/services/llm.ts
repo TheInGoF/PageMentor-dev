@@ -149,9 +149,16 @@ function isEmbeddingModel(name: string): boolean {
 /**
  * Resolve the model name for an Ollama call:
  *  - if a specific name is requested and the server has it, use it
- *  - else pick the first available NON-EMBEDDING model on that server
- *  - else fall back to a sensible generation default and let Ollama
- *    surface the error if it isn't pulled
+ *  - if requested AND missing AND we can pull, attempt /api/pull and
+ *    surface a clear error if that fails (no silent fallback to "any
+ *    other model the arbiter has loaded")
+ *  - if NOTHING was requested, pick the first available NON-EMBEDDING
+ *    model as a soft default (caller didn't care which one)
+ *
+ * The "no silent fallback" rule fixes a real bug: when the GPU arbiter
+ * had qwen3.5:9b loaded for a different caller, every Card-Build chunk
+ * silently switched to qwen and ran into qwen's token-limit problem.
+ * The user expected gemma3:e4b (per their Settings) and got nothing.
  */
 async function resolveOllamaModel(
   url: string,
@@ -160,26 +167,58 @@ async function resolveOllamaModel(
   const available = await ollamaTags(url);
   if (requested && available.includes(requested)) return requested;
 
-  // Fallback — the user requested something specific but Ollama
-  // doesn't know it (tag mismatch, model not pulled, `/api/tags`
-  // returned an inconsistent listing during an arbiter unload, …).
-  // Log LOUDLY so the user sees why their model wasn't used.
-  const generative = available.filter((n) => !isEmbeddingModel(n));
-  if (generative.length > 0) {
-    if (requested) {
-      console.warn(
-        `[llm] requested model "${requested}" NOT in Ollama /api/tags at ${url}; ` +
-          `available generative: [${generative.join(", ")}]; ` +
-          `falling back to "${generative[0]}"`
-      );
+  if (requested) {
+    // Try a pull — Ollama will fetch the model if it's available
+    // upstream. This handles "I configured gemma3:e4b in Settings but
+    // it's not pulled yet" cleanly. Pull is synchronous-ish: we wait
+    // up to 5 min for the stream to close. Most models are <10 GB and
+    // arrive within that window on a normal home connection.
+    console.log(
+      `[llm] requested model "${requested}" not in Ollama /api/tags at ${url}; ` +
+        `attempting /api/pull (one-time, may take minutes)`
+    );
+    const pulled = await tryPullOllamaModel(url, requested);
+    if (pulled) {
+      console.log(`[llm] pull of "${requested}" succeeded`);
+      return requested;
     }
-    return generative[0];
+    // Hard error — don't switch to a different model behind the user's
+    // back. Caller can catch this and decide what to do.
+    const generative = available.filter((n) => !isEmbeddingModel(n));
+    throw new Error(
+      `Requested Ollama model "${requested}" is not available at ${url} ` +
+        `and /api/pull failed. Models present: [${generative.join(", ") || "(none)"}]. ` +
+        `Either pull the model manually (\`ollama pull ${requested}\`) or pick a different ` +
+        `Default Ollama Model in Settings.`
+    );
   }
+
+  // No model requested — pick the first generative one (soft default).
+  const generative = available.filter((n) => !isEmbeddingModel(n));
+  if (generative.length > 0) return generative[0];
+
   console.warn(
-    `[llm] no generative models found at ${url}; requested=${requested ?? "(none)"}, ` +
-      `falling back to "llama3.2:3b"`
+    `[llm] no generative models found at ${url}; falling back to "llama3.2:3b"`
   );
-  return requested || "llama3.2:3b";
+  return "llama3.2:3b";
+}
+
+async function tryPullOllamaModel(url: string, name: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url}/api/pull`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: name, stream: false }),
+      // 5 min hard timeout — small models can take longer than the
+      // default 2 s. If you're pulling a 20 GB model on a slow link
+      // you're going to have to do it manually.
+      signal: AbortSignal.timeout(5 * 60 * 1000),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn(`[llm] /api/pull for "${name}" failed:`, err);
+    return false;
+  }
 }
 
 export async function pickProvider(force = false): Promise<Provider | null> {
