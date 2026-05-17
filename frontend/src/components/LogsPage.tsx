@@ -4,12 +4,12 @@ import { t } from "../lib/i18n";
 
 interface LogLine {
   ts: number;
-  source: "pm-app" | "qwen-tts" | "arbiter" | "ollama" | "system";
+  source: "pm-app" | "qwen-tts" | "arbiter" | "ollama" | "docling" | "system";
   level: "info" | "warn" | "error" | "debug";
   message: string;
 }
 
-const SOURCES = ["pm-app", "qwen-tts", "arbiter", "ollama"] as const;
+const SOURCES = ["pm-app", "qwen-tts", "arbiter", "ollama", "docling"] as const;
 
 /**
  * Live log viewer. Subscribes to /api/admin/logs/stream (SSE)
@@ -208,6 +208,8 @@ function sourceColor(src: string): string {
       return "text-amber-400";
     case "ollama":
       return "text-emerald-400";
+    case "docling":
+      return "text-violet-400";
     default:
       return "text-neutral-400";
   }
