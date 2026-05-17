@@ -114,10 +114,10 @@ export function LearningMenu({
   const extractionDone = doc?.ocr_status === "done";
   const extractionRunning = doc?.ocr_status === "running" || doc?.ocr_status === "pending";
 
-  async function startExtraction() {
+  async function startExtraction(opts?: { forceOcr?: boolean }) {
     setBusyExtract(true);
     try {
-      await api.documents.reprocess(docId);
+      await api.documents.reprocess(docId, opts);
       toast.show(t("extract.started"), "success");
       await load();
     } catch (err) {

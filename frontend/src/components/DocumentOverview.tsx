@@ -17,7 +17,7 @@ interface Props {
   extractionRunning: boolean;
   extractionBusy: boolean;
   extractionStartedAt: number | null;
-  onStartExtraction: () => void;
+  onStartExtraction: (opts?: { forceOcr?: boolean }) => void;
   onCancelExtraction: () => void;
   onGoTo: (tab: Tab) => void;
 }
@@ -237,7 +237,7 @@ function ExtractionCard({
   running: boolean;
   busy: boolean;
   startedAt: number | null;
-  onStart: () => void;
+  onStart: (opts?: { forceOcr?: boolean }) => void;
   onCancel: () => void;
 }) {
   const status = doc.ocr_status;
@@ -306,25 +306,40 @@ function ExtractionCard({
         </div>
       )}
 
-      <div className="pt-2 border-t border-border flex gap-2">
+      <div className="pt-2 border-t border-border flex flex-wrap items-center gap-x-4 gap-y-2">
         {running ? (
           <Button variant="danger" onClick={onCancel} className="!py-1 !px-3 text-xs">
             {t("extract.cancel")}
           </Button>
         ) : ready ? (
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm(t("overview.extraction.rerunConfirm"))) onStart();
-            }}
-            disabled={busy}
-            className="text-[11px] text-neutral-500 hover:text-neutral-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {t("overview.extraction.rerun")}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(t("overview.extraction.rerunConfirm")))
+                  onStart({ forceOcr: false });
+              }}
+              disabled={busy}
+              className="text-[11px] text-neutral-500 hover:text-neutral-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {t("overview.extraction.rerun")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(t("overview.extraction.rerunForceOcrConfirm")))
+                  onStart({ forceOcr: true });
+              }}
+              disabled={busy}
+              title={t("overview.extraction.rerunForceOcrHint")}
+              className="text-[11px] text-amber-400/80 hover:text-amber-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {t("overview.extraction.rerunForceOcr")}
+            </button>
+          </>
         ) : (
           <Button
-            onClick={onStart}
+            onClick={() => onStart()}
             disabled={busy}
             className="!py-1 !px-3 text-xs"
           >

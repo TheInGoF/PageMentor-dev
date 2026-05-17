@@ -189,6 +189,11 @@ const en: Record<string, string> = {
   "overview.extraction.rerun": "Re-run Docling",
   "overview.extraction.rerunConfirm":
     "Really re-run Docling? This will overwrite the existing extraction and may invalidate chapters, audio, flashcards and summaries that depend on it.",
+  "overview.extraction.rerunForceOcr": "Re-run with Force-OCR",
+  "overview.extraction.rerunForceOcrHint":
+    "Slower (~2×). Re-OCRs every page from the image — use this if the current extraction shows garbled tokens like \"/g94 /g96 …\".",
+  "overview.extraction.rerunForceOcrConfirm":
+    "Re-run Docling with Force-OCR? This re-OCRs every page (~2× slower) and overwrites the existing extraction. Use this only when the text shows /gNN glyph garbage.",
   "overview.chapters.title": "Chapters",
   "overview.chapters.count": "detected chapters",
   "overview.audio.doneLabel": "chapters narrated",
@@ -1092,6 +1097,11 @@ const de: Record<string, string> = {
   "overview.extraction.rerun": "Docling erneut laufen lassen",
   "overview.extraction.rerunConfirm":
     "Docling wirklich erneut laufen lassen? Die bestehende Extraktion wird überschrieben – Kapitel, Hörbuch, Karten und Zusammenfassungen können dadurch ungültig werden.",
+  "overview.extraction.rerunForceOcr": "Mit Force-OCR neu extrahieren",
+  "overview.extraction.rerunForceOcrHint":
+    "Langsamer (~2×). Erkennt jede Seite per OCR aus dem Bild neu – sinnvoll wenn der aktuelle Text Glyph-Müll wie \"/g94 /g96 …\" zeigt.",
+  "overview.extraction.rerunForceOcrConfirm":
+    "Docling mit Force-OCR neu laufen lassen? Jede Seite wird per OCR neu erkannt (~2× langsamer) und die bestehende Extraktion überschrieben. Nur nutzen wenn der Text /gNN-Glyphenmüll enthält.",
   "overview.chapters.title": "Kapitel",
   "overview.chapters.count": "erkannte Kapitel",
   "overview.audio.doneLabel": "Kapitel vertont",

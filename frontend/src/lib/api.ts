@@ -538,8 +538,18 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
-    reprocess: (id: string) =>
-      request<{ status: string }>(`/api/documents/${id}/reprocess`, { method: "POST" }),
+    reprocess: (id: string, opts?: { forceOcr?: boolean }) => {
+      // Optional ?force_ocr= persists the flag on the document before
+      // re-running extraction. Caller doesn't have to manage state.
+      const qs =
+        opts?.forceOcr === undefined
+          ? ""
+          : `?force_ocr=${opts.forceOcr ? "true" : "false"}`;
+      return request<{ status: string }>(
+        `/api/documents/${id}/reprocess${qs}`,
+        { method: "POST" }
+      );
+    },
     cancelExtract: (id: string) =>
       request<{ status: string }>(`/api/documents/${id}/extract/cancel`, { method: "POST" }),
     doclingStatus: () =>
