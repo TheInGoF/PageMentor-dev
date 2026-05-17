@@ -442,50 +442,27 @@ const en: Record<string, string> = {
 
   // Cards
   "cards.title": "Flashcards",
-  "cards.subtitle": "Tasks extracted from chapter text, SM-2 spaced repetition",
-  "cards.new": "+ New card",
-  "cards.extract": "Extract from chapters",
-  "cards.extractedToast": "{n} cards extracted",
-  "cards.ai": "✨ AI cards",
-  "cards.aiGenerated": "{n} cards generated with {model}",
-  "cards.generate": "✨ Generate cards",
-  "cards.generateTitle": "Extract from markers, then fill gaps with AI",
+  "cards.subtitle":
+    "Gemma walks every chapter, extracts the exercises and worked examples it finds in the text, and assembles them as flashcards. SM-2 spaced repetition tracks your progress.",
+  "cards.build.start": "Build cards",
+  "cards.build.rerun": "Rebuild cards",
+  "cards.build.cancel": "Cancel after current",
+  "cards.build.canceling": "Cancelling after the current chunk …",
+  "cards.build.replaceConfirm":
+    "This rebuild replaces the {n} existing AI-generated cards (manual cards stay). Continue?",
+  "cards.build.runningPhase": "Building …",
+  "cards.build.donePhase": "Done",
+  "cards.build.failedPhase": "Failed",
+  "cards.build.canceledPhase": "Cancelled",
+  "cards.build.chapterLabel": "Chapter {current} of {total}",
+  "cards.build.chunkLabel": "Chunk {current} of {total}",
+  "cards.build.cardsSoFar": "{n} cards",
   "cards.deleteAll": "🗑 Delete all",
   "cards.deleteAllTitle":
     "Wipe every card for this document (and its SM-2 progress). Used before re-importing via the new Q&A flow.",
   "cards.deleteAllConfirm":
     "Delete all {n} cards for this document? This also wipes the SM-2 review progress.",
   "cards.deleteAllDone": "{n} cards deleted.",
-  "cards.prep": "🧪 Prepare chapter",
-  "cards.prepTitle":
-    "Classify a chapter (exam vs. lecture text) and clean up formulas / extract Q&A pairs for downstream card generation",
-  "cards.prep.title": "Card preparation per chapter",
-  "cards.prep.description":
-    "Each chapter is classified by the LLM as an exam/exercise sheet (Q&A pairs are extracted directly) or as lecture content (formulas reconstructed in LaTeX so the AI card generator has a clean source).",
-  "cards.prep.noChapters": "No chapters in this document yet.",
-  "cards.prep.run": "Prepare",
-  "cards.prep.redo": "Prepare again",
-  "cards.prep.processing": "Running …",
-  "cards.prep.importQa": "Import Q&A as cards",
-  "cards.prep.imported": "{n} cards imported ({skipped} skipped as duplicate).",
-  "cards.prep.badge.unknown": "not prepared",
-  "cards.prep.badge.error": "error",
-  "cards.prep.badge.qa": "Q&A ready",
-  "cards.prep.badge.qaCount": "{n} Q&A pairs",
-  "cards.prep.badge.content": "content cleaned",
-  "cards.prep.batch.selectLabel": "Selection:",
-  "cards.prep.batch.selectAll": "all",
-  "cards.prep.batch.selectNone": "none",
-  "cards.prep.batch.selectedCount": "{n} / {total} selected",
-  "cards.prep.batch.run": "Prepare selection ({n})",
-  "cards.prep.batch.cancel": "Cancel after current",
-  "cards.prep.batch.progress": "Chapter {current} of {total} …",
-  "cards.prep.batch.empty": "No chapters selected — pick at least one.",
-  "cards.prep.batch.done": "Batch done — {ok} ok, {failed} failed.",
-  "cards.prep.batch.cancelled":
-    "Batch cancelled — {ok} done, {failed} failed, {total} requested.",
-  "cards.prep.batch.closeConfirm":
-    "A batch is still running. Close anyway? (The current chapter finishes, subsequent ones are skipped.)",
   "cards.exportCsv": "↓ CSV",
   "cards.exportTitle": "CSV export (Anki-compatible)",
   "cards.importCsv": "↑ CSV",
@@ -498,19 +475,16 @@ const en: Record<string, string> = {
   "cards.stats.due": "Due",
   "cards.stats.learned": "Learned",
   "cards.filter.chapter": "Chapter",
-  "cards.empty.none": "No cards yet. Click \u201CExtract from chapters\u201D or add one manually.",
+  "cards.empty.none":
+    "No cards yet. Click \u201CBuild cards\u201D to let Gemma walk every chapter and pull the exercises out.",
   "cards.empty.filter": "No cards in this chapter.",
-  "cards.source.extracted": "extracted",
   "cards.source.ai": "AI",
-  "cards.source.filled": "AI-filled",
   "cards.source.manual": "manual",
   "cards.reviewed": "{n}× reviewed",
   "cards.hintChip": "💡 Hint",
   "cards.noAnswer": "No solution attached.",
-  "cards.modal.new": "New card",
   "cards.modal.edit": "Edit card",
   "cards.modal.create": "Create",
-  "cards.field.chapter": "Chapter (optional)",
   "cards.field.question": "Question",
   "cards.field.answer": "Answer / solution",
   "cards.field.hint":
@@ -519,47 +493,6 @@ const en: Record<string, string> = {
   "cards.diff.easy": "Easy",
   "cards.diff.medium": "Medium",
   "cards.diff.hard": "Hard",
-
-  // AI-generate modal
-  "cards.ai.title": "Generate cards with AI",
-  "cards.ai.description":
-    "Uses your local Ollama LLM. The prompt instructs the model to create cards from the chapter text.",
-  "cards.ai.count": "Count",
-  "cards.ai.difficulty": "Difficulty",
-  "cards.ai.style": "Style",
-  "cards.ai.style.basic": "Basics",
-  "cards.ai.style.deep": "In-depth",
-  "cards.ai.style.exam": "Exam level",
-  "cards.ai.submit": "Generate",
-  "cards.ai.submitting": "Generating …",
-
-  // Unified generate (extract + fill)
-  "cards.gen.title": "Generate flashcards",
-  "cards.gen.description":
-    "Extracts exercises and solutions from chapter markers. Gaps are filled by the LLM using retrieval over the document — answers are quoted verbatim, never invented.",
-  "cards.gen.stepExtract": "Extract from chapter markers",
-  "cards.gen.stepExtractHint":
-    "Regex finds “Aufgabe 3.1 / Lösung 3.1” style markers across all chapters, including the appendix.",
-  "cards.gen.stepFill": "Fill empty answers with AI",
-  "cards.gen.stepFillHint":
-    "For every exercise without a matching solution the LLM retrieves the most relevant passages from the whole document and cites the answer verbatim.",
-  "cards.gen.submit": "Generate",
-  "cards.gen.cancel": "Close",
-  "cards.gen.keepRunning": "Continue in background",
-  "cards.gen.phase.start": "Starting …",
-  "cards.gen.phase.extracting": "Extracting from markers …",
-  "cards.gen.phase.extractDone":
-    "{current} of {total} extracted with answer — {gaps} open",
-  "cards.gen.phase.filling": "Filling answers: {current}/{total}",
-  "cards.gen.phase.fillChapter": "Chapter {num}",
-  "cards.gen.phase.noEmbedder":
-    "No Ollama embedder reachable — skipped filling. Configure in Settings.",
-  "cards.gen.phase.noChunks":
-    "Document has no embedded chunks yet — re-run extraction after Ollama is online.",
-  "cards.gen.phase.done": "Done",
-  "cards.gen.phase.failed": "Failed: {msg}",
-  "cards.gen.doneToast":
-    "{extracted} extracted · {filled}/{fillTotal} answers found by AI",
 
   // Review
   "review.title": "Review",
@@ -963,10 +896,6 @@ const en: Record<string, string> = {
   "reader.thumbnails": "Thumbnails",
   "reader.thumbnailsToggle": "Toggle thumbnail sidebar",
 
-  // Similar cards
-  "review.similar": "+ More like this",
-  "review.similarGenerated": "{n} similar cards generated",
-  "review.similarBusy": "Generating …",
 
 };
 
@@ -1351,50 +1280,27 @@ const de: Record<string, string> = {
 
   // Cards
   "cards.title": "Lernkarten",
-  "cards.subtitle": "Aus Kapiteltext extrahierte Aufgaben mit SM-2 Spaced Repetition",
-  "cards.new": "+ Neue Karte",
-  "cards.extract": "Aus Kapiteln extrahieren",
-  "cards.extractedToast": "{n} Karten extrahiert",
-  "cards.ai": "✨ KI-Karten",
-  "cards.aiGenerated": "{n} Karten mit {model} generiert",
-  "cards.generate": "✨ Karten generieren",
-  "cards.generateTitle": "Aus Markern ziehen, dann offene Antworten per KI belegen",
+  "cards.subtitle":
+    "Gemma geht jedes Kapitel durch, holt die Übungen und ausgearbeiteten Beispiele aus dem Text und legt sie als Karten an. SM-2 Spaced Repetition verfolgt deinen Lernfortschritt.",
+  "cards.build.start": "Karten bauen",
+  "cards.build.rerun": "Karten neu bauen",
+  "cards.build.cancel": "Nach aktuellem Chunk abbrechen",
+  "cards.build.canceling": "Bricht nach dem aktuellen Chunk ab …",
+  "cards.build.replaceConfirm":
+    "Beim Neubau werden die {n} bestehenden KI-Karten ersetzt (manuelle bleiben). Fortfahren?",
+  "cards.build.runningPhase": "Baut …",
+  "cards.build.donePhase": "Fertig",
+  "cards.build.failedPhase": "Fehlgeschlagen",
+  "cards.build.canceledPhase": "Abgebrochen",
+  "cards.build.chapterLabel": "Kapitel {current} von {total}",
+  "cards.build.chunkLabel": "Chunk {current} von {total}",
+  "cards.build.cardsSoFar": "{n} Karten",
   "cards.deleteAll": "🗑 Alle löschen",
   "cards.deleteAllTitle":
-    "Alle Karten dieses Dokuments löschen (inkl. SM-2-Lernfortschritt). Sinnvoll vor erneutem Import über den neuen Q&A-Flow.",
+    "Alle Karten dieses Dokuments löschen (inkl. SM-2-Lernfortschritt). Sinnvoll vor einem sauberen Neubau.",
   "cards.deleteAllConfirm":
     "Alle {n} Karten dieses Dokuments wirklich löschen? Der SM-2-Lernfortschritt geht damit ebenfalls verloren.",
   "cards.deleteAllDone": "{n} Karten gelöscht.",
-  "cards.prep": "🧪 Kapitel vorbereiten",
-  "cards.prepTitle":
-    "Kapitel klassifizieren (Klausur vs Lehrtext) und Formeln aufbereiten / Q&A-Paare extrahieren für die Karten-Generierung",
-  "cards.prep.title": "Karten-Vorbereitung pro Kapitel",
-  "cards.prep.description":
-    "Jedes Kapitel wird vom LLM klassifiziert als Klausur-/Übungs-Block (Aufgaben werden direkt als Q&A extrahiert) oder als Lehrtext (Formeln in LaTeX rekonstruiert, sodass der AI-Karten-Generator sauber daraus arbeiten kann).",
-  "cards.prep.noChapters": "In diesem Dokument sind noch keine Kapitel.",
-  "cards.prep.run": "Vorbereiten",
-  "cards.prep.redo": "Erneut vorbereiten",
-  "cards.prep.processing": "Läuft …",
-  "cards.prep.importQa": "Aufgaben als Karten importieren",
-  "cards.prep.imported": "{n} Karten importiert ({skipped} als Duplikat übersprungen).",
-  "cards.prep.badge.unknown": "nicht vorbereitet",
-  "cards.prep.badge.error": "Fehler",
-  "cards.prep.badge.qa": "Q&A bereit",
-  "cards.prep.badge.qaCount": "{n} Aufgaben",
-  "cards.prep.badge.content": "Inhalt bereinigt",
-  "cards.prep.batch.selectLabel": "Auswahl:",
-  "cards.prep.batch.selectAll": "alle",
-  "cards.prep.batch.selectNone": "keine",
-  "cards.prep.batch.selectedCount": "{n} / {total} ausgewählt",
-  "cards.prep.batch.run": "Auswahl vorbereiten ({n})",
-  "cards.prep.batch.cancel": "Nach aktuellem Kapitel abbrechen",
-  "cards.prep.batch.progress": "Kapitel {current} von {total} …",
-  "cards.prep.batch.empty": "Keine Kapitel ausgewählt — mindestens eines anhaken.",
-  "cards.prep.batch.done": "Batch fertig — {ok} ok, {failed} fehlgeschlagen.",
-  "cards.prep.batch.cancelled":
-    "Batch abgebrochen — {ok} erledigt, {failed} fehlgeschlagen, {total} gewünscht.",
-  "cards.prep.batch.closeConfirm":
-    "Ein Batch läuft noch. Trotzdem schließen? (Aktuelles Kapitel läuft zu Ende, danach Stopp.)",
   "cards.exportCsv": "↓ CSV",
   "cards.exportTitle": "CSV-Export (Anki-kompatibel)",
   "cards.importCsv": "↑ CSV",
@@ -1408,19 +1314,15 @@ const de: Record<string, string> = {
   "cards.stats.learned": "Gelernt",
   "cards.filter.chapter": "Kapitel",
   "cards.empty.none":
-    "Noch keine Karten. Klicke \u201EAus Kapiteln extrahieren\u201C oder lege eine manuell an.",
+    "Noch keine Karten. Klicke \u201EKarten bauen\u201C, damit Gemma jedes Kapitel durchgeht und die \u00DCbungen rauszieht.",
   "cards.empty.filter": "Keine Karten in diesem Kapitel.",
-  "cards.source.extracted": "extrahiert",
   "cards.source.ai": "KI",
-  "cards.source.filled": "KI-belegt",
   "cards.source.manual": "manuell",
   "cards.reviewed": "{n}× gelernt",
   "cards.hintChip": "💡 Hinweis",
   "cards.noAnswer": "Keine Lösung zugeordnet.",
-  "cards.modal.new": "Neue Karte",
   "cards.modal.edit": "Karte bearbeiten",
   "cards.modal.create": "Anlegen",
-  "cards.field.chapter": "Kapitel (optional)",
   "cards.field.question": "Frage",
   "cards.field.answer": "Antwort / Lösung",
   "cards.field.hint":
@@ -1429,47 +1331,6 @@ const de: Record<string, string> = {
   "cards.diff.easy": "Leicht",
   "cards.diff.medium": "Mittel",
   "cards.diff.hard": "Schwer",
-
-  // AI-generate modal
-  "cards.ai.title": "Karten mit KI generieren",
-  "cards.ai.description":
-    "Nutzt lokales Ollama-LLM. Der Prompt instruiert das Modell, Karten aus dem Kapiteltext zu erstellen.",
-  "cards.ai.count": "Anzahl",
-  "cards.ai.difficulty": "Schwierigkeit",
-  "cards.ai.style": "Stil",
-  "cards.ai.style.basic": "Grundlagen",
-  "cards.ai.style.deep": "Vertiefung",
-  "cards.ai.style.exam": "Klausur",
-  "cards.ai.submit": "Generieren",
-  "cards.ai.submitting": "Generiere …",
-
-  // Unified generate (extract + fill)
-  "cards.gen.title": "Karten generieren",
-  "cards.gen.description":
-    "Zieht Aufgaben und Lösungen aus den Kapitel-Markern. Leere Antworten werden per KI aus dem gesamten Dokument belegt — zitiert wörtlich, nie erfunden.",
-  "cards.gen.stepExtract": "Aus Kapitel-Markern extrahieren",
-  "cards.gen.stepExtractHint":
-    "Regex findet „Aufgabe 3.1 / Lösung 3.1“-Marker über alle Kapitel inklusive Anhang.",
-  "cards.gen.stepFill": "Leere Antworten per KI belegen",
-  "cards.gen.stepFillHint":
-    "Für jede Aufgabe ohne Lösung holt das LLM die relevantesten Passagen aus dem ganzen Dokument und zitiert die Antwort wörtlich.",
-  "cards.gen.submit": "Los",
-  "cards.gen.cancel": "Schließen",
-  "cards.gen.keepRunning": "Im Hintergrund laufen lassen",
-  "cards.gen.phase.start": "Starte …",
-  "cards.gen.phase.extracting": "Extrahiere aus Markern …",
-  "cards.gen.phase.extractDone":
-    "{current} von {total} mit Antwort extrahiert — {gaps} offen",
-  "cards.gen.phase.filling": "Belege Antworten: {current}/{total}",
-  "cards.gen.phase.fillChapter": "Kapitel {num}",
-  "cards.gen.phase.noEmbedder":
-    "Kein Ollama-Embedder erreichbar — Belegen übersprungen. Konfigurier die LLM-Kette in den Einstellungen.",
-  "cards.gen.phase.noChunks":
-    "Dokument hat noch keine Embeddings — bitte Extraktion erneut laufen lassen, sobald Ollama online ist.",
-  "cards.gen.phase.done": "Fertig",
-  "cards.gen.phase.failed": "Fehlgeschlagen: {msg}",
-  "cards.gen.doneToast":
-    "{extracted} extrahiert · {filled}/{fillTotal} Antworten durch KI belegt",
 
   // Review
   "review.title": "Lerneinheit",
@@ -1873,12 +1734,6 @@ const de: Record<string, string> = {
   // Reader extras
   "reader.thumbnails": "Thumbnails",
   "reader.thumbnailsToggle": "Thumbnail-Leiste umschalten",
-
-  // Similar cards
-  "review.similar": "+ Mehr wie diese",
-  "review.similarGenerated": "{n} ähnliche Karten generiert",
-  "review.similarBusy": "Generiere …",
-
 };
 
 const dicts: Record<Locale, Record<string, string>> = { en, de };

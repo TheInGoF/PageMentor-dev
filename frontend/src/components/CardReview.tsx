@@ -22,22 +22,7 @@ export function CardReview({ cards, onClose }: Props) {
   const [showHint, setShowHint] = useState(false);
   const [history, setHistory] = useState<SessionEntry[]>([]);
   const [saving, setSaving] = useState(false);
-  const [similarBusy, setSimilarBusy] = useState(false);
   const toast = useToast();
-
-  async function generateSimilar() {
-    if (idx >= cards.length) return;
-    const card = cards[idx];
-    setSimilarBusy(true);
-    try {
-      const res = await api.cards.similar(card.id);
-      toast.show(t("review.similarGenerated", { n: res.generated }), "success");
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    } finally {
-      setSimilarBusy(false);
-    }
-  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -188,13 +173,6 @@ export function CardReview({ cards, onClose }: Props) {
                   disabled={saving}
                 />
               </div>
-              <button
-                onClick={generateSimilar}
-                disabled={similarBusy}
-                className="text-xs text-neutral-500 hover:text-accent disabled:opacity-50 mt-2 self-center"
-              >
-                {similarBusy ? t("review.similarBusy") : t("review.similar")}
-              </button>
             </>
           )}
         </div>

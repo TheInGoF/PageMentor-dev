@@ -1,34 +1,24 @@
 import { Hono } from "hono";
 import { randomUUID } from "crypto";
 import { db } from "../db";
-import { extractCards, extractCardsFromDoc } from "../services/cards";
 import { initialState, updateProgress, type Quality } from "../services/sm2";
-import { generate as ollamaGenerate, isAvailable as ollamaAvailable } from "../services/llm";
-import { resolveEmbedder } from "../services/embeddings";
-import { loadDocChunks, fillAnswerFromChunks } from "../services/cardFill";
 import {
-  preprocessChapterForCards,
-  importQaPairsAsCards,
-} from "../services/cardPreprocess";
-import { emit as emitEvent } from "../services/events";
+  runCardBuild,
+  cancelCardBuild,
+  isCardBuildActive,
+} from "../services/cardGenerate";
 import { tt } from "../lib/i18n";
 
 export const cardRoutes = new Hono();
 
-interface Chapter {
-  id: string;
-  document_id: string;
-  number: number;
-  title: string;
-  text: string;
-  start_page: number;
-}
+// ---------------------------------------------------------------------
+// Read / list / stats
+// ---------------------------------------------------------------------
 
-// List cards for a document (optionally filter by chapter).
 cardRoutes.get("/document/:docId", (c) => {
   const docId = c.req.param("docId");
   const chapterId = c.req.query("chapter");
-  const params: any[] = [docId];
+  const params: unknown[] = [docId];
   let sql = `SELECT c.*, ch.title as chapter_title, ch.number as chapter_number,
                     p.ease, p.reps, p.streak, p.next_review, p.last_seen
              FROM cards c
@@ -44,264 +34,45 @@ cardRoutes.get("/document/:docId", (c) => {
   return c.json(rows);
 });
 
-// Extract cards from all chapters of a document.
-cardRoutes.post("/extract/:docId", async (c) => {
+cardRoutes.get("/stats/:docId", (c) => {
   const docId = c.req.param("docId");
-  const body = await c.req
-    .json<{ replace?: boolean }>()
-    .catch(() => ({ replace: false }));
-
   const d = db();
-  const doc = d.prepare("SELECT id FROM documents WHERE id = ?").get(docId);
-  if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
-
-  const chapters = d
-    .prepare("SELECT id, document_id, number, title, text, start_page FROM chapters WHERE document_id = ? ORDER BY sort_order")
-    .all(docId) as Chapter[];
-
-  if (body.replace) {
-    d.prepare("DELETE FROM cards WHERE document_id = ? AND source = 'extracted'").run(docId);
-  }
-
-  let total = 0;
-  const insert = d.prepare(
-    "INSERT INTO cards (id, document_id, chapter_id, question, answer, difficulty, source_page, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'extracted')"
-  );
-
-  const tx = d.transaction(() => {
-    for (const ch of chapters) {
-      const cards = extractCards(ch.text);
-      for (const card of cards) {
-        insert.run(
-          randomUUID(),
-          docId,
-          ch.id,
-          card.question,
-          card.answer,
-          card.difficulty ?? "medium",
-          ch.start_page
-        );
-        total++;
-      }
-    }
-  });
-  tx();
-
-  return c.json({ status: "ok", extracted: total, chapters: chapters.length });
+  const total = (d.prepare("SELECT COUNT(*) as n FROM cards WHERE document_id = ?").get(docId) as { n: number }).n;
+  const due = (d
+    .prepare(
+      `SELECT COUNT(*) as n FROM cards c
+       LEFT JOIN progress p ON p.card_id = c.id
+       WHERE c.document_id = ? AND (p.next_review IS NULL OR p.next_review <= datetime('now'))`
+    )
+    .get(docId) as { n: number }).n;
+  const learned = (d
+    .prepare(
+      `SELECT COUNT(*) as n FROM cards c JOIN progress p ON p.card_id = c.id
+       WHERE c.document_id = ? AND p.reps >= 2`
+    )
+    .get(docId) as { n: number }).n;
+  return c.json({ total, due, learned });
 });
 
-// Fire-and-forget hybrid pipeline:
-//   Stage 1 (deterministic): pull exercises from markers in content
-//     chapters and match solutions from content AND solutions chapters.
-//   Stage 2 (RAG+LLM): for any exercise without an answer, fetch the
-//     most likely chunks via embedding retrieval and have the LLM
-//     quote verbatim.
-// Progress is emitted via the shared event bus (`cards.*` phases) and
-// the frontend UI subscribes through /api/audio/stream/:docId.
-const cardRunsActive = new Set<string>();
-
-cardRoutes.post("/generate/:docId", async (c) => {
-  const docId = c.req.param("docId");
-  const body = (await c.req
-    .json<{ extract?: boolean; fill?: boolean }>()
-    .catch(() => ({}))) as { extract?: boolean; fill?: boolean };
-  const doExtract = body.extract !== false; // default on
-  const doFill = body.fill !== false; // default on
-
-  const doc = db()
-    .prepare("SELECT id FROM documents WHERE id = ?")
-    .get(docId);
-  if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
-
-  if (cardRunsActive.has(docId)) {
-    return c.json({ status: "busy" }, 409);
-  }
-  if (!doExtract && !doFill) {
-    return c.json({ error: tt(c, "err.missingFields") }, 400);
-  }
-
-  cardRunsActive.add(docId);
-  // Fire-and-forget — UI sees progress via SSE.
-  void runCardGenerate(docId, doExtract, doFill).finally(() => {
-    cardRunsActive.delete(docId);
-  });
-
-  return c.json({ status: "started" }, 202);
+cardRoutes.get("/due/:docId", (c) => {
+  const rows = db()
+    .prepare(
+      `SELECT c.*, p.ease, p.reps, p.streak, p.next_review, p.last_seen
+       FROM cards c
+       LEFT JOIN progress p ON p.card_id = c.id
+       WHERE c.document_id = ?
+         AND (p.next_review IS NULL OR p.next_review <= datetime('now'))
+       ORDER BY RANDOM()
+       LIMIT 100`
+    )
+    .all(c.req.param("docId"));
+  return c.json(rows);
 });
 
-async function runCardGenerate(
-  docId: string,
-  doExtract: boolean,
-  doFill: boolean
-): Promise<void> {
-  const d = db();
-  const doc = d
-    .prepare("SELECT id, language FROM documents WHERE id = ?")
-    .get(docId) as { id: string; language: string } | undefined;
-  if (!doc) {
-    emitEvent({ phase: "cards.failed", docId, message: "document not found" });
-    return;
-  }
+// ---------------------------------------------------------------------
+// Write: manual create, edit, delete, bulk delete
+// ---------------------------------------------------------------------
 
-  try {
-    emitEvent({ phase: "cards.start", docId });
-
-    let extracted = 0;
-    let extractedGaps = 0;
-    if (doExtract) {
-      const chapters = d
-        .prepare(
-          `SELECT id, number, title, text, start_page, COALESCE(kind, 'content') as kind
-           FROM chapters WHERE document_id = ? ORDER BY sort_order`
-        )
-        .all(docId) as Array<{
-        id: string;
-        number: number;
-        title: string;
-        text: string;
-        start_page: number;
-        kind: string;
-      }>;
-
-      d.prepare(
-        "DELETE FROM cards WHERE document_id = ? AND source IN ('extracted', 'ai_filled')"
-      ).run(docId);
-
-      const { cards, unmatched } = extractCardsFromDoc(chapters);
-      const insert = d.prepare(
-        "INSERT INTO cards (id, document_id, chapter_id, question, answer, difficulty, source_page, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'extracted')"
-      );
-      const tx = d.transaction(() => {
-        for (const card of cards) {
-          insert.run(
-            randomUUID(),
-            docId,
-            card.chapterId,
-            card.question,
-            card.answer,
-            "medium",
-            card.sourcePage
-          );
-        }
-      });
-      tx();
-      extracted = cards.length;
-      extractedGaps = unmatched.length;
-      emitEvent({
-        phase: "cards.extract.done",
-        docId,
-        total: extracted,
-        current: extracted - extractedGaps,
-      });
-    }
-
-    let filled = 0;
-    let fillTotal = 0;
-    if (doFill) {
-      const empties = d
-        .prepare(
-          `SELECT c.id, c.question, c.chapter_id, ch.number as chapter_number, ch.sort_order
-           FROM cards c
-           LEFT JOIN chapters ch ON ch.id = c.chapter_id
-           WHERE c.document_id = ?
-             AND (c.answer IS NULL OR c.answer = '')
-             AND c.question != ''
-           ORDER BY ch.sort_order ASC, ch.number ASC, c.created_at ASC`
-        )
-        .all(docId) as Array<{
-        id: string;
-        question: string;
-        chapter_id: string | null;
-        chapter_number: number | null;
-      }>;
-      fillTotal = empties.length;
-      emitEvent({ phase: "cards.fill.start", docId, total: fillTotal, current: 0 });
-
-      if (fillTotal > 0) {
-        const embedder = await resolveEmbedder();
-        const llmOk = await ollamaAvailable();
-        if (!embedder || !llmOk) {
-          emitEvent({
-            phase: "cards.fill.progress",
-            docId,
-            total: fillTotal,
-            current: 0,
-            message: "no-embedder",
-          });
-        } else {
-          const chunks = loadDocChunks(docId, embedder.model);
-          if (chunks.length === 0) {
-            emitEvent({
-              phase: "cards.fill.progress",
-              docId,
-              total: fillTotal,
-              current: 0,
-              message: "no-chunks",
-            });
-          } else {
-            const language: "de" | "en" = doc.language === "de" ? "de" : "en";
-            const update = d.prepare(
-              "UPDATE cards SET answer = ?, source = 'ai_filled', source_page = COALESCE(?, source_page) WHERE id = ?"
-            );
-            let lastChapterNum: number | null = null;
-            for (let i = 0; i < empties.length; i++) {
-              const card = empties[i];
-              if (card.chapter_number !== lastChapterNum) {
-                lastChapterNum = card.chapter_number;
-                emitEvent({
-                  phase: "cards.fill.chapter",
-                  docId,
-                  chapterId: card.chapter_id ?? undefined,
-                  chapterNumber: card.chapter_number ?? undefined,
-                  current: i,
-                  total: fillTotal,
-                });
-              }
-              try {
-                const res = await fillAnswerFromChunks({
-                  chunks,
-                  question: card.question,
-                  language,
-                  embedder,
-                });
-                if (res) {
-                  update.run(res.answer, res.page ?? null, card.id);
-                  filled++;
-                }
-              } catch {
-                // Let a single question fail, keep the overall run going.
-              }
-              emitEvent({
-                phase: "cards.fill.progress",
-                docId,
-                current: i + 1,
-                total: fillTotal,
-                chapterNumber: card.chapter_number ?? undefined,
-                chapterId: card.chapter_id ?? undefined,
-              });
-            }
-          }
-        }
-      }
-    }
-
-    emitEvent({
-      phase: "cards.done",
-      docId,
-      total: extracted,
-      current: filled,
-      message: JSON.stringify({ extracted, extractedGaps, fillTotal, filled }),
-    });
-  } catch (err) {
-    emitEvent({
-      phase: "cards.failed",
-      docId,
-      message: err instanceof Error ? err.message : "unknown",
-    });
-  }
-}
-
-// Create a manual card.
 cardRoutes.post("/", async (c) => {
   const body = await c.req.json<{
     document_id: string;
@@ -312,7 +83,8 @@ cardRoutes.post("/", async (c) => {
     difficulty?: "easy" | "medium" | "hard";
     source_page?: number;
   }>();
-  if (!body.document_id || !body.question) return c.json({ error: tt(c, "err.missingFields") }, 400);
+  if (!body.document_id || !body.question)
+    return c.json({ error: tt(c, "err.missingFields") }, 400);
 
   const id = randomUUID();
   db()
@@ -332,7 +104,6 @@ cardRoutes.post("/", async (c) => {
   return c.json({ id }, 201);
 });
 
-// Update a card (title/answer/hint/difficulty).
 cardRoutes.patch("/:id", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json<{
@@ -346,7 +117,7 @@ cardRoutes.patch("/:id", async (c) => {
   if (!card) return c.json({ error: tt(c, "err.notFound") }, 404);
 
   const sets: string[] = [];
-  const vals: any[] = [];
+  const vals: unknown[] = [];
   for (const [k, v] of Object.entries(body)) {
     if (v !== undefined) {
       sets.push(`${k} = ?`);
@@ -365,43 +136,27 @@ cardRoutes.delete("/:id", (c) => {
   return c.json({ status: "ok" });
 });
 
-/** Hard reset: wipe ALL cards (and their progress) for a document.
- *  Used by the Cards-Tab "Alle Karten löschen"-Button to clear out
- *  garbage from older regex-extraction runs before re-importing via
- *  the new qa_pairs preprocess flow. */
+/** Hard reset: wipe every card (and progress, via FK cascade) for a
+ *  document. Used by the "Alle löschen"-Button when the user wants to
+ *  start fresh before a re-build. */
 cardRoutes.delete("/all/:docId", (c) => {
   const docId = c.req.param("docId");
-  const d = db();
-  // progress rows are ON DELETE CASCADE in the schema, so deleting
-  // cards drops their SM-2 state with them.
-  const res = d
+  const res = db()
     .prepare("DELETE FROM cards WHERE document_id = ?")
     .run(docId);
   return c.json({ deleted: res.changes ?? 0 });
 });
 
-// Cards due for review (next_review <= now OR never reviewed).
-cardRoutes.get("/due/:docId", (c) => {
-  const rows = db()
-    .prepare(
-      `SELECT c.*, p.ease, p.reps, p.streak, p.next_review, p.last_seen
-       FROM cards c
-       LEFT JOIN progress p ON p.card_id = c.id
-       WHERE c.document_id = ?
-         AND (p.next_review IS NULL OR p.next_review <= datetime('now'))
-       ORDER BY RANDOM()
-       LIMIT 100`
-    )
-    .all(c.req.param("docId"));
-  return c.json(rows);
-});
+// ---------------------------------------------------------------------
+// SM-2 review
+// ---------------------------------------------------------------------
 
-// Review a card with quality (1/3/5) — updates SM-2 progress.
 cardRoutes.post("/:id/review", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json<{ quality: Quality }>();
   const quality = body.quality;
-  if (![1, 3, 5].includes(quality)) return c.json({ error: tt(c, "err.invalidQuality") }, 400);
+  if (![1, 3, 5].includes(quality))
+    return c.json({ error: tt(c, "err.invalidQuality") }, 400);
 
   const d = db();
   const card = d.prepare("SELECT id FROM cards WHERE id = ?").get(id);
@@ -466,7 +221,10 @@ cardRoutes.post("/:id/review", async (c) => {
   });
 });
 
-// CSV export (Anki compatible: "question";"answer" semicolon-separated with quotes).
+// ---------------------------------------------------------------------
+// Import / Export (Anki-compatible CSV)
+// ---------------------------------------------------------------------
+
 cardRoutes.get("/export/:docId", (c) => {
   const docId = c.req.param("docId");
   const format = (c.req.query("format") || "csv").toLowerCase();
@@ -501,7 +259,6 @@ cardRoutes.get("/export/:docId", (c) => {
     });
   }
 
-  // Default CSV
   const lines: string[] = ["question;answer;tags;difficulty"];
   for (const r of rows) {
     const tag = r.chapter_number ? `kap${String(r.chapter_number).padStart(2, "0")}` : "manual";
@@ -514,7 +271,7 @@ cardRoutes.get("/export/:docId", (c) => {
       ].join(";")
     );
   }
-  const csv = "\uFEFF" + lines.join("\n");
+  const csv = "﻿" + lines.join("\n");
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
@@ -523,9 +280,6 @@ cardRoutes.get("/export/:docId", (c) => {
   });
 });
 
-// CSV import (complementary to export). Accepts UTF-8 CSV with ";" or
-// "," as separator. The first line is interpreted as the header,
-// "question" and "answer" columns are required (rest optional).
 cardRoutes.post("/import/:docId", async (c) => {
   const docId = c.req.param("docId");
   const doc = db().prepare("SELECT id FROM documents WHERE id = ?").get(docId);
@@ -536,8 +290,7 @@ cardRoutes.post("/import/:docId", async (c) => {
   if (!file) return c.json({ error: tt(c, "err.missingFile") }, 400);
 
   const text = await file.text();
-  // Strip UTF-8 BOM
-  const clean = text.replace(/^\uFEFF/, "");
+  const clean = text.replace(/^﻿/, "");
   const rows = parseCsv(clean);
   if (rows.length < 2) return c.json({ error: tt(c, "err.csvEmpty") }, 400);
 
@@ -570,10 +323,52 @@ cardRoutes.post("/import/:docId", async (c) => {
   return c.json({ imported });
 });
 
-// Minimal RFC-4180-ish CSV parser with `;` and `,` autodetect.
+// ---------------------------------------------------------------------
+// Build (the single generation entrypoint)
+// ---------------------------------------------------------------------
+
+/** Start the chunked, sequential chapter-by-chapter build. Fire-and-
+ *  forget: returns immediately with status 202, progress streams over
+ *  the existing per-doc SSE channel (cards.start / cards.chapter /
+ *  cards.chunk / cards.progress / cards.done|failed|canceled). */
+cardRoutes.post("/build/:docId", (c) => {
+  const docId = c.req.param("docId");
+  const doc = db().prepare("SELECT id FROM documents WHERE id = ?").get(docId);
+  if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+  if (isCardBuildActive(docId)) return c.json({ status: "busy" }, 409);
+
+  void runCardBuild(docId).catch((err) =>
+    console.error(
+      `[cards.build] ${docId} crashed:`,
+      err instanceof Error ? err.stack : err
+    )
+  );
+  return c.json({ status: "started" }, 202);
+});
+
+cardRoutes.get("/build/:docId", (c) => {
+  return c.json({ active: isCardBuildActive(c.req.param("docId")) });
+});
+
+/** Cancel after the currently-running Gemma call returns. We never
+ *  interrupt an in-flight LLM call mid-token — Ollama doesn't react
+ *  well — but we stop scheduling further chunks. */
+cardRoutes.delete("/build/:docId", (c) => {
+  const docId = c.req.param("docId");
+  const canceled = cancelCardBuild(docId);
+  return c.json({ canceled });
+});
+
+// ---------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------
+
 function parseCsv(text: string): string[][] {
   const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
-  const sep = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const sep =
+    (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0)
+      ? ";"
+      : ",";
 
   const rows: string[][] = [];
   let row: string[] = [];
@@ -617,400 +412,7 @@ function csvCell(s: string | null | undefined): string {
   return `"${esc}"`;
 }
 
-// Aggregate stats for a document (for the "Exercises" tab header).
-cardRoutes.get("/stats/:docId", (c) => {
-  const docId = c.req.param("docId");
-  const d = db();
-  const total = (d.prepare("SELECT COUNT(*) as n FROM cards WHERE document_id = ?").get(docId) as { n: number }).n;
-  const due = (d
-    .prepare(
-      `SELECT COUNT(*) as n FROM cards c
-       LEFT JOIN progress p ON p.card_id = c.id
-       WHERE c.document_id = ? AND (p.next_review IS NULL OR p.next_review <= datetime('now'))`
-    )
-    .get(docId) as { n: number }).n;
-  const learned = (d
-    .prepare(
-      `SELECT COUNT(*) as n FROM cards c JOIN progress p ON p.card_id = c.id
-       WHERE c.document_id = ? AND p.reps >= 2`
-    )
-    .get(docId) as { n: number }).n;
-  return c.json({ total, due, learned });
-});
-
-// Generate new cards from a chapter using Ollama.
-cardRoutes.post("/ai-generate/:chapterId", async (c) => {
-  const chapterId = c.req.param("chapterId");
-  const body = await c.req.json<{
-    count?: number;
-    difficulty?: "easy" | "medium" | "hard";
-    style?: "basic" | "deep" | "exam";
-  }>();
-  const count = Math.max(1, Math.min(15, body.count ?? 5));
-  const difficulty = body.difficulty ?? "medium";
-  const style = body.style ?? "deep";
-
-  const d = db();
-  const ch = d
-    .prepare(
-      "SELECT c.id, c.document_id, c.text, c.card_text, c.card_text_type, c.number, c.title, c.start_page, doc.language FROM chapters c JOIN documents doc ON doc.id = c.document_id WHERE c.id = ?"
-    )
-    .get(chapterId) as
-    | {
-        id: string;
-        document_id: string;
-        text: string;
-        card_text: string | null;
-        card_text_type: string | null;
-        number: number;
-        title: string;
-        start_page: number;
-        language: string;
-      }
-    | undefined;
-  if (!ch) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
-  if (!ch.text || ch.text.length < 100)
-    return c.json({ error: tt(c, "err.chapterTooShort") }, 400);
-
-  // Short-circuit: if the chapter has been preprocessed as qa_pairs,
-  // the AI-gen step is unnecessary — just import the cached Q&A pairs.
-  if (ch.card_text_type === "qa_pairs" && ch.card_text) {
-    const result = importQaPairsAsCards({
-      chapterId,
-      documentId: ch.document_id,
-      startPage: ch.start_page,
-      difficulty,
-    });
-    return c.json({
-      generated: result.inserted,
-      skipped: result.skipped,
-      mode: "qa_imported",
-    });
-  }
-
-  if (!(await ollamaAvailable())) {
-    return c.json({ error: tt(c, "err.ollamaUnavailable") }, 503);
-  }
-
-  const lang = ch.language === "de" ? "de" : "en";
-  // Prefer the formula-cleaned card_text when available — that
-  // input has LaTeX-reconstructed formulas the AI can carry over
-  // directly into the cards.
-  const source =
-    ch.card_text_type === "content" && ch.card_text
-      ? ch.card_text
-      : ch.text;
-  const snippet = source.slice(0, 20_000);
-
-  const system =
-    lang === "de"
-      ? `Du erstellst Lernkarten aus einem Kapiteltext. Antworte AUSSCHLIESSLICH mit einem validen JSON-Array. Keine Einleitung, keine Codefences, keine Kommentare. Jede Karte hat question und answer (beide String).
-
-FORMEL-REKONSTRUKTION (wichtig für Mathe-/Info-/Naturwiss.-Kapitel):
-Der Kapiteltext stammt aus einer PDF-Extraktion. Formeln sind dort oft verstümmelt — Subscripts fehlen, "=" und "+" sind manchmal als Leerzeichen rausgekommen, "x_1" steht als "x 1", "τ_1" als "τ 1", Wahrscheinlichkeiten wie "P(x_1) = 0,5" als "P ( x 1  0,5)".
-
-Beim Erstellen der Karten musst du diese Formeln REKONSTRUIEREN bevor du sie in question/answer übernimmst:
-- Subscripts als Unicode-Tiefstellungen schreiben: x₁, x₂, τ₁, τ_8 (Unicode ₁₂₃₄₅₆₇₈₉₀ oder LaTeX-Stil x_1, x_2)
-- Operatoren explizit machen: P(x₁) = 0,5 (mit echtem "=")
-- Wahrscheinlichkeiten/Werte aus dem Kontext erschließen wenn die Extraktion zwischendurch ein Zeichen verloren hat
-- Bei längeren Formeln auch LaTeX-Stil mit $...$ erlaubt (z.B. $H(X) = -\\sum p_i \\log_2 p_i$)
-
-Wenn eine Formel nach Rekonstruktion nicht eindeutig ist (zu viel fehlt), lass sie weg und mach lieber eine begriffliche statt rechnerische Karte. Nie verstümmelte Formeln wörtlich in die Karte kopieren.`
-      : `You create flashcards from a chapter of study material. Respond ONLY with a valid JSON array. No introduction, no code fences, no comments. Each card has question and answer (both strings).
-
-FORMULA RECONSTRUCTION (important for math/CS/science chapters):
-The chapter text comes from a PDF extraction. Formulas there are often mangled — subscripts dropped, "=" and "+" sometimes leaked into spaces, "x_1" appears as "x 1", "τ_1" as "τ 1", probabilities like "P(x_1) = 0.5" as "P ( x 1  0.5)".
-
-When creating cards you must RECONSTRUCT these formulas before putting them into question/answer:
-- Write subscripts as Unicode (x₁, x₂, τ₁, τ_8) or LaTeX style (x_1, x_2)
-- Make operators explicit: P(x₁) = 0.5 (with a real "=")
-- Infer probabilities/values from context if extraction lost a character
-- For longer formulas, LaTeX with $...$ is allowed (e.g. $H(X) = -\\sum p_i \\log_2 p_i$)
-
-If a formula is too ambiguous after reconstruction (too much missing), skip it and make a conceptual card instead of a computational one. Never copy a mangled formula verbatim into a card.`;
-
-  const styleLabel =
-    lang === "de"
-      ? style === "basic"
-        ? "Grundlagen-Verständnis"
-        : style === "exam"
-        ? "Klausur-Niveau mit anspruchsvollen Transfer-Fragen"
-        : "tiefe Auseinandersetzung mit Details"
-      : style === "basic"
-      ? "foundational understanding"
-      : style === "exam"
-      ? "exam level with challenging transfer questions"
-      : "deep engagement with the material";
-
-  const prompt =
-    lang === "de"
-      ? `Erstelle exakt ${count} Lernkarten (${styleLabel}, Schwierigkeit ${difficulty}). ` +
-        `Format: [{"question": "…", "answer": "…"}, …]\n\nKapiteltext:\n${snippet}`
-      : `Generate exactly ${count} flashcards (${styleLabel}, difficulty ${difficulty}). ` +
-        `Format: [{"question": "…", "answer": "…"}, …]\n\nChapter text:\n${snippet}`;
-
-  let result;
-  try {
-    result = await ollamaGenerate({ prompt, system });
-  } catch (err) {
-    return c.json(
-      { error: err instanceof Error ? err.message : tt(c, "err.ollamaFailed") },
-      503
-    );
-  }
-
-  const parsed = parseCards(result.response);
-  if (parsed.length === 0) {
-    return c.json({ error: tt(c, "err.csvParseFailed") }, 502);
-  }
-
-  const insert = d.prepare(
-    "INSERT INTO cards (id, document_id, chapter_id, question, answer, difficulty, source_page, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'ai_generated')"
-  );
-  const tx = d.transaction(() => {
-    for (const card of parsed) {
-      insert.run(
-        randomUUID(),
-        ch.document_id,
-        chapterId,
-        card.question,
-        card.answer,
-        difficulty,
-        ch.start_page
-      );
-    }
-  });
-  tx();
-
-  return c.json({ generated: parsed.length, model: result.model });
-});
-
-// Generate 3 new cards similar to an existing one using Ollama.
-cardRoutes.post("/similar/:cardId", async (c) => {
-  const cardId = c.req.param("cardId");
-  const d = db();
-  const card = d
-    .prepare(
-      `SELECT c.question, c.answer, c.document_id, c.chapter_id, c.difficulty, c.source_page,
-              ch.text as chapter_text, doc.language
-       FROM cards c
-       LEFT JOIN chapters ch ON ch.id = c.chapter_id
-       JOIN documents doc ON doc.id = c.document_id
-       WHERE c.id = ?`
-    )
-    .get(cardId) as
-    | {
-        question: string;
-        answer: string;
-        document_id: string;
-        chapter_id: string | null;
-        difficulty: string;
-        source_page: number | null;
-        chapter_text: string | null;
-        language: string;
-      }
-    | undefined;
-  if (!card) return c.json({ error: tt(c, "err.notFound") }, 404);
-
-  if (!(await ollamaAvailable())) {
-    return c.json({ error: tt(c, "err.ollamaUnavailable") }, 503);
-  }
-
-  const lang = card.language === "de" ? "de" : "en";
-  const system =
-    lang === "de"
-      ? `Du generierst Lernkarten im Stil einer Beispielkarte. Antworte NUR mit einem validen JSON-Array, keine Prose, keine Codefences.
-
-Falls der Kapitelkontext mathematische Formeln enthält die aus der PDF-Extraktion verstümmelt sind (Subscripts fehlen, "=" als Leerzeichen, "x 1" statt "x_1"), REKONSTRUIERE sie sauber in deinen Karten — Unicode-Tiefstellungen (x₁, τ₂) oder LaTeX-Stil ($P(x_i) = 0,5$). Nie verstümmelt übernehmen.`
-      : `You generate flashcards in the style of an example card. Respond ONLY with a valid JSON array, no prose, no code fences.
-
-If the chapter context contains mathematical formulas that are mangled from PDF extraction (missing subscripts, "=" as spaces, "x 1" instead of "x_1"), RECONSTRUCT them cleanly in your cards — Unicode subscripts (x₁, τ₂) or LaTeX style ($P(x_i) = 0.5$). Never copy mangled formulas verbatim.`;
-
-  const context = (card.chapter_text || "").slice(0, 8_000);
-  const prompt =
-    lang === "de"
-      ? `Erstelle 3 neue Lernkarten zum gleichen Thema wie die Beispielkarte. Gleiche Schwierigkeit, ähnlicher Stil, aber unterschiedliche Fragen. Format: [{"question":"…","answer":"…"}, …]\n\nBeispielkarte:\nFrage: ${card.question}\nAntwort: ${card.answer}\n\nKapitelkontext:\n${context}`
-      : `Create 3 new flashcards on the same topic as the example card. Same difficulty, similar style, but different questions. Format: [{"question":"…","answer":"…"}, …]\n\nExample card:\nQuestion: ${card.question}\nAnswer: ${card.answer}\n\nChapter context:\n${context}`;
-
-  let result;
-  try {
-    result = await ollamaGenerate({ prompt, system });
-  } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "Ollama failed" }, 503);
-  }
-
-  const parsed = parseCards(result.response);
-  if (parsed.length === 0) {
-    return c.json({ error: tt(c, "err.csvParseFailed") }, 502);
-  }
-
-  const insert = d.prepare(
-    "INSERT INTO cards (id, document_id, chapter_id, question, answer, difficulty, source_page, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'ai_generated')"
-  );
-  const tx = d.transaction(() => {
-    for (const n of parsed.slice(0, 5)) {
-      insert.run(
-        randomUUID(),
-        card.document_id,
-        card.chapter_id,
-        n.question,
-        n.answer,
-        card.difficulty,
-        card.source_page
-      );
-    }
-  });
-  tx();
-
-  return c.json({ generated: Math.min(parsed.length, 5), model: result.model });
-});
-
-function parseCards(raw: string): Array<{ question: string; answer: string }> {
-  // Strip markdown codefences if the model decided to add any.
-  let text = raw.trim();
-  text = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
-
-  // Find the outermost JSON array (first '[' to last ']').
-  const start = text.indexOf("[");
-  const end = text.lastIndexOf("]");
-  if (start !== -1 && end !== -1 && end > start) {
-    const jsonSlice = text.slice(start, end + 1);
-    try {
-      const parsed = JSON.parse(jsonSlice);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter((x) => x && typeof x.question === "string" && typeof x.answer === "string")
-          .map((x) => ({
-            question: String(x.question).trim(),
-            answer: String(x.answer).trim(),
-          }))
-          .filter((c) => c.question.length > 4);
-      }
-    } catch {
-      // fallthrough to regex
-    }
-  }
-
-  // Fallback: extract "question":"…","answer":"…" pairs via regex
-  const out: Array<{ question: string; answer: string }> = [];
-  const re = /"question"\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*"answer"\s*:\s*"((?:\\.|[^"\\])*)"/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    out.push({
-      question: unescapeJson(m[1]).trim(),
-      answer: unescapeJson(m[2]).trim(),
-    });
-  }
-  return out;
-}
-
-function unescapeJson(s: string): string {
-  return s
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, "\\");
-}
-
 function isoNow(d: Date): string {
-  // SQLite stores as "YYYY-MM-DD HH:MM:SS" (UTC). datetime('now') returns this format.
-  const iso = d.toISOString();
-  return iso.slice(0, 19).replace("T", " ");
+  // SQLite stores datetime as "YYYY-MM-DD HH:MM:SS" (UTC).
+  return d.toISOString().slice(0, 19).replace("T", " ");
 }
-
-// ---------------------------------------------------------------------
-// Card preprocessing — classifies chapter (Klausur vs Lehrtext) and
-// either extracts Q&A pairs directly or reconstructs formulas in the
-// content for the AI generator to consume cleanly.
-// ---------------------------------------------------------------------
-
-cardRoutes.post("/preprocess/:chapterId", async (c) => {
-  const chapterId = c.req.param("chapterId");
-  const body = await c.req
-    .json<{ force?: boolean; model?: string }>()
-    .catch(() => ({}));
-  try {
-    const result = await preprocessChapterForCards({
-      chapterId,
-      force: body.force,
-      model: body.model,
-    });
-    return c.json({
-      type: result.type,
-      model: result.model,
-      cached: result.cached,
-      // For qa_pairs return the count so the UI can show "12 Aufgaben
-      // erkannt" immediately. For content return the cleaned length.
-      pairCount:
-        result.type === "qa_pairs" ? result.pairs?.length ?? 0 : undefined,
-      contentLength:
-        result.type === "content" ? result.text.length : undefined,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg === "llm_unavailable") {
-      return c.json({ error: "LLM ist nicht erreichbar." }, 503);
-    }
-    if (msg.startsWith("Chapter ") && msg.includes(" not found")) {
-      return c.json({ error: msg }, 404);
-    }
-    // Make the failure actually loggable. console.error on a raw Error
-    // object printed "{}" in the logs because our log-tap only spreads
-    // arrays; here we serialise the .stack explicitly so the trace is
-    // visible in PageMentor's Logs page.
-    const stack = err instanceof Error ? err.stack ?? msg : msg;
-    console.error(`[cards] preprocess failed (chapter=${chapterId}): ${stack}`);
-    return c.json({ error: msg }, 500);
-  }
-});
-
-cardRoutes.get("/preprocess-status/:chapterId", (c) => {
-  const chapterId = c.req.param("chapterId");
-  const row = db()
-    .prepare(
-      "SELECT card_text_type, card_text_model, LENGTH(card_text) as len FROM chapters WHERE id = ?"
-    )
-    .get(chapterId) as
-    | { card_text_type: string | null; card_text_model: string | null; len: number | null }
-    | undefined;
-  if (!row) return c.json({ error: "Chapter not found" }, 404);
-  return c.json({
-    type: row.card_text_type,
-    model: row.card_text_model,
-    length: row.len ?? 0,
-    preprocessed: !!row.card_text_type && (row.len ?? 0) > 0,
-  });
-});
-
-/** Import Q&A pairs from a preprocessed chapter directly as cards.
- *  Only valid when card_text_type === "qa_pairs". Skips questions
- *  that already exist (dedupe by normalized question text within
- *  the chapter). */
-cardRoutes.post("/import-qa/:chapterId", async (c) => {
-  const chapterId = c.req.param("chapterId");
-  const body = await c.req
-    .json<{ difficulty?: "easy" | "medium" | "hard" }>()
-    .catch(() => ({}));
-  const ch = db()
-    .prepare("SELECT document_id, start_page FROM chapters WHERE id = ?")
-    .get(chapterId) as
-    | { document_id: string; start_page: number | null }
-    | undefined;
-  if (!ch) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
-  const result = importQaPairsAsCards({
-    chapterId,
-    documentId: ch.document_id,
-    startPage: ch.start_page,
-    difficulty: body.difficulty ?? "medium",
-  });
-  if (result.pairs === 0) {
-    return c.json(
-      {
-        error:
-          "Kein qa_pairs-Cache vorhanden. Erst Kapitel vorbereiten (POST /preprocess/:chapterId).",
-      },
-      400
-    );
-  }
-  return c.json(result);
-});

@@ -30,12 +30,12 @@ export type ProgressPhase =
   | "audiobook.failed"
   | "audiobook.canceled"
   | "cards.start"
-  | "cards.extract.done"
-  | "cards.fill.start"
-  | "cards.fill.progress"
-  | "cards.fill.chapter"
+  | "cards.chapter"
+  | "cards.chunk"
+  | "cards.progress"
   | "cards.done"
-  | "cards.failed";
+  | "cards.failed"
+  | "cards.canceled";
 
 export interface ProgressEvent {
   phase: ProgressPhase;

@@ -444,12 +444,12 @@ export type ProgressPhase =
   | "audiobook.failed"
   | "audiobook.canceled"
   | "cards.start"
-  | "cards.extract.done"
-  | "cards.fill.start"
-  | "cards.fill.progress"
-  | "cards.fill.chapter"
+  | "cards.chapter"
+  | "cards.chunk"
+  | "cards.progress"
   | "cards.done"
-  | "cards.failed";
+  | "cards.failed"
+  | "cards.canceled";
 
 export interface ProgressEvent {
   phase: ProgressPhase;
@@ -582,16 +582,6 @@ export const api = {
       ),
     due: (docId: string) => request<Card[]>(`/api/cards/due/${docId}`),
     stats: (docId: string) => request<CardStats>(`/api/cards/stats/${docId}`),
-    extract: (docId: string, replace = false) =>
-      request<{ status: string; extracted: number; chapters: number }>(
-        `/api/cards/extract/${docId}`,
-        { method: "POST", body: JSON.stringify({ replace }) }
-      ),
-    generate: (docId: string, body: { extract: boolean; fill: boolean }) =>
-      request<{ status: string }>(`/api/cards/generate/${docId}`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      }),
     create: (body: {
       document_id: string;
       chapter_id?: string | null;
@@ -622,42 +612,16 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ quality }),
       }),
-    aiGenerate: (
-      chapterId: string,
-      body: { count: number; difficulty: "easy" | "medium" | "hard"; style: "basic" | "deep" | "exam" }
-    ) =>
-      request<{ generated: number; model?: string; skipped?: number; mode?: string }>(
-        `/api/cards/ai-generate/${chapterId}`,
-        { method: "POST", body: JSON.stringify(body) }
-      ),
-    similar: (cardId: string) =>
-      request<{ generated: number; model: string }>(
-        `/api/cards/similar/${cardId}`,
-        { method: "POST" }
-      ),
-    preprocess: (chapterId: string, body?: { force?: boolean; model?: string }) =>
-      request<{
-        type: "qa_pairs" | "content";
-        model: string;
-        cached: boolean;
-        pairCount?: number;
-        contentLength?: number;
-      }>(`/api/cards/preprocess/${chapterId}`, {
-        method: "POST",
-        body: JSON.stringify(body ?? {}),
-      }),
-    preprocessStatus: (chapterId: string) =>
-      request<{
-        type: "qa_pairs" | "content" | null;
-        model: string | null;
-        length: number;
-        preprocessed: boolean;
-      }>(`/api/cards/preprocess-status/${chapterId}`),
-    importQa: (chapterId: string, difficulty: "easy" | "medium" | "hard" = "medium") =>
-      request<{ inserted: number; skipped: number; pairs: number }>(
-        `/api/cards/import-qa/${chapterId}`,
-        { method: "POST", body: JSON.stringify({ difficulty }) }
-      ),
+    /** Sequential, chunked, Gemma-driven card build over every chapter
+     *  of the document. Returns immediately; progress streams over the
+     *  per-document SSE channel (phases cards.start, cards.chapter,
+     *  cards.chunk, cards.progress, cards.done / failed / canceled). */
+    build: (docId: string) =>
+      request<{ status: string }>(`/api/cards/build/${docId}`, { method: "POST" }),
+    buildStatus: (docId: string) =>
+      request<{ active: boolean }>(`/api/cards/build/${docId}`),
+    buildCancel: (docId: string) =>
+      request<{ canceled: boolean }>(`/api/cards/build/${docId}`, { method: "DELETE" }),
     deleteAll: (docId: string) =>
       request<{ deleted: number }>(`/api/cards/all/${docId}`, {
         method: "DELETE",

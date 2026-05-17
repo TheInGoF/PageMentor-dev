@@ -4,12 +4,10 @@ import {
   subscribeProgress,
   type Card,
   type CardStats,
-  type Chapter,
   type ProgressEvent,
 } from "../lib/api";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
-import { Input } from "./ui/Input";
 import { useToast } from "./ui/Toast";
 import { CardReview } from "./CardReview";
 import { cn } from "../lib/cn";
@@ -22,31 +20,40 @@ interface Props {
   docId: string;
 }
 
+interface BuildState {
+  active: boolean;
+  chapterCurrent: number;
+  chapterTotal: number;
+  chapterTitle: string | null;
+  chunkCurrent: number;
+  chunkTotal: number;
+  cardsCount: number;
+  error: string | null;
+  finished: "done" | "failed" | "canceled" | null;
+}
+
+const INITIAL_BUILD: BuildState = {
+  active: false,
+  chapterCurrent: 0,
+  chapterTotal: 0,
+  chapterTitle: null,
+  chunkCurrent: 0,
+  chunkTotal: 0,
+  cardsCount: 0,
+  error: null,
+  finished: null,
+};
+
 export function Cards({ docId }: Props) {
   const [cards, setCards] = useState<Card[] | null>(null);
   const [stats, setStats] = useState<CardStats | null>(null);
   const [reviewing, setReviewing] = useState<Card[] | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
   const [editCard, setEditCard] = useState<Card | null>(null);
-  const [genOpen, setGenOpen] = useState(false);
-  const [prepOpen, setPrepOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [filterChapter, setFilterChapter] = useState<string>("all");
+  const [build, setBuild] = useState<BuildState>(INITIAL_BUILD);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
-
-  async function importCsv(file: File) {
-    setBusy(true);
-    try {
-      const res = await api.cards.importCsv(docId, file);
-      toast.show(t("cards.importedToast", { n: res.imported }), "success");
-      await load();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +69,50 @@ export function Cards({ docId }: Props) {
     load();
   }, [load]);
 
+  // Recover after refresh: ask the server whether a build is still
+  // running, and either re-subscribe or just sit idle. Without this,
+  // refreshing the page mid-build would lose the progress display.
+  useEffect(() => {
+    let mounted = true;
+    api.cards
+      .buildStatus(docId)
+      .then((r) => {
+        if (!mounted) return;
+        if (r.active) setBuild((b) => ({ ...b, active: true }));
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, [docId]);
+
+  // SSE subscription is always-on. Phases outside cards.* are ignored
+  // here (audiobook reuses the same channel).
+  useEffect(() => {
+    const unsub = subscribeProgress(docId, (ev) => {
+      if (!ev.phase.startsWith("cards.")) return;
+      setBuild((prev) => reduceBuild(prev, ev));
+      if (ev.phase === "cards.done" || ev.phase === "cards.canceled") {
+        // The DB has changed — reload list + stats.
+        void load();
+      }
+    });
+    return unsub;
+  }, [docId, load]);
+
+  async function importCsv(file: File) {
+    setBusy(true);
+    try {
+      const res = await api.cards.importCsv(docId, file);
+      toast.show(t("cards.importedToast", { n: res.imported }), "success");
+      await load();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startReview() {
     try {
       const due = await api.cards.due(docId);
@@ -76,13 +127,37 @@ export function Cards({ docId }: Props) {
   }
 
   async function remove(card: Card) {
-    if (
-      !confirm(t("cards.deleteConfirm", { preview: card.question.slice(0, 100) }))
-    )
+    if (!confirm(t("cards.deleteConfirm", { preview: card.question.slice(0, 100) })))
       return;
     try {
       await api.cards.remove(card.id);
       await load();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  async function buildAll() {
+    if (
+      stats &&
+      stats.total > 0 &&
+      !confirm(t("cards.build.replaceConfirm", { n: stats.total }))
+    )
+      return;
+    setBuild({ ...INITIAL_BUILD, active: true });
+    try {
+      await api.cards.build(docId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t("common.error");
+      toast.show(msg, "error");
+      setBuild({ ...INITIAL_BUILD, error: msg, finished: "failed" });
+    }
+  }
+
+  async function cancelBuild() {
+    try {
+      await api.cards.buildCancel(docId);
+      toast.show(t("cards.build.canceling"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
@@ -118,26 +193,18 @@ export function Cards({ docId }: Props) {
             <p className="text-xs text-neutral-500 mt-1">{t("cards.subtitle")}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" onClick={() => setAddOpen(true)}>
-              {t("cards.new")}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setGenOpen(true)}
-              disabled={busy}
-              title={t("cards.generateTitle")}
-            >
-              {t("cards.generate")}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setPrepOpen(true)}
-              disabled={busy}
-              title={t("cards.prepTitle")}
-            >
-              {t("cards.prep")}
-            </Button>
-            {(stats?.total ?? 0) > 0 && (
+            {build.active ? (
+              <Button variant="danger" onClick={cancelBuild}>
+                {t("cards.build.cancel")}
+              </Button>
+            ) : (
+              <Button onClick={buildAll} disabled={busy}>
+                {stats && stats.total > 0
+                  ? t("cards.build.rerun")
+                  : t("cards.build.start")}
+              </Button>
+            )}
+            {(stats?.total ?? 0) > 0 && !build.active && (
               <Button
                 variant="ghost"
                 onClick={async () => {
@@ -145,10 +212,7 @@ export function Cards({ docId }: Props) {
                   setBusy(true);
                   try {
                     const r = await api.cards.deleteAll(docId);
-                    toast.show(
-                      t("cards.deleteAllDone", { n: r.deleted }),
-                      "success"
-                    );
+                    toast.show(t("cards.deleteAllDone", { n: r.deleted }), "success");
                     await load();
                   } catch (err) {
                     toast.show(
@@ -190,7 +254,7 @@ export function Cards({ docId }: Props) {
             <Button
               variant="ghost"
               onClick={() => fileInputRef.current?.click()}
-              disabled={busy}
+              disabled={busy || build.active}
               className="text-xs"
               title={t("cards.importTitle")}
             >
@@ -203,6 +267,8 @@ export function Cards({ docId }: Props) {
             )}
           </div>
         </div>
+
+        {(build.active || build.finished) && <BuildProgressPanel state={build} />}
 
         {stats && (
           <div className="grid grid-cols-3 gap-3">
@@ -275,33 +341,158 @@ export function Cards({ docId }: Props) {
           }}
         />
       )}
-      <AddCardModal
-        open={addOpen || !!editCard}
-        docId={docId}
-        chapters={chapters}
-        editCard={editCard}
-        onClose={() => {
-          setAddOpen(false);
-          setEditCard(null);
-        }}
-        onCreated={async () => {
-          setAddOpen(false);
+      <EditCardModal
+        open={!!editCard}
+        card={editCard}
+        onClose={() => setEditCard(null)}
+        onSaved={async () => {
           setEditCard(null);
           await load();
         }}
       />
-      <GenerateModal
-        open={genOpen}
-        docId={docId}
-        onClose={() => setGenOpen(false)}
-        onReload={load}
-      />
-      <PreprocessModal
-        open={prepOpen}
-        docId={docId}
-        onClose={() => setPrepOpen(false)}
-        onReload={load}
-      />
+    </div>
+  );
+}
+
+function reduceBuild(prev: BuildState, ev: ProgressEvent): BuildState {
+  switch (ev.phase) {
+    case "cards.start":
+      return {
+        ...INITIAL_BUILD,
+        active: true,
+        chapterTotal: ev.total ?? 0,
+      };
+    case "cards.chapter":
+      return {
+        ...prev,
+        active: true,
+        chapterCurrent: (ev.current ?? 0) + 1,
+        chapterTotal: ev.total ?? prev.chapterTotal,
+        chapterTitle: ev.message ?? null,
+        chunkCurrent: 0,
+        chunkTotal: 0,
+      };
+    case "cards.chunk":
+      return {
+        ...prev,
+        active: true,
+        chunkCurrent: ev.current ?? 0,
+        chunkTotal: ev.total ?? 0,
+      };
+    case "cards.progress":
+      return {
+        ...prev,
+        active: true,
+        cardsCount: ev.current ?? prev.cardsCount,
+      };
+    case "cards.done":
+      return {
+        ...prev,
+        active: false,
+        chapterCurrent: prev.chapterTotal,
+        chunkCurrent: prev.chunkTotal,
+        cardsCount: ev.current ?? prev.cardsCount,
+        finished: "done",
+      };
+    case "cards.canceled":
+      return { ...prev, active: false, finished: "canceled" };
+    case "cards.failed":
+      return {
+        ...prev,
+        active: false,
+        finished: "failed",
+        error: ev.message ?? "unknown",
+      };
+    default:
+      return prev;
+  }
+}
+
+function BuildProgressPanel({ state }: { state: BuildState }) {
+  const chapterPct =
+    state.chapterTotal > 0
+      ? Math.round(((state.chapterCurrent - 1) / state.chapterTotal) * 100)
+      : 0;
+  const chunkPct =
+    state.chunkTotal > 0
+      ? Math.round((state.chunkCurrent / state.chunkTotal) * 100)
+      : 0;
+
+  return (
+    <div
+      className={cn(
+        "border rounded-md p-3 flex flex-col gap-2 text-xs font-mono",
+        state.finished === "failed"
+          ? "border-accent-subtle bg-accent/5"
+          : state.finished === "canceled"
+            ? "border-border bg-bg-elevated"
+            : "border-accent-subtle bg-accent/5"
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span
+          className={cn(
+            "uppercase tracking-wide",
+            state.finished === "failed" ? "text-accent" : "text-accent"
+          )}
+        >
+          {state.finished === "done"
+            ? t("cards.build.donePhase")
+            : state.finished === "failed"
+              ? t("cards.build.failedPhase")
+              : state.finished === "canceled"
+                ? t("cards.build.canceledPhase")
+                : t("cards.build.runningPhase")}
+        </span>
+        <span className="text-neutral-500">
+          {t("cards.build.cardsSoFar", { n: state.cardsCount })}
+        </span>
+      </div>
+
+      {state.chapterTotal > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-neutral-400 truncate">
+              {t("cards.build.chapterLabel", {
+                current: Math.max(1, state.chapterCurrent),
+                total: state.chapterTotal,
+              })}
+              {state.chapterTitle ? ` — ${state.chapterTitle}` : ""}
+            </span>
+            <span className="text-neutral-500 shrink-0">{chapterPct}%</span>
+          </div>
+          <div className="h-1 bg-black/40 rounded overflow-hidden">
+            <div
+              className="h-full bg-accent transition-all"
+              style={{ width: `${chapterPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {state.chunkTotal > 0 && state.active && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-neutral-500">
+              {t("cards.build.chunkLabel", {
+                current: state.chunkCurrent,
+                total: state.chunkTotal,
+              })}
+            </span>
+            <span className="text-neutral-500 shrink-0">{chunkPct}%</span>
+          </div>
+          <div className="h-1 bg-black/40 rounded overflow-hidden">
+            <div
+              className="h-full bg-accent/60 transition-all"
+              style={{ width: `${chunkPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {state.error && (
+        <p className="text-accent text-[11px] mt-1 break-words">{state.error}</p>
+      )}
     </div>
   );
 }
@@ -323,9 +514,7 @@ function StatPill({ label, value, accent }: { label: string; value: number; acce
 }
 
 function sourceLabel(source: Card["source"]): string {
-  if (source === "extracted") return t("cards.source.extracted");
   if (source === "ai_generated") return t("cards.source.ai");
-  if (source === "ai_filled") return t("cards.source.filled");
   return t("cards.source.manual");
 }
 
@@ -345,7 +534,7 @@ function CardRow({
         <button
           onClick={() => setOpen(!open)}
           className="text-xs text-accent w-5 flex-shrink-0 mt-1"
-          aria-label="Umschalten"
+          aria-label="toggle"
         >
           {open ? "▾" : "▸"}
         </button>
@@ -410,63 +599,44 @@ function CardRow({
   );
 }
 
-function AddCardModal({
+function EditCardModal({
   open,
-  docId,
-  chapters,
-  editCard,
+  card,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   open: boolean;
-  docId: string;
-  chapters: Array<{ id: string; title: string; number: number }>;
-  editCard?: Card | null;
+  card: Card | null;
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [hint, setHint] = useState("");
-  const [chapterId, setChapterId] = useState<string>("");
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
-  const editing = !!editCard;
-
   useEffect(() => {
-    if (open) {
-      setQuestion(editCard?.question ?? "");
-      setAnswer(editCard?.answer ?? "");
-      setHint(editCard?.hint ?? "");
-      setChapterId(editCard?.chapter_id ?? "");
-      setDifficulty(editCard?.difficulty ?? "medium");
+    if (open && card) {
+      setQuestion(card.question);
+      setAnswer(card.answer ?? "");
+      setHint(card.hint ?? "");
+      setDifficulty(card.difficulty ?? "medium");
     }
-  }, [open, editCard]);
+  }, [open, card]);
 
   async function submit() {
-    if (!question.trim()) return;
+    if (!card || !question.trim()) return;
     setBusy(true);
     try {
-      if (editing && editCard) {
-        await api.cards.patch(editCard.id, {
-          question: question.trim(),
-          answer: answer.trim(),
-          hint: hint.trim() || null,
-          difficulty,
-        });
-      } else {
-        await api.cards.create({
-          document_id: docId,
-          chapter_id: chapterId || null,
-          question: question.trim(),
-          answer: answer.trim(),
-          hint: hint.trim() || undefined,
-          difficulty,
-        });
-      }
-      onCreated();
+      await api.cards.patch(card.id, {
+        question: question.trim(),
+        answer: answer.trim(),
+        hint: hint.trim() || null,
+        difficulty,
+      });
+      onSaved();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
@@ -478,39 +648,19 @@ function AddCardModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={editing ? t("cards.modal.edit") : t("cards.modal.new")}
+      title={t("cards.modal.edit")}
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             {t("common.cancel")}
           </Button>
           <Button onClick={submit} disabled={busy || !question.trim()}>
-            {editing ? t("common.save") : t("cards.modal.create")}
+            {t("common.save")}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
-        {chapters.length > 0 && !editing && (
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-neutral-400">
-              {t("cards.field.chapter")}
-            </label>
-            <select
-              className="input"
-              value={chapterId}
-              onChange={(e) => setChapterId(e.target.value)}
-            >
-              <option value="">{t("common.none")}</option>
-              {chapters.map((ch) => (
-                <option key={ch.id} value={ch.id}>
-                  {String(ch.number).padStart(2, "0")} ·{" "}
-                  {ch.title || `${t("learn.tab.chapters")} ${ch.number}`}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-neutral-400">
             {t("cards.field.question")}
@@ -558,715 +708,5 @@ function AddCardModal({
         </div>
       </div>
     </Modal>
-  );
-}
-
-interface GenProgressState {
-  phase: ProgressEvent["phase"] | null;
-  extractTotal: number;
-  extractMatched: number;
-  fillTotal: number;
-  fillCurrent: number;
-  fillChapterNum: number | null;
-  fillNote: "no-embedder" | "no-chunks" | null;
-  errorMsg: string | null;
-}
-
-const initialGenState: GenProgressState = {
-  phase: null,
-  extractTotal: 0,
-  extractMatched: 0,
-  fillTotal: 0,
-  fillCurrent: 0,
-  fillChapterNum: null,
-  fillNote: null,
-  errorMsg: null,
-};
-
-function GenerateModal({
-  open,
-  docId,
-  onClose,
-  onReload,
-}: {
-  open: boolean;
-  docId: string;
-  onClose: () => void;
-  onReload: () => Promise<void>;
-}) {
-  const [doExtract, setDoExtract] = useState(true);
-  const [doFill, setDoFill] = useState(true);
-  const [running, setRunning] = useState(false);
-  const [state, setState] = useState<GenProgressState>(initialGenState);
-  const toast = useToast();
-  const unsubRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      // Modal zu — Subscription sauber beenden, State reset.
-      unsubRef.current?.();
-      unsubRef.current = null;
-      setState(initialGenState);
-      setRunning(false);
-    }
-  }, [open]);
-
-  // Close the stream on unmount — otherwise EventSource instances
-  // leak when the user switches tabs while a run is active.
-  useEffect(() => {
-    return () => {
-      unsubRef.current?.();
-      unsubRef.current = null;
-    };
-  }, []);
-
-  async function start() {
-    if (!doExtract && !doFill) return;
-    setRunning(true);
-    setState({ ...initialGenState, phase: "cards.start" });
-
-    unsubRef.current?.();
-    unsubRef.current = subscribeProgress(docId, (ev) => {
-      if (!ev.phase.startsWith("cards.")) return;
-      setState((prev) => {
-        const next = { ...prev, phase: ev.phase };
-        if (ev.phase === "cards.extract.done") {
-          next.extractTotal = ev.total ?? 0;
-          next.extractMatched = ev.current ?? 0;
-        } else if (ev.phase === "cards.fill.start") {
-          next.fillTotal = ev.total ?? 0;
-          next.fillCurrent = 0;
-          next.fillNote = null;
-        } else if (ev.phase === "cards.fill.progress") {
-          next.fillCurrent = ev.current ?? prev.fillCurrent;
-          next.fillTotal = ev.total ?? prev.fillTotal;
-          if (ev.message === "no-embedder") next.fillNote = "no-embedder";
-          else if (ev.message === "no-chunks") next.fillNote = "no-chunks";
-          if (ev.chapterNumber != null) next.fillChapterNum = ev.chapterNumber;
-        } else if (ev.phase === "cards.fill.chapter") {
-          if (ev.chapterNumber != null) next.fillChapterNum = ev.chapterNumber;
-        } else if (ev.phase === "cards.done") {
-          next.errorMsg = null;
-        } else if (ev.phase === "cards.failed") {
-          next.errorMsg = ev.message ?? "unknown";
-        }
-        return next;
-      });
-
-      if (ev.phase === "cards.done") {
-        unsubRef.current?.();
-        unsubRef.current = null;
-        setRunning(false);
-        void onReload();
-        // Summary-Toast aus dem in message encodierten JSON lesen.
-        let extracted = 0;
-        let filled = 0;
-        let fillTotal = 0;
-        try {
-          if (ev.message) {
-            const parsed = JSON.parse(ev.message) as {
-              extracted?: number;
-              filled?: number;
-              fillTotal?: number;
-            };
-            extracted = parsed.extracted ?? 0;
-            filled = parsed.filled ?? 0;
-            fillTotal = parsed.fillTotal ?? 0;
-          }
-        } catch {
-          // ignore — fallback auf event totals
-        }
-        toast.show(
-          t("cards.gen.doneToast", { extracted, filled, fillTotal }),
-          "success"
-        );
-      } else if (ev.phase === "cards.failed") {
-        unsubRef.current?.();
-        unsubRef.current = null;
-        setRunning(false);
-        void onReload();
-        toast.show(
-          t("cards.gen.phase.failed", { msg: ev.message ?? "unknown" }),
-          "error"
-        );
-      }
-    });
-
-    try {
-      await api.cards.generate(docId, { extract: doExtract, fill: doFill });
-    } catch (err) {
-      unsubRef.current?.();
-      unsubRef.current = null;
-      setRunning(false);
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    }
-  }
-
-  const percent =
-    running && state.fillTotal > 0
-      ? Math.min(100, Math.round((state.fillCurrent / state.fillTotal) * 100))
-      : running && state.phase === "cards.extract.done"
-      ? 100
-      : 0;
-
-  const status = phaseMessage(state);
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t("cards.gen.title")}
-      footer={
-        running ? (
-          <Button variant="ghost" onClick={onClose}>
-            {t("cards.gen.keepRunning")}
-          </Button>
-        ) : (
-          <>
-            <Button variant="ghost" onClick={onClose}>
-              {t("cards.gen.cancel")}
-            </Button>
-            <Button
-              onClick={start}
-              disabled={!doExtract && !doFill}
-            >
-              {t("cards.gen.submit")}
-            </Button>
-          </>
-        )
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <p className="text-xs text-neutral-500">{t("cards.gen.description")}</p>
-
-        <label className="flex items-start gap-3 p-3 rounded border border-border hover:border-border-strong transition-colors cursor-pointer">
-          <input
-            type="checkbox"
-            checked={doExtract}
-            onChange={(e) => setDoExtract(e.target.checked)}
-            disabled={running}
-            className="mt-1 accent-accent"
-          />
-          <div className="flex-1">
-            <div className="text-sm font-medium text-neutral-100">
-              {t("cards.gen.stepExtract")}
-            </div>
-            <div className="text-xs text-neutral-500 mt-0.5">
-              {t("cards.gen.stepExtractHint")}
-            </div>
-          </div>
-        </label>
-
-        <label className="flex items-start gap-3 p-3 rounded border border-border hover:border-border-strong transition-colors cursor-pointer">
-          <input
-            type="checkbox"
-            checked={doFill}
-            onChange={(e) => setDoFill(e.target.checked)}
-            disabled={running}
-            className="mt-1 accent-accent"
-          />
-          <div className="flex-1">
-            <div className="text-sm font-medium text-neutral-100">
-              {t("cards.gen.stepFill")}
-            </div>
-            <div className="text-xs text-neutral-500 mt-0.5">
-              {t("cards.gen.stepFillHint")}
-            </div>
-          </div>
-        </label>
-
-        {(running || state.phase) && (
-          <div className="card p-3 flex flex-col gap-2 border-accent-subtle">
-            {status && <div className="text-sm text-neutral-200">{status}</div>}
-            {state.fillTotal > 0 && (
-              <div className="h-1.5 bg-neutral-800 rounded overflow-hidden">
-                <div
-                  className="h-full bg-accent transition-all duration-200"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-            )}
-            {state.fillNote === "no-embedder" && (
-              <div className="text-xs text-amber-400">
-                {t("cards.gen.phase.noEmbedder")}
-              </div>
-            )}
-            {state.fillNote === "no-chunks" && (
-              <div className="text-xs text-amber-400">
-                {t("cards.gen.phase.noChunks")}
-              </div>
-            )}
-            {state.errorMsg && (
-              <div className="text-xs text-red-400">
-                {t("cards.gen.phase.failed", { msg: state.errorMsg })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-function phaseMessage(s: GenProgressState): string | null {
-  switch (s.phase) {
-    case "cards.start":
-      return t("cards.gen.phase.start");
-    case "cards.extract.done": {
-      const gaps = Math.max(0, s.extractTotal - s.extractMatched);
-      return t("cards.gen.phase.extractDone", {
-        current: s.extractMatched,
-        total: s.extractTotal,
-        gaps,
-      });
-    }
-    case "cards.fill.start":
-    case "cards.fill.chapter":
-    case "cards.fill.progress": {
-      const base = t("cards.gen.phase.filling", {
-        current: s.fillCurrent,
-        total: s.fillTotal,
-      });
-      if (s.fillChapterNum != null) {
-        return `${base} · ${t("cards.gen.phase.fillChapter", { num: s.fillChapterNum })}`;
-      }
-      return base;
-    }
-    case "cards.done":
-      return t("cards.gen.phase.done");
-    case "cards.failed":
-      return null;
-    default:
-      return null;
-  }
-}
-
-// Re-exported because some callers may want the shared Input style.
-void Input;
-
-// ---------------------------------------------------------------------
-// Card preprocess modal — per-chapter classify (Klausur vs Lehrtext)
-// and either extract Q&A pairs (and import as cards) or rewrite the
-// content with LaTeX-clean formulas for the AI card-gen to consume.
-// ---------------------------------------------------------------------
-
-type PrepStatus =
-  | { state: "unknown" }
-  | { state: "loading" }
-  | { state: "ready"; type: "qa_pairs" | "content"; length: number }
-  | { state: "running" }
-  | {
-      state: "result";
-      type: "qa_pairs" | "content";
-      pairCount?: number;
-      contentLength?: number;
-    }
-  | { state: "error"; message: string };
-
-function PreprocessModal({
-  open,
-  docId,
-  onClose,
-  onReload,
-}: {
-  open: boolean;
-  docId: string;
-  onClose: () => void;
-  onReload: () => Promise<void>;
-}) {
-  const [chapters, setChapters] = useState<Chapter[] | null>(null);
-  const [status, setStatus] = useState<Record<string, PrepStatus>>({});
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  // Batch-Run state. activeChapterId = currently-processing chapter so
-  // we can highlight its row; batchRunning = disable selection
-  // controls while the queue is draining.
-  const [batchRunning, setBatchRunning] = useState(false);
-  const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
-  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(
-    null
-  );
-  // Used as an abort signal — flipping to true mid-batch makes the
-  // for-loop exit after the current chapter finishes (we don't kill
-  // an in-flight LLM call, just stop queueing further chapters).
-  const cancelRef = useRef(false);
-  const toast = useToast();
-
-  useEffect(() => {
-    if (!open) {
-      // Reset batch state when modal closes so a re-open starts fresh.
-      cancelRef.current = false;
-      setBatchRunning(false);
-      setActiveChapterId(null);
-      setBatchProgress(null);
-      return;
-    }
-    api.chapters
-      .list(docId)
-      .then(async (chs) => {
-        setChapters(chs);
-        // Default-Selection: alles AUSSER Vorwort / Inhaltsverzeichnis /
-        // Literatur / Index / Glossar — diese Kapitel ergeben in der
-        // Karten-Pipeline nichts Nützliches (kein Lehrinhalt, keine
-        // Aufgaben). User kann jederzeit per "Alle" wieder einschließen.
-        const isCardRelevant = (kind: string | undefined) =>
-          kind === undefined ||
-          kind === "content" ||
-          kind === "summary" ||
-          kind === "self_check" ||
-          kind === "exercise" ||
-          kind === "example";
-        setSelected(
-          new Set(chs.filter((c) => isCardRelevant(c.kind)).map((c) => c.id))
-        );
-        // Lade aktuellen Preprocess-Status für jedes Kapitel parallel.
-        const entries = await Promise.all(
-          chs.map(async (ch) => {
-            try {
-              const r = await api.cards.preprocessStatus(ch.id);
-              const v: PrepStatus = r.preprocessed
-                ? {
-                    state: "ready",
-                    type: (r.type as "qa_pairs" | "content") ?? "content",
-                    length: r.length,
-                  }
-                : { state: "unknown" };
-              return [ch.id, v] as const;
-            } catch {
-              return [ch.id, { state: "unknown" } as PrepStatus] as const;
-            }
-          })
-        );
-        setStatus(Object.fromEntries(entries));
-      })
-      .catch(() => setChapters([]));
-  }, [open, docId]);
-
-  function toggleSelect(chapterId: string) {
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(chapterId)) next.delete(chapterId);
-      else next.add(chapterId);
-      return next;
-    });
-  }
-
-  function selectAll() {
-    if (!chapters) return;
-    setSelected(new Set(chapters.map((c) => c.id)));
-  }
-  function selectNone() {
-    setSelected(new Set());
-  }
-
-  async function runPreprocess(chapterId: string, force: boolean) {
-    setStatus((s) => ({ ...s, [chapterId]: { state: "running" } }));
-    try {
-      const r = await api.cards.preprocess(chapterId, { force });
-      setStatus((s) => ({
-        ...s,
-        [chapterId]: {
-          state: "result",
-          type: r.type,
-          pairCount: r.pairCount,
-          contentLength: r.contentLength,
-        },
-      }));
-    } catch (err) {
-      setStatus((s) => ({
-        ...s,
-        [chapterId]: {
-          state: "error",
-          message: err instanceof Error ? err.message : "Fehler",
-        },
-      }));
-      throw err;
-    }
-  }
-
-  async function runBatch() {
-    if (!chapters) return;
-    const queue = chapters.filter((c) => selected.has(c.id));
-    if (queue.length === 0) {
-      toast.show(t("cards.prep.batch.empty"), "info");
-      return;
-    }
-    cancelRef.current = false;
-    setBatchRunning(true);
-    setBatchProgress({ current: 0, total: queue.length });
-    let ok = 0;
-    let failed = 0;
-    for (let i = 0; i < queue.length; i++) {
-      if (cancelRef.current) break;
-      const ch = queue[i];
-      setActiveChapterId(ch.id);
-      setBatchProgress({ current: i + 1, total: queue.length });
-      try {
-        // force=true für "Erneut vorbereiten" wenn schon ein Cache da
-        // ist — sonst wäre der Batch ein No-Op auf bereits prepared
-        // Kapiteln. Nutzer kann ja immer dehaken wenn nicht gewünscht.
-        const existing = status[ch.id];
-        const force =
-          existing?.state === "ready" || existing?.state === "result";
-        await runPreprocess(ch.id, force);
-        ok++;
-      } catch {
-        failed++;
-        // Weitermachen mit dem nächsten Kapitel — einzelne Fehler
-        // sollen den ganzen Batch nicht aufhalten.
-      }
-    }
-    setActiveChapterId(null);
-    setBatchRunning(false);
-    setBatchProgress(null);
-    toast.show(
-      cancelRef.current
-        ? t("cards.prep.batch.cancelled", { ok, failed, total: queue.length })
-        : t("cards.prep.batch.done", { ok, failed }),
-      failed > 0 ? "info" : "success"
-    );
-  }
-
-  function cancelBatch() {
-    cancelRef.current = true;
-  }
-
-  async function importQa(chapterId: string) {
-    try {
-      const r = await api.cards.importQa(chapterId, "medium");
-      toast.show(
-        t("cards.prep.imported", { n: r.inserted, skipped: r.skipped }),
-        "success"
-      );
-      await onReload();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={() => {
-        if (batchRunning) {
-          if (!confirm(t("cards.prep.batch.closeConfirm"))) return;
-          cancelRef.current = true;
-        }
-        onClose();
-      }}
-      title={t("cards.prep.title")}
-      footer={
-        batchRunning ? (
-          <>
-            <span className="text-xs text-neutral-500 mr-auto">
-              {batchProgress
-                ? t("cards.prep.batch.progress", {
-                    current: batchProgress.current,
-                    total: batchProgress.total,
-                  })
-                : null}
-            </span>
-            <Button variant="ghost" onClick={cancelBatch}>
-              {t("cards.prep.batch.cancel")}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button variant="ghost" onClick={onClose}>
-              {t("common.close")}
-            </Button>
-            <Button
-              variant="primary"
-              onClick={runBatch}
-              disabled={selected.size === 0}
-            >
-              {t("cards.prep.batch.run", { n: selected.size })}
-            </Button>
-          </>
-        )
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <p className="text-xs text-neutral-500">{t("cards.prep.description")}</p>
-        {chapters && chapters.length > 0 && (
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-neutral-500">{t("cards.prep.batch.selectLabel")}</span>
-            <button
-              type="button"
-              onClick={selectAll}
-              disabled={batchRunning}
-              className="px-2 py-0.5 rounded border border-border text-neutral-300 hover:border-border-strong disabled:opacity-50"
-            >
-              {t("cards.prep.batch.selectAll")}
-            </button>
-            <button
-              type="button"
-              onClick={selectNone}
-              disabled={batchRunning}
-              className="px-2 py-0.5 rounded border border-border text-neutral-300 hover:border-border-strong disabled:opacity-50"
-            >
-              {t("cards.prep.batch.selectNone")}
-            </button>
-            <span className="ml-auto text-neutral-500">
-              {t("cards.prep.batch.selectedCount", {
-                n: selected.size,
-                total: chapters.length,
-              })}
-            </span>
-          </div>
-        )}
-        {!chapters && (
-          <div className="text-sm text-neutral-500">{t("common.loading")}</div>
-        )}
-        {chapters && chapters.length === 0 && (
-          <div className="text-sm text-neutral-500 italic">
-            {t("cards.prep.noChapters")}
-          </div>
-        )}
-        {chapters && chapters.length > 0 && (
-          <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">
-            {chapters.map((ch) => {
-              const st = status[ch.id] ?? { state: "unknown" };
-              const isSelected = selected.has(ch.id);
-              const isActive = activeChapterId === ch.id;
-              return (
-                <div
-                  key={ch.id}
-                  className={cn(
-                    "border rounded p-3 flex flex-col gap-2 transition-colors",
-                    isActive
-                      ? "border-accent bg-accent/5"
-                      : isSelected
-                        ? "border-border"
-                        : "border-border/40 opacity-60"
-                  )}
-                >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleSelect(ch.id)}
-                      disabled={batchRunning}
-                      className="accent-accent"
-                      aria-label={`select chapter ${ch.number}`}
-                    />
-                    <span className="text-xs text-neutral-500 tabular-nums">
-                      {String(ch.number).padStart(2, "0")}
-                    </span>
-                    <span className="text-sm text-neutral-100 truncate flex-1">
-                      {ch.title || `Kapitel ${ch.number}`}
-                    </span>
-                    {ch.kind && ch.kind !== "content" && (
-                      <KindBadge kind={ch.kind} />
-                    )}
-                    <PrepBadge status={st} />
-                  </div>
-                  <div className="flex gap-2 flex-wrap pl-7">
-                    <Button
-                      variant="outline"
-                      onClick={() => runPreprocess(ch.id, st.state === "ready").catch(() => {})}
-                      disabled={st.state === "running" || batchRunning}
-                      className="!py-1 !px-2 text-xs"
-                    >
-                      {st.state === "running"
-                        ? t("cards.prep.processing")
-                        : st.state === "ready" || st.state === "result"
-                          ? t("cards.prep.redo")
-                          : t("cards.prep.run")}
-                    </Button>
-                    {(st.state === "ready" && st.type === "qa_pairs") ||
-                    (st.state === "result" && st.type === "qa_pairs") ? (
-                      <Button
-                        variant="primary"
-                        onClick={() => importQa(ch.id)}
-                        disabled={batchRunning}
-                        className="!py-1 !px-2 text-xs"
-                      >
-                        {t("cards.prep.importQa")}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-/** Small kind-tag for non-content chapter rows so the user sees WHY a
- *  chapter is default-off in the PreprocessModal selection (e.g. an
- *  "index"-kind row stays unchecked because Inhaltsverzeichnis-cards
- *  are useless). */
-function KindBadge({ kind }: { kind: string }) {
-  // Localized via i18n if a label exists, fallback to the raw kind.
-  const label =
-    kind === "meta"
-      ? "Vorwort"
-      : kind === "index"
-        ? "Verzeichnis"
-        : kind === "references"
-          ? "Literatur"
-          : kind === "summary"
-            ? "Zusammenf."
-            : kind === "self_check"
-              ? "Aufgaben"
-              : kind === "exercise"
-                ? "Übung"
-                : kind === "solutions"
-                  ? "Lösungen"
-                  : kind === "example"
-                    ? "Beispiel"
-                    : kind === "other"
-                      ? "andere"
-                      : kind;
-  return (
-    <span className="text-[10px] text-neutral-500 px-1.5 py-0.5 rounded border border-border/50 bg-neutral-900/40 italic">
-      {label}
-    </span>
-  );
-}
-
-function PrepBadge({ status }: { status: PrepStatus }) {
-  if (status.state === "unknown")
-    return (
-      <span className="text-[11px] text-neutral-500 px-1.5 py-0.5 rounded border border-border">
-        {t("cards.prep.badge.unknown")}
-      </span>
-    );
-  if (status.state === "loading" || status.state === "running")
-    return (
-      <span className="text-[11px] text-neutral-400 px-1.5 py-0.5 rounded border border-border">
-        ⋯
-      </span>
-    );
-  if (status.state === "error")
-    return (
-      <span
-        className="text-[11px] text-accent px-1.5 py-0.5 rounded border border-accent-subtle"
-        title={status.message}
-      >
-        {t("cards.prep.badge.error")}
-      </span>
-    );
-  // ready or result
-  const isQa = status.type === "qa_pairs";
-  const label = isQa
-    ? "result" in status && status.state === "result"
-      ? t("cards.prep.badge.qaCount", { n: status.pairCount ?? 0 })
-      : t("cards.prep.badge.qa")
-    : t("cards.prep.badge.content");
-  return (
-    <span
-      className={cn(
-        "text-[11px] px-1.5 py-0.5 rounded border",
-        isQa
-          ? "text-emerald-300 border-emerald-700/50 bg-emerald-700/10"
-          : "text-blue-300 border-blue-700/50 bg-blue-700/10"
-      )}
-    >
-      {label}
-    </span>
   );
 }
