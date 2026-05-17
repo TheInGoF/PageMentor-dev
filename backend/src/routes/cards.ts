@@ -6,6 +6,10 @@ import { initialState, updateProgress, type Quality } from "../services/sm2";
 import { generate as ollamaGenerate, isAvailable as ollamaAvailable } from "../services/llm";
 import { resolveEmbedder } from "../services/embeddings";
 import { loadDocChunks, fillAnswerFromChunks } from "../services/cardFill";
+import {
+  preprocessChapterForCards,
+  importQaPairsAsCards,
+} from "../services/cardPreprocess";
 import { emit as emitEvent } from "../services/events";
 import { tt } from "../lib/i18n";
 
@@ -634,21 +638,54 @@ cardRoutes.post("/ai-generate/:chapterId", async (c) => {
   const d = db();
   const ch = d
     .prepare(
-      "SELECT c.id, c.document_id, c.text, c.number, c.title, c.start_page, doc.language FROM chapters c JOIN documents doc ON doc.id = c.document_id WHERE c.id = ?"
+      "SELECT c.id, c.document_id, c.text, c.card_text, c.card_text_type, c.number, c.title, c.start_page, doc.language FROM chapters c JOIN documents doc ON doc.id = c.document_id WHERE c.id = ?"
     )
     .get(chapterId) as
-    | { id: string; document_id: string; text: string; number: number; title: string; start_page: number; language: string }
+    | {
+        id: string;
+        document_id: string;
+        text: string;
+        card_text: string | null;
+        card_text_type: string | null;
+        number: number;
+        title: string;
+        start_page: number;
+        language: string;
+      }
     | undefined;
   if (!ch) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
   if (!ch.text || ch.text.length < 100)
     return c.json({ error: tt(c, "err.chapterTooShort") }, 400);
+
+  // Short-circuit: if the chapter has been preprocessed as qa_pairs,
+  // the AI-gen step is unnecessary — just import the cached Q&A pairs.
+  if (ch.card_text_type === "qa_pairs" && ch.card_text) {
+    const result = importQaPairsAsCards({
+      chapterId,
+      documentId: ch.document_id,
+      startPage: ch.start_page,
+      difficulty,
+    });
+    return c.json({
+      generated: result.inserted,
+      skipped: result.skipped,
+      mode: "qa_imported",
+    });
+  }
 
   if (!(await ollamaAvailable())) {
     return c.json({ error: tt(c, "err.ollamaUnavailable") }, 503);
   }
 
   const lang = ch.language === "de" ? "de" : "en";
-  const snippet = ch.text.slice(0, 20_000);
+  // Prefer the formula-cleaned card_text when available — that
+  // input has LaTeX-reconstructed formulas the AI can carry over
+  // directly into the cards.
+  const source =
+    ch.card_text_type === "content" && ch.card_text
+      ? ch.card_text
+      : ch.text;
+  const snippet = source.slice(0, 20_000);
 
   const system =
     lang === "de"
@@ -865,3 +902,95 @@ function isoNow(d: Date): string {
   const iso = d.toISOString();
   return iso.slice(0, 19).replace("T", " ");
 }
+
+// ---------------------------------------------------------------------
+// Card preprocessing — classifies chapter (Klausur vs Lehrtext) and
+// either extracts Q&A pairs directly or reconstructs formulas in the
+// content for the AI generator to consume cleanly.
+// ---------------------------------------------------------------------
+
+cardRoutes.post("/preprocess/:chapterId", async (c) => {
+  const chapterId = c.req.param("chapterId");
+  const body = await c.req
+    .json<{ force?: boolean; model?: string }>()
+    .catch(() => ({}));
+  try {
+    const result = await preprocessChapterForCards({
+      chapterId,
+      force: body.force,
+      model: body.model,
+    });
+    return c.json({
+      type: result.type,
+      model: result.model,
+      cached: result.cached,
+      // For qa_pairs return the count so the UI can show "12 Aufgaben
+      // erkannt" immediately. For content return the cleaned length.
+      pairCount:
+        result.type === "qa_pairs" ? result.pairs?.length ?? 0 : undefined,
+      contentLength:
+        result.type === "content" ? result.text.length : undefined,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === "llm_unavailable") {
+      return c.json({ error: "LLM ist nicht erreichbar." }, 503);
+    }
+    if (msg.startsWith("Chapter ") && msg.includes(" not found")) {
+      return c.json({ error: msg }, 404);
+    }
+    console.error("[cards] preprocess failed:", err);
+    return c.json({ error: msg }, 500);
+  }
+});
+
+cardRoutes.get("/preprocess-status/:chapterId", (c) => {
+  const chapterId = c.req.param("chapterId");
+  const row = db()
+    .prepare(
+      "SELECT card_text_type, card_text_model, LENGTH(card_text) as len FROM chapters WHERE id = ?"
+    )
+    .get(chapterId) as
+    | { card_text_type: string | null; card_text_model: string | null; len: number | null }
+    | undefined;
+  if (!row) return c.json({ error: "Chapter not found" }, 404);
+  return c.json({
+    type: row.card_text_type,
+    model: row.card_text_model,
+    length: row.len ?? 0,
+    preprocessed: !!row.card_text_type && (row.len ?? 0) > 0,
+  });
+});
+
+/** Import Q&A pairs from a preprocessed chapter directly as cards.
+ *  Only valid when card_text_type === "qa_pairs". Skips questions
+ *  that already exist (dedupe by normalized question text within
+ *  the chapter). */
+cardRoutes.post("/import-qa/:chapterId", async (c) => {
+  const chapterId = c.req.param("chapterId");
+  const body = await c.req
+    .json<{ difficulty?: "easy" | "medium" | "hard" }>()
+    .catch(() => ({}));
+  const ch = db()
+    .prepare("SELECT document_id, start_page FROM chapters WHERE id = ?")
+    .get(chapterId) as
+    | { document_id: string; start_page: number | null }
+    | undefined;
+  if (!ch) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
+  const result = importQaPairsAsCards({
+    chapterId,
+    documentId: ch.document_id,
+    startPage: ch.start_page,
+    difficulty: body.difficulty ?? "medium",
+  });
+  if (result.pairs === 0) {
+    return c.json(
+      {
+        error:
+          "Kein qa_pairs-Cache vorhanden. Erst Kapitel vorbereiten (POST /preprocess/:chapterId).",
+      },
+      400
+    );
+  }
+  return c.json(result);
+});

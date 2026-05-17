@@ -4,6 +4,7 @@ import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
 import { cn } from "../lib/cn";
 import { t } from "../lib/i18n";
+import { renderMarkdown } from "../lib/markdown";
 
 interface Props {
   cards: Card[];
@@ -112,9 +113,9 @@ export function CardReview({ cards, onClose }: Props) {
                 })}
               </div>
             )}
-            <p className="text-lg md:text-xl leading-relaxed whitespace-pre-wrap">
-              {card.question}
-            </p>
+            <div className="text-lg md:text-xl leading-relaxed">
+              {renderMarkdown(card.question)}
+            </div>
           </section>
 
           {showHint && card.hint && !showAnswer && (
@@ -122,9 +123,9 @@ export function CardReview({ cards, onClose }: Props) {
               <div className="text-[11px] uppercase tracking-wide text-amber-400 mb-2">
                 {t("cards.hintChip")}
               </div>
-              <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap text-neutral-200">
-                {card.hint}
-              </p>
+              <div className="text-sm md:text-base leading-relaxed text-neutral-200">
+                {renderMarkdown(card.hint)}
+              </div>
             </section>
           )}
 
@@ -134,9 +135,9 @@ export function CardReview({ cards, onClose }: Props) {
                 {t("review.solution")}
               </div>
               {card.answer ? (
-                <p className="text-base md:text-lg leading-relaxed whitespace-pre-wrap text-neutral-100">
-                  {card.answer}
-                </p>
+                <div className="text-base md:text-lg leading-relaxed text-neutral-100">
+                  {renderMarkdown(card.answer)}
+                </div>
               ) : (
                 <p className="text-sm text-neutral-500 italic">{t("review.noSolution")}</p>
               )}

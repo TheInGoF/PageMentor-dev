@@ -3,7 +3,7 @@
  *
  * Why hand-rolled instead of `marked` + `dompurify`: those add ~30 kB
  * gzip and we only need a handful of features. The renderer covers
- * what our LLM prompts (Tutor, Summaries) actually emit:
+ * what our LLM prompts (Tutor, Summaries, Cards) actually emit:
  *
  *   - # / ## / ### headings
  *   - - / * unordered list bullets
@@ -11,12 +11,14 @@
  *   - **bold** and *italic* inline
  *   - `inline code`
  *   - blank-line-separated paragraphs
+ *   - `$inline math$` and `$$block math$$` (rendered via KaTeX)
  *
  * Out of scope: tables, blockquotes, links, code fences, images. If we
  * ever need those, swap in `react-markdown`.
  */
 
 import type { ReactNode } from "react";
+import { InlineMath, BlockMath } from "react-katex";
 
 /** Parses inline markdown (bold, italic, code) inside a single line of
  *  text and returns a list of React nodes. The regex walks left to
@@ -24,8 +26,17 @@ import type { ReactNode } from "react";
  *  between stays plain text. */
 function renderInline(text: string): ReactNode[] {
   // Order matters: longer/more-specific markers first.
-  // `**bold**`, `__bold__`, `*italic*`, `_italic_`, `` `code` ``
-  const re = /(\*\*[^*\n]+\*\*|__[^_\n]+__|`[^`\n]+`|\*[^*\n]+\*|_[^_\n]+_)/g;
+  //   `$...$`     — inline math (must come before italic to avoid the
+  //                 `*` running into `$`-quoted LaTeX that contains *)
+  //   `**bold**`, `__bold__`
+  //   `` `code` ``
+  //   `*italic*`, `_italic_`
+  //
+  // Inline math is greedy on non-dollar non-newline content so e.g.
+  // "die Wahrscheinlichkeit $P(x_1) = 0.5$ ergibt sich" parses cleanly.
+  // Inside `$...$` we accept anything except `$` and newline.
+  const re =
+    /(\$[^$\n]+\$|\*\*[^*\n]+\*\*|__[^_\n]+__|`[^`\n]+`|\*[^*\n]+\*|_[^_\n]+_)/g;
   const out: ReactNode[] = [];
   let lastIdx = 0;
   let match: RegExpExecArray | null;
@@ -35,7 +46,16 @@ function renderInline(text: string): ReactNode[] {
       out.push(text.slice(lastIdx, match.index));
     }
     const token = match[0];
-    if (token.startsWith("**") && token.endsWith("**")) {
+    if (token.startsWith("$") && token.endsWith("$")) {
+      const tex = token.slice(1, -1);
+      // KaTeX throws on malformed input. We render the raw `$...$`
+      // text on parse error so the user can see what was attempted.
+      try {
+        out.push(<InlineMath key={key++} math={tex} />);
+      } catch {
+        out.push(<span key={key++} className="text-amber-400">{token}</span>);
+      }
+    } else if (token.startsWith("**") && token.endsWith("**")) {
       out.push(<strong key={key++}>{token.slice(2, -2)}</strong>);
     } else if (token.startsWith("__") && token.endsWith("__")) {
       out.push(<strong key={key++}>{token.slice(2, -2)}</strong>);
@@ -65,7 +85,8 @@ type Block =
   | { kind: "heading"; level: 1 | 2 | 3; text: string }
   | { kind: "ul"; items: string[] }
   | { kind: "ol"; items: string[] }
-  | { kind: "p"; text: string };
+  | { kind: "p"; text: string }
+  | { kind: "math"; tex: string };
 
 /** Splits the raw text into block-level chunks. Bullet runs collapse
  *  into one `ul` block; numbered runs into one `ol`. Blank lines flush
@@ -105,6 +126,16 @@ function parseBlocks(raw: string): Block[] {
     const line = rawLine.trim();
     if (!line) {
       flushAll();
+      continue;
+    }
+    // Block-level math `$$...$$`. Must be on its own line (or own
+    // paragraph). The LLM is instructed to put display formulas on
+    // a separate line in the prompt — that means we treat any line
+    // that is exactly `$$...$$` as a math block.
+    const blockMath = /^\$\$([^$]+?)\$\$$/.exec(line);
+    if (blockMath) {
+      flushAll();
+      blocks.push({ kind: "math", tex: blockMath[1].trim() });
       continue;
     }
     const heading = /^(#{1,3})\s+(.*)$/.exec(line);
@@ -190,6 +221,26 @@ export function renderMarkdown(text: string): ReactNode {
             {renderInline(block.text)}
           </p>
         );
+      case "math": {
+        // BlockMath also throws on malformed input; render the raw
+        // TeX on error so the failing source is visible.
+        try {
+          return (
+            <div key={i} className="my-2">
+              <BlockMath math={block.tex} />
+            </div>
+          );
+        } catch {
+          return (
+            <pre
+              key={i}
+              className="my-2 text-xs text-amber-400 whitespace-pre-wrap"
+            >
+              {`$$${block.tex}$$`}
+            </pre>
+          );
+        }
+      }
     }
   });
 }

@@ -616,7 +616,7 @@ export const api = {
       chapterId: string,
       body: { count: number; difficulty: "easy" | "medium" | "hard"; style: "basic" | "deep" | "exam" }
     ) =>
-      request<{ generated: number; model: string }>(
+      request<{ generated: number; model?: string; skipped?: number; mode?: string }>(
         `/api/cards/ai-generate/${chapterId}`,
         { method: "POST", body: JSON.stringify(body) }
       ),
@@ -624,6 +624,29 @@ export const api = {
       request<{ generated: number; model: string }>(
         `/api/cards/similar/${cardId}`,
         { method: "POST" }
+      ),
+    preprocess: (chapterId: string, body?: { force?: boolean; model?: string }) =>
+      request<{
+        type: "qa_pairs" | "content";
+        model: string;
+        cached: boolean;
+        pairCount?: number;
+        contentLength?: number;
+      }>(`/api/cards/preprocess/${chapterId}`, {
+        method: "POST",
+        body: JSON.stringify(body ?? {}),
+      }),
+    preprocessStatus: (chapterId: string) =>
+      request<{
+        type: "qa_pairs" | "content" | null;
+        model: string | null;
+        length: number;
+        preprocessed: boolean;
+      }>(`/api/cards/preprocess-status/${chapterId}`),
+    importQa: (chapterId: string, difficulty: "easy" | "medium" | "hard" = "medium") =>
+      request<{ inserted: number; skipped: number; pairs: number }>(
+        `/api/cards/import-qa/${chapterId}`,
+        { method: "POST", body: JSON.stringify({ difficulty }) }
       ),
     exportUrl: (docId: string, format: "csv" | "json" = "csv") =>
       `/api/cards/export/${docId}?format=${format}`,

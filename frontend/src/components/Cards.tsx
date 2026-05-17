@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, subscribeProgress, type Card, type CardStats, type ProgressEvent } from "../lib/api";
+import {
+  api,
+  subscribeProgress,
+  type Card,
+  type CardStats,
+  type Chapter,
+  type ProgressEvent,
+} from "../lib/api";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
 import { Input } from "./ui/Input";
@@ -7,6 +14,7 @@ import { useToast } from "./ui/Toast";
 import { CardReview } from "./CardReview";
 import { cn } from "../lib/cn";
 import { t } from "../lib/i18n";
+import { renderMarkdown } from "../lib/markdown";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -21,6 +29,7 @@ export function Cards({ docId }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [editCard, setEditCard] = useState<Card | null>(null);
   const [genOpen, setGenOpen] = useState(false);
+  const [prepOpen, setPrepOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [filterChapter, setFilterChapter] = useState<string>("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -119,6 +128,14 @@ export function Cards({ docId }: Props) {
               title={t("cards.generateTitle")}
             >
               {t("cards.generate")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setPrepOpen(true)}
+              disabled={busy}
+              title={t("cards.prepTitle")}
+            >
+              {t("cards.prep")}
             </Button>
             {(stats?.total ?? 0) > 0 && (
               <a
@@ -250,6 +267,12 @@ export function Cards({ docId }: Props) {
         onClose={() => setGenOpen(false)}
         onReload={load}
       />
+      <PreprocessModal
+        open={prepOpen}
+        docId={docId}
+        onClose={() => setPrepOpen(false)}
+        onReload={load}
+      />
     </div>
   );
 }
@@ -298,7 +321,9 @@ function CardRow({
           {open ? "▾" : "▸"}
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-neutral-100 line-clamp-2">{card.question}</p>
+          <div className="text-sm text-neutral-100 line-clamp-2">
+            {renderMarkdown(card.question)}
+          </div>
           <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-1">
             {card.chapter_number && (
               <span>
@@ -321,12 +346,14 @@ function CardRow({
             )}
           </div>
           {open && (
-            <div className="mt-3 pt-3 border-t border-border text-sm text-neutral-300 whitespace-pre-wrap space-y-2">
+            <div className="mt-3 pt-3 border-t border-border text-sm text-neutral-300 space-y-2">
               {card.hint && (
-                <p className="text-amber-400/90 text-xs italic">💡 {card.hint}</p>
+                <div className="text-amber-400/90 text-xs italic">
+                  💡 {renderMarkdown(card.hint)}
+                </div>
               )}
               {card.answer ? (
-                <p>{card.answer}</p>
+                <div>{renderMarkdown(card.answer)}</div>
               ) : (
                 <span className="text-neutral-500 italic">{t("cards.noAnswer")}</span>
               )}
@@ -787,3 +814,219 @@ function phaseMessage(s: GenProgressState): string | null {
 
 // Re-exported because some callers may want the shared Input style.
 void Input;
+
+// ---------------------------------------------------------------------
+// Card preprocess modal — per-chapter classify (Klausur vs Lehrtext)
+// and either extract Q&A pairs (and import as cards) or rewrite the
+// content with LaTeX-clean formulas for the AI card-gen to consume.
+// ---------------------------------------------------------------------
+
+type PrepStatus =
+  | { state: "unknown" }
+  | { state: "loading" }
+  | { state: "ready"; type: "qa_pairs" | "content"; length: number }
+  | { state: "running" }
+  | {
+      state: "result";
+      type: "qa_pairs" | "content";
+      pairCount?: number;
+      contentLength?: number;
+    }
+  | { state: "error"; message: string };
+
+function PreprocessModal({
+  open,
+  docId,
+  onClose,
+  onReload,
+}: {
+  open: boolean;
+  docId: string;
+  onClose: () => void;
+  onReload: () => Promise<void>;
+}) {
+  const [chapters, setChapters] = useState<Chapter[] | null>(null);
+  const [status, setStatus] = useState<Record<string, PrepStatus>>({});
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!open) return;
+    api.chapters
+      .list(docId)
+      .then(async (chs) => {
+        setChapters(chs);
+        // Lade aktuellen Preprocess-Status für jedes Kapitel parallel.
+        const entries = await Promise.all(
+          chs.map(async (ch) => {
+            try {
+              const r = await api.cards.preprocessStatus(ch.id);
+              const v: PrepStatus = r.preprocessed
+                ? {
+                    state: "ready",
+                    type: (r.type as "qa_pairs" | "content") ?? "content",
+                    length: r.length,
+                  }
+                : { state: "unknown" };
+              return [ch.id, v] as const;
+            } catch {
+              return [ch.id, { state: "unknown" } as PrepStatus] as const;
+            }
+          })
+        );
+        setStatus(Object.fromEntries(entries));
+      })
+      .catch(() => setChapters([]));
+  }, [open, docId]);
+
+  async function runPreprocess(chapterId: string, force: boolean) {
+    setStatus((s) => ({ ...s, [chapterId]: { state: "running" } }));
+    try {
+      const r = await api.cards.preprocess(chapterId, { force });
+      setStatus((s) => ({
+        ...s,
+        [chapterId]: {
+          state: "result",
+          type: r.type,
+          pairCount: r.pairCount,
+          contentLength: r.contentLength,
+        },
+      }));
+    } catch (err) {
+      setStatus((s) => ({
+        ...s,
+        [chapterId]: {
+          state: "error",
+          message: err instanceof Error ? err.message : "Fehler",
+        },
+      }));
+    }
+  }
+
+  async function importQa(chapterId: string) {
+    try {
+      const r = await api.cards.importQa(chapterId, "medium");
+      toast.show(
+        t("cards.prep.imported", { n: r.inserted, skipped: r.skipped }),
+        "success"
+      );
+      await onReload();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t("cards.prep.title")}
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          {t("common.close")}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-xs text-neutral-500">{t("cards.prep.description")}</p>
+        {!chapters && (
+          <div className="text-sm text-neutral-500">{t("common.loading")}</div>
+        )}
+        {chapters && chapters.length === 0 && (
+          <div className="text-sm text-neutral-500 italic">
+            {t("cards.prep.noChapters")}
+          </div>
+        )}
+        {chapters && chapters.length > 0 && (
+          <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-1">
+            {chapters.map((ch) => {
+              const st = status[ch.id] ?? { state: "unknown" };
+              return (
+                <div
+                  key={ch.id}
+                  className="border border-border rounded p-3 flex flex-col gap-2"
+                >
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-xs text-neutral-500 tabular-nums">
+                      {String(ch.number).padStart(2, "0")}
+                    </span>
+                    <span className="text-sm text-neutral-100 truncate">
+                      {ch.title || `Kapitel ${ch.number}`}
+                    </span>
+                    <PrepBadge status={st} />
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      onClick={() => runPreprocess(ch.id, st.state === "ready")}
+                      disabled={st.state === "running"}
+                      className="!py-1 !px-2 text-xs"
+                    >
+                      {st.state === "running"
+                        ? t("cards.prep.processing")
+                        : st.state === "ready" || st.state === "result"
+                          ? t("cards.prep.redo")
+                          : t("cards.prep.run")}
+                    </Button>
+                    {(st.state === "ready" && st.type === "qa_pairs") ||
+                    (st.state === "result" && st.type === "qa_pairs") ? (
+                      <Button
+                        variant="primary"
+                        onClick={() => importQa(ch.id)}
+                        className="!py-1 !px-2 text-xs"
+                      >
+                        {t("cards.prep.importQa")}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function PrepBadge({ status }: { status: PrepStatus }) {
+  if (status.state === "unknown")
+    return (
+      <span className="text-[11px] text-neutral-500 px-1.5 py-0.5 rounded border border-border">
+        {t("cards.prep.badge.unknown")}
+      </span>
+    );
+  if (status.state === "loading" || status.state === "running")
+    return (
+      <span className="text-[11px] text-neutral-400 px-1.5 py-0.5 rounded border border-border">
+        ⋯
+      </span>
+    );
+  if (status.state === "error")
+    return (
+      <span
+        className="text-[11px] text-accent px-1.5 py-0.5 rounded border border-accent-subtle"
+        title={status.message}
+      >
+        {t("cards.prep.badge.error")}
+      </span>
+    );
+  // ready or result
+  const isQa = status.type === "qa_pairs";
+  const label = isQa
+    ? "result" in status && status.state === "result"
+      ? t("cards.prep.badge.qaCount", { n: status.pairCount ?? 0 })
+      : t("cards.prep.badge.qa")
+    : t("cards.prep.badge.content");
+  return (
+    <span
+      className={cn(
+        "text-[11px] px-1.5 py-0.5 rounded border",
+        isQa
+          ? "text-emerald-300 border-emerald-700/50 bg-emerald-700/10"
+          : "text-blue-300 border-blue-700/50 bg-blue-700/10"
+      )}
+    >
+      {label}
+    </span>
+  );
+}

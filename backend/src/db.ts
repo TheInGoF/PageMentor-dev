@@ -174,6 +174,24 @@ export function initDb() {
     // 1 = include, 0 = exclude, NULL = use kind-default.
     d.exec("ALTER TABLE chapters ADD COLUMN include_in_audio INTEGER");
   }
+  if (!chapterCols.some((c) => c.name === "card_text")) {
+    // LLM-preprocessed chapter text, optimized for card generation.
+    // Two distinct usage modes encoded in `card_text_type`:
+    //   "qa_pairs": chapter is an exam / exercise sheet. card_text
+    //               is a JSON-stringified array of {question, answer}
+    //               objects that the Cards-Generator imports
+    //               directly without a second LLM round-trip.
+    //   "content":  chapter is regular study material. card_text is
+    //               the same prose with PDF-mangled formulas
+    //               reconstructed in LaTeX ($P(x_i) = 0,5$ etc.) so
+    //               the AI-card-gen builds clean cards.
+    // NULL = not yet preprocessed; AI-card-gen falls back to the raw
+    //        `text` column with the same garble-handling prompt as
+    //        before.
+    d.exec("ALTER TABLE chapters ADD COLUMN card_text TEXT");
+    d.exec("ALTER TABLE chapters ADD COLUMN card_text_model TEXT");
+    d.exec("ALTER TABLE chapters ADD COLUMN card_text_type TEXT");
+  }
 
   const docCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
   if (!docCols.some((c) => c.name === "author")) {
