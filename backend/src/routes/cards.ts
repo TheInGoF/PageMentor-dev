@@ -652,8 +652,30 @@ cardRoutes.post("/ai-generate/:chapterId", async (c) => {
 
   const system =
     lang === "de"
-      ? "Du erstellst Lernkarten aus einem Kapiteltext. Antworte AUSSCHLIESSLICH mit einem validen JSON-Array. Keine Einleitung, keine Codefences, keine Kommentare. Jede Karte hat question und answer (beide String)."
-      : "You create flashcards from a chapter of study material. Respond ONLY with a valid JSON array. No introduction, no code fences, no comments. Each card has question and answer (both strings).";
+      ? `Du erstellst Lernkarten aus einem Kapiteltext. Antworte AUSSCHLIESSLICH mit einem validen JSON-Array. Keine Einleitung, keine Codefences, keine Kommentare. Jede Karte hat question und answer (beide String).
+
+FORMEL-REKONSTRUKTION (wichtig für Mathe-/Info-/Naturwiss.-Kapitel):
+Der Kapiteltext stammt aus einer PDF-Extraktion. Formeln sind dort oft verstümmelt — Subscripts fehlen, "=" und "+" sind manchmal als Leerzeichen rausgekommen, "x_1" steht als "x 1", "τ_1" als "τ 1", Wahrscheinlichkeiten wie "P(x_1) = 0,5" als "P ( x 1  0,5)".
+
+Beim Erstellen der Karten musst du diese Formeln REKONSTRUIEREN bevor du sie in question/answer übernimmst:
+- Subscripts als Unicode-Tiefstellungen schreiben: x₁, x₂, τ₁, τ_8 (Unicode ₁₂₃₄₅₆₇₈₉₀ oder LaTeX-Stil x_1, x_2)
+- Operatoren explizit machen: P(x₁) = 0,5 (mit echtem "=")
+- Wahrscheinlichkeiten/Werte aus dem Kontext erschließen wenn die Extraktion zwischendurch ein Zeichen verloren hat
+- Bei längeren Formeln auch LaTeX-Stil mit $...$ erlaubt (z.B. $H(X) = -\\sum p_i \\log_2 p_i$)
+
+Wenn eine Formel nach Rekonstruktion nicht eindeutig ist (zu viel fehlt), lass sie weg und mach lieber eine begriffliche statt rechnerische Karte. Nie verstümmelte Formeln wörtlich in die Karte kopieren.`
+      : `You create flashcards from a chapter of study material. Respond ONLY with a valid JSON array. No introduction, no code fences, no comments. Each card has question and answer (both strings).
+
+FORMULA RECONSTRUCTION (important for math/CS/science chapters):
+The chapter text comes from a PDF extraction. Formulas there are often mangled — subscripts dropped, "=" and "+" sometimes leaked into spaces, "x_1" appears as "x 1", "τ_1" as "τ 1", probabilities like "P(x_1) = 0.5" as "P ( x 1  0.5)".
+
+When creating cards you must RECONSTRUCT these formulas before putting them into question/answer:
+- Write subscripts as Unicode (x₁, x₂, τ₁, τ_8) or LaTeX style (x_1, x_2)
+- Make operators explicit: P(x₁) = 0.5 (with a real "=")
+- Infer probabilities/values from context if extraction lost a character
+- For longer formulas, LaTeX with $...$ is allowed (e.g. $H(X) = -\\sum p_i \\log_2 p_i$)
+
+If a formula is too ambiguous after reconstruction (too much missing), skip it and make a conceptual card instead of a computational one. Never copy a mangled formula verbatim into a card.`;
 
   const styleLabel =
     lang === "de"
@@ -745,8 +767,12 @@ cardRoutes.post("/similar/:cardId", async (c) => {
   const lang = card.language === "de" ? "de" : "en";
   const system =
     lang === "de"
-      ? "Du generierst Lernkarten im Stil einer Beispielkarte. Antworte NUR mit einem validen JSON-Array, keine Prose, keine Codefences."
-      : "You generate flashcards in the style of an example card. Respond ONLY with a valid JSON array, no prose, no code fences.";
+      ? `Du generierst Lernkarten im Stil einer Beispielkarte. Antworte NUR mit einem validen JSON-Array, keine Prose, keine Codefences.
+
+Falls der Kapitelkontext mathematische Formeln enthält die aus der PDF-Extraktion verstümmelt sind (Subscripts fehlen, "=" als Leerzeichen, "x 1" statt "x_1"), REKONSTRUIERE sie sauber in deinen Karten — Unicode-Tiefstellungen (x₁, τ₂) oder LaTeX-Stil ($P(x_i) = 0,5$). Nie verstümmelt übernehmen.`
+      : `You generate flashcards in the style of an example card. Respond ONLY with a valid JSON array, no prose, no code fences.
+
+If the chapter context contains mathematical formulas that are mangled from PDF extraction (missing subscripts, "=" as spaces, "x 1" instead of "x_1"), RECONSTRUCT them cleanly in your cards — Unicode subscripts (x₁, τ₂) or LaTeX style ($P(x_i) = 0.5$). Never copy mangled formulas verbatim.`;
 
   const context = (card.chapter_text || "").slice(0, 8_000);
   const prompt =
