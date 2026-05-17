@@ -46,6 +46,16 @@ services:
       # modal (persisted in data/llm-config.json). This ENV only acts as
       # a fallback default when the Settings field is empty.
       PM_QWEN_TTS_URL: ${PM_QWEN_TTS_URL:-}
+      # Embedding server (infinity hosting jina-embeddings-v3) on the
+      # GPU host. Mandatory since v1.18.144 — Ollama embedding fallback
+      # was removed to keep the vector space consistent.
+      PM_TEI_URL: ${PM_TEI_URL:-}
+      # Optional: mirror docling's container logs into PageMentor's
+      # Logs page via the pm-docker-log-bridge sidecar on the GPU host.
+      # When PM_DOCKER_LOG_BRIDGE_URL is empty the pump is a no-op.
+      PM_DOCKER_LOG_BRIDGE_URL: ${PM_DOCKER_LOG_BRIDGE_URL:-}
+      PM_DOCKER_LOG_BRIDGE_TOKEN: ${PM_DOCKER_LOG_BRIDGE_TOKEN:-}
+      PM_DOCKER_LOG_BRIDGE_CONTAINERS: ${PM_DOCKER_LOG_BRIDGE_CONTAINERS:-pm-docling}
     volumes:
       - /volume1/docker/pagementor/data:/data
     depends_on:
