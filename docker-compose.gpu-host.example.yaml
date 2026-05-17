@@ -46,6 +46,26 @@
 #      `http://<gpu-host-ip>:8790`. And → LLM → Ollama URL to
 #      `http://<gpu-host-ip>:8790` (yes, same port — the arbiter
 #      speaks both protocols).
+#
+# ----------------------------------------------------------------------
+# NAS-side .env values that pair with this stack (copy into pm-app's
+# .env on the Synology). Single source of truth for the URLs — the
+# .env.example in the repo root has the same list:
+#
+#   DOCLING_API_KEY=<must match DOCLING_SERVE_API_KEY below>
+#   PM_QWEN_TTS_URL=http://<gpu-host>:8790      # via arbiter, not direct
+#   PM_TEI_URL=http://<gpu-host>:8080           # infinity / jina-v3
+#   PM_DOCKER_LOG_BRIDGE_URL=http://<gpu-host>:8792
+#   PM_DOCKER_LOG_BRIDGE_TOKEN=<matches LOG_BRIDGE_TOKEN below, empty=unauth>
+#   PM_DOCKER_LOG_BRIDGE_CONTAINERS=pm-docling  # extend with ,pm-qdrant etc.
+#
+# Doc_storage's .env mirror (in doc_storage/.env):
+#   DS_ARBITER_URL=http://<gpu-host>:8790
+#   DS_OLLAMA_URL=http://<gpu-host>:8790
+#   DS_DOCLING_URL=http://<gpu-host>:5001
+#   DS_DOCLING_API_KEY=<same as PageMentor's DOCLING_API_KEY>
+#   DS_TEI_URL=http://<gpu-host>:8080
+#   DS_QDRANT_URL=http://<gpu-host>:6333
 
 services:
   ollama:
