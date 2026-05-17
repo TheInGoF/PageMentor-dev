@@ -93,12 +93,20 @@ class ArbiterState:
     owner: Owner = "idle"
     since: float = field(default_factory=time.time)
     queue_depth: int = 0
+    # Name of the Ollama model the arbiter believes is currently
+    # resident in VRAM. Updated on every LLM proxy enter when we
+    # peek at the request body. Drives the pre-unload step when a
+    # different model is about to be called — keeps strict
+    # single-model-resident behaviour even when multiple model tags
+    # are alternated (e.g. RAG answer + rerank + classify).
+    loaded_model: str | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {
             "owner": self.owner,
             "since_seconds": round(time.time() - self.since, 3),
             "queue_depth": self.queue_depth,
+            "loaded_model": self.loaded_model,
         }
 
 
@@ -263,23 +271,25 @@ async def _start_tts_and_wait() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _unload_all_ollama_models() -> None:
+async def _list_loaded_models() -> list[str]:
+    """Returns the model tags Ollama currently has resident in VRAM."""
     assert http_client is not None
     try:
         r = await http_client.get(f"{OLLAMA_URL}/api/ps", timeout=10.0)
         r.raise_for_status()
         data = r.json()
     except Exception as e:  # noqa: BLE001
-        log.warning("could not read /api/ps, skipping unload: %r", e)
-        return
-
+        log.warning("could not read /api/ps: %r", e)
+        return []
     models = [m.get("name") or m.get("model") for m in data.get("models", []) if m]
-    models = [m for m in models if m]
-    if not models:
-        log.info("no Ollama model loaded, nothing to unload")
-        return
+    return [m for m in models if m]
 
-    log.info("unloading Ollama models: %s", ", ".join(models))
+
+async def _unload_models(models: list[str]) -> None:
+    """Forces Ollama to drop each listed model from VRAM by issuing
+    an empty `keep_alive=0` generate. Errors are logged and swallowed
+    — a single failed unload mustn't block the caller's request."""
+    assert http_client is not None
     for model in models:
         try:
             await http_client.post(
@@ -289,6 +299,41 @@ async def _unload_all_ollama_models() -> None:
             )
         except Exception as e:  # noqa: BLE001
             log.warning("unload failed for %s: %r", model, e)
+
+
+async def _unload_all_ollama_models() -> None:
+    """Drop every resident model. Used before TTS takes the GPU."""
+    models = await _list_loaded_models()
+    if not models:
+        log.info("no Ollama model loaded, nothing to unload")
+        state.loaded_model = None
+        return
+    log.info("unloading Ollama models: %s", ", ".join(models))
+    await _unload_models(models)
+    state.loaded_model = None
+
+
+async def _ensure_single_model_resident(desired: str | None) -> None:
+    """Strict-single-model mode: if any model other than `desired`
+    is currently resident, unload it first. Called from the LLM
+    proxy entry path so two consecutive requests with different
+    model tags (e.g. RAG → rerank with different num_ctx, or
+    gemma4:26b → qwen3.5:9b) never fight for VRAM.
+
+    `desired=None` means we don't know the requested model (couldn't
+    parse the body) — in that case keep current state, the user
+    shouldn't pay an unload cost for missing telemetry."""
+    if not desired:
+        return
+    loaded = await _list_loaded_models()
+    stale = [m for m in loaded if m != desired]
+    if stale:
+        log.info(
+            "single-model mode: '%s' wants the GPU — evicting %s",
+            desired, ", ".join(stale),
+        )
+        await _unload_models(stale)
+    state.loaded_model = desired
 
 
 # ---------------------------------------------------------------------------
@@ -497,11 +542,36 @@ async def gpu_reset():
     state.owner = "idle"
     state.since = time.time()
     state.queue_depth = 0
+    state.loaded_model = None
 
     result["elapsed_s"] = round(time.time() - start, 2)
     result["snapshot"] = state.snapshot()
     log.info("gpu reset done in %.2fs", result["elapsed_s"])
     return result
+
+
+def _peek_requested_model(path: str, body: bytes) -> str | None:
+    """Try to read the model tag a /api/* request is targeting so we
+    can pre-unload any other resident model. Only the JSON endpoints
+    that the doc_storage + PageMentor clients actually use are
+    inspected (chat / generate / embeddings); everything else (tags,
+    pull, …) returns None and skips the pre-unload."""
+    if not body:
+        return None
+    if not any(
+        path.startswith(p)
+        for p in ("chat", "generate", "embeddings", "embed")
+    ):
+        return None
+    import json as _json
+    try:
+        payload = _json.loads(body)
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(payload, dict):
+        return None
+    m = payload.get("model")
+    return m if isinstance(m, str) and m else None
 
 
 @app.api_route(
@@ -510,7 +580,22 @@ async def gpu_reset():
 )
 async def ollama_proxy(path: str, request: Request):
     assert http_client is not None
+    # Peek the body up-front so the model-aware pre-unload knows
+    # which model the caller wants. Starlette caches the result of
+    # request.body() internally, so the second call inside
+    # proxy_stream returns the same bytes without a fresh receive
+    # round-trip — no need to manually re-inject.
+    body = await request.body()
+    desired = _peek_requested_model(path, body)
     async with own_gpu("llm"):
+        if desired:
+            # Strict single-model: evict any other model BEFORE
+            # the proxy hands the new request to Ollama. Inside the
+            # lock so no concurrent caller swaps state under us.
+            try:
+                await _ensure_single_model_resident(desired)
+            except Exception as e:  # noqa: BLE001
+                log.warning("pre-unload before %s failed: %r", desired, e)
         return await proxy_stream(http_client, OLLAMA_URL, request, f"api/{path}")
 
 
