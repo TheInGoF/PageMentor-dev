@@ -228,6 +228,15 @@ export function initDb() {
     // edits this in the Audiobook tab via the intro box.
     d.exec("ALTER TABLE documents ADD COLUMN audio_intro_text TEXT");
   }
+  if (!docCols.some((c) => c.name === "force_ocr")) {
+    // Force full-page OCR on extraction (re-runs RapidOCR over the
+    // rasterised page even when the PDF has extractable text). Needed
+    // for PDFs where the font's CMap is broken so /gNN glyph names
+    // leak through as garbage tokens ("Quelle /g94 /g96 i 1 2 n ...").
+    // Default 0 (off) because force-OCR roughly doubles extraction
+    // time and most PDFs don't need it.
+    d.exec("ALTER TABLE documents ADD COLUMN force_ocr INTEGER NOT NULL DEFAULT 0");
+  }
   if (!docCols.some((c) => c.name === "audio_intro_text_tts")) {
     // Gemma-cleaned TTS variant of audio_intro_text. User stores the
     // readable form ("Qwen3-TTS", "PageMentor") in audio_intro_text;

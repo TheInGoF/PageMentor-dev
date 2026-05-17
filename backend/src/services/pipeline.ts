@@ -44,7 +44,7 @@ export async function processDocument(docId: string): Promise<void> {
 
   const d = db();
   const doc = d.prepare("SELECT * FROM documents WHERE id = ?").get(docId) as
-    | { stored_path: string; language: string }
+    | { stored_path: string; language: string; force_ocr: number }
     | undefined;
 
   if (!doc) {
@@ -71,6 +71,7 @@ export async function processDocument(docId: string): Promise<void> {
     const extraction = await extractPdfViaDocling({
       pdfPath: fullPath,
       language: doc.language,
+      forceOcr: doc.force_ocr === 1,
       signal,
       onProgress: (message, fraction) =>
         emit({ phase: "pipeline.extraction", docId, message, current: fraction }),

@@ -26,6 +26,7 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
   const [moduleId, setModuleId] = useState("");
   const [modules, setModules] = useState<ModuleListItem[]>([]);
   const [tags, setTags] = useState("");
+  const [forceOcr, setForceOcr] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
     setLanguage(getSettings().defaultLanguage);
     setModuleId("");
     setTags("");
+    setForceOcr(false);
     setBusy(false);
     setProgress(null);
     setError(null);
@@ -82,6 +84,7 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
       form.set("language", language);
       form.set("tags", tags);
       if (moduleId) form.set("module", moduleId);
+      if (forceOcr) form.set("force_ocr", "true");
       try {
         await api.documents.upload(form);
         uploaded++;
@@ -238,6 +241,23 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
           onChange={setTags}
           placeholder={t("upload.tagsPlaceholder")}
         />
+
+        <label className="flex items-start gap-2 text-xs text-neutral-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={forceOcr}
+            onChange={(e) => setForceOcr(e.target.checked)}
+            className="mt-0.5 accent-accent"
+          />
+          <span>
+            <span className="font-medium text-neutral-200">
+              {t("upload.forceOcr")}
+            </span>
+            <span className="block text-neutral-500">
+              {t("upload.forceOcrHint")}
+            </span>
+          </span>
+        </label>
 
         {error && <p className="text-xs text-accent">{error}</p>}
       </form>

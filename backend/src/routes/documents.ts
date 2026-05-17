@@ -159,6 +159,10 @@ documentRoutes.post("/upload", async (c) => {
   const moduleRaw = (form.get("module") as string) || "";
   const moduleId =
     moduleRaw === "" || moduleRaw === "none" ? null : moduleRaw;
+  // Opt-in: re-OCR every page even when extractable text exists. Rescues
+  // PDFs with broken font CMaps (/gNN glyph soup in the text layer).
+  const forceOcr =
+    String(form.get("force_ocr") ?? "").toLowerCase() === "true" ? 1 : 0;
 
   if (!file) return c.json({ error: tt(c, "err.missingFile") }, 400);
 
@@ -175,8 +179,8 @@ documentRoutes.post("/upload", async (c) => {
 
   db()
     .prepare(
-      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type, module_id, ocr_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting-extraction')`
+      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type, module_id, force_ocr, ocr_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting-extraction')`
     )
     .run(
       id,
@@ -187,7 +191,8 @@ documentRoutes.post("/upload", async (c) => {
       buf.length,
       language,
       type,
-      moduleId
+      moduleId,
+      forceOcr
     );
 
   // Tags
@@ -213,6 +218,14 @@ documentRoutes.post("/:id/reprocess", async (c) => {
   const id = c.req.param("id");
   const doc = db().prepare("SELECT id FROM documents WHERE id = ?").get(id);
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+  // Allow flipping force_ocr at re-run time without re-uploading the
+  // file. Common flow: first extraction shows /gNN garbage → user
+  // re-triggers with force_ocr=true.
+  const forceOcrRaw = c.req.query("force_ocr");
+  if (forceOcrRaw !== undefined) {
+    const v = forceOcrRaw.toLowerCase() === "true" ? 1 : 0;
+    db().prepare("UPDATE documents SET force_ocr = ? WHERE id = ?").run(v, id);
+  }
   processDocument(id).catch((err) => console.error("[reprocess] pipeline error:", err));
   return c.json({ status: "queued" });
 });

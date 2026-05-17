@@ -300,10 +300,14 @@ export async function doclingAlive(): Promise<boolean> {
 export async function extractPdfViaDocling(params: {
   pdfPath: string;
   language?: string;
+  /** Re-run OCR over the rasterised pages even when the PDF carries
+   *  extractable text. Useful for PDFs with broken font CMaps where
+   *  /gNN glyph names leak into the text layer. Roughly 2x slower. */
+  forceOcr?: boolean;
   signal?: AbortSignal;
   onProgress?: (message: string, fraction?: number) => void;
 }): Promise<DoclingExtraction> {
-  const { pdfPath, language = "de", signal, onProgress } = params;
+  const { pdfPath, language = "de", forceOcr = false, signal, onProgress } = params;
   const lang = pickLang(language);
 
   // ---- 1. Upload -----------------------------------------------------
@@ -319,6 +323,12 @@ export async function extractPdfViaDocling(params: {
   form.append("from_formats", "pdf");
   form.append("ocr_lang", language === "en" ? "en" : "de");
   form.append("do_ocr", "true");
+  if (forceOcr) {
+    // Replaces extractable text with OCR-derived text. Saves PDFs with
+    // broken CMaps where the text layer is /gNN glyph soup. Costs
+    // roughly 2x extraction time, so opt-in per upload.
+    form.append("force_ocr", "true");
+  }
   form.append("table_mode", "fast");
   form.append("pdf_backend", "dlparse_v2");
   form.append("abort_on_error", "false");
