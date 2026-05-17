@@ -16,6 +16,19 @@
 # CUDA path actually working.
 FROM quay.io/docling-project/docling-serve:v1.16.1
 
+# We tried `dnf install tesseract-langpack-deu` first but it fails
+# inside this slim container — the package installs + verifies fine,
+# then dnf returns exit 1 from a post-transaction trigger (no
+# systemd / scriptlet runner). Workaround: pull the .traineddata
+# straight from the upstream Tesseract repo. The tessdata_fast
+# variant is what every recent tesseract uses by default (LSTM
+# weights, ~15 MB).
+#
+# TESSDATA_PREFIX is set to /usr/share/tesseract/tessdata/ by the
+# base image, so dropping the file there makes it pick-up
+# automatically. `tesseract --list-langs` will then show "deu".
 USER 0
-RUN dnf install -y tesseract-langpack-deu && dnf clean all
+RUN curl -fsSL \
+      -o /usr/share/tesseract/tessdata/deu.traineddata \
+      https://github.com/tesseract-ocr/tessdata_fast/raw/main/deu.traineddata
 USER 1001
