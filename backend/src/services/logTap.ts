@@ -121,9 +121,10 @@ export function startSidecarLogPump(intervalMs: number = 5000): () => void {
           source: "system",
           level: "warn",
           message:
-            `[sidecar-log-pump] sidecar unreachable (${detail}) — ` +
-            `if this persists, restart pm-gpu-arbiter / pm-qwen-tts on the GPU host ` +
-            `(or trigger the GPU reset from PageMentor's admin endpoint).`,
+            `[sidecar-log-pump] /diagnostics/recent-logs endpoint not responding (${detail}). ` +
+            `This does NOT mean the sidecar itself is dead — TTS / embed calls may still work. ` +
+            `Only the live-log mirror into PageMentor's Logs page is affected. ` +
+            `If TTS also actually fails, restart pm-gpu-arbiter / pm-qwen-tts on the GPU host.`,
         });
       }
       return;
@@ -138,8 +139,9 @@ export function startSidecarLogPump(intervalMs: number = 5000): () => void {
         source: "system",
         level: "warn",
         message:
-          `[sidecar-log-pump] still down for ${downForS}s (latest: ${detail}). ` +
-          `Recommend GPU swap: docker restart pm-gpu-arbiter pm-qwen-tts on the GPU host.`,
+          `[sidecar-log-pump] diagnostics endpoint still down for ${downForS}s (latest: ${detail}). ` +
+          `Not necessarily a TTS outage — only the live-log mirror. ` +
+          `Restart pm-gpu-arbiter / pm-qwen-tts only if TTS actually fails.`,
       });
       lastErrorLogAt = now;
     }

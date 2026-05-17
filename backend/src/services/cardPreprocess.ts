@@ -78,11 +78,22 @@ async function classifyChapterType(
   const result = await generate({
     prompt: `Klassifiziere folgenden Auszug:\n\n${slice}`,
     system: CLASSIFY_SYSTEM,
+    // 64 tokens reicht für "qa_pairs" oder "content" plus ggf. ein
+    // Modell-Vorspann ("Antwort: content"). 16 wie vorher war zu
+    // knapp — Gemma riss "reason=length" ab und der Code defaultete
+    // still auf "content", was qa-Kapitel falsch klassifizierte.
+    options: { temperature: 0.0, num_predict: 64 },
     model,
-    options: { temperature: 0.0, num_predict: 16 },
   });
   const raw = (result.response ?? "").trim().toLowerCase();
-  if (raw.startsWith("qa")) return "qa_pairs";
+  if (raw.length < 3) {
+    console.warn(
+      `[card-preprocess] classifyChapterType: suspiciously short output ("${raw}", done_reason=${result.doneReason ?? "?"}) — defaulting to content`
+    );
+  }
+  // Suche "qa" irgendwo am Anfang — manche Modelle prefixen mit
+  // "Antwort: " oder Markdown-Quotes.
+  if (/\bqa[_ -]?pairs?\b/.test(raw) || raw.startsWith("qa")) return "qa_pairs";
   return "content";
 }
 
@@ -119,7 +130,11 @@ async function extractQaPairs(
     options: {
       temperature: 0.1,
       num_ctx: 32768,
-      num_predict: 8192,
+      // 8192 war oft zu knapp — eine grosse Klausur-Aufgaben-Liste
+      // mit Mathe-Formeln in LaTeX wird leicht 12k+ Tokens. Zu kurz
+      // = Gemma reisst mid-JSON ab, JSON.parse failed, alles im Eimer.
+      // 16384 deckt typische Hefte ab.
+      num_predict: 16384,
     },
   });
   const raw = (result.response ?? "").trim();
@@ -288,13 +303,23 @@ export async function preprocessChapterForCards(params: {
   let outModel: string;
   let pairs: QaPair[] | undefined;
   if (type === "qa_pairs") {
-    const extracted = await extractQaPairs(row.text, params.model);
-    if (extracted.length === 0) {
-      // Classifier said qa_pairs but extraction found nothing —
-      // fall back to content mode so the chapter isn't useless.
+    // extractQaPairs can throw if Gemma truncates mid-JSON
+    // (num_predict cap hit, model glitch, etc.). Catch + log + fall
+    // back to content mode so a single bad extraction doesn't kill
+    // the whole chapter — the user can still get cleaned text to
+    // generate cards from.
+    let extracted: QaPair[] = [];
+    try {
+      extracted = await extractQaPairs(row.text, params.model);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[card-preprocess] ${label} qa_pairs extraction empty — falling back to content mode`
+        `[card-preprocess] ${label} qa_pairs extraction threw — falling back to content mode. Cause: ${msg.slice(0, 300)}`
       );
+    }
+    if (extracted.length === 0) {
+      // Classifier said qa_pairs but extraction found nothing OR
+      // threw — fall back to content mode so the chapter isn't useless.
       const cleaned = await rewriteContentForCards(row.text, params.model);
       outText = cleaned;
       outModel = (await getActiveModelName(params.model)) ?? "unknown";
