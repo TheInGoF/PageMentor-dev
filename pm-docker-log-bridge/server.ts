@@ -80,8 +80,9 @@ function parseDockerLogStream(
   if (tty) {
     const text = decoder.decode(buf);
     for (const rawLine of text.split("\n")) {
-      if (!rawLine) continue;
-      const parsed = splitTimestamp(rawLine, withTimestamps);
+      const collapsed = collapseCarriageReturns(rawLine);
+      if (!collapsed) continue;
+      const parsed = splitTimestamp(collapsed, withTimestamps);
       lines.push({
         ts: parsed.ts,
         stream: "stdout",
@@ -98,8 +99,9 @@ function parseDockerLogStream(
     const chunk = decoder.decode(buf.subarray(offset + 8, offset + 8 + len));
     offset += 8 + len;
     for (const rawLine of chunk.split("\n")) {
-      if (!rawLine) continue;
-      const parsed = splitTimestamp(rawLine, withTimestamps);
+      const collapsed = collapseCarriageReturns(rawLine);
+      if (!collapsed) continue;
+      const parsed = splitTimestamp(collapsed, withTimestamps);
       lines.push({
         ts: parsed.ts,
         stream: streamType === 2 ? "stderr" : "stdout",
@@ -108,6 +110,22 @@ function parseDockerLogStream(
     }
   }
   return lines;
+}
+
+/** tqdm and similar progress libraries write multiple frames into a
+ *  single line, separated by \r — in a terminal each frame overwrites
+ *  the previous one, but the docker log stream captures all of them.
+ *  Without this collapse, "Loading weights: 0% ... 31% ... 61% ..."
+ *  shows up as 4-5 redundant log entries.
+ *
+ *  Strategy: split on \r, drop empty fragments, keep only the LAST
+ *  non-empty one (matches what a TTY would render after the line is
+ *  done). When the line has no \r, this is a no-op. */
+function collapseCarriageReturns(raw: string): string {
+  if (!raw.includes("\r")) return raw;
+  const frames = raw.split("\r").filter((f) => f.length > 0);
+  if (frames.length === 0) return "";
+  return frames[frames.length - 1];
 }
 
 /** Strips the RFC3339-Nano timestamp prefix Docker adds when called

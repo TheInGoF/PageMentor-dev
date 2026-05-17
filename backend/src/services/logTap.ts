@@ -234,6 +234,34 @@ function normalizeLevel(s: string): LogLevel {
   return "info";
 }
 
+// ANSI SGR colour escape sequences like \x1b[32m / \x1b[0m. Python's
+// rich/loguru output them when stdout is a TTY-ish stream; harmless in
+// a terminal but visual noise in our log pane.
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, "");
+}
+
+// Python loggers (and uvicorn, RapidOCR, ...) write INFO lines to
+// stderr too, so we can't trust the stream alone. Sniff the message
+// for the standard level marker first, fall back to stream-based
+// classification only when no marker is present.
+function inferLevelFromMessage(
+  msg: string,
+  stream: "stdout" | "stderr"
+): LogLevel {
+  // Match common patterns:
+  //   "[INFO] 2026-...", "INFO:     172.18.0.1 ...",
+  //   "WARNING - ...", "ERROR ..."
+  const m = /\b(DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL|FATAL)\b/.exec(
+    msg.slice(0, 64)
+  );
+  if (m) return normalizeLevel(m[1]);
+  return stream === "stderr" ? "warn" : "info";
+}
+
 // ---------------------------------------------------------------------
 // Docker-log-bridge pump (for docling and friends)
 // ---------------------------------------------------------------------
@@ -292,17 +320,18 @@ function startDockerContainerPump(params: {
       };
       for (const l of data.lines ?? []) {
         if (l.ts <= sinceTs) continue;
+        const cleaned = stripAnsi(l.message);
         publish({
           ts: l.ts,
           // Container-name → known LogSource if we have a mapping,
           // else fall back to "system" to keep TS happy and avoid
           // surprising the UI with unknown source colours.
           source: mapContainerToSource(params.source),
-          // Docker streams don't carry a level; everything from
-          // stderr we treat as warn (matches docling's pattern where
-          // INFO goes to stdout, errors/warns to stderr).
-          level: l.stream === "stderr" ? "warn" : "info",
-          message: l.message,
+          // Stream alone isn't reliable for Python services — INFO
+          // hits stderr too. Sniff the level marker in the message
+          // first, fall back to stream-based heuristic.
+          level: inferLevelFromMessage(cleaned, l.stream),
+          message: cleaned,
         });
         if (l.ts > sinceTs) sinceTs = l.ts;
       }
