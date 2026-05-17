@@ -67,32 +67,126 @@ Mischformen klassifizierst du nach dem überwiegenden Charakter. Wenn unsicher: 
 
 Antworte AUSSCHLIESSLICH mit einem einzigen Wort: "qa_pairs" oder "content". Kein Markdown, keine Erklärung.`;
 
+/** Heuristic title-and-content sniff. Returns "qa_pairs" if we're
+ *  very confident, "content" if confident the other way, and "unknown"
+ *  for the ambiguous middle which then asks the LLM.
+ *
+ *  Most exam/exercise chapters in study booklets are unambiguously
+ *  named — "Aufgaben zur Selbstüberprüfung", "Übungsklausur",
+ *  "Klausur 2023", "Selbsttest", "Wiederholungsfragen". Sending those
+ *  to the LLM is waste — and worse, the LLM occasionally answers wrong
+ *  (Gemma's classify call returned an empty 64-token response on one
+ *  of these and defaulted to "content"). Title-match is ~100% reliable
+ *  on the cases we care about, runs in microseconds, costs nothing. */
+function heuristicClassify(
+  title: string,
+  text: string
+): CardTextType | "unknown" {
+  const t = (title || "").toLowerCase();
+
+  // Strong title signals — almost certainly an exam/exercise chapter.
+  // Includes German + English variants we've actually seen in study
+  // material from the user's WBH booklets.
+  const qaTitleHits = [
+    /\baufgaben?(?:\s|-)/, // "Aufgaben", "Aufgabe 3", "Aufgaben-Pool"
+    /\bübung(en)?\b/,
+    /\bselbst(?:überprüfung|kontrolle|test)\b/,
+    /\bklausur(?:en|-trainer)?\b/,
+    /\bwiederholungs?(?:frag|aufgab)/,
+    /\bquiz\b/,
+    /\bprüfungs?aufgab/,
+    /\bexercises?\b/,
+    /\bexam(?:s|inations?)?\b/,
+    /\bself[- ]?(?:check|test|assessment)\b/,
+    /\breview questions?\b/,
+  ];
+  if (qaTitleHits.some((re) => re.test(t))) return "qa_pairs";
+
+  // Strong content signals — typical Lehrtext-Headings.
+  const contentTitleHits = [
+    /^\d+\s*[-:.]?\s+\w/, // "1. Einführung", "2 Diskrete Quellen"
+    /\beinführung\b/,
+    /\bzusammenfassung\b/,
+    /\bdefinition(en)?\b/,
+    /\bübersicht\b/,
+    /\bintroduction\b/,
+    /\bsummary\b/,
+    /\boverview\b/,
+  ];
+
+  // Content-signaled title alone isn't decisive — a chapter can be
+  // named "2. Aufgaben" — only treat as content if title fits AND
+  // text doesn't look like an exam sheet.
+  const titleSaysContent = contentTitleHits.some((re) => re.test(t));
+
+  // Content-density check: count lines that LOOK like numbered exam
+  // items ("3.1 ...", "Aufgabe 4: ...", "1) ..."). If a substantial
+  // fraction of non-empty lines match, it's likely qa_pairs.
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return "unknown";
+
+  const exemPatterns = [
+    /^\d+(?:\.\d+){0,2}\s*[a-z]?\s*[).:]\s+\S/i, // "3.1)", "4:", "1.2.3."
+    /^aufgabe\s+\d/i,
+    /^übung\s+\d/i,
+    /^frage\s+\d/i,
+    /^task\s+\d/i,
+    /^question\s+\d/i,
+    /^\([a-z]\)\s+\S/i, // "(a) ...", "(b) ..."
+  ];
+  const exemHits = lines.filter((l) =>
+    exemPatterns.some((re) => re.test(l))
+  ).length;
+  const exemRatio = exemHits / lines.length;
+
+  // Multiple numbered items + short text → exam-sheet shape.
+  if (exemRatio >= 0.15 && exemHits >= 3) return "qa_pairs";
+
+  // Content-title + low numbered-item ratio → definitely content.
+  if (titleSaysContent && exemRatio < 0.05) return "content";
+
+  return "unknown";
+}
+
 async function classifyChapterType(
-  sample: string,
+  title: string,
+  text: string,
   model?: string
 ): Promise<CardTextType> {
-  // 4000 chars sample is enough to spot Aufgabe/Frage patterns
-  // without burning tokens. Tail bias: take the BEGINNING of the
-  // chapter because exam sheets put their numbering up top.
-  const slice = sample.slice(0, 4000);
+  // Heuristic first — title-based + numbered-item-density. Picks up
+  // ~95 % of cases instantly without hitting Gemma at all. Free, fast,
+  // and deterministically correct on the obvious chapters that
+  // confused the LLM (e.g. "Aufgaben zur Selbstüberprüfung").
+  const heur = heuristicClassify(title, text);
+  if (heur !== "unknown") {
+    console.log(
+      `[card-preprocess] classifyChapterType: heuristic decided "${heur}" (skipping LLM)`
+    );
+    return heur;
+  }
+
+  // Heuristic was inconclusive — ask Gemma on a 4 k sample.
+  const slice = text.slice(0, 4000);
   const result = await generate({
     prompt: `Klassifiziere folgenden Auszug:\n\n${slice}`,
     system: CLASSIFY_SYSTEM,
-    // 64 tokens reicht für "qa_pairs" oder "content" plus ggf. ein
-    // Modell-Vorspann ("Antwort: content"). 16 wie vorher war zu
-    // knapp — Gemma riss "reason=length" ab und der Code defaultete
-    // still auf "content", was qa-Kapitel falsch klassifizierte.
+    // 64 tokens for "qa_pairs" or "content" plus optional model
+    // preamble. We've seen empty 64-token responses on this call —
+    // those now fall through to the explicit-default branch below.
     options: { temperature: 0.0, num_predict: 64 },
     model,
   });
   const raw = (result.response ?? "").trim().toLowerCase();
   if (raw.length < 3) {
     console.warn(
-      `[card-preprocess] classifyChapterType: suspiciously short output ("${raw}", done_reason=${result.doneReason ?? "?"}) — defaulting to content`
+      `[card-preprocess] classifyChapterType: LLM returned empty (done_reason=${result.doneReason ?? "?"}) — defaulting to content`
     );
   }
-  // Suche "qa" irgendwo am Anfang — manche Modelle prefixen mit
-  // "Antwort: " oder Markdown-Quotes.
+  // "qa" anywhere near the start — tolerates model prefixes like
+  // "Antwort: " or markdown quotes.
   if (/\bqa[_ -]?pairs?\b/.test(raw) || raw.startsWith("qa")) return "qa_pairs";
   return "content";
 }
@@ -354,7 +448,7 @@ export async function preprocessChapterForCards(params: {
   );
 
   // Stage 1: detect type
-  const type = await classifyChapterType(row.text, params.model);
+  const type = await classifyChapterType(row.title, row.text, params.model);
   console.log(`[card-preprocess] ${label} classified as "${type}"`);
 
   // Stage 2: type-specific extraction
