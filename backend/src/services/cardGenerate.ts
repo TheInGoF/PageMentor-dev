@@ -45,6 +45,7 @@ import { db } from "../db";
 import { emit as emitEvent } from "./events";
 import { withGemmaLock } from "./gemmaLock";
 import { generate as llmGenerate, isAvailable as llmAvailable } from "./llm";
+import { effective } from "./llmConfig";
 import { cleanupHints } from "./promptHints";
 
 const CHUNK_CHARS = 4000;
@@ -123,6 +124,35 @@ export async function runCardBuild(
     });
     return;
   }
+
+  // Pin the model explicitly per call. Audiobook preprocess already
+  // does this via body.model from the UI's model picker; card build
+  // didn't, so it relied on the global Settings default which the
+  // pickProvider cache could hold as "" if the config wasn't read
+  // when the candidate snapshot was built. Symptom: cards.build ran
+  // against whatever the arbiter had loaded (qwen) while audio
+  // happily used gemma4:e4b.
+  //
+  // If neither Settings nor ENV gives us a value, refuse to start —
+  // an unpinned run will burn hours producing garbage on the wrong
+  // model, hard-fail is the kinder default.
+  const pinnedModel = effective("ollamaModel", "PM_OLLAMA_MODEL");
+  if (!pinnedModel) {
+    activeRuns.delete(docId);
+    emitEvent({
+      phase: "cards.failed",
+      docId,
+      message:
+        "Default Ollama Model is empty (Settings → LLM). Pick a model " +
+        "(e.g. gemma4:e4b) before starting a card build.",
+    });
+    console.warn(
+      `[cards.build] refused to start: Settings.ollamaModel is empty. ` +
+        `Set Settings → Default Ollama Model and retry.`
+    );
+    return;
+  }
+  console.log(`[cards.build] pinned model="${pinnedModel}" for doc=${docId}`);
 
   const lang: "de" | "en" = doc.language === "de" ? "de" : "en";
 
@@ -261,7 +291,8 @@ export async function runCardBuild(
           chunks[chunkIdx],
           ch.title,
           ch.number,
-          lang
+          lang,
+          pinnedModel
         );
 
         const tx = d.transaction(() => {
@@ -354,7 +385,8 @@ async function extractCardsFromChunk(
   chunk: string,
   chapterTitle: string,
   chapterNumber: number,
-  lang: "de" | "en"
+  lang: "de" | "en",
+  pinnedModel: string
 ): Promise<Card[]> {
   const system =
     lang === "de"
@@ -396,6 +428,7 @@ Format: [{"question": "…", "answer": "…"}, …]`;
       llmGenerate({
         prompt: userPrompt,
         system,
+        model: pinnedModel,
         options: {
           temperature: 0.2,
           top_p: 0.9,
