@@ -201,9 +201,25 @@ services:
       DOCLING_SERVE_OPTIONS_DO_FORMULA_ENRICHMENT: "true"
       DOCLING_SERVE_OPTIONS_DO_CODE_ENRICHMENT: "true"
       #
-      # Picture description (SmolVLM) — STILL opt-in, heavier model:
-      #   DOCLING_PICTURE_DESCRIPTION_MODEL: "local"
-      #   DOCLING_SERVE_OPTIONS_DO_PICTURE_DESCRIPTION: "true"
+      # ---- Picture description (SmolVLM) ----
+      # Generates a short caption per image/diagram in the document.
+      # Used by doc_storage for technical-drawing search (signal plans,
+      # Weichenpläne etc. become text-searchable). PageMentor doesn't
+      # want it — audiobook pipeline has no use for image captions and
+      # the latency hit per image (~1-3 s) bloats every upload.
+      #
+      # Architecture: load the model server-side (PRELOAD=true) BUT do
+      # NOT set DOCLING_SERVE_OPTIONS_DO_PICTURE_DESCRIPTION. That
+      # makes the model available without enabling it globally. Each
+      # client then opts in per call:
+      #   doc_storage  → sends do_picture_description=true     (active)
+      #   PageMentor   → sends nothing about it                 (off, default)
+      #
+      # Disk cost: ~5 GB SmolVLM weights into docling-cache on first
+      # boot. Latency cost when a client opts in: depends on image
+      # count, often dominant share of total extraction time.
+      DOCLING_PICTURE_DESCRIPTION_MODEL: "local"
+      DOCLING_PRELOAD_PICTURE_DESCRIPTION: "true"
     volumes:
       - docling-cache:/opt/app-root/src/.cache
     deploy:

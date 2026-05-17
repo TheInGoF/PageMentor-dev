@@ -323,20 +323,25 @@ export async function extractPdfViaDocling(params: {
   form.append("pdf_backend", "dlparse_v2");
   form.append("abort_on_error", "false");
 
-  // Enrichment models (formula → LaTeX, code → fenced blocks, picture
-  // description) are activated SERVER-SIDE via env vars on the docling
-  // container, not via per-call form fields. See the docling service
-  // block in docker-compose.gpu-host.example.yaml — set
-  //   DOCLING_SERVE_OPTIONS_DO_FORMULA_ENRICHMENT=true
-  //   DOCLING_SERVE_OPTIONS_DO_CODE_ENRICHMENT=true
-  // and restart docling. The models load at boot together with the
-  // standard layout pipeline (gated by DOCLING_SERVE_LOAD_MODELS_AT_BOOT)
-  // and then apply to every convert call automatically.
+  // Enrichment-Strategie:
   //
-  // We tried the per-call form-field approach in v1.18.171 — it failed
-  // with silent "failure" responses because the CodeFormula model had
-  // to lazy-load mid-request and crashed. Server-side preload avoids
-  // that whole class of bug.
+  // - FORMULA + CODE: server-seitig als Default eingeschaltet (via
+  //   DOCLING_SERVE_OPTIONS_DO_FORMULA_ENRICHMENT=true und _CODE_=true
+  //   im docling-Container). Läuft automatisch bei jedem convert-Call,
+  //   wir senden keinen Flag.
+  //
+  // - PICTURE-DESCRIPTION: server-seitig PRELOADED (Modell ist
+  //   geladen) aber NICHT als Default aktiviert. doc_storage opt-int
+  //   per Call (do_picture_description=true). PageMentor sendet
+  //   bewusst NICHTS dazu — der Audiobook-Workflow hat keinen Nutzen
+  //   von Bildbeschreibungen und der Latenz-Hit pro Bild ist
+  //   beträchtlich. Falls jemand hier do_picture_description=true
+  //   einfügt, würden alle PageMentor-Uploads 5-10x länger dauern.
+  //
+  // Wir tried per-call form-field für formula in v1.18.171 — silent
+  // "failure" responses weil CodeFormula mid-request lazy-laden musste
+  // und crashte. Server-side preload + per-call opt-in (für Picture)
+  // löst beide Klassen.
 
   onProgress?.(tLang(lang, "msg.doclingUploading"));
   const uploadRes = await doclingFetch("/v1/convert/file/async", {
