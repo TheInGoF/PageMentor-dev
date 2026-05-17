@@ -175,23 +175,35 @@ services:
       DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "true"
       DOCLING_DEVICE: cuda
       DOCLING_PERF_PAGE_BATCH_SIZE: "4"
-      # ---- Enrichment models (off by default; enable per feature) ----
-      # When enabled, doc_storage can flip the matching toggles in
-      # Settings → Service Configuration to send `do_picture_description=
-      # true` etc. with each /v1/convert/file/async call. Each model is
-      # ~1-5 GB on first download, cached under docling-cache.
+      # ---- Enrichment: server-side defaults (PageMentor v1.18.174+) ----
+      # We turn on formula + code enrichment globally instead of per
+      # call. Reason: trying it via client form-field (do_formula_enrich
+      # =true) in v1.18.171 made docling-serve return a generic
+      # `failure` with empty error_message because the CodeFormula model
+      # had to lazy-load mid-request and crashed silently. Setting it
+      # via env preloads the model at boot together with the standard
+      # layout/table models (gated by DOCLING_SERVE_LOAD_MODELS_AT_BOOT
+      # above) and applies it to every convert call.
       #
-      # Picture description (SmolVLM):
+      # Disk cost: ~1 GB CodeFormula + ~150 MB Code-enrichment, cached
+      # in the docling-cache volume after first boot.
+      # Latency cost: +5-15 s per PDF depending on formula density.
+      #
+      # If conversion still fails after this:
+      #   1. Watch the docling logs (via pm-docker-log-bridge mirror or
+      #      `docker logs pm-docling -f` on the host) — you should see
+      #      "Downloading CodeFormula" once on first boot.
+      #   2. If model download fails (no internet, disk full): the
+      #      symptoms are silent task failures. Free disk / fix network
+      #      and restart.
+      #   3. To disable without code change: flip both lines to "false"
+      #      and restart docling.
+      DOCLING_SERVE_OPTIONS_DO_FORMULA_ENRICHMENT: "true"
+      DOCLING_SERVE_OPTIONS_DO_CODE_ENRICHMENT: "true"
+      #
+      # Picture description (SmolVLM) — STILL opt-in, heavier model:
       #   DOCLING_PICTURE_DESCRIPTION_MODEL: "local"
-      #   Pre-warm at boot to avoid the cold-load latency on first call:
-      #   DOCLING_PRELOAD_PICTURE_DESCRIPTION: "true"
-      #
-      # Formula enrichment (RapidLatexOCR or similar):
-      #   DOCLING_PRELOAD_FORMULA: "true"
-      #
-      # Exact env names depend on the docling-serve version — check the
-      # container's README. Some builds only honour the converter-level
-      # `do_*` form fields and load on demand without an env opt-in.
+      #   DOCLING_SERVE_OPTIONS_DO_PICTURE_DESCRIPTION: "true"
     volumes:
       - docling-cache:/opt/app-root/src/.cache
     deploy:

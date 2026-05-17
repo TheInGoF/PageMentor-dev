@@ -323,22 +323,20 @@ export async function extractPdfViaDocling(params: {
   form.append("pdf_backend", "dlparse_v2");
   form.append("abort_on_error", "false");
 
-  // NOTE on enrichment flags (do_formula_enrichment, do_code_enrichment,
-  // do_picture_description):
+  // Enrichment models (formula → LaTeX, code → fenced blocks, picture
+  // description) are activated SERVER-SIDE via env vars on the docling
+  // container, not via per-call form fields. See the docling service
+  // block in docker-compose.gpu-host.example.yaml — set
+  //   DOCLING_SERVE_OPTIONS_DO_FORMULA_ENRICHMENT=true
+  //   DOCLING_SERVE_OPTIONS_DO_CODE_ENRICHMENT=true
+  // and restart docling. The models load at boot together with the
+  // standard layout pipeline (gated by DOCLING_SERVE_LOAD_MODELS_AT_BOOT)
+  // and then apply to every convert call automatically.
   //
-  // We briefly enabled do_formula_enrichment + do_code_enrichment in
-  // v1.18.171 (Nougat-style formula → LaTeX). docling-serve v1.16.1
-  // rejected the conversion with a generic "failure" and no
-  // error_message — likely because the enrichment models aren't
-  // preloaded on the server side. The docling-serve container needs
-  // BOTH a server-side env (e.g. DOCLING_PRELOAD_FORMULA=true) AND
-  // the client-side flag. Without preload, lazy-loading on first
-  // request appears to crash silently.
-  //
-  // To activate: set on the docling-serve container
-  //    DOCLING_PRELOAD_FORMULA: "true"
-  // and uncomment the flag below. Test with one PDF first — first call
-  // downloads ~1 GB CodeFormula weights.
+  // We tried the per-call form-field approach in v1.18.171 — it failed
+  // with silent "failure" responses because the CodeFormula model had
+  // to lazy-load mid-request and crashed. Server-side preload avoids
+  // that whole class of bug.
 
   onProgress?.(tLang(lang, "msg.doclingUploading"));
   const uploadRes = await doclingFetch("/v1/convert/file/async", {
@@ -478,7 +476,10 @@ const KNOWN_SECTION_TITLES: Array<{ pattern: RegExp; kind: ChapterKind }> = [
   { pattern: /^aufgaben\s+zur\s+selbst(überprüfung|kontrolle)$/i, kind: "self_check" },
   { pattern: /^lösungen\s+der\s+übungen/i, kind: "solutions" },
   { pattern: /^lösungen\s+der\s+aufgaben/i, kind: "solutions" },
-  { pattern: /^einsendeaufgabe/i, kind: "self_check" },
+  // Einsendeaufgaben — auch mit ESA-Suffix oder Heft-Nummer-Präfix
+  // ("Einsendeaufgaben (ESA)", "ESA — Heft 3", "Einsendeaufgabenblatt").
+  { pattern: /einsendeaufgabe/i, kind: "self_check" },
+  { pattern: /\besa\s*\d|^\s*esa\b/i, kind: "self_check" },
   // Generic indexes — short titles ending in "Verzeichnis".
   { pattern: /\bverzeichnis$/i, kind: "index" },
 ];

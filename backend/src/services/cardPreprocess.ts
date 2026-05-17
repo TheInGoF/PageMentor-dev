@@ -88,13 +88,16 @@ function heuristicClassify(
   // Includes German + English variants we've actually seen in study
   // material from the user's WBH booklets.
   const qaTitleHits = [
-    /\baufgaben?(?:\s|-)/, // "Aufgaben", "Aufgabe 3", "Aufgaben-Pool"
+    /\baufgaben?\b/, // "Aufgaben", "Aufgabe 3"
+    /einsendeaufgabe/, // "Einsendeaufgaben", "Einsendeaufgabe (ESA)"
+    /aufgabenblatt/, // "Einsendeaufgaben-Aufgabenblatt"
     /\bübung(en)?\b/,
     /\bselbst(?:überprüfung|kontrolle|test)\b/,
     /\bklausur(?:en|-trainer)?\b/,
     /\bwiederholungs?(?:frag|aufgab)/,
     /\bquiz\b/,
     /\bprüfungs?aufgab/,
+    /\besa\b/, // common abbreviation for Einsendeaufgaben at WBH
     /\bexercises?\b/,
     /\bexam(?:s|inations?)?\b/,
     /\bself[- ]?(?:check|test|assessment)\b/,

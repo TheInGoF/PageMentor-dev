@@ -904,9 +904,20 @@ function PreprocessModal({
       .list(docId)
       .then(async (chs) => {
         setChapters(chs);
-        // Default-Selection: alle Kapitel angehakt — typische Use-Case
-        // ist "ganzes Heft vorbereiten", User dehakt nur Ausnahmen.
-        setSelected(new Set(chs.map((c) => c.id)));
+        // Default-Selection: alles AUSSER Vorwort / Inhaltsverzeichnis /
+        // Literatur / Index / Glossar — diese Kapitel ergeben in der
+        // Karten-Pipeline nichts Nützliches (kein Lehrinhalt, keine
+        // Aufgaben). User kann jederzeit per "Alle" wieder einschließen.
+        const isCardRelevant = (kind: string | undefined) =>
+          kind === undefined ||
+          kind === "content" ||
+          kind === "summary" ||
+          kind === "self_check" ||
+          kind === "exercise" ||
+          kind === "example";
+        setSelected(
+          new Set(chs.filter((c) => isCardRelevant(c.kind)).map((c) => c.id))
+        );
         // Lade aktuellen Preprocess-Status für jedes Kapitel parallel.
         const entries = await Promise.all(
           chs.map(async (ch) => {
@@ -1144,6 +1155,9 @@ function PreprocessModal({
                     <span className="text-sm text-neutral-100 truncate flex-1">
                       {ch.title || `Kapitel ${ch.number}`}
                     </span>
+                    {ch.kind && ch.kind !== "content" && (
+                      <KindBadge kind={ch.kind} />
+                    )}
                     <PrepBadge status={st} />
                   </div>
                   <div className="flex gap-2 flex-wrap pl-7">
@@ -1178,6 +1192,39 @@ function PreprocessModal({
         )}
       </div>
     </Modal>
+  );
+}
+
+/** Small kind-tag for non-content chapter rows so the user sees WHY a
+ *  chapter is default-off in the PreprocessModal selection (e.g. an
+ *  "index"-kind row stays unchecked because Inhaltsverzeichnis-cards
+ *  are useless). */
+function KindBadge({ kind }: { kind: string }) {
+  // Localized via i18n if a label exists, fallback to the raw kind.
+  const label =
+    kind === "meta"
+      ? "Vorwort"
+      : kind === "index"
+        ? "Verzeichnis"
+        : kind === "references"
+          ? "Literatur"
+          : kind === "summary"
+            ? "Zusammenf."
+            : kind === "self_check"
+              ? "Aufgaben"
+              : kind === "exercise"
+                ? "Übung"
+                : kind === "solutions"
+                  ? "Lösungen"
+                  : kind === "example"
+                    ? "Beispiel"
+                    : kind === "other"
+                      ? "andere"
+                      : kind;
+  return (
+    <span className="text-[10px] text-neutral-500 px-1.5 py-0.5 rounded border border-border/50 bg-neutral-900/40 italic">
+      {label}
+    </span>
   );
 }
 
