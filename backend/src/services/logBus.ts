@@ -15,6 +15,7 @@ export type LogSource =
   | "qwen-tts"
   | "arbiter"
   | "ollama"
+  | "docling"
   | "system";
 export type LogLevel = "info" | "warn" | "error" | "debug";
 

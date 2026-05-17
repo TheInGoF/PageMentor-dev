@@ -70,9 +70,18 @@ const PKG_VERSION = ((): string => {
 
 // Wire console.* into the in-memory log bus BEFORE the banner so
 // even the first lines after boot show up in the Logs page.
-import { installLogTap, startSidecarLogPump } from "./services/logTap";
+import {
+  installLogTap,
+  startSidecarLogPump,
+  startDockerLogPumps,
+} from "./services/logTap";
 installLogTap();
 startSidecarLogPump();
+// Mirror docling's container logs into the Logs page via the
+// pm-docker-log-bridge sidecar. No-op when PM_DOCKER_LOG_BRIDGE_URL
+// isn't configured, so existing installs without the bridge keep
+// working unchanged.
+startDockerLogPumps();
 
 // Loud startup banner — makes it immediately visible in the
 // Portainer log that the new build is actually running (Portainer

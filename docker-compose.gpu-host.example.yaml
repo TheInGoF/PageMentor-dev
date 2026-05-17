@@ -38,6 +38,7 @@
 #        - 5001 (docling)    — PageMentor + doc_storage PDF extraction
 #        - 8080 (infinity)   — PM + doc_storage embeddings
 #        - 6333 (qdrant)     — doc_storage vector DB
+#        - 8792 (log-bridge) — PageMentor Logs-page mirror of docling
 #      Ports 11434 (ollama) and 8880 (qwen-tts) stay private — the NAS
 #      never talks to them directly.
 #
@@ -432,6 +433,32 @@ services:
       - "6333:6333"
     volumes:
       - qdrant-data:/qdrant/storage
+
+  # pm-docker-log-bridge — exposes docker container logs over HTTP so
+  # the NAS-side pm-app can mirror docling's internal logs into its
+  # Logs page (docling-serve has no /diagnostics/recent-logs endpoint
+  # like the arbiter does). Mounts docker.sock read-only and offers
+  # GET /logs/<container>?since=...&tail=... → JSON line array.
+  #
+  # Generic enough to surface logs for ANY container on this host
+  # (ollama, qwen-tts, qdrant, …) — pm-app picks which ones to pump.
+  #
+  # Auth via shared secret: set LOG_BRIDGE_TOKEN here AND in the NAS
+  # .env as PM_DOCKER_LOG_BRIDGE_TOKEN. Leave both empty for unauth
+  # mode on a trusted LAN.
+  pm-docker-log-bridge:
+    image: ghcr.io/theingof/pm-docker-log-bridge-dev:latest
+    container_name: pm-docker-log-bridge
+    restart: unless-stopped
+    ports:
+      - "8792:8792"
+    environment:
+      LOG_BRIDGE_TOKEN: ${LOG_BRIDGE_TOKEN:-}
+    volumes:
+      # Read-only docker socket. The bridge only ever reads container
+      # logs — no list/start/stop. RW would unnecessarily widen the
+      # blast radius of a compromise.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   ollama-models:

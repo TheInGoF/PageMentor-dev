@@ -13,7 +13,7 @@
  * regardless, so we never lose log data.
  */
 
-import { publish, type LogLevel } from "./logBus";
+import { publish, type LogLevel, type LogSource } from "./logBus";
 import { effective } from "./llmConfig";
 
 let installed = false;
@@ -232,4 +232,178 @@ function normalizeLevel(s: string): LogLevel {
   if (l === "error" || l === "critical" || l === "fatal") return "error";
   if (l === "debug" || l === "trace") return "debug";
   return "info";
+}
+
+// ---------------------------------------------------------------------
+// Docker-log-bridge pump (for docling and friends)
+// ---------------------------------------------------------------------
+//
+// docling-serve has no /diagnostics/recent-logs endpoint like the
+// arbiter, so we can't pump it the same way. Instead we run a tiny
+// pm-docker-log-bridge container on the GPU host (mounts docker.sock
+// read-only, exposes GET /logs/<container>?since=...) and pull from
+// there. Generic over container name — pass it as a config field, the
+// pump iterates over a list and publishes each container's lines with
+// `source = <container_name>`.
+
+interface DockerLogLine {
+  ts: number;
+  stream: "stdout" | "stderr";
+  message: string;
+}
+
+/** Polls the docker-log-bridge for one specific container and
+ *  republishes the lines on the log bus. Independent error-state
+ *  tracking per container so a docling outage doesn't muddle the
+ *  qwen-tts pump's state. */
+function startDockerContainerPump(params: {
+  bridgeBaseUrl: string;
+  bridgeToken: string | undefined;
+  container: string;
+  source: string;
+  intervalMs: number;
+}): () => void {
+  let stopped = false;
+  let sinceTs = Date.now() - 60_000;
+  let errorKind: null | "unreachable" = null;
+  let errorSince = 0;
+  let lastErrorLogAt = 0;
+  let lastErrorDetail = "";
+  const REPEAT_NOTICE_MS = 5 * 60 * 1000;
+
+  async function tick() {
+    if (stopped) return;
+    const url =
+      params.bridgeBaseUrl.replace(/\/+$/, "") +
+      `/logs/${encodeURIComponent(params.container)}?since=${sinceTs}&tail=200`;
+    try {
+      const res = await fetch(url, {
+        headers: params.bridgeToken
+          ? { Authorization: `Bearer ${params.bridgeToken}` }
+          : {},
+        signal: AbortSignal.timeout(4_000),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as {
+        container: string;
+        lines: DockerLogLine[];
+      };
+      for (const l of data.lines ?? []) {
+        if (l.ts <= sinceTs) continue;
+        publish({
+          ts: l.ts,
+          // Container-name → known LogSource if we have a mapping,
+          // else fall back to "system" to keep TS happy and avoid
+          // surprising the UI with unknown source colours.
+          source: mapContainerToSource(params.source),
+          // Docker streams don't carry a level; everything from
+          // stderr we treat as warn (matches docling's pattern where
+          // INFO goes to stdout, errors/warns to stderr).
+          level: l.stream === "stderr" ? "warn" : "info",
+          message: l.message,
+        });
+        if (l.ts > sinceTs) sinceTs = l.ts;
+      }
+      if (errorKind !== null) {
+        publish({
+          ts: Date.now(),
+          source: "system",
+          level: "info",
+          message:
+            `[docker-log-bridge:${params.container}] reconnected after ` +
+            `${Math.round((Date.now() - errorSince) / 1000)}s ` +
+            `(last error: ${lastErrorDetail || "unknown"}).`,
+        });
+        errorKind = null;
+        errorSince = 0;
+        lastErrorLogAt = 0;
+        lastErrorDetail = "";
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      const now = Date.now();
+      lastErrorDetail = detail;
+      if (errorKind === null) {
+        errorKind = "unreachable";
+        errorSince = now;
+        lastErrorLogAt = now;
+        publish({
+          ts: now,
+          source: "system",
+          level: "warn",
+          message:
+            `[docker-log-bridge:${params.container}] cannot reach log-bridge (${detail}). ` +
+            `PageMentor's Logs page will not show ${params.container}'s internal logs until this recovers. ` +
+            `Container itself may be running fine — check pm-docker-log-bridge on the GPU host.`,
+        });
+      } else if (now - lastErrorLogAt >= REPEAT_NOTICE_MS) {
+        const downForS = Math.round((now - errorSince) / 1000);
+        publish({
+          ts: now,
+          source: "system",
+          level: "warn",
+          message:
+            `[docker-log-bridge:${params.container}] still down for ${downForS}s (latest: ${detail}).`,
+        });
+        lastErrorLogAt = now;
+      }
+    }
+    schedule();
+  }
+  function schedule(delay: number = params.intervalMs) {
+    if (stopped) return;
+    setTimeout(tick, delay);
+  }
+  schedule(2000);
+  return () => {
+    stopped = true;
+  };
+}
+
+/** Wires up pumps for every container listed in
+ *  `PM_DOCKER_LOG_BRIDGE_CONTAINERS` (comma-separated). When the
+ *  bridge URL isn't configured, this is a no-op — no pumps started,
+ *  no log noise. */
+/** Maps a source string (which is just a container name here) to the
+ *  fixed LogSource enum the logBus accepts. Falls back to "system"
+ *  for containers we haven't given a dedicated colour to yet. */
+function mapContainerToSource(s: string): LogSource {
+  if (s === "docling" || s === "pm-app" || s === "qwen-tts" ||
+      s === "arbiter" || s === "ollama") return s;
+  return "system";
+}
+
+export function startDockerLogPumps(intervalMs: number = 5000): () => void {
+  const baseUrl = process.env.PM_DOCKER_LOG_BRIDGE_URL ?? "";
+  const token = process.env.PM_DOCKER_LOG_BRIDGE_TOKEN ?? "";
+  const containersRaw =
+    process.env.PM_DOCKER_LOG_BRIDGE_CONTAINERS ?? "pm-docling";
+  if (!baseUrl.trim()) return () => undefined;
+  const containers = containersRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (containers.length === 0) return () => undefined;
+
+  const stops: Array<() => void> = [];
+  for (const container of containers) {
+    const stop = startDockerContainerPump({
+      bridgeBaseUrl: baseUrl,
+      bridgeToken: token || undefined,
+      container,
+      // Re-use existing source enum where applicable so the Logs UI
+      // colour-codes nicely. Unknown containers fall under "system".
+      source:
+        container === "pm-docling"
+          ? "docling"
+          : container,
+      intervalMs,
+    });
+    stops.push(stop);
+  }
+  return () => {
+    for (const s of stops) s();
+  };
 }
