@@ -331,9 +331,16 @@ export async function extractPdfViaDocling(params: {
   // The German pack lives in our pm-docling-de image only — upstream
   // docling-serve ships eng-only, so this requires the custom image
   // set in docker-compose.gpu-host.example.yaml.
-  form.append("ocr_engine", "tesseract");
+  //
+  // IMPORTANT: the field is `ocr_preset`, NOT `ocr_engine`. The latter
+  // was deprecated in docling-serve v1.16 and is silently ignored
+  // (falls back to the RapidOCR default — exact symptom we hit in
+  // v1.18.184 where Tesseract was wired client-side but RapidOCR kept
+  // running on the server). See docling-serve issue #567.
+  form.append("ocr_preset", "tesseract");
   // Tesseract uses ISO 639-2 three-letter codes, not the 2-letter
-  // ones. "deu" not "de", "eng" not "en".
+  // ones. "deu" not "de", "eng" not "en". For multi-language use a
+  // "+"-separator, NOT comma: "eng+deu".
   form.append("ocr_lang", language === "en" ? "eng" : "deu");
   form.append("do_ocr", "true");
   if (forceOcr) {
