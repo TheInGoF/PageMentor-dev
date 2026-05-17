@@ -321,7 +321,20 @@ export async function extractPdfViaDocling(params: {
   form.append("to_formats", "md");
   form.append("to_formats", "json");
   form.append("from_formats", "pdf");
-  form.append("ocr_lang", language === "en" ? "en" : "de");
+  // OCR engine: tesseract instead of RapidOCR (the docling default).
+  // Reason: RapidOCR's PP-OCRv4 weights have poor German diacritic
+  // recognition and frequently collapse word spacing ("dieSiegerade
+  // schreiben" instead of "die Sie gerade schreiben"). Tesseract +
+  // the German language pack handles both reliably. Trade-off: ~1.5-
+  // 2x slower per page on CPU, negligible on GPU.
+  //
+  // The German pack lives in our pm-docling-de image only — upstream
+  // docling-serve ships eng-only, so this requires the custom image
+  // set in docker-compose.gpu-host.example.yaml.
+  form.append("ocr_engine", "tesseract");
+  // Tesseract uses ISO 639-2 three-letter codes, not the 2-letter
+  // ones. "deu" not "de", "eng" not "en".
+  form.append("ocr_lang", language === "en" ? "eng" : "deu");
   form.append("do_ocr", "true");
   if (forceOcr) {
     // Replaces extractable text with OCR-derived text. Saves PDFs with

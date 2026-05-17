@@ -158,7 +158,12 @@ services:
     restart: "no"
 
   docling:
-    image: quay.io/docling-project/docling-serve:v1.16.1
+    # Custom variant of docling-serve that adds the German tesseract
+    # language pack on top. Upstream image only ships tesseract-eng,
+    # so ocr_engine=tesseract + ocr_lang=deu would fail and fall back
+    # to RapidOCR — which can't read German diacritics. See
+    # pm-docling-de/Dockerfile for the (3-line) build.
+    image: ghcr.io/theingof/pm-docling-de:latest
     container_name: pm-docling
     restart: unless-stopped
     ports:
