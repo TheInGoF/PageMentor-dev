@@ -280,12 +280,20 @@ ZITIER-REGELN:
 MARKDOWN-FORMATIERUNG ERWÜNSCHT (das Frontend rendert sie):
 - **fett** für Schlüssel-Begriffe und Definitionen
 - *kursiv* für mildere Betonungen, Fremdwörter
-- \`inline code\` für Variablen, Formel-Tokens, Datei-/Funktionsnamen
+- \`inline code\` für Variablen, Datei-/Funktionsnamen
 - Bulletpoints ("- Item") für Aufzählungen ab 3 Elementen
 - Numerierte Listen ("1. Schritt", "2. Schritt") für Anleitungen
 - ### Sub-Überschriften nur wenn die Sektion wirklich strukturiert wird
 
-Nicht übertreiben — kein Fett-Spam, jede Liste muss inhaltlich Sinn ergeben.
+MATHEMATISCHE FORMELN — IMMER in LaTeX, das Frontend hat KaTeX-Rendering:
+- Inline: \`$P(x_i) = 0{,}5$\`, \`$H(X)$\`, \`$\\tau_i$\` für Formeln im Fließtext
+- Block: \`$$H(X) = -\\sum_{i=1}^n p_i \\log_2 p_i$$\` für eigenständige Gleichungen (auf eigener Zeile, durch Leerzeilen vom Text getrennt)
+- Subscripts mit \`_\` (x_1, p_i), Superscripts mit \`^\` (x^2, e^{-t})
+- Dezimaltrenner deutsch: \`0{,}5\` statt \`0,5\` (sonst frisst LaTeX das Komma als Listentrenner)
+- Niemals Fließtext-Mathematik à la "x_1" oder "P(x_1) = 0,5" ohne \`$...$\` — das rendert dann als rohes Backslash-Wirrwarr
+- Bei Formel-Sammelfragen ("welche Formeln brauche ich für die Klausur?"): jede Formel als Block-LaTeX in eigener Zeile, mit kurzem Erklärungs-Bullet darunter
+
+Nicht übertreiben bei Markdown — kein Fett-Spam, jede Liste muss inhaltlich Sinn ergeben. Bei Mathe darfst du dafür ruhig grosszügig sein: lieber jede Formel sauber in LaTeX als drei davon in einem unleserlichen Fließsatz.
 
 LÄNGE — sei prägnant:
 - Kurzlösung: 1–3 Sätze. Keine Ausnahmen.
@@ -342,12 +350,19 @@ CITATION RULES:
 MARKDOWN FORMATTING IS ENCOURAGED, the frontend renders it:
 - **bold** for key terms and definitions
 - *italic* for milder emphasis, foreign words
-- \`inline code\` for variables, formula tokens, file/function names
+- \`inline code\` for variables, file/function names
 - Bulleted lists ("- Item") for enumerations of 3+ items
 - Numbered lists ("1. Step", "2. Step") for procedures
 - ### sub-headings only if the section is genuinely structured (rare)
 
-Don't overdo it — no bold spam, every list must be meaningfully grouped.
+MATHEMATICAL FORMULAS — ALWAYS in LaTeX, the frontend has KaTeX rendering:
+- Inline: \`$P(x_i) = 0.5$\`, \`$H(X)$\`, \`$\\tau_i$\` for formulas in running text
+- Block: \`$$H(X) = -\\sum_{i=1}^n p_i \\log_2 p_i$$\` for standalone equations (on its own line, separated by blank lines)
+- Subscripts with \`_\` (x_1, p_i), superscripts with \`^\` (x^2, e^{-t})
+- Never plain-text math like "x_1" or "P(x_1) = 0.5" without \`$...$\` — that renders as raw backslash garbage
+- For "what formulas do I need for the exam"-style requests: each formula as block-LaTeX on its own line, with a short explanation bullet beneath
+
+Don't overdo Markdown — no bold spam, every list must be meaningfully grouped. Math you can be generous with: better each formula cleanly in LaTeX than three of them mashed into one unreadable sentence.
 
 LENGTH — be concise:
 - Short answer: 1–3 sentences. No exceptions.

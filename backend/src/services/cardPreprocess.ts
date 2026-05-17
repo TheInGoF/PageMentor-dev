@@ -142,10 +142,31 @@ async function extractQaPairs(
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
-  } catch {
-    throw new Error(
-      `Q&A extraction returned non-JSON (first 200 chars): ${raw.slice(0, 200)}`
-    );
+  } catch (parseErr) {
+    // Recovery attempt: many LLMs emit a valid JSON array followed by
+    // a "Note:" comment or extra prose. Walk forward to find the
+    // first `[` and back from the end to find the matching `]`,
+    // re-try parsing on that slice.
+    const recovered = extractFirstJsonArray(json);
+    if (recovered !== null) {
+      try {
+        parsed = JSON.parse(recovered);
+      } catch {
+        parsed = null;
+      }
+    }
+    if (parsed === null) {
+      const head = raw.slice(0, 200);
+      const tail = raw.length > 400 ? raw.slice(-200) : "";
+      const cause =
+        parseErr instanceof Error ? parseErr.message : String(parseErr);
+      throw new Error(
+        `Q&A extraction returned non-JSON. parse-error: ${cause}. ` +
+          `output length=${raw.length}, done_reason=${result.doneReason ?? "?"}. ` +
+          `head: ${head}` +
+          (tail ? ` ... tail: ${tail}` : "")
+      );
+    }
   }
   if (!Array.isArray(parsed)) {
     throw new Error("Q&A extraction did not return an array");
@@ -176,6 +197,44 @@ function tryStripJson(s: string): string {
   const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(s.trim());
   if (fence) return fence[1].trim();
   return s.trim();
+}
+
+/** Walks the string looking for the first balanced top-level JSON
+ *  array. Tolerates trailing prose ("[ ... ]\n\nNote: this is..."),
+ *  leading commentary, or unmatched braces inside string literals.
+ *  Returns the substring `[...]` on success, or null if we can't
+ *  isolate a balanced array. */
+function extractFirstJsonArray(s: string): string | null {
+  const start = s.indexOf("[");
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (inStr) {
+      if (c === "\\") {
+        escape = true;
+        continue;
+      }
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') {
+      inStr = true;
+      continue;
+    }
+    if (c === "[") depth++;
+    else if (c === "]") {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------
