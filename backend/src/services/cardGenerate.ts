@@ -45,6 +45,7 @@ import { db } from "../db";
 import { emit as emitEvent } from "./events";
 import { withGemmaLock } from "./gemmaLock";
 import { generate as llmGenerate, isAvailable as llmAvailable } from "./llm";
+import { cleanupHints } from "./promptHints";
 
 const CHUNK_CHARS = 4000;
 const CHUNK_OVERLAP = 500;
@@ -304,8 +305,9 @@ REGELN:
 - "Beispiel X.Y" mit ausgearbeiteter Lösung wird zu einer Karte: Frage = Aufgabenstellung des Beispiels, Antwort = die Lösung aus dem Text.
 - Wenn nur eine Aufgabe ohne sichtbare Lösung im Text steht: trotzdem als Karte aufnehmen, Antwort dann mit den Begriffen/Konzepten beantworten die im Kapitel davor erklärt wurden (kurze, sachliche Antwort, kein Erfinden über den Kapitelinhalt hinaus).
 - Wenn dieser Chunk gar keine Übungen oder Beispiele enthält: gib ein leeres Array [] zurück.
-- Formeln: behalte sie bei. Wenn sie im Quelltext verstümmelt sind (z.B. "x 1" statt "x_1"), rekonstruiere sie in LaTeX-Notation ($x_1$, $P(x_i)$, $\\sum_{i=1}^{n}$).
 - Keine erfundenen Verständnisfragen. Keine Lückentexte. Keine Karteikarten aus reinem Fließtext ohne explizite Aufgaben-Markierung.
+
+${cleanupHints("de")}
 
 AUSGABE: AUSSCHLIESSLICH ein valides JSON-Array. Keine Einleitung, keine Codefences, keine Kommentare.
 Format: [{"question": "…", "answer": "…"}, …]`
@@ -316,8 +318,9 @@ RULES:
 - "Example X.Y" with a worked-out solution becomes one card: question = the example's problem statement, answer = the solution from the text.
 - If there's a question without a visible answer: still include it; answer briefly using the concepts the chapter explained earlier (factual, no invention beyond the chapter content).
 - If this chunk contains no exercises or examples at all: return an empty array [].
-- Formulas: keep them. If they're mangled in the source ("x 1" instead of "x_1"), reconstruct in LaTeX ($x_1$, $P(x_i)$, $\\sum_{i=1}^{n}$).
 - No invented comprehension questions. No fill-in-the-blanks. No flashcards from prose without an explicit exercise marker.
+
+${cleanupHints("en")}
 
 OUTPUT: a valid JSON array ONLY. No prose, no code fences, no comments.
 Format: [{"question": "…", "answer": "…"}, …]`;

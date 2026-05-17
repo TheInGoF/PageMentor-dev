@@ -9,6 +9,7 @@ import {
   llmStatus,
 } from "../services/llm";
 import { tt } from "../lib/i18n";
+import { cleanupHints } from "../services/promptHints";
 
 export const summaryRoutes = new Hono();
 
@@ -69,7 +70,14 @@ const PROMPTS: Record<PromptLang, Record<Level, PromptPair>> = {
 
 function pickPrompt(level: Level, lang: string): PromptPair {
   const l: PromptLang = lang === "de" ? "de" : "en";
-  return PROMPTS[l][level];
+  const base = PROMPTS[l][level];
+  // Append the shared cleanup hints so summaries don't carry watermark
+  // tokens ("WILHELM BÜCHNER HOCHSCHULE", "wbh") into the bullets or
+  // copy mangled OCR formulas verbatim.
+  return {
+    ...base,
+    system: `${base.system}\n\n${cleanupHints(l)}`,
+  };
 }
 
 // Status endpoint — exposes the active LLM provider, model list and

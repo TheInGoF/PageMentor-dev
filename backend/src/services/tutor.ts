@@ -25,6 +25,7 @@ import {
   cosineSim,
 } from "./embeddings";
 import { generate } from "./llm";
+import { cleanupHints } from "./promptHints";
 
 // Top-K für Retrieval. 8 war oft zu knapp wenn die User-Frage mehrere
 // Modelle gleichzeitig referenziert (z.B. "Analysiere mit TZI und
@@ -541,8 +542,12 @@ export async function ask(params: {
   // Language decision per turn — keeps prompt + output monolingual
   // (avoids code-switching in the response).
   const language = detectQuestionLanguage(question);
-  const systemPrompt =
+  // Append the shared cleanup hints so tutor answers don't echo back
+  // "WILHELM BÜCHNER HOCHSCHULE" headers or mangled formula tokens
+  // that survived OCR.
+  const baseSystem =
     language === "en" ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_DE;
+  const systemPrompt = `${baseSystem}\n\n${cleanupHints(language)}`;
 
   const prompt = buildPrompt(history, question, sources, language);
   const result = await generate({

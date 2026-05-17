@@ -65,6 +65,7 @@ export function stripLeadingSectionNumbers(text: string): string {
 // share the same queue so they can't accidentally fire parallel
 // Gemma calls and shove the GPU arbiter into a flapping state.
 import { withGemmaLock } from "./gemmaLock";
+import { cleanupHints } from "./promptHints";
 
 interface ChapterRow {
   id: string;
@@ -1208,7 +1209,13 @@ export async function preprocessChapterForAudio(params: {
   const expanded = expandAbbreviations(row.text, params.language);
   const pretreated = stripLeadingSectionNumbers(expanded);
 
-  const system = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
+  // Base prompt + the shared cleanup hints (watermark stripping,
+  // formula reconstruction) so a Wilhelm-Büchner header or a "wbh"
+  // logo glyph never makes it into the spoken audiobook.
+  const baseSystem = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
+  const system = `${baseSystem}\n\n${cleanupHints(
+    params.language === "de" ? "de" : "en"
+  )}`;
 
   // num_ctx sized generously for modern long-context models
   // (Gemma 3 e4b @ 128k, Qwen 2.5 @ 128k, Llama 3.1 @ 128k).
