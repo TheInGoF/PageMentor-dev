@@ -372,32 +372,33 @@ export async function extractPdfViaDocling(params: {
   // (older docling-serve, proxy blocks, etc.).
   //
   // docling-serve sends practically no status updates during
-  // processing — the state stays "started" for minutes. So the user
-  // sees in the app log that the pipeline is alive, we emit a
-  // heartbeat every 30 s even when the state doesn't change.
-  const HEARTBEAT_MS = 30_000;
+  // processing — the state stays "started" for the whole run with no
+  // intermediate messages. So we run an INDEPENDENT interval-driven
+  // heartbeat (not event-coupled) that emits a "Docling läuft … (Ns)"
+  // progress event every 5 s. Without this the UI's progress card
+  // freezes on the initial message and the user has no signal that
+  // anything's happening.
+  const HEARTBEAT_MS = 5_000;
   const startedAt = Date.now();
   let lastLoggedState = "";
-  let lastHeartbeatAt = Date.now();
+  let lastReportedState = "started";
+  let lastEventAt = Date.now();
   const reportStatus = (status: PollResponse) => {
     const state = status.task_status?.toLowerCase() ?? "unknown";
     const now = Date.now();
+    lastEventAt = now;
+    lastReportedState = state;
     const stateChanged = state !== lastLoggedState;
-    const heartbeatDue =
-      !stateChanged && now - lastHeartbeatAt >= HEARTBEAT_MS;
 
-    if (stateChanged || heartbeatDue) {
+    if (stateChanged) {
       const extras: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(status)) {
         if (k !== "task_status") extras[k] = v;
       }
-      const elapsedSec = Math.round((now - startedAt) / 1000);
-      const tag = heartbeatDue ? "alive" : state;
       console.log(
-        `[docling] task=${task_id.slice(0, 8)} state=${state} ${tag === "alive" ? `(${elapsedSec}s elapsed) ` : ""}${JSON.stringify(extras)}`
+        `[docling] task=${task_id.slice(0, 8)} state=${state} ${JSON.stringify(extras)}`
       );
       lastLoggedState = state;
-      lastHeartbeatAt = now;
     }
 
     const meta = (status.task_meta ?? {}) as Record<string, unknown>;
@@ -429,14 +430,39 @@ export async function extractPdfViaDocling(params: {
     return state;
   };
 
-  try {
-    await subscribeViaWs(task_id, signal, reportStatus);
-  } catch (wsErr) {
-    // WS unavailable → fall back to classic polling.
-    console.log(
-      `[docling] WS subscription not possible (${(wsErr as Error).message}), falling back to polling`
+  // Independent heartbeat: ticks every HEARTBEAT_MS regardless of
+  // whether docling pushed an event. Emits an elapsed-seconds counter
+  // so the user sees the run is alive. Cleared in finally{} so it
+  // never leaks past task completion.
+  const heartbeat = setInterval(() => {
+    const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+    const sinceLastEventSec = Math.round((Date.now() - lastEventAt) / 1000);
+    onProgress?.(
+      `Docling: ${lastReportedState} · ${elapsedSec}s`,
+      undefined
     );
-    await pollUntilDone(task_id, signal, reportStatus);
+    // Also log a server-side heartbeat once a minute so the operator
+    // can tell from logs whether docling is just slow or genuinely
+    // stuck (no events in 60+ s).
+    if (sinceLastEventSec >= 60 && elapsedSec % 60 < 5) {
+      console.log(
+        `[docling] task=${task_id.slice(0, 8)} alive (${elapsedSec}s elapsed, no event for ${sinceLastEventSec}s)`
+      );
+    }
+  }, HEARTBEAT_MS);
+
+  try {
+    try {
+      await subscribeViaWs(task_id, signal, reportStatus);
+    } catch (wsErr) {
+      // WS unavailable → fall back to classic polling.
+      console.log(
+        `[docling] WS subscription not possible (${(wsErr as Error).message}), falling back to polling`
+      );
+      await pollUntilDone(task_id, signal, reportStatus);
+    }
+  } finally {
+    clearInterval(heartbeat);
   }
 
   // ---- 3. Fetch result ----------------------------------------------
