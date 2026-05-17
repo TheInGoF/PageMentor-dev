@@ -227,7 +227,13 @@ export async function processDocument(docId: string): Promise<void> {
       `[pipeline] ${docId}: docling → ${extraction.pageCount} pages, ${cleanedSections.length} chapters`
     );
   } catch (err) {
-    console.error(`[pipeline] ${docId} failed:`, err);
+    // logTap.installLogTap only spreads strings — passing an Error
+    // object printed "{}" in the Logs page (same issue we hit in
+    // cards/preprocess). Serialise the stack so it's actually
+    // diagnosable.
+    const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack ?? msg : msg;
+    console.error(`[pipeline] ${docId} failed: ${stack}`);
     d.prepare(
       "UPDATE documents SET ocr_status = 'failed', extraction_started_at = NULL WHERE id = ?"
     ).run(docId);

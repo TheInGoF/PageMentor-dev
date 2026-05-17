@@ -154,6 +154,23 @@ services:
       DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "true"
       DOCLING_DEVICE: cuda
       DOCLING_PERF_PAGE_BATCH_SIZE: "4"
+      # ---- Enrichment models (off by default; enable per feature) ----
+      # When enabled, doc_storage can flip the matching toggles in
+      # Settings → Service Configuration to send `do_picture_description=
+      # true` etc. with each /v1/convert/file/async call. Each model is
+      # ~1-5 GB on first download, cached under docling-cache.
+      #
+      # Picture description (SmolVLM):
+      #   DOCLING_PICTURE_DESCRIPTION_MODEL: "local"
+      #   Pre-warm at boot to avoid the cold-load latency on first call:
+      #   DOCLING_PRELOAD_PICTURE_DESCRIPTION: "true"
+      #
+      # Formula enrichment (RapidLatexOCR or similar):
+      #   DOCLING_PRELOAD_FORMULA: "true"
+      #
+      # Exact env names depend on the docling-serve version — check the
+      # container's README. Some builds only honour the converter-level
+      # `do_*` form fields and load on demand without an env opt-in.
     volumes:
       - docling-cache:/opt/app-root/src/.cache
     deploy:

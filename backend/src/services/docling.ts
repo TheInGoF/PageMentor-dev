@@ -322,16 +322,23 @@ export async function extractPdfViaDocling(params: {
   form.append("table_mode", "fast");
   form.append("pdf_backend", "dlparse_v2");
   form.append("abort_on_error", "false");
-  // Formula recognition — Docling's built-in CodeFormula model
-  // (similar to Nougat) converts formula image regions to LaTeX
-  // instead of dropping them as mangled text ("P ( x 1  0,5)" →
-  // "P(x_1) = 0.5"). Adds ~5-15s to extraction depending on
-  // formula density + GPU availability. The model gets pulled on
-  // first use into the docling-cache volume.
-  form.append("do_formula_enrichment", "true");
-  // Code-block recognition — preserves source listings as ``` fences
-  // instead of getting them re-flowed as prose.
-  form.append("do_code_enrichment", "true");
+
+  // NOTE on enrichment flags (do_formula_enrichment, do_code_enrichment,
+  // do_picture_description):
+  //
+  // We briefly enabled do_formula_enrichment + do_code_enrichment in
+  // v1.18.171 (Nougat-style formula → LaTeX). docling-serve v1.16.1
+  // rejected the conversion with a generic "failure" and no
+  // error_message — likely because the enrichment models aren't
+  // preloaded on the server side. The docling-serve container needs
+  // BOTH a server-side env (e.g. DOCLING_PRELOAD_FORMULA=true) AND
+  // the client-side flag. Without preload, lazy-loading on first
+  // request appears to crash silently.
+  //
+  // To activate: set on the docling-serve container
+  //    DOCLING_PRELOAD_FORMULA: "true"
+  // and uncomment the flag below. Test with one PDF first — first call
+  // downloads ~1 GB CodeFormula weights.
 
   onProgress?.(tLang(lang, "msg.doclingUploading"));
   const uploadRes = await doclingFetch("/v1/convert/file/async", {
