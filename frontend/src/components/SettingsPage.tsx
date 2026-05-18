@@ -46,7 +46,7 @@ interface Props {
   onBack: () => void;
 }
 
-type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "ai" | "logs";
+type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "logs";
 
 /** Event name for "voice list has changed" — other components
  *  (audiobook picker) listen for it and reload voices. */
@@ -61,7 +61,6 @@ const TABS: Array<{ id: SettingsTab; labelKey: string }> = [
   { id: "audiobook", labelKey: "settings.tab.audiobook" },
   { id: "tts", labelKey: "settings.tab.tts" },
   { id: "llm", labelKey: "settings.tab.llm" },
-  { id: "ai", labelKey: "settings.tab.ai" },
   { id: "logs", labelKey: "settings.tab.logs" },
 ];
 
@@ -1088,6 +1087,83 @@ export function SettingsPage({ onBack }: Props) {
           <Button onClick={saveLlmConfig} disabled={llmBusy}>
             {llmBusy ? t("common.saving") : t("settings.llm.save")}
           </Button>
+
+          {/* Per-user model picker (was a separate "KI" tab before
+              v1.18.193). Lives here because every AI workflow (audio
+              preprocess, card build, tutor) reads this localStorage
+              value at call time via getSettings().defaultOllamaModel,
+              and the picker pulls its list from the same Ollama URL
+              the LLM-chain config above points at. */}
+          <div className="pt-4 mt-2 border-t border-border flex flex-col gap-3">
+            <h3 className="text-xs uppercase tracking-wide text-neutral-500">
+              {t("settings.section.ai")}
+            </h3>
+            {ollama?.available ? (
+              <>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-neutral-400">
+                    {t("settings.defaultOllamaModel")}
+                  </label>
+                  <select
+                    className="input"
+                    value={s.defaultOllamaModel}
+                    onChange={(e) =>
+                      setS({ ...s, defaultOllamaModel: e.target.value })
+                    }
+                  >
+                    <option value="">
+                      {t("settings.ollama.server", {
+                        model: ollama.defaultModel,
+                      })}
+                    </option>
+                    {ollama.models.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-[11px] text-neutral-500">
+                  {t("settings.ollama.connected", { url: ollama.url })}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-neutral-500">
+                {t("settings.ollama.disabled")}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-2 pt-3 border-t border-border">
+              <h4 className="text-xs uppercase tracking-wide text-neutral-500">
+                {t("settings.embed.title")}
+              </h4>
+              {ragStatus ? (
+                <p className="text-[11px] text-neutral-500">
+                  {t("settings.embed.stats", {
+                    embedded: ragStatus.embedded,
+                    total: ragStatus.total,
+                    docs: ragStatus.documents,
+                  })}
+                </p>
+              ) : (
+                <p className="text-[11px] text-neutral-500">
+                  {t("settings.embed.statsLoading")}
+                </p>
+              )}
+              <p className="text-[11px] text-neutral-500">
+                {t("settings.embed.hint")}
+              </p>
+              <Button
+                variant="outline"
+                onClick={reembedAll}
+                disabled={reembedBusy || !ollama?.available}
+              >
+                {reembedBusy
+                  ? t("settings.embed.reembedBusy")
+                  : t("settings.embed.reembed")}
+              </Button>
+            </div>
+          </div>
         </section>
         )}
 
@@ -1815,73 +1891,6 @@ export function SettingsPage({ onBack }: Props) {
               ))}
             </ul>
           )}
-        </section>
-        )}
-
-        {tab === "ai" && (
-        <section className="flex flex-col gap-3">
-          <h3 className="text-xs uppercase tracking-wide text-neutral-500">
-            {t("settings.section.ai")}
-          </h3>
-          {ollama?.available ? (
-            <>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-neutral-400">
-                  {t("settings.defaultOllamaModel")}
-                </label>
-                <select
-                  className="input"
-                  value={s.defaultOllamaModel}
-                  onChange={(e) => setS({ ...s, defaultOllamaModel: e.target.value })}
-                >
-                  <option value="">
-                    {t("settings.ollama.server", { model: ollama.defaultModel })}
-                  </option>
-                  {ollama.models.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <p className="text-[11px] text-neutral-500">
-                {t("settings.ollama.connected", { url: ollama.url })}
-              </p>
-            </>
-          ) : (
-            <p className="text-xs text-neutral-500">{t("settings.ollama.disabled")}</p>
-          )}
-
-          <div className="flex flex-col gap-2 pt-3 border-t border-border">
-            <h4 className="text-xs uppercase tracking-wide text-neutral-500">
-              {t("settings.embed.title")}
-            </h4>
-            {ragStatus ? (
-              <p className="text-[11px] text-neutral-500">
-                {t("settings.embed.stats", {
-                  embedded: ragStatus.embedded,
-                  total: ragStatus.total,
-                  docs: ragStatus.documents,
-                })}
-              </p>
-            ) : (
-              <p className="text-[11px] text-neutral-500">
-                {t("settings.embed.statsLoading")}
-              </p>
-            )}
-            <p className="text-[11px] text-neutral-500">
-              {t("settings.embed.hint")}
-            </p>
-            <Button
-              variant="outline"
-              onClick={reembedAll}
-              disabled={reembedBusy || !ollama?.available}
-            >
-              {reembedBusy
-                ? t("settings.embed.reembedBusy")
-                : t("settings.embed.reembed")}
-            </Button>
-          </div>
         </section>
         )}
 
