@@ -176,6 +176,15 @@ export async function runCardBuild(
       !SKIP_KINDS.has(c.kind)
   );
 
+  // Document-wide outline: every chapter title we'll send into the
+  // chunk prompt as orientation. Helps the model decide "this chunk
+  // is part of chapter 5.3, the previous one was 5.2, so when I see
+  // 'Beispiel 5.3' inside this chunk it really belongs here". Kept
+  // short — one line per chapter, no body text.
+  const docOutline = chapters
+    .map((c) => `  ${c.number}. ${c.title}`)
+    .join("\n");
+
   // Resume support: count existing ai_generated cards per chapter so
   // we can skip chapters that already finished. In rebuild mode we
   // wipe first, then nothing is skipped.
@@ -292,7 +301,8 @@ export async function runCardBuild(
           ch.title,
           ch.number,
           lang,
-          pinnedModel
+          pinnedModel,
+          docOutline
         );
 
         const tx = d.transaction(() => {
@@ -386,41 +396,71 @@ async function extractCardsFromChunk(
   chapterTitle: string,
   chapterNumber: number,
   lang: "de" | "en",
-  pinnedModel: string
+  pinnedModel: string,
+  docOutline: string
 ): Promise<Card[]> {
   const system =
     lang === "de"
-      ? `Du extrahierst Lernkarten AUS DEM GEGEBENEN TEXT. Erfinde nichts dazu — nur was im Text als Übung, Aufgabe, Beispiel oder Selbstkontrolle steht.
+      ? `Du extrahierst Lernkarten AUS DEM GEGEBENEN TEXT. Lieber 3 saubere Karten als 10 mittelmäßige.
 
-REGELN:
-- Mehrteilige Aufgaben (a), b), c), …) sind EINE Karte. Die Frage enthält die komplette Einleitung + alle Teile a/b/c, die Antwort enthält alle Teilantworten in derselben Reihenfolge.
-- "Beispiel X.Y" mit ausgearbeiteter Lösung wird zu einer Karte: Frage = Aufgabenstellung des Beispiels, Antwort = die Lösung aus dem Text.
-- Wenn nur eine Aufgabe ohne sichtbare Lösung im Text steht: trotzdem als Karte aufnehmen, Antwort dann mit den Begriffen/Konzepten beantworten die im Kapitel davor erklärt wurden (kurze, sachliche Antwort, kein Erfinden über den Kapitelinhalt hinaus).
-- Wenn dieser Chunk gar keine Übungen oder Beispiele enthält: gib ein leeres Array [] zurück.
-- Keine erfundenen Verständnisfragen. Keine Lückentexte. Keine Karteikarten aus reinem Fließtext ohne explizite Aufgaben-Markierung.
+WAS DU EXTRAHIERST:
+1. Explizit markierte Aufgaben mit Lösung: "Übung 2.1", "Aufgabe 5.3", "Einsendeaufgabe", "Selbstkontrollfrage" — Frage = Aufgabentext, Antwort = die im Text gegebene Lösung.
+2. Worked-Examples mit Rechenweg: "Beispiel 3.2: …" gefolgt von Lösung/Rechnung — Frage = Aufgabenstellung des Beispiels, Antwort = der dort gezeigte Rechenweg.
+3. Mehrteilige Aufgaben (a), b), c)) sind EINE Karte: Frage enthält Einleitung + alle Teile, Antwort enthält alle Teilantworten in derselben Reihenfolge.
+
+WAS DU NICHT EXTRAHIERST (gib einfach kein Item dafür aus):
+- Rhetorische Fragen im Fließtext ("Nehmen wir an, dass …", "Stellen Sie sich vor …", "Sehen Sie, dass …") — das sind didaktische Stilmittel, keine Aufgaben.
+- Überschriften alleine (z.B. "## Natürliche Redundanz") — eine Überschrift ohne erklärten Inhalt wird KEINE Karte.
+- Definitionen ohne explizite Frage-Aufforderung.
+- Karten wo die Antwort eine bloße Wiederholung der Frage wäre.
+- Karten wo die Antwort kürzer als 30 Zeichen wäre und keinen eigenständigen Inhalt trägt.
+
+QUALITÄTS-GATE (gehe jede potenzielle Karte durch):
+- Ist die Antwort eigenständiger Inhalt (≠ Wiederholung/Echo der Frage)? Wenn nein → weglassen.
+- Hat die Antwort mindestens 30 Zeichen erkennbaren Lerninhalt? Wenn nein → weglassen.
+- Wäre die Frage in einer Klausur sinnvoll? Wenn die Antwort nur "es kommt drauf an" / "wie oben" / die Überschrift wäre → weglassen.
+
+Wenn dieser Chunk gar nichts Karten-Würdiges enthält: gib [] zurück. Das ist die richtige Antwort und kein Fehler.
 
 ${cleanupHints("de")}
 
 AUSGABE: AUSSCHLIESSLICH ein valides JSON-Array. Keine Einleitung, keine Codefences, keine Kommentare.
 Format: [{"question": "…", "answer": "…"}, …]`
-      : `You extract flashcards FROM THE PROVIDED TEXT. Do not invent anything — only what the text marks as exercises, problems, examples, or self-checks.
+      : `You extract flashcards FROM THE PROVIDED TEXT. Better 3 clean cards than 10 mediocre ones.
 
-RULES:
-- Multi-part exercises (a), b), c), …) become ONE card. The question contains the full intro + every part a/b/c, the answer contains every part's answer in the same order.
-- "Example X.Y" with a worked-out solution becomes one card: question = the example's problem statement, answer = the solution from the text.
-- If there's a question without a visible answer: still include it; answer briefly using the concepts the chapter explained earlier (factual, no invention beyond the chapter content).
-- If this chunk contains no exercises or examples at all: return an empty array [].
-- No invented comprehension questions. No fill-in-the-blanks. No flashcards from prose without an explicit exercise marker.
+WHAT TO EXTRACT:
+1. Explicitly marked exercises with solution: "Exercise 2.1", "Problem 5.3", "Self-check question" — question = exercise text, answer = the solution shown in the text.
+2. Worked examples with reasoning: "Example 3.2: …" followed by a solution/computation — question = the example's problem, answer = the worked solution from the text.
+3. Multi-part exercises (a), b), c)) become ONE card: question contains the intro + all parts, answer contains all part-answers in the same order.
+
+WHAT YOU DO NOT EXTRACT (just skip — no item):
+- Rhetorical questions in prose ("Suppose that …", "Imagine …", "You can see that …") — these are pedagogical devices, not exercises.
+- Standalone headings (e.g. "## Natural Redundancy") — a heading without explained content does NOT become a card.
+- Definitions without an explicit prompt.
+- Cards where the answer is a mere repetition of the question.
+- Cards where the answer would be shorter than 30 characters with no real content.
+
+QUALITY GATE (run each potential card through):
+- Is the answer independent content (≠ echo of the question)? If no → drop it.
+- Does the answer contain at least 30 characters of recognisable learning content? If no → drop it.
+- Would this question make sense on an exam? If the answer is just "it depends" / "see above" / the heading → drop it.
+
+If this chunk contains nothing card-worthy: return []. That's the correct answer and not an error.
 
 ${cleanupHints("en")}
 
 OUTPUT: a valid JSON array ONLY. No prose, no code fences, no comments.
 Format: [{"question": "…", "answer": "…"}, …]`;
 
+  // Include the document-wide outline (chapter titles) and which
+  // chapter THIS chunk belongs to. Helps the model recognize sub-
+  // headings inside the chunk as belonging to the current chapter,
+  // and lets it tell "Beispiel 5.2" apart from "Beispiel 5.3" when
+  // both appear nearby.
   const userPrompt =
     lang === "de"
-      ? `Kapitel ${chapterNumber}: ${chapterTitle}\n\nText:\n${chunk}`
-      : `Chapter ${chapterNumber}: ${chapterTitle}\n\nText:\n${chunk}`;
+      ? `Dokument-Übersicht (alle Kapitel):\n${docOutline}\n\nDieser Chunk gehört zu Kapitel ${chapterNumber}: ${chapterTitle}\n\nChunk-Text:\n${chunk}`
+      : `Document outline (all chapters):\n${docOutline}\n\nThis chunk belongs to Chapter ${chapterNumber}: ${chapterTitle}\n\nChunk text:\n${chunk}`;
 
   const result = await withGemmaLock(
     `cards.build chunk (ch=${chapterNumber})`,
@@ -481,9 +521,51 @@ function normalizeArray(arr: unknown): Card[] {
     const rec = item as Record<string, unknown>;
     const q = typeof rec.question === "string" ? rec.question.trim() : "";
     const a = typeof rec.answer === "string" ? rec.answer.trim() : "";
-    if (q.length >= 4 && a.length >= 1) out.push({ question: q, answer: a });
+    const reason = qualityRejection(q, a);
+    if (reason) {
+      console.log(`[cards.build] dropping low-quality card (${reason}): q="${q.slice(0, 60)}…"`);
+      continue;
+    }
+    out.push({ question: q, answer: a });
   }
   return out;
+}
+
+/** Returns a short reason string if this Q/A pair should be DROPPED,
+ *  or null if it's good enough to keep. Belt-and-braces over the
+ *  prompt's quality gate — if the model echoes a heading or answers
+ *  with a slice of the question, we filter it here so it never lands
+ *  in the user's card deck.
+ *
+ *  Symptoms we've seen in real runs:
+ *   - "Was ist natürliche Redundanz?" / "Natürliche Redundanz"  → echo
+ *   - long question / 5-word answer that's the question's first line → too short
+ *   - "Sehen Sie, dass …?" / "Sehen Sie, dass …" → rhetorical-fragment dup
+ */
+function qualityRejection(q: string, a: string): string | null {
+  if (q.length < 8) return "question too short";
+  if (a.length < 30) return "answer too short (<30 chars)";
+
+  // Echo detection: normalised answer is contained verbatim in the
+  // question, or vice versa. Catches "Was ist X?" / "X" and longer
+  // variants like "… Mehrheitsentscheidung durch …" appearing as both.
+  const nq = normalizeForCompare(q);
+  const na = normalizeForCompare(a);
+  if (nq === na) return "answer equals question";
+  if (na.length <= nq.length / 2 && nq.includes(na))
+    return "answer is a substring of the question";
+  if (nq.length <= na.length / 2 && na.includes(nq))
+    return "question is a substring of the answer";
+
+  return null;
+}
+
+function normalizeForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[„""''`.,;:!?()\[\]{}]/g, "")
+    .trim();
 }
 
 /** Same balanced-bracket recovery as cardPreprocess.ts uses — duplicated
