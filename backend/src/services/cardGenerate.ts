@@ -90,6 +90,11 @@ export interface BuildOptions {
    *  SKIP any chapter that already has ai_generated cards — used to
    *  resume a build after a crash, restart, or cancel. */
   rebuild?: boolean;
+  /** Override the Ollama model. Same precedence the audio preprocess
+   *  uses: caller-supplied (e.g. frontend localStorage picker) >
+   *  Settings → Default Ollama Model > ENV. If none of those is set
+   *  the build refuses to start. */
+  model?: string;
 }
 
 export async function runCardBuild(
@@ -136,7 +141,14 @@ export async function runCardBuild(
   // If neither Settings nor ENV gives us a value, refuse to start —
   // an unpinned run will burn hours producing garbage on the wrong
   // model, hard-fail is the kinder default.
-  const pinnedModel = effective("ollamaModel", "PM_OLLAMA_MODEL");
+  // Resolution order matches audio preprocess:
+  //   1. opts.model — caller-supplied (frontend's per-user model picker)
+  //   2. Settings → ollamaModel (server-side llm-config.json)
+  //   3. PM_OLLAMA_MODEL env var
+  // If all three are empty, refuse to start with a clear message.
+  const pinnedModel =
+    (opts.model && opts.model.trim()) ||
+    effective("ollamaModel", "PM_OLLAMA_MODEL");
   if (!pinnedModel) {
     activeRuns.delete(docId);
     emitEvent({

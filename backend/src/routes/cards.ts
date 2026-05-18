@@ -337,18 +337,19 @@ cardRoutes.post("/build/:docId", (c) => {
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
   if (isCardBuildActive(docId)) return c.json({ status: "busy" }, 409);
 
-  // Query flag ?rebuild=true → wipe + start over (used by the
-  // "Karten neu bauen" button). Default = resume, skipping chapters
-  // that already have ai_generated cards from a previous (partial) run.
+  // ?rebuild=true → wipe + start over. Default = resume.
   const rebuild = c.req.query("rebuild") === "true";
+  // ?model=… → frontend per-user override (same pattern Audio uses).
+  // Wins over server-side Settings → ollamaModel. Empty = use server.
+  const model = c.req.query("model") || undefined;
 
-  void runCardBuild(docId, { rebuild }).catch((err) =>
+  void runCardBuild(docId, { rebuild, model }).catch((err) =>
     console.error(
       `[cards.build] ${docId} crashed:`,
       err instanceof Error ? err.stack : err
     )
   );
-  return c.json({ status: "started", rebuild }, 202);
+  return c.json({ status: "started", rebuild, model: model || null }, 202);
 });
 
 cardRoutes.get("/build/:docId", (c) => {

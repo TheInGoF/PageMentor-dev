@@ -13,6 +13,7 @@ import { CardReview } from "./CardReview";
 import { cn } from "../lib/cn";
 import { t } from "../lib/i18n";
 import { renderMarkdown } from "../lib/markdown";
+import { getSettings } from "../lib/settings";
 
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -149,9 +150,15 @@ export function Cards({ docId }: Props) {
 
   async function buildResume() {
     // Resume: keep what we have, walk un-processed chapters.
+    // Send the per-user model from localStorage (same Settings field
+    // the Audio tab uses) so the backend doesn't have to fall back
+    // to its own llm-config — Audio already proved this path is
+    // reliable.
     setBuild({ ...INITIAL_BUILD, active: true });
     try {
-      await api.cards.build(docId);
+      await api.cards.build(docId, {
+        model: getSettings().defaultOllamaModel || undefined,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : t("common.error");
       toast.show(msg, "error");
@@ -160,7 +167,6 @@ export function Cards({ docId }: Props) {
   }
 
   async function buildRebuild() {
-    // Confirm + wipe + start over.
     if (
       stats &&
       stats.total > 0 &&
@@ -169,7 +175,10 @@ export function Cards({ docId }: Props) {
       return;
     setBuild({ ...INITIAL_BUILD, active: true });
     try {
-      await api.cards.build(docId, { rebuild: true });
+      await api.cards.build(docId, {
+        rebuild: true,
+        model: getSettings().defaultOllamaModel || undefined,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : t("common.error");
       toast.show(msg, "error");

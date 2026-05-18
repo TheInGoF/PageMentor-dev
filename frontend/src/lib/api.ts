@@ -618,12 +618,19 @@ export const api = {
      *  cards.chunk, cards.progress, cards.done / failed / canceled). */
     /** Start (or resume) the build. With rebuild=true wipes existing
      *  ai_generated cards first; otherwise resumes by skipping chapters
-     *  that already have cards from a previous run. */
-    build: (docId: string, opts?: { rebuild?: boolean }) =>
-      request<{ status: string; rebuild?: boolean }>(
-        `/api/cards/build/${docId}${opts?.rebuild ? "?rebuild=true" : ""}`,
+     *  that already have cards from a previous run. With model=… the
+     *  caller pins a specific Ollama model (overrides server-side
+     *  Settings → Default Ollama Model). */
+    build: (docId: string, opts?: { rebuild?: boolean; model?: string }) => {
+      const params = new URLSearchParams();
+      if (opts?.rebuild) params.set("rebuild", "true");
+      if (opts?.model && opts.model.trim()) params.set("model", opts.model.trim());
+      const qs = params.toString();
+      return request<{ status: string; rebuild?: boolean; model?: string | null }>(
+        `/api/cards/build/${docId}${qs ? "?" + qs : ""}`,
         { method: "POST" }
-      ),
+      );
+    },
     buildStatus: (docId: string) =>
       request<{ active: boolean }>(`/api/cards/build/${docId}`),
     buildCancel: (docId: string) =>
