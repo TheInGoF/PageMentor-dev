@@ -18,7 +18,7 @@ export const cardRoutes = new Hono();
 cardRoutes.get("/document/:docId", (c) => {
   const docId = c.req.param("docId");
   const chapterId = c.req.query("chapter");
-  const params: unknown[] = [docId];
+  const params: string[] = [docId];
   let sql = `SELECT c.*, ch.title as chapter_title, ch.number as chapter_number,
                     p.ease, p.reps, p.streak, p.next_review, p.last_seen
              FROM cards c
@@ -117,7 +117,7 @@ cardRoutes.patch("/:id", async (c) => {
   if (!card) return c.json({ error: tt(c, "err.notFound") }, 404);
 
   const sets: string[] = [];
-  const vals: unknown[] = [];
+  const vals: Array<string | number | null> = [];
   for (const [k, v] of Object.entries(body)) {
     if (v !== undefined) {
       sets.push(`${k} = ?`);

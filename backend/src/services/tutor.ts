@@ -171,7 +171,7 @@ async function retrieveChunks(
 
   // Get every chunk in scope. For module=null we search the entire
   // library; for a specific module we restrict to its documents.
-  const params: unknown[] = [];
+  const params: string[] = [];
   let where = "";
   if (moduleId) {
     where = "WHERE d.module_id = ?";

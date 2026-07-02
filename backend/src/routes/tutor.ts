@@ -16,7 +16,9 @@ tutorRoutes.get("/sessions", (c) => {
 });
 
 tutorRoutes.post("/sessions", async (c) => {
-  const body = await c.req.json<{ moduleId?: string | null }>().catch(() => ({}));
+  const body = await c.req
+    .json<{ moduleId?: string | null }>()
+    .catch(() => ({}) as { moduleId?: string | null });
   const moduleId = body?.moduleId ?? null;
   const session = createChatSession(moduleId);
   return c.json({ session }, 201);

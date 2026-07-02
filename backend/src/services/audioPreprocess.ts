@@ -7,7 +7,9 @@
  *   - Expand abbreviations (z. B. → "zum Beispiel", vgl. → "vergleiche")
  *   - Verbalize numbers and units (§ 12 → "Paragraph zwölf",
  *     5 kg/m² → "fünf Kilogramm pro Quadratmeter")
- *   - Formulas in speakable form (f(x) = x² → "f von x gleich x Quadrat")
+ *   - Formulas paraphrased by meaning, never read symbol-by-symbol
+ *     (E = mc² → "die Energie entspricht der Masse mal dem Quadrat
+ *     der Lichtgeschwindigkeit")
  *   - Remove or reformulate inline citations ((Müller 2023, S. 42)
  *     → either drop or "laut Müller")
  *   - Strip list markers (• – * 1. 2. 3.) — they're annoying spoken,
@@ -96,7 +98,8 @@ Du DARFST den TEXT (Formulierung) ändern, NICHT den INHALT.
 
 ERLAUBT (das ist deine Aufgabe):
 - Sätze umformulieren, splitten, zusammenziehen, andere Verben/Konnektoren wählen
-- Abkürzungen ausschreiben, Symbole verbalisieren, Formeln in Worte überführen
+- Abkürzungen ausschreiben, Symbole verbalisieren, Formeln sinngemäß beschreiben
+  (Aussage statt Notation — siehe Section 4)
 - Wiederholungs-Pronominalisierung (Mimik-Pattern), Zahlenreihen-Paraphrasen,
   Schema-Echo-Aufbrechen (siehe Failure-Katalog)
 - Übungen/Captions/Inline-Citations ersatzlos streichen (siehe Section 6, 11)
@@ -373,8 +376,10 @@ geschickt und müssen unter allen Umständen vermieden werden:
     vorzeichnet. Komma und Punkt zählen hier als DEZIMALTRENNER innerhalb
     der Zahlen, NICHT als Satzzeichen am Satzende.
 
-    Regel: AB FÜNF ZAHLEN IN FOLGE wird paraphrasiert, nicht aufgezählt —
-    egal ob als Ziffer oder als Wort geschrieben.
+    Regel: AB VIER ZAHLEN IN FOLGE wird paraphrasiert, nicht aufgezählt —
+    egal ob als Ziffer oder als Wort geschrieben. Zwei bis drei Werte in
+    einem natürlichen Satz sind in Ordnung ("die Werte drei, fünf und
+    sieben") — alles darüber wird beschrieben statt aufgelistet.
 
     FALSCH:  "Die Auftrittswahrscheinlichkeiten P von x 1 bis P von
               x 8 sind 0,7, 0,2, 0,05, 0,015, 0,012, 0,011, 0,007 und
@@ -423,16 +428,16 @@ geschickt und müssen unter allen Umständen vermieden werden:
                  eins-eins. Aus der zehn Bit langen Beispielfolge
                  entsteht so eine zwanzig Bit lange Sequenz."
 
-    b) BIT-SEQUENZ MIT BIS ZU ACHT BIT, deren exakter Inhalt für die
-       Argumentation wichtig ist → als Wort-Sequenz beibehalten, aber
-       in EINEN Satz packen und Länge ansagen. Die TTS kommt mit 8
-       Tokens noch sauber durch.
-       OK: "Die acht Bit lange Folge null, eins, eins, null, eins,
-            null, null, eins wird übertragen."
+    b) BIT-SEQUENZ MIT BIS ZU VIER BIT, deren exakter Inhalt für die
+       Argumentation zwingend nötig ist → als Wort-Sequenz in EINEM
+       Satz, mit Längen-Ansage.
+       OK: "Die vier Bit lange Folge null, eins, eins, null wird
+            übertragen."
 
-    c) BIT-SEQUENZ LÄNGER ALS ACHT → IMMER paraphrasieren, niemals
+    c) JEDE LÄNGERE SEQUENZ → IMMER paraphrasieren, niemals
        Wort-für-Wort. Auch nicht „weil der Hörer es nachvollziehen
-       soll" — er kann das im Skript nachlesen.
+       soll" — er kann das im Skript nachlesen. Beschreibe die
+       Eigenschaft der Folge (Länge, Muster, Zweck) statt der Werte.
 
     Identische Logik gilt für Integer-Folgen ("1, 2, 3, 4, 5, 6, 7, 8")
     und Spalten-Werte aus Tabellen.
@@ -527,6 +532,11 @@ Latein: "e.g." (auf DE)    → "zum Beispiel"
 ================================================================
 2. SYMBOLE UND SONDERZEICHEN VERBALISIEREN
 ================================================================
+Diese Tabelle gilt für EINZELNE Symbole im Fließtext ("der Anteil
+liegt bei 5 %", "Temperaturen über 30 °C"). Für Symbole INNERHALB
+einer Formel gilt Section 4: die Formel wird sinngemäß beschrieben,
+nicht Symbol für Symbol übersetzt.
+
 "§"  → "Paragraph"     |  "§§" → "Paragraphen"
 "%"  → "Prozent"       |  "‰"  → "Promille"
 "°C" → "Grad Celsius"  |  "°F" → "Grad Fahrenheit"
@@ -563,32 +573,52 @@ Latein: "e.g." (auf DE)    → "zum Beispiel"
 Wenn ein griechischer Buchstabe als Symbol für eine Größe steht ("μ = 0,5"), heißt es: "mü gleich null Komma fünf".
 
 ================================================================
-4. MATHEMATISCHE FORMELN VERBALISIEREN
+4. FORMELN SINNGEMÄSS UMSCHREIBEN — NIE ZEICHEN FÜR ZEICHEN VORLESEN
 ================================================================
-Allgemeine Regeln:
-- Lies Variablen als einzelne Buchstaben.
-- Lies Indizes / Subscripts als "Index": "x_i" → "x Index i", "a_n" → "a Index n"
-- Lies Hochzahlen als "hoch": "x²" → "x Quadrat", "x³" → "x hoch drei", "e^x" → "e hoch x"
-- Klammern artikulieren: "f(x)" → "f von x", "g(x, y)" → "g von x und y"
-- Brüche: "a/b" → "a durch b" (kurz) oder "a geteilt durch b" (lang)
-- Wurzeln: "√x" → "Wurzel aus x", "∛x" → "dritte Wurzel aus x"
-- Beträge: "|x|" → "Betrag von x"
-- Logarithmen: "log(x)" → "Logarithmus von x", "ln(x)" → "natürlicher Logarithmus von x"
-- Trigonometrie: "sin(x)" → "Sinus von x", "cos(x)" → "Kosinus von x"
-- Limes: "lim x→∞" → "Limes für x gegen unendlich"
-- Ableitung: "f'(x)" → "f Strich von x", "∂f/∂x" → "partielle Ableitung von f nach x"
-- Integral: "∫f(x) dx" → "Integral von f von x dx"
-- Summe: "Σ_{i=1}^n x_i" → "Summe von i gleich eins bis n über x Index i"
-- Matrizen: "A^T" → "A transponiert", "A^{-1}" → "A invers"
+GRUNDREGEL: Eine Formel wird im Hörbuch NICHT wörtlich vorgelesen.
+Kein menschlicher Sprecher liest "f von x gleich x Quadrat plus zwei
+x minus eins" — er sagt, WAS die Formel aussagt. Wörtlich vorgelesene
+Operator-Ketten sind für den Hörer ohne Blatt nicht rekonstruierbar
+und gehören zu den zuverlässigsten Loop-Triggern der TTS-Engine.
 
-Beispiele komplett:
-"f(x) = x² + 2x − 1"    → "f von x gleich x Quadrat plus zwei x minus eins"
-"y = mx + b"            → "y gleich m mal x plus b"
-"E = mc²"               → "E gleich m mal c Quadrat"
-"P(A|B) = P(A∩B)/P(B)"  → "P von A gegeben B gleich P von A geschnitten mit B durch P von B"
-"∫_0^1 x² dx"            → "Integral von null bis eins über x Quadrat dx"
+Deshalb: BESCHREIBE die AUSSAGE der Formel in einem normalen deutschen
+Satz. Was setzt sie in Beziehung? Was hängt wovon ab? Was ist das
+Ergebnis? Der Hörer soll das Konzept verstehen, die exakte Notation
+liest er im Skript nach.
 
-Wenn eine Formel zu komplex zum gut verbalisieren ist, beschreibe sie kurz in Worten ("Die Bewegungsgleichung in der dritten Dimension lautet …") und überspringe die wörtliche Wiedergabe.
+FALSCH:  "f von x gleich x Quadrat plus zwei x minus eins"
+RICHTIG: "Die Funktion f ist eine nach oben geöffnete Parabel,
+          beschrieben durch ein quadratisches Polynom."
+FALSCH:  "E gleich m mal c Quadrat"
+RICHTIG: "Die Energie eines Körpers entspricht seiner Masse mal dem
+          Quadrat der Lichtgeschwindigkeit."
+FALSCH:  "P von A gegeben B gleich P von A geschnitten mit B durch
+          P von B"
+RICHTIG: "Die bedingte Wahrscheinlichkeit von A gegeben B ergibt sich,
+          indem man die Wahrscheinlichkeit beider Ereignisse zusammen
+          durch die Wahrscheinlichkeit von B teilt."
+FALSCH:  "Summe von i gleich eins bis n über x Index i"
+RICHTIG: "die Summe aller x-Werte"
+FALSCH:  "Integral von null bis eins über x Quadrat dx"
+RICHTIG: "das Integral der Funktion über das Intervall von null bis
+          eins"
+
+EINZIGE AUSNAHME — triviale Kurzaussagen mit höchstens EINEM Operator
+dürfen gesprochen werden, weil sie wie natürliche Sprache klingen:
+  "x gleich fünf"           (x = 5)
+  "mü gleich null Komma fünf"  (μ = 0,5)
+  "n größer als zehn"       (n > 10)
+Sobald mehr als ein Operator, ein Bruch, ein Index, eine Hochzahl oder
+eine Klammer im Spiel ist: sinngemäß beschreiben, nicht vorlesen.
+
+Wenn die Bedeutung einer Formel aus dem Kontext NICHT erschließbar ist
+(z. B. weil die Extraktion sie verstümmelt hat), nenne nur ihre Rolle
+("Die zugehörige Berechnungsformel steht im Skript.") oder lass sie
+ersatzlos weg. Niemals rätselhafte Zeichenketten in den Output heben.
+
+Wenn der Folgetext auf Bestandteile der Formel Bezug nimmt ("dabei ist
+m die Masse"), integriere diese Erklärungen in deine Beschreibung —
+sie sind gesprochen wertvoller als die Notation selbst.
 
 ================================================================
 5. ZAHLEN, EINHEITEN, DATUM
@@ -712,7 +742,8 @@ You MAY change WORDING. You MUST NOT change CONTENT.
 
 ALLOWED (this is your job):
 - Rewording, splitting, merging sentences; alternative verbs/connectives.
-- Expanding abbreviations, verbalizing symbols, turning formulas into words.
+- Expanding abbreviations, verbalizing symbols, describing formulas by
+  meaning (statement instead of notation — see section 4).
 - Repetition-pronominalization (Mimik pattern), numeric-series paraphrase,
   schema-echo breakup (see failure catalog).
 - Cutting exercises / captions / inline citations (see sections 6, 11).
@@ -898,8 +929,10 @@ D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
    comma here means the SEPARATOR within a number, NOT sentence-ending
    punctuation.
 
-   Rule: FIVE OR MORE NUMBERS IN A ROW → paraphrase, don't enumerate —
-   whether written as digits or words.
+   Rule: FOUR OR MORE NUMBERS IN A ROW → paraphrase, don't enumerate —
+   whether written as digits or words. Two or three values inside a
+   natural sentence are fine ("the values three, five, and seven");
+   anything beyond that gets described, not listed.
 
    WRONG: "The probabilities P(x_1) through P(x_8) are 0.7, 0.2, 0.05,
            0.015, 0.012, 0.011, 0.007, and 0.005."
@@ -941,16 +974,15 @@ D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
               zero-zero, a one becomes one-one. From the 10-bit
               example sequence you get a 20-bit one."
 
-   b) BIT SEQUENCE UP TO EIGHT BITS whose exact content matters for
-      the argument → keep as a word sequence, but put it in ONE
-      sentence and announce the length. The TTS can handle 8 tokens
-      cleanly.
-      OK: "The 8-bit sequence zero, one, one, zero, one, zero, zero,
-           one is transmitted."
+   b) BIT SEQUENCE UP TO FOUR BITS whose exact content is strictly
+      required for the argument → keep as a word sequence in ONE
+      sentence, announcing the length.
+      OK: "The 4-bit sequence zero, one, one, zero is transmitted."
 
-   c) BIT SEQUENCE LONGER THAN EIGHT → ALWAYS paraphrase, never
-      word-for-word. Not even "so the listener can follow" — the
-      script is there for that.
+   c) ANY LONGER SEQUENCE → ALWAYS paraphrase, never word-for-word.
+      Not even "so the listener can follow" — the script is there for
+      that. Describe the property of the sequence (length, pattern,
+      purpose) instead of its values.
 
    The same logic applies to integer ranges ("1, 2, 3, 4, 5, 6, 7, 8")
    and column values from tables.
@@ -978,6 +1010,11 @@ D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
 ================================================================
 2. VERBALIZE SYMBOLS
 ================================================================
+This table applies to ISOLATED symbols in prose ("a share of 5 %",
+"temperatures above 30 °C"). For symbols INSIDE a formula, section 4
+wins: the formula is described by meaning, not translated symbol by
+symbol.
+
 "§"  → "Section"        |  "%" → "percent"        |  "‰" → "per mille"
 "°C" → "degrees Celsius"|  "°F" → "degrees Fahrenheit"
 "&"  → "and"            |  "©"  → "copyright"
@@ -1012,30 +1049,49 @@ D) PARAPHRASE LONG NUMERIC SERIES — DO NOT ENUMERATE
 When a Greek letter denotes a quantity ("μ = 0.5"), say: "mu equals zero point five".
 
 ================================================================
-4. VERBALIZE MATHEMATICAL FORMULAS
+4. PARAPHRASE FORMULAS BY MEANING — NEVER READ SYMBOL BY SYMBOL
 ================================================================
-Rules:
-- Read variables as single letters.
-- Subscripts: "x_i" → "x sub i", "a_n" → "a sub n"
-- Superscripts: "x²" → "x squared", "x³" → "x cubed", "x^n" → "x to the n", "e^x" → "e to the x"
-- Function calls: "f(x)" → "f of x", "g(x, y)" → "g of x and y"
-- Fractions: "a/b" → "a over b" (short) or "a divided by b" (long)
-- Roots: "√x" → "square root of x", "∛x" → "cube root of x"
-- Absolute value: "|x|" → "absolute value of x"
-- Logarithms: "log(x)" → "log of x", "ln(x)" → "natural log of x"
-- Trig: "sin(x)" → "sine of x", "cos(x)" → "cosine of x"
-- Limit: "lim x→∞" → "the limit as x goes to infinity"
-- Derivative: "f'(x)" → "f prime of x", "∂f/∂x" → "partial f over partial x"
-- Integral: "∫f(x) dx" → "integral of f of x dx"
-- Sum: "Σ_{i=1}^n x_i" → "sum from i equals one to n of x sub i"
-- Matrix: "A^T" → "A transpose", "A^{-1}" → "A inverse"
+CORE RULE: A formula is NEVER read aloud verbatim in an audiobook.
+No human narrator says "f of x equals x squared plus two x minus one"
+— they say WHAT the formula states. Spoken operator chains cannot be
+reconstructed by a listener without the page, and they are among the
+most reliable loop triggers for the TTS engine.
 
-Full examples:
-"f(x) = x² + 2x − 1"    → "f of x equals x squared plus two x minus one"
-"E = mc²"               → "E equals m c squared"
-"P(A|B) = P(A∩B)/P(B)"  → "the probability of A given B equals the probability of A intersect B divided by the probability of B"
+Therefore: DESCRIBE what the formula asserts, in one plain sentence.
+What does it relate? What depends on what? What is the result? The
+listener should grasp the concept; the exact notation lives in the
+script.
 
-If a formula is too complex to verbalize cleanly, describe it briefly ("The third-dimensional equation of motion is …") and skip the literal reading.
+WRONG: "f of x equals x squared plus two x minus one"
+RIGHT: "The function f is an upward-opening parabola, described by a
+        quadratic polynomial."
+WRONG: "E equals m c squared"
+RIGHT: "The energy of a body equals its mass times the speed of light
+        squared."
+WRONG: "the probability of A given B equals the probability of A
+        intersect B divided by the probability of B"
+RIGHT: "The conditional probability of A given B is the probability
+        of both events together, divided by the probability of B."
+WRONG: "sum from i equals one to n of x sub i"
+RIGHT: "the sum of all x values"
+
+ONLY EXCEPTION — trivial short statements with at most ONE operator
+may be spoken, because they sound like natural language:
+  "x equals five"          (x = 5)
+  "mu equals zero point five"  (μ = 0.5)
+  "n greater than ten"     (n > 10)
+As soon as more than one operator, a fraction, a subscript, an
+exponent, or a bracket is involved: describe the meaning, don't read
+the notation.
+
+If the meaning of a formula cannot be inferred from context (e.g.
+because extraction mangled it), state only its role ("The formula for
+this calculation is given in the script.") or drop it entirely. Never
+carry cryptic character strings into the output.
+
+If the following text explains the formula's components ("where m is
+the mass"), fold those explanations into your description — spoken,
+they are worth more than the notation itself.
 
 ================================================================
 5. NUMBERS, UNITS, DATES
@@ -1210,11 +1266,16 @@ export async function preprocessChapterForAudio(params: {
   const pretreated = stripLeadingSectionNumbers(expanded);
 
   // Base prompt + the shared cleanup hints (watermark stripping,
-  // formula reconstruction) so a Wilhelm-Büchner header or a "wbh"
-  // logo glyph never makes it into the spoken audiobook.
+  // formula handling) so a Wilhelm-Büchner header or a "wbh" logo
+  // glyph never makes it into the spoken audiobook. The "audio"
+  // context matters: the text variant would instruct the model to
+  // rebuild broken formulas as LaTeX, which is unspeakable and
+  // violates the TTS character allowlist — the audio variant asks
+  // for a plain-language description instead.
   const baseSystem = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
   const system = `${baseSystem}\n\n${cleanupHints(
-    params.language === "de" ? "de" : "en"
+    params.language === "de" ? "de" : "en",
+    "audio"
   )}`;
 
   // num_ctx sized generously for modern long-context models
