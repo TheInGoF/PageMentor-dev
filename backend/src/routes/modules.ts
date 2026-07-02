@@ -13,6 +13,9 @@ interface Module {
   color: string;
   icon: string;
   sort_order: number;
+  /** 0 | 1 — completed modules collapse in the library and sort
+   *  below the active ones. */
+  completed: number;
   created_at: string;
 }
 
@@ -177,6 +180,10 @@ moduleRoutes.patch("/:id", async (c) => {
     if (["name", "semester", "description", "color", "icon", "sort_order"].includes(k)) {
       sets.push(`${k} = ?`);
       vals.push(v);
+    } else if (k === "completed") {
+      // Accept boolean or 0/1 — SQLite stores an integer.
+      sets.push("completed = ?");
+      vals.push(v ? 1 : 0);
     }
   }
   if (sets.length === 0) return c.json({ status: "noop" });

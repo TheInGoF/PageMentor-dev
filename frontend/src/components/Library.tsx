@@ -180,12 +180,13 @@ export function Library({
     return Number.isFinite(n) ? n : 9999;
   }
 
-  /** Gruppiert die gefilterten Hefte nach Modul-Zugehörigkeit für die
-   *  Render-Schleife. "unassigned" (kein Modul gesetzt) kommt zuerst,
-   *  danach die Module in ihrer sort_order — so wie auch die Module-
-   *  Übersichtsseite sie listet. Module ohne Dokumente in der aktuellen
-   *  Filter-Auswahl werden übersprungen, damit nicht 20 leere
-   *  Überschriften erscheinen. */
+  /** Groups the filtered documents by module for the render loop.
+   *  "unassigned" (no module set) comes first, then the ACTIVE
+   *  modules, and finally the COMPLETED ones in their own collapsed
+   *  block at the bottom. Both groups are sorted by semester first
+   *  (numeric-aware, empty semester last), then alphabetically by
+   *  name. Modules without documents in the current filter selection
+   *  are skipped so we don't render 20 empty headings. */
   const grouped = useMemo(() => {
     if (!filtered) return null;
     const byModule = new Map<string | null, Document[]>();
@@ -195,29 +196,73 @@ export function Library({
       if (arr) arr.push(d);
       else byModule.set(key, [d]);
     }
-    const sections: Array<{
+    type Section = {
       key: string;
       module: ModuleListItem | null;
       docs: Document[];
-    }> = [];
-    const unassigned = byModule.get(null);
-    if (unassigned && unassigned.length > 0) {
-      sections.push({ key: "__unassigned", module: null, docs: unassigned });
-    }
-    const sortedModules = [...modules].sort(
-      (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
-    );
-    for (const m of sortedModules) {
-      const docs = byModule.get(m.id);
-      if (docs && docs.length > 0) {
-        sections.push({ key: m.id, module: m, docs });
+    };
+    const bySemesterThenName = (a: ModuleListItem, b: ModuleListItem) => {
+      const semA = a.semester?.trim() ?? "";
+      const semB = b.semester?.trim() ?? "";
+      if (semA !== semB) {
+        if (!semA) return 1;
+        if (!semB) return -1;
+        const cmp = semA.localeCompare(semB, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+        if (cmp !== 0) return cmp;
       }
-    }
-    return sections;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    };
+    const toSections = (mods: ModuleListItem[]): Section[] =>
+      mods
+        .sort(bySemesterThenName)
+        .flatMap((m) => {
+          const docs = byModule.get(m.id);
+          return docs && docs.length > 0 ? [{ key: m.id, module: m, docs }] : [];
+        });
+
+    const unassigned = byModule.get(null);
+    return {
+      unassigned:
+        unassigned && unassigned.length > 0
+          ? ({ key: "__unassigned", module: null, docs: unassigned } as Section)
+          : null,
+      active: toSections(modules.filter((m) => !m.completed)),
+      completed: toSections(modules.filter((m) => !!m.completed)),
+    };
   }, [filtered, modules]);
 
   function toggleTag(tg: string) {
     setActiveTags((xs) => (xs.includes(tg) ? xs.filter((x) => x !== tg) : [...xs, tg]));
+  }
+
+  async function toggleModuleCompleted(m: ModuleListItem) {
+    try {
+      await api.modules.patch(m.id, { completed: m.completed ? 0 : 1 });
+      setModules(await api.modules.list());
+      toast.show(
+        m.completed
+          ? t("library.module.reopened", { name: m.name })
+          : t("library.module.completedToast", { name: m.name }),
+        "success"
+      );
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  // Completed sections are collapsed by default; clicking the header
+  // toggles them open. Keyed by module id, session-local state only.
+  const [expandedCompleted, setExpandedCompleted] = useState<Set<string>>(new Set());
+  function toggleExpanded(id: string) {
+    setExpandedCompleted((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   async function handleDelete(doc: Document) {
@@ -332,12 +377,20 @@ export function Library({
           <EmptyState onUpload={() => setUploadOpen(true)} hasAny={(docs?.length ?? 0) > 0} />
         ) : (
           <div className="flex flex-col gap-8">
-            {grouped.map((section) => (
+            {[
+              ...(grouped.unassigned ? [grouped.unassigned] : []),
+              ...grouped.active,
+            ].map((section) => (
               <section key={section.key} className="flex flex-col gap-3">
                 <ModuleSectionHeader
                   module={section.module}
                   count={section.docs.length}
                   onOpenModule={onOpenModule}
+                  onToggleCompleted={
+                    section.module
+                      ? () => toggleModuleCompleted(section.module!)
+                      : undefined
+                  }
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {section.docs.map((d) => (
@@ -354,6 +407,53 @@ export function Library({
                 </div>
               </section>
             ))}
+
+            {grouped.completed.length > 0 && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 pt-2">
+                  <span className="text-base">✅</span>
+                  <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wide">
+                    {t("library.section.completedGroup")}
+                  </h2>
+                  <span className="text-xs text-neutral-600">
+                    ({grouped.completed.length})
+                  </span>
+                  <div className="flex-1 border-b border-border" />
+                </div>
+                {grouped.completed.map((section) => {
+                  const expanded = expandedCompleted.has(section.key);
+                  return (
+                    <section key={section.key} className="flex flex-col gap-3">
+                      <ModuleSectionHeader
+                        module={section.module}
+                        count={section.docs.length}
+                        onOpenModule={onOpenModule}
+                        onToggleCompleted={() =>
+                          toggleModuleCompleted(section.module!)
+                        }
+                        collapsed={!expanded}
+                        onToggleCollapse={() => toggleExpanded(section.key)}
+                      />
+                      {expanded && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          {section.docs.map((d) => (
+                            <DocumentCard
+                              key={d.id}
+                              doc={d}
+                              liveEvent={liveEvents[d.id]}
+                              onOpen={() => onOpen(d.id)}
+                              onDelete={() => handleDelete(d)}
+                              onEdit={() => setEditDoc(d)}
+                              onRetried={() => void load()}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -408,17 +508,26 @@ function ModuleChip({
   );
 }
 
-/** Zwischen-Überschrift pro Modul-Sektion in der Library. Bei
- *  echten Modulen klickbar als Schnellverweis auf die Modul-Detailseite,
- *  bei der "ohne Modul"-Sektion nur statische Überschrift. */
+/** Section heading per module in the library. For real modules the
+ *  title is a quick link to the module detail page; the unassigned
+ *  section renders a static heading. Completed sections additionally
+ *  get a collapse chevron (whole-row click toggles) and every module
+ *  section gets a small completed-toggle on the right. */
 function ModuleSectionHeader({
   module: m,
   count,
   onOpenModule,
+  onToggleCompleted,
+  collapsed,
+  onToggleCollapse,
 }: {
   module: ModuleListItem | null;
   count: number;
   onOpenModule?: (id: string) => void;
+  onToggleCompleted?: () => void;
+  /** undefined = not collapsible (active sections). */
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   if (!m) {
     return (
@@ -432,37 +541,92 @@ function ModuleSectionHeader({
     );
   }
   const clickable = !!onOpenModule;
+  const collapsible = collapsed !== undefined && !!onToggleCollapse;
+  const isCompleted = !!m.completed;
   return (
-    <button
-      type="button"
-      onClick={clickable ? () => onOpenModule!(m.id) : undefined}
-      disabled={!clickable}
+    <div
       className={
-        "flex items-baseline gap-2 border-b pb-1.5 text-left transition-colors " +
-        (clickable
-          ? "border-border hover:border-border-strong group cursor-pointer"
-          : "border-border cursor-default")
+        "flex items-center gap-2 border-b pb-1.5 group " +
+        (isCompleted ? "opacity-70 hover:opacity-100 transition-opacity" : "")
       }
       style={{ borderBottomColor: m.color }}
-      title={clickable ? t("library.section.openModule") : undefined}
     >
-      <span className="text-base">{m.icon}</span>
-      <h2
-        className="text-sm font-semibold transition-colors"
-        style={{ color: m.color }}
+      {collapsible && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          aria-expanded={!collapsed}
+          title={collapsed ? t("library.section.expand") : t("library.section.collapse")}
+          className="text-xs text-neutral-500 hover:text-neutral-200 w-4 shrink-0 transition-colors"
+        >
+          {collapsed ? "▸" : "▾"}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={
+          collapsible
+            ? onToggleCollapse
+            : clickable
+            ? () => onOpenModule!(m.id)
+            : undefined
+        }
+        disabled={!clickable && !collapsible}
+        className={
+          "flex items-baseline gap-2 text-left min-w-0 flex-1 " +
+          (clickable || collapsible ? "cursor-pointer" : "cursor-default")
+        }
+        title={
+          collapsible
+            ? collapsed
+              ? t("library.section.expand")
+              : t("library.section.collapse")
+            : clickable
+            ? t("library.section.openModule")
+            : undefined
+        }
       >
-        {m.name}
-      </h2>
-      {m.semester && (
-        <span className="text-xs text-neutral-500">· {m.semester}</span>
-      )}
-      <span className="text-xs text-neutral-500">({count})</span>
+        <span className="text-base">{m.icon}</span>
+        <h2
+          className="text-sm font-semibold transition-colors truncate"
+          style={{ color: m.color }}
+        >
+          {m.name}
+        </h2>
+        {m.semester && (
+          <span className="text-xs text-neutral-500 shrink-0">· {m.semester}</span>
+        )}
+        <span className="text-xs text-neutral-500 shrink-0">({count})</span>
+      </button>
       {clickable && (
-        <span className="ml-auto text-xs text-neutral-500 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          type="button"
+          onClick={() => onOpenModule!(m.id)}
+          className="text-xs text-neutral-500 hover:text-neutral-200 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        >
           {t("library.section.openModule")} →
-        </span>
+        </button>
       )}
-    </button>
+      {onToggleCompleted && (
+        <button
+          type="button"
+          onClick={onToggleCompleted}
+          title={
+            isCompleted
+              ? t("library.module.markActive")
+              : t("library.module.markCompleted")
+          }
+          className={
+            "text-xs px-2 py-0.5 rounded-full border transition-colors shrink-0 " +
+            (isCompleted
+              ? "border-border text-neutral-400 hover:border-border-strong hover:text-neutral-200"
+              : "border-border text-neutral-500 opacity-0 group-hover:opacity-100 hover:border-emerald-600 hover:text-emerald-400")
+          }
+        >
+          {isCompleted ? `↺ ${t("library.module.markActive")}` : "✓"}
+        </button>
+      )}
+    </div>
   );
 }
 

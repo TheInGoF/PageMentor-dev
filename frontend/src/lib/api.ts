@@ -299,6 +299,9 @@ export interface Module {
   color: string;
   icon: string;
   sort_order: number;
+  /** 0 | 1 — completed modules collapse in the library and sort
+   *  below the active ones. */
+  completed: number;
   created_at: string;
 }
 

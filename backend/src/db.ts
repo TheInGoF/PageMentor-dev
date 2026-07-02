@@ -145,6 +145,13 @@ export function initDb() {
     d.exec("ALTER TABLE documents ADD COLUMN extraction_started_at INTEGER");
   }
 
+  const moduleCols = d.prepare("PRAGMA table_info(modules)").all() as Array<{ name: string }>;
+  if (!moduleCols.some((c) => c.name === "completed")) {
+    // Completed modules collapse in the library and sort below the
+    // active ones.
+    d.exec("ALTER TABLE modules ADD COLUMN completed INTEGER NOT NULL DEFAULT 0");
+  }
+
   const summaryCols = d.prepare("PRAGMA table_info(summaries)").all() as Array<{ name: string }>;
   if (!summaryCols.some((c) => c.name === "generation_ms")) {
     d.exec("ALTER TABLE summaries ADD COLUMN generation_ms INTEGER NOT NULL DEFAULT 0");
