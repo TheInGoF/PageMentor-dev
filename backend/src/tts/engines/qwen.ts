@@ -453,6 +453,7 @@ async function callSpeechCloneFromDesign(params: {
   text: string;
   design: VoiceDesign;
   timeoutMs: number;
+  dials?: AdvancedDials;
   signal?: AbortSignal;
 }): Promise<Buffer> {
   if (!params.design.refPath || !existsSync(params.design.refPath)) {
@@ -461,6 +462,7 @@ async function callSpeechCloneFromDesign(params: {
     );
   }
   const url = baseUrl();
+  const d = params.dials ?? {};
   const refBytes = readFileSync(params.design.refPath);
   const refB64 = refBytes.toString("base64");
 
@@ -484,6 +486,13 @@ async function callSpeechCloneFromDesign(params: {
       instruct: params.design.description || undefined,
       language: qwenLanguageFor(params.design.language),
       seed: params.design.seed,
+      // Same advanced dials as the preset/sample paths — without them
+      // the settings' repetition_penalty (the anti-loop knob) was
+      // silently ignored for design voices.
+      temperature: d.temperature,
+      top_p: d.topP,
+      top_k: d.topK,
+      repetition_penalty: d.repetitionPenalty,
     }),
     timeoutMs: params.timeoutMs,
     signal: params.signal,
@@ -739,13 +748,17 @@ export const qwenEngine: TtsEngine = {
       // every chunk gets the same voice identity. Calling VoiceDesign
       // directly per chunk would not be.
       const ready = await ensureDesignReference(design, SYNTH_TIMEOUT_MS);
+      const dials = readDials();
       console.log(
-        `[qwen-tts] synth design=${ready.id} (${ready.label}) via clone text=${text.length}c rate=${params.rate} seed=${ready.seed}`
+        `[qwen-tts] synth design=${ready.id} (${ready.label}) via clone text=${text.length}c rate=${params.rate} seed=${ready.seed} ` +
+          `temp=${dials.temperature ?? "def"} top_p=${dials.topP ?? "def"} ` +
+          `top_k=${dials.topK ?? "def"} rep_pen=${dials.repetitionPenalty ?? "def"}`
       );
       buf = await callSpeechCloneFromDesign({
         text,
         design: ready,
         timeoutMs: SYNTH_TIMEOUT_MS,
+        dials,
         signal: params.signal,
       });
     } else if (presetSpeaker) {
@@ -854,6 +867,7 @@ export const qwenEngine: TtsEngine = {
         text: params.text,
         design: ready,
         timeoutMs: PREVIEW_TIMEOUT_MS,
+        dials: readDials(),
       });
       if (buf.length === 0) {
         throw new Error(
