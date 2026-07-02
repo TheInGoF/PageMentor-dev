@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { randomUUID } from "crypto";
-import { join } from "path";
+import { basename, join } from "path";
 import { mkdirSync, writeFileSync, unlinkSync, existsSync, rmSync } from "fs";
 import { processDocument, cancelProcessing } from "../services/pipeline";
 import { doclingAlive } from "../services/docling";
@@ -119,10 +119,14 @@ documentRoutes.get("/:id/pdf", (c) => {
 
   const stat = statSync(fullPath);
   const range = c.req.header("range");
+  // Sanitize the stored filename for the header — quotes or CR/LF in
+  // a legacy DB row would otherwise break out of the header value.
+  const headerName =
+    row.filename.replace(/[\x00-\x1f"\\]/g, "").trim() || "document.pdf";
   const baseHeaders: Record<string, string> = {
     "Content-Type": row.mime_type || "application/pdf",
     "Accept-Ranges": "bytes",
-    "Content-Disposition": `inline; filename="${row.filename}"`,
+    "Content-Disposition": `inline; filename="${headerName}"`,
   };
   if (range) {
     const m = /bytes=(\d+)-(\d*)/.exec(range);
@@ -166,16 +170,23 @@ documentRoutes.post("/upload", async (c) => {
 
   if (!file) return c.json({ error: tt(c, "err.missingFile") }, 400);
 
+  // The multipart filename is client-controlled — strip any path
+  // component so "../../evil.pdf" can't escape the upload directory,
+  // and drop control chars/quotes that would later break the
+  // Content-Disposition header when streaming the PDF back.
+  const safeName =
+    basename(file.name).replace(/[\x00-\x1f"\\]/g, "").trim() || "upload.pdf";
+
   const id = randomUUID();
   const dir = join(UPLOAD_DIR, id);
   mkdirSync(dir, { recursive: true });
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const stored = join(dir, file.name);
+  const stored = join(dir, safeName);
   writeFileSync(stored, buf);
 
-  const relPath = join("uploads", id, file.name);
-  const title = file.name.replace(/\.[^.]+$/, "");
+  const relPath = join("uploads", id, safeName);
+  const title = safeName.replace(/\.[^.]+$/, "");
 
   db()
     .prepare(
@@ -185,7 +196,7 @@ documentRoutes.post("/upload", async (c) => {
     .run(
       id,
       title,
-      file.name,
+      safeName,
       relPath,
       file.type || "application/pdf",
       buf.length,
@@ -209,7 +220,7 @@ documentRoutes.post("/upload", async (c) => {
   // explicitly via POST /:id/reprocess when ready (docling runs can
   // take a good half hour on the NAS).
 
-  return c.json({ id, title, filename: file.name }, 201);
+  return c.json({ id, title, filename: safeName }, 201);
 });
 
 // Start (or re-run) Docling extraction. Manually triggered even for

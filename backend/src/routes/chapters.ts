@@ -43,9 +43,13 @@ chapterRoutes.patch("/:id", async (c) => {
   const chapter = db().prepare("SELECT id FROM chapters WHERE id = ?").get(id);
   if (!chapter) return c.json({ error: tt(c, "err.chapterNotFound") }, 404);
 
+  // Column whitelist — JSON keys must never reach the SET clause
+  // verbatim, otherwise a crafted key injects SQL.
+  const PATCHABLE = ["title", "text", "start_page", "end_page", "sort_order"] as const;
   const sets: string[] = [];
-  const vals: any[] = [];
-  for (const [k, v] of Object.entries(body)) {
+  const vals: Array<string | number | null> = [];
+  for (const k of PATCHABLE) {
+    const v = body[k];
     if (v !== undefined) {
       sets.push(`${k} = ?`);
       vals.push(v);

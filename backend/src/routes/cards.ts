@@ -116,9 +116,13 @@ cardRoutes.patch("/:id", async (c) => {
   const card = db().prepare("SELECT id FROM cards WHERE id = ?").get(id);
   if (!card) return c.json({ error: tt(c, "err.notFound") }, 404);
 
+  // Column whitelist — JSON keys must never reach the SET clause
+  // verbatim, otherwise a crafted key injects SQL.
+  const PATCHABLE = ["question", "answer", "hint", "difficulty"] as const;
   const sets: string[] = [];
   const vals: Array<string | number | null> = [];
-  for (const [k, v] of Object.entries(body)) {
+  for (const k of PATCHABLE) {
+    const v = body[k];
     if (v !== undefined) {
       sets.push(`${k} = ?`);
       vals.push(v);

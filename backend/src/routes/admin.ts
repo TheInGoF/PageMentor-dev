@@ -119,12 +119,18 @@ adminRoutes.get("/logs/stream", (c) => {
       });
     }
 
+    // Cap mirrors the logBus ring buffer: a stalled/slow client must
+    // not grow the per-connection queue without bound during a log
+    // burst (e.g. a docling run). Oldest lines drop first — the
+    // client can always reload for the replay window.
+    const MAX_QUEUE = 1000;
     const queue: string[] = [];
     let resolver: (() => void) | null = null;
     let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
     const unsubscribe = subscribeLogs((line) => {
       queue.push(JSON.stringify(line));
+      if (queue.length > MAX_QUEUE) queue.shift();
       if (resolver) {
         const r = resolver;
         resolver = null;
