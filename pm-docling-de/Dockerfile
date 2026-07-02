@@ -27,8 +27,15 @@ FROM quay.io/docling-project/docling-serve:v1.16.1
 # TESSDATA_PREFIX is set to /usr/share/tesseract/tessdata/ by the
 # base image, so dropping the file there makes it pick-up
 # automatically. `tesseract --list-langs` will then show "deu".
+# osd.traineddata: orientation & script detection. The base image
+# doesn't ship it, so every OCR rectangle logged "OSD failed" and
+# rotated/skewed scans were OCR'd at an assumed 0° — garbage text on
+# rotated pages. With the file present, tesseract detects rotation.
 USER 0
 RUN curl -fsSL \
       -o /usr/share/tesseract/tessdata/deu.traineddata \
-      https://github.com/tesseract-ocr/tessdata_fast/raw/main/deu.traineddata
+      https://github.com/tesseract-ocr/tessdata_fast/raw/main/deu.traineddata \
+ && curl -fsSL \
+      -o /usr/share/tesseract/tessdata/osd.traineddata \
+      https://github.com/tesseract-ocr/tessdata_fast/raw/main/osd.traineddata
 USER 1001
