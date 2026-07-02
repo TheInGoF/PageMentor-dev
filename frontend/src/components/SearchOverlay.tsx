@@ -23,11 +23,15 @@ export function SearchOverlay({ onOpenDocument }: Props) {
   }, []);
 
   useEffect(() => {
+    // Always cancel the pending debounce first — otherwise clearing
+    // the input lets a stale timer fetch the old query and pop the
+    // dropdown open under an empty search box.
+    if (timer.current) window.clearTimeout(timer.current);
     if (!q.trim()) {
       setResult(null);
+      setOpen(false);
       return;
     }
-    if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
       try {
         const r = await api.search.query(q);
@@ -37,6 +41,9 @@ export function SearchOverlay({ onOpenDocument }: Props) {
         // ignore transient errors
       }
     }, 200);
+    return () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    };
   }, [q]);
 
   useEffect(() => {

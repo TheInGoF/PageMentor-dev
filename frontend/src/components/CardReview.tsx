@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type Card, type ReviewQuality } from "../lib/api";
 import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
@@ -22,19 +22,24 @@ export function CardReview({ cards, onClose }: Props) {
   const [showHint, setShowHint] = useState(false);
   const [history, setHistory] = useState<SessionEntry[]>([]);
   const [saving, setSaving] = useState(false);
+  // Synchronous re-entry guard: `saving` state only updates on the
+  // next render, so key auto-repeat could fire rate() twice for the
+  // same card and double-post the SM-2 review.
+  const ratingRef = useRef(false);
   const toast = useToast();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === " ") {
+      // Escape first — the rating branch below must never swallow it.
+      if (e.key === "Escape") {
+        onClose();
+      } else if (e.key === " ") {
         e.preventDefault();
         setShowAnswer((s) => !s);
       } else if (showAnswer && !saving) {
         if (e.key === "1") rate(1);
         else if (e.key === "2") rate(3);
         else if (e.key === "3") rate(5);
-      } else if (e.key === "Escape") {
-        onClose();
       }
     };
     window.addEventListener("keydown", handler);
@@ -44,6 +49,8 @@ export function CardReview({ cards, onClose }: Props) {
 
   async function rate(quality: ReviewQuality) {
     if (idx >= cards.length) return;
+    if (ratingRef.current) return;
+    ratingRef.current = true;
     const card = cards[idx];
     setSaving(true);
     try {
@@ -56,6 +63,7 @@ export function CardReview({ cards, onClose }: Props) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
       setSaving(false);
+      ratingRef.current = false;
     }
   }
 

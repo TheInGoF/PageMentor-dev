@@ -348,6 +348,7 @@ export function Library({
                       onOpen={() => onOpen(d.id)}
                       onDelete={() => handleDelete(d)}
                       onEdit={() => setEditDoc(d)}
+                      onRetried={() => void load()}
                     />
                   ))}
                 </div>

@@ -17,6 +17,9 @@ interface Props {
   onOpen: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  /** Called after a retry/reprocess was accepted by the backend so
+   *  the list refreshes — a "failed" card otherwise never re-polls. */
+  onRetried?: () => void;
 }
 
 const statusColor: Record<Document["ocr_status"], string> = {
@@ -138,13 +141,14 @@ function PipelineDots({ doc }: { doc: Document }) {
   );
 }
 
-export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit }: Props) {
+export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit, onRetried }: Props) {
   const toast = useToast();
 
   async function retry() {
     try {
       await api.documents.reprocess(doc.id);
       toast.show(t("library.retryStarted"), "success");
+      onRetried?.();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }

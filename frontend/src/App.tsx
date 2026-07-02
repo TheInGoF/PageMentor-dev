@@ -102,6 +102,22 @@ function initialNav(): NavState {
   );
 }
 
+/** Deep-link page target from `?openDoc=<id>&page=<n>` (tutor source
+ *  pills). Read once at startup; the URL params are stripped after
+ *  consumption so a reload doesn't jump back into the document. */
+function initialDeepLink(): { docId: string; page: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const docId = params.get("openDoc");
+    if (!docId) return null;
+    const page = parseInt(params.get("page") ?? "", 10);
+    return { docId, page: Number.isFinite(page) && page > 0 ? page : 0 };
+  } catch {
+    return null;
+  }
+}
+
 export function App() {
   const [auth, setAuth] = useState<AuthState>("checking");
   const [view, setView] = useState<View>(() => initialNav().view);
@@ -114,9 +130,13 @@ export function App() {
   const [returnTo, setReturnTo] = useState<View | null>(
     () => initialNav().returnTo
   );
+  const [deepLink] = useState(initialDeepLink);
   // Guard, damit popstate-Updates nicht selbst wieder pushState
   // ausloesen — sonst frisst der History-Stack sich auf.
   const skipNextHistoryPushRef = useRef(false);
+  // First effect run replaces the history entry instead of pushing —
+  // otherwise the first Back click after load is a no-op.
+  const firstHistoryWriteRef = useRef(true);
   const locale = useLocale();
 
   useEffect(() => {
@@ -138,7 +158,16 @@ export function App() {
       return;
     }
     try {
-      window.history.pushState({ pmNav: snapshot }, "", window.location.href);
+      // Always write a URL without deep-link params — otherwise
+      // `?openDoc=…` sticks to every history entry forever and a
+      // reload jumps back into the document.
+      const cleanUrl = window.location.pathname;
+      if (firstHistoryWriteRef.current) {
+        firstHistoryWriteRef.current = false;
+        window.history.replaceState({ pmNav: snapshot }, "", cleanUrl);
+      } else {
+        window.history.pushState({ pmNav: snapshot }, "", cleanUrl);
+      }
     } catch {
       // pushState kann in iframes / Sandboxes blockiert sein —
       // localStorage-Persistierung oben reicht in dem Fall.
@@ -219,6 +248,11 @@ export function App() {
       return (
         <LearningMenu
           docId={openDocId}
+          initialPage={
+            deepLink && deepLink.docId === openDocId && deepLink.page > 0
+              ? deepLink.page
+              : undefined
+          }
           onBack={() => setOpenDocId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
           onLogout={handleLogout}

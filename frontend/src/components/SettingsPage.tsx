@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
@@ -85,6 +85,20 @@ export function SettingsPage({ onBack }: Props) {
   const [doclingAlive, setDoclingAlive] = useState<boolean | null>(null);
   const [backendVersion, setBackendVersion] = useState<string | null>(null);
   const [llmConfig, setLlmConfig] = useState<LlmConfig>({});
+  // Snapshot of the last server-persisted config — lets the header
+  // Save detect unsaved LLM/TTS/ABS edits (null until first load).
+  const savedLlmConfigRef = useRef<string | null>(null);
+  // Single active voice-preview element: starting a new preview stops
+  // the previous one, and unmount stops whatever is still playing.
+  const activePreviewRef = useRef<HTMLAudioElement | null>(null);
+  function stopActivePreview() {
+    const a = activePreviewRef.current;
+    if (a) {
+      a.pause();
+      activePreviewRef.current = null;
+    }
+  }
+  useEffect(() => stopActivePreview, []);
   const [anthropicKeyInput, setAnthropicKeyInput] = useState("");
   const [openaiKeyInput, setOpenaiKeyInput] = useState("");
   const [googleKeyInput, setGoogleKeyInput] = useState("");
@@ -163,7 +177,6 @@ export function SettingsPage({ onBack }: Props) {
   const toast = useToast();
 
   useEffect(() => {
-    if (!open) return;
     setS(getSettings());
     api.audio
       .voices()
@@ -193,6 +206,7 @@ export function SettingsPage({ onBack }: Props) {
       .get()
       .then((r) => {
         setLlmConfig(r.config);
+        savedLlmConfigRef.current = JSON.stringify(r.config);
         setOllama(r.status);
         // Library-Liste automatisch nachladen wenn ABS konfiguriert ist,
         // damit das Dropdown nach Neustart die gespeicherte Auswahl anzeigt.
@@ -238,7 +252,10 @@ export function SettingsPage({ onBack }: Props) {
       .listPresetVisibility()
       .then((r) => setPresetVisibility(r.presets))
       .catch(() => setPresetVisibility([]));
-  }, [open]);
+    // Mount-only: this is a full page (not a modal) — it loads its
+    // data once when opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function saveLlmConfig() {
     setLlmBusy(true);
@@ -269,6 +286,7 @@ export function SettingsPage({ onBack }: Props) {
       if (absKeyInput.trim()) patch.absApiKey = absKeyInput.trim();
       const res = await api.llmConfig.put(patch);
       setLlmConfig(res.config as LlmConfig);
+      savedLlmConfigRef.current = JSON.stringify(res.config);
       setOllama(res.status);
       setAnthropicKeyInput("");
       setOpenaiKeyInput("");
@@ -473,7 +491,9 @@ export function SettingsPage({ onBack }: Props) {
 
   function playVoicePreview(id: string) {
     const url = api.customVoices.previewUrl(id);
+    stopActivePreview();
     const audio = new Audio(url);
+    activePreviewRef.current = audio;
     audio.play().catch(() =>
       toast.show(t("settings.voices.previewFailed"), "error")
     );
@@ -651,7 +671,9 @@ export function SettingsPage({ onBack }: Props) {
   }
 
   function playDesignPreview(id: string) {
+    stopActivePreview();
     const audio = new Audio(api.voiceDesigns.previewUrl(id));
+    activePreviewRef.current = audio;
     audio.play().catch(() =>
       toast.show(t("settings.design.previewFailed"), "error")
     );
@@ -723,8 +745,22 @@ export function SettingsPage({ onBack }: Props) {
     }
   }
 
-  function save() {
+  async function save() {
     setSettings(s);
+    // The header Save must not silently discard unsaved server-side
+    // config (LLM/TTS/ABS tabs) — persist it too when dirty.
+    const llmDirty =
+      savedLlmConfigRef.current !== null &&
+      JSON.stringify(llmConfig) !== savedLlmConfigRef.current;
+    const pendingKeys =
+      anthropicKeyInput.trim() ||
+      openaiKeyInput.trim() ||
+      googleKeyInput.trim() ||
+      qwenTtsKeyInput.trim() ||
+      absKeyInput.trim();
+    if (llmDirty || pendingKeys) {
+      await saveLlmConfig();
+    }
     toast.show(t("settings.saved"), "success");
     onBack();
   }
@@ -1490,7 +1526,7 @@ export function SettingsPage({ onBack }: Props) {
                     <div className="text-[10px] text-neutral-500 font-mono">
                       {v.language} · seed {v.seed} ·{" "}
                       {(v.bytes / 1024).toFixed(0)} KB
-                      {v.refTextPresent && " · mit Transkript"}
+                      {v.refTextPresent && ` · ${t("settings.voices.withTranscript")}`}
                     </div>
                   </div>
                   <Button

@@ -82,6 +82,14 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const [absBusy, setAbsBusy] = useState(false);
   const [absConfigured, setAbsConfigured] = useState(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Stop a running voice preview when the tab unmounts — otherwise it
+  // keeps playing to the end with no way to silence it.
+  useEffect(() => {
+    return () => {
+      previewAudioRef.current?.pause();
+      previewAudioRef.current = null;
+    };
+  }, []);
   // Snapshot for the SSE handler, which would otherwise see stale
   // chapterStatus (useEffect deps don't keep it fresh). On the
   // `audiobook.start` event chapterCharsRef.current is read.

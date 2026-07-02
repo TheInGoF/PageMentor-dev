@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 
@@ -20,13 +20,53 @@ const SIZE_CLASS: Record<ModalSize, string> = {
   "3xl": "max-w-3xl",
 };
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ open, onClose, title, children, footer, size = "lg" }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
+
+  // Focus management: move focus into the dialog on open (so keyboard
+  // users don't keep operating hidden background controls), keep Tab
+  // cycling inside it, and restore focus to the trigger on close.
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    if (dialog) {
+      const first = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      (first ?? dialog).focus();
+    }
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      const focusables = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !dialogRef.current.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !dialogRef.current.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", trap);
+    return () => {
+      window.removeEventListener("keydown", trap);
+      previouslyFocused?.focus?.();
+    };
+  }, [open]);
 
   if (!open) return null;
   return (
@@ -35,7 +75,11 @@ export function Modal({ open, onClose, title, children, footer, size = "lg" }: P
       onClick={onClose}
     >
       <div
-        className={`card w-full ${SIZE_CLASS[size]} flex flex-col max-h-[90vh]`}
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        className={`card w-full ${SIZE_CLASS[size]} flex flex-col max-h-[90vh] outline-none`}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (

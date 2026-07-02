@@ -27,6 +27,7 @@ export function ExamTrainer({ docId }: Props) {
   const [minutes, setMinutes] = useState(() => getSettings().defaultExamMinutes);
   const [session, setSession] = useState<ExamSession | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
+  const [takenMs, setTakenMs] = useState(0);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -82,9 +83,9 @@ export function ExamTrainer({ docId }: Props) {
     );
 
     async function reviewAndSubmit(
-      sessionId: string,
+      _sessionId: string,
       answers: Record<string, { text: string }>,
-      takenMs: number
+      elapsedMs: number
     ) {
       // Transition to review mode with current answers, user will self-grade.
       if (!session) return;
@@ -92,10 +93,8 @@ export function ExamTrainer({ docId }: Props) {
         ...session!,
         answers: Object.fromEntries(Object.entries(answers)),
       });
+      setTakenMs(elapsedMs);
       setMode("review");
-      // Keep takenMs in a ref-like via closure
-      (session as any)._takenMs = takenMs;
-      (session as any)._sessionId = sessionId;
     }
   }
 
@@ -103,6 +102,7 @@ export function ExamTrainer({ docId }: Props) {
     return (
       <ExamReview
         session={session}
+        takenMs={takenMs}
         onSubmitted={async (score) => {
           toast.show(t("exam.review.submitted", { score }), "success");
           setSession(null);
@@ -224,7 +224,7 @@ function ExamSessionRunner({
   }
 
   if (!card) {
-    return <div className="text-sm text-neutral-500">Keine Karten in der Session.</div>;
+    return <div className="text-sm text-neutral-500">{t("exam.review.noCards")}</div>;
   }
 
   const remaining =
@@ -355,9 +355,11 @@ function ClampedQuestion({ text }: { text: string }) {
 
 function ExamReview({
   session,
+  takenMs,
   onSubmitted,
 }: {
   session: ExamSession;
+  takenMs: number;
   onSubmitted: (score: number) => void;
 }) {
   const [qualities, setQualities] = useState<Record<string, ReviewQuality>>({});
@@ -365,7 +367,6 @@ function ExamReview({
   const toast = useToast();
 
   const allRated = session.cards.every((c) => qualities[c.id] != null);
-  const takenMs: number = (session as any)._takenMs ?? 0;
 
   async function submit() {
     setBusy(true);

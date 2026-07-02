@@ -36,6 +36,9 @@ const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = 
 
 interface Props {
   docId: string;
+  /** Deep-link target page (tutor source pills). When set, the menu
+   *  opens directly in the reader tab at that page. */
+  initialPage?: number;
   onBack: () => void;
   onOpenDocument: (docId: string) => void;
   onLogout: () => void;
@@ -44,13 +47,14 @@ interface Props {
 
 export function LearningMenu({
   docId,
+  initialPage,
   onBack,
   onOpenDocument: _onOpenDocument,
   onLogout,
   onOpenSettings,
 }: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(initialPage ? "reader" : "overview");
   const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
   const [extractionStartedAt, setExtractionStartedAt] = useState<number | null>(null);
   const [busyExtract, setBusyExtract] = useState(false);
@@ -218,7 +222,7 @@ export function LearningMenu({
             onGoTo={setTab}
           />
         )}
-        {tab === "reader" && <PdfViewer docId={docId} />}
+        {tab === "reader" && <PdfViewer docId={docId} initialPage={initialPage} />}
         {tab === "audiobook" && extractionDone &&
           (doc ? (
             <Audiobook docId={docId} documentLanguage={doc.language} />

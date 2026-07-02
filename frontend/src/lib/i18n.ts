@@ -538,6 +538,7 @@ const en: Record<string, string> = {
   "exam.review.yourAnswer": "Your answer",
   "exam.review.reference": "Reference solution",
   "exam.review.empty": "empty",
+  "exam.review.noCards": "No cards in this session.",
   "exam.review.noReference": "no reference given",
   "exam.review.submit": "Submit exam",
   "exam.review.submitted": "Exam submitted — {score} %",
@@ -745,6 +746,7 @@ const en: Record<string, string> = {
   "settings.voices.male": "Male",
   "settings.voices.refText": "Reference transcript (optional)",
   "settings.voices.refTextPlaceholder": "Exact words spoken in the sample — improves clone quality",
+  "settings.voices.withTranscript": "with transcript",
   "settings.voices.file": "Reference audio (WAV/MP3/FLAC, 3–10 s)",
   "settings.voices.fileHint":
     "Clean mono speech works best. No music, no background noise. ≤ 2.5 MB.",
@@ -1379,6 +1381,7 @@ const de: Record<string, string> = {
   "exam.review.yourAnswer": "Deine Antwort",
   "exam.review.reference": "Musterlösung",
   "exam.review.empty": "leer",
+  "exam.review.noCards": "Keine Karten in der Session.",
   "exam.review.noReference": "keine hinterlegt",
   "exam.review.submit": "Abgeben",
   "exam.review.submitted": "Klausur abgegeben — {score} %",
@@ -1587,6 +1590,7 @@ const de: Record<string, string> = {
   "settings.voices.male": "Männlich",
   "settings.voices.refText": "Transkript der Referenz (optional)",
   "settings.voices.refTextPlaceholder": "Exakter Text der Aufnahme — verbessert die Klon-Qualität",
+  "settings.voices.withTranscript": "mit Transkript",
   "settings.voices.file": "Referenz-Audio (WAV/MP3/FLAC, 3–10 s)",
   "settings.voices.fileHint":
     "Saubere Mono-Sprache funktioniert am besten. Keine Musik, kein Hintergrundlärm. ≤ 2,5 MB.",

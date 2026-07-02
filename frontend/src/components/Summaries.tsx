@@ -92,10 +92,24 @@ export function Summaries({ docId }: Props) {
             "success"
           );
         },
-        onError: (msg) => toast.show(msg, "error"),
+        onError: (msg) => {
+          toast.show(msg, "error");
+          // Drop the partial stream buffer — leaving it makes the
+          // chapter show a fake "Generating…" panel forever.
+          setStreamBuf((s) => {
+            const next = { ...s };
+            delete next[key];
+            return next;
+          });
+        },
       });
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+      setStreamBuf((s) => {
+        const next = { ...s };
+        delete next[key];
+        return next;
+      });
     } finally {
       setBusy((b) => ({ ...b, [key]: false }));
       setStreamStart((s) => {

@@ -90,10 +90,14 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
         uploaded++;
         setProgress({ current: uploaded, total: files.length });
       } catch (err) {
-        failures.push(`${file.name}: ${err instanceof Error ? err.message : "Fehler"}`);
+        failures.push(
+          `${file.name}: ${err instanceof Error ? err.message : t("common.error")}`
+        );
       }
     }
-    onUploaded();
+    // Only signal success when at least one file actually made it —
+    // otherwise the Library shows a green toast next to our error list.
+    if (uploaded > 0) onUploaded();
     if (failures.length === 0) {
       reset();
       onClose();
@@ -116,7 +120,14 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
       title={t("upload.title")}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              reset();
+              onClose();
+            }}
+            disabled={busy}
+          >
             {t("common.cancel")}
           </Button>
           <Button onClick={submit as any} disabled={busy || files.length === 0}>
