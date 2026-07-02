@@ -20,6 +20,17 @@ jobs:
       packages: write
 
     steps:
+      # The docling base image is CUDA-sized (~10 GB unpacked); pulling
+      # + building it exhausts the ~14 GB free disk of a standard
+      # runner ("No space left on device", seen twice on 2026-07-02).
+      # Dropping the pre-installed toolchains we never use frees ~25 GB.
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet \
+            /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v4
 
