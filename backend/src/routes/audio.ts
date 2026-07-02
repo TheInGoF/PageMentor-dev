@@ -679,44 +679,57 @@ function safeFilename(s: string): string {
 audioRoutes.get("/stream/:docId", (c) => {
   const docId = c.req.param("docId");
   return streamSSE(c, async (stream) => {
-    // Replay recent events so late joiners see current state
-    for (const ev of getRecent(docId)) {
-      await stream.writeSSE({ event: "progress", data: JSON.stringify(ev) });
-    }
-
     const queue: string[] = [];
     let resolver: (() => void) | null = null;
     let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
-    const unsubscribe = subscribe(docId, (ev) => {
-      queue.push(JSON.stringify(ev));
+    const wake = () => {
       if (resolver) {
         const r = resolver;
         resolver = null;
         r();
       }
+    };
+
+    // Subscribe FIRST, replay afterwards: events emitted while the
+    // replay writes are awaited would otherwise be lost (neither in
+    // the snapshot nor delivered) — a client connecting mid-run could
+    // permanently miss e.g. audiobook.chapter.done.
+    const unsubscribe = subscribe(docId, (ev) => {
+      queue.push(JSON.stringify(ev));
+      wake();
     });
+
+    // Replay recent events so late joiners see current state.
+    for (const ev of getRecent(docId)) {
+      await stream.writeSSE({ event: "progress", data: JSON.stringify(ev) });
+    }
 
     // Keep-alive every 20 s. Without it every proxy (nginx default
     // 60 s, cloudflare 100 s) and some browsers close the idle
     // HTTP/2 connection — EventSource then reconnects constantly
     // and the client sees ERR_HTTP2_PROTOCOL_ERROR in the console.
     // SSE comments (`:` prefix) are silently dropped by the
-    // EventSource client but keep the TCP connection warm.
+    // EventSource client but keep the TCP connection warm. The timer
+    // ALSO wakes the main loop: when the client disconnects while no
+    // events arrive, the loop would otherwise block on its promise
+    // forever and leak the subscription + this interval.
     keepAliveTimer = setInterval(() => {
-      if (stream.aborted) return;
-      // writeSSE with `event: "ping"` would also be an option, but
-      // EventSource clients listening only for `progress` would get
-      // it as a silent trigger. SSE comment is cleaner.
+      if (stream.aborted) {
+        wake();
+        return;
+      }
       stream.write(": keepalive\n\n").catch(() => {
-        // client gone — next iteration of the main loop cleans up
+        // client gone — the wake() below lets the main loop exit
       });
+      wake();
     }, 20_000);
 
     try {
       while (!stream.aborted) {
         if (queue.length === 0) {
           await new Promise<void>((r) => (resolver = r));
+          if (stream.aborted) break;
         }
         const payload = queue.shift();
         if (payload) await stream.writeSSE({ event: "progress", data: payload });

@@ -58,7 +58,18 @@ export function defaultVoiceFor(language: string): string {
 
 /** Looks up a voice by ID across all engines, including hidden ones.
  *  Synthesis must work even for voices the user has hidden from the
- *  picker — finished audiobooks reference them by ID. */
-export function findVoice(id: string): Voice | undefined {
-  return allVoices(true).find((v) => v.id === id);
+ *  picker — finished audiobooks reference them by ID.
+ *
+ *  Preset voices share one ID across their language variants
+ *  ("preset:Ryan" exists for de AND en) — without `language` the
+ *  first (de) variant always won, so English audiobooks got a
+ *  "Kapitel: …" announcement and language=German at the sidecar. */
+export function findVoice(id: string, language?: string): Voice | undefined {
+  const matches = allVoices(true).filter((v) => v.id === id);
+  if (matches.length === 0) return undefined;
+  if (language) {
+    const langMatch = matches.find((v) => v.language === language);
+    if (langMatch) return langMatch;
+  }
+  return matches[0];
 }

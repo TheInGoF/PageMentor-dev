@@ -128,28 +128,37 @@ adminRoutes.get("/logs/stream", (c) => {
     let resolver: (() => void) | null = null;
     let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
-    const unsubscribe = subscribeLogs((line) => {
-      queue.push(JSON.stringify(line));
-      if (queue.length > MAX_QUEUE) queue.shift();
+    const wake = () => {
       if (resolver) {
         const r = resolver;
         resolver = null;
         r();
       }
+    };
+
+    const unsubscribe = subscribeLogs((line) => {
+      queue.push(JSON.stringify(line));
+      if (queue.length > MAX_QUEUE) queue.shift();
+      wake();
     });
 
+    // The keep-alive ALSO wakes the main loop: if the client
+    // disconnects while no log lines arrive, the loop would block on
+    // its promise forever and leak the subscription + this interval.
     keepAliveTimer = setInterval(() => {
       void stream.writeSSE({ event: "ping", data: "" }).catch(() => {});
+      wake();
     }, 20_000);
 
     try {
       // Long-running async-pull loop: wait for the next event, ship it.
       // Closing the stream (client disconnect) throws and we land in finally.
-      while (true) {
+      while (!stream.aborted) {
         if (queue.length === 0) {
           await new Promise<void>((resolve) => {
             resolver = resolve;
           });
+          if (stream.aborted) break;
         }
         while (queue.length > 0) {
           await stream.writeSSE({

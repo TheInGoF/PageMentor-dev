@@ -6,7 +6,12 @@ import { join as pathJoin } from "path";
 import { db } from "../db";
 import { segmentText } from "../tts/segment";
 import { synthesizeChunk, interChunkPause } from "../tts/synth";
-import { concatMp3WithGaps, normalizeAndTag, buildM4B } from "../tts/ffmpeg";
+import {
+  concatMp3WithGaps,
+  normalizeAndTag,
+  buildM4B,
+  probeDurationMs,
+} from "../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../tts/voices";
 import type { EngineId } from "../tts/engines/base";
 import {
@@ -260,7 +265,9 @@ export async function generateAudiobook(params: {
       "No TTS voice available for this language."
     );
   }
-  const voice = findVoice(voiceId);
+  // Pass the document language: preset IDs are shared between the
+  // de/en variants and the first match used to win (always de).
+  const voice = findVoice(voiceId, doc.language);
   if (!voice) {
     running.delete(params.docId);
     throw new Error(`Unknown voice: ${voiceId}`);
@@ -535,17 +542,22 @@ export async function generateAudiobook(params: {
           message: tLang(lang, "msg.buildingM4B"),
         });
 
-        // If an intro MP3 exists, prepend it as track 0. Duration
-        // via ffprobe (inside buildM4B) — we pass 0 here, ffmpeg
-        // determines the actual length itself. The chapter-marker
-        // label is language-dependent — only shown in the player,
-        // not spoken.
+        // If an intro MP3 exists, prepend it as track 0. The real
+        // duration MUST be probed here: buildFfMetadata computes the
+        // chapter START/END marks purely cumulatively from the passed
+        // durationMs values — a 0 would shift every following chapter
+        // marker forward by the intro's actual length. The label is
+        // language-dependent — only shown in the player, not spoken.
         const introPath = join(audioDir, "intro.mp3");
         const inputs = [...successfulChapterFiles];
         const m4bChapters = [...chapterDurations];
         if (existsSync(introPath)) {
+          const introMs = await probeDurationMs(introPath).catch(() => 0);
           inputs.unshift(introPath);
-          m4bChapters.unshift({ title: tLang(lang, "label.intro"), durationMs: 0 });
+          m4bChapters.unshift({
+            title: tLang(lang, "label.intro"),
+            durationMs: introMs,
+          });
         }
 
         const bookPath = join(audioDir, "book.m4b");
@@ -652,7 +664,7 @@ export async function generateSingleChapterAudio(params: {
     | undefined;
   if (!row) throw new Error("Chapter not found");
 
-  const voice = findVoice(params.voiceId);
+  const voice = findVoice(params.voiceId, row.language);
   if (!voice) throw new Error(`Unknown voice: ${params.voiceId}`);
   const rate = params.rate || "+0%";
 
@@ -798,14 +810,14 @@ export async function generateIntroAudio(params: {
   voiceId: string;
   rate?: string;
 }): Promise<{ path: string; durationMs: number }> {
-  const voice = findVoice(params.voiceId);
-  if (!voice) throw new Error(`Unknown voice: ${params.voiceId}`);
-  const rate = params.rate || "+0%";
-
   const introDoc = db()
     .prepare("SELECT language FROM documents WHERE id = ?")
     .get(params.docId) as { language: string } | undefined;
   const lang = pickLang(introDoc?.language);
+
+  const voice = findVoice(params.voiceId, lang);
+  if (!voice) throw new Error(`Unknown voice: ${params.voiceId}`);
+  const rate = params.rate || "+0%";
 
   const audioDir = join(DATA_DIR, "audio", params.docId);
   mkdirSync(audioDir, { recursive: true });
@@ -1282,8 +1294,15 @@ export async function rebuildM4B(docId: string): Promise<{
 
   const introPath = join(audioDir, "intro.mp3");
   if (existsSync(introPath)) {
+    // Real duration required — a 0 shifts every chapter marker
+    // forward by the intro's length (see the buildFfMetadata note
+    // at the other call site).
+    const introMs = await probeDurationMs(introPath).catch(() => 0);
     inputs.push(introPath);
-    m4bChapters.push({ title: tLang(lang, "label.intro"), durationMs: 0 });
+    m4bChapters.push({
+      title: tLang(lang, "label.intro"),
+      durationMs: introMs,
+    });
   }
 
   for (const r of rows) {

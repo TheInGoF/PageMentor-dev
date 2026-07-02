@@ -39,25 +39,24 @@ import { expandAbbreviations } from "./germanAbbreviations";
  *  - Only at line start (paragraph beginning), not inline ("Beispiel
  *    4.6" inside a sentence stays untouched — Gemma needs that for
  *    cross-references).
- *  - Up to 4 levels deep: "4", "4.6", "4.6.1", "4.6.1.2".
- *  - Followed by whitespace and an uppercase word (heading-/sentence-
- *    starter), so we don't accidentally chew off a numeric list item
- *    that's actually content ("4. Schritt: Wasser kochen").
+ *  - MULTI-LEVEL only: "4.6", "4.6.1", "4.6.1.2" (up to 4 levels).
+ *    Plain integers at line start are NOT stripped — German nouns are
+ *    always capitalized, so an uppercase lookahead cannot distinguish
+ *    a heading number from a year ("1998 Deutschland reformierte…")
+ *    or an ordinal list item ("4. Schritt: Wasser kochen"). Deleting
+ *    those was silent content loss.
  *  - Trailing dot allowed and stripped as well ("4.6. Angesichts").
  *
  * Idempotent — re-running on stripped text is a no-op.
  */
 export function stripLeadingSectionNumbers(text: string): string {
   // ^[ \t]*           leading whitespace on a line
-  // (?:\d+(?:\.\d+){0,3})  number with up to 4 levels (4, 4.6, 4.6.1.2)
+  // \d+(?:\.\d+){1,3} multi-level number (4.6, 4.6.1, 4.6.1.2)
   // \.?               optional trailing dot ("4.6.")
   // [ \t]+            mandatory whitespace before the heading text
-  // (?=[A-ZÄÖÜ])      lookahead — must be followed by an uppercase
-  //                   letter so we keep numeric list items like
-  //                   "1. schritt: ..." (rare in our texts) and
-  //                   numeric-only lines.
+  // (?=[A-ZÄÖÜ])      heading text starts uppercase
   return text.replace(
-    /^[ \t]*\d+(?:\.\d+){0,3}\.?[ \t]+(?=[A-ZÄÖÜ])/gm,
+    /^[ \t]*\d+(?:\.\d+){1,3}\.?[ \t]+(?=[A-ZÄÖÜ])/gm,
     ""
   );
 }
@@ -1469,12 +1468,17 @@ export async function preprocessChapterForAudio(params: {
     params.language === "de"
       ? expandAbbreviations(numeralFixed, params.language)
       : numeralFixed;
-  // Section-number stripping erneut anwenden — falls Gemma die
-  // führenden Marker rekonstruiert hat (haben wir per Prompt verboten,
-  // aber LLMs sind so).
-  const sectionStripped = stripLeadingSectionNumbers(postPassed);
+  // Order matters: restoreHeadingParagraphs needs the leading heading
+  // numbers to detect merged heading+body lines, so it MUST run
+  // before stripLeadingSectionNumbers removes exactly those numbers
+  // (previously it ran after and never matched anything).
+  const headingsRestored = restoreHeadingParagraphs(stripWrappers(postPassed));
+  // Section-number stripping again — in case Gemma reconstructed the
+  // leading markers (forbidden by the prompt, but LLMs gonna LLM).
+  const sectionStripped = stripLeadingSectionNumbers(headingsRestored);
   const cleaned = stripProblematicCharsForTts(
-    restoreHeadingParagraphs(stripWrappers(sectionStripped))
+    sectionStripped,
+    params.language === "de" ? "de" : "en"
   );
   if (!cleaned || cleaned.length < 20) {
     throw new Error(
@@ -1580,54 +1584,81 @@ function stripWrappers(s: string): string {
     ""
   );
   // Cut trailing edit lists / meta commentary at the end.
-  // Match from the first line that looks like a meta header to EOF.
-  // Typical triggers:
-  //   "---" as a separator before an explanation
-  //   "### Änderungen", "**Hinweis:**", "Änderungen:", "Changes:" …
-  //   "Ich habe folgendes / die folgenden …"
-  //   "Note:", "Notes:", "Anmerkung:"
-  const metaHeaderRe = new RegExp(
-    // optional: horizontal rule on its own line
-    "\\n+(?:-{3,}\\s*\\n+)?" +
-      // optional Markdown heading/bold marker
-      "(?:#{1,6}\\s*|\\*\\*\\s*)?" +
-      // the actual signal word (case-insensitive)
-      "(?:" +
-      [
-        "Änderungen",
-        "Änderungsliste",
-        "Bearbeitungen",
-        "Vorgenommene\\s+Änderungen",
-        "Anmerkung",
-        "Anmerkungen",
-        "Hinweis",
-        "Hinweise",
-        "Zusammenfassung\\s+der\\s+Änderungen",
-        "Meine\\s+Bearbeitungen",
-        "Ich\\s+habe\\s+(?:folgende|die\\s+folgenden|hier\\s+)?(?:Änderungen|Anpassungen|Bearbeitungen)",
-        "Edit\\s*list",
-        "Changes",
-        "Modifications",
-        "Notes?",
-        "Summary\\s+of\\s+changes",
-        "I\\s+(?:made|have\\s+made|performed)\\s+the\\s+following",
-      ].join("|") +
-      ")" +
-      // colon or asterisk or newline after the signal word
-      "(?:\\*?\\s*:|\\s*\\n|\\s*\\*\\*)" +
-      // everything up to EOF
-      "[\\s\\S]*$",
-    "i"
-  );
-  t = t.replace(metaHeaderRe, "");
+  // Two signal classes:
+  //   - unambiguous meta headers ("Änderungen:", "Changes:", "Ich
+  //     habe folgende Änderungen…") — always meta when near the tail.
+  //   - ambiguous headers ("Anmerkung:", "Hinweis:", "Note:") — these
+  //     are ALSO legitimate author content the prompt explicitly asks
+  //     to preserve. They only count as meta when the block talks
+  //     about editing ("geändert", "umformuliert", "removed", …).
+  // Both classes are only cut when the match sits in the trailing
+  // fifth of the text (min 500 chars) — an "Anmerkung:" in the middle
+  // of a chapter previously deleted the note AND everything after it.
+  const headPart =
+    // optional horizontal rule on its own line, then optional
+    // Markdown heading/bold marker
+    "\\n+(?:-{3,}\\s*\\n+)?(?:#{1,6}\\s*|\\*\\*\\s*)?";
+  // Colon / newline / bold-close after the signal word. Deliberately
+  // NO greedy [\s\S]*$ tail — the regexes below enumerate ALL
+  // candidate header positions via matchAll; the cut itself is a
+  // slice(0, index), which removes the rest implicitly.
+  const tailPart = "(?:\\*?\\s*:|\\s*\\n|\\s*\\*\\*)";
+  const unambiguous = [
+    "Änderungen",
+    "Änderungsliste",
+    "Bearbeitungen",
+    "Vorgenommene\\s+Änderungen",
+    "Zusammenfassung\\s+der\\s+Änderungen",
+    "Meine\\s+Bearbeitungen",
+    "Ich\\s+habe\\s+(?:folgende|die\\s+folgenden|hier\\s+)?(?:Änderungen|Anpassungen|Bearbeitungen)",
+    "Edit\\s*list",
+    "Changes",
+    "Modifications",
+    "Summary\\s+of\\s+changes",
+    "I\\s+(?:made|have\\s+made|performed)\\s+the\\s+following",
+  ].join("|");
+  const ambiguous = ["Anmerkung", "Anmerkungen", "Hinweis", "Hinweise", "Notes?"].join("|");
+  const editVocab =
+    /(geändert|angepasst|umformuliert|entfernt|ersetzt|gestrichen|bereinigt|changed|removed|replaced|reworded|rewrote|edited)/i;
+
+  const tailWindowStart = Math.max(0, t.length - Math.max(500, Math.floor(t.length / 5)));
+  // Header-only regexes (no [\s\S]*$ tail) so we can enumerate ALL
+  // candidate positions and pick the last one inside the tail window
+  // — a legitimate "Änderungen" in the body must not stop us from
+  // cutting a real meta block at the end.
+  const unambiguousRe = new RegExp(`${headPart}(?:${unambiguous})${tailPart}`, "ig");
+  const ambiguousRe = new RegExp(`${headPart}(?:${ambiguous})${tailPart}`, "ig");
+
+  const lastTailMatch = (re: RegExp): RegExpExecArray | null => {
+    let best: RegExpExecArray | null = null;
+    for (const m of t.matchAll(re)) {
+      if (m.index !== undefined && m.index >= tailWindowStart) {
+        best = m as RegExpExecArray;
+      }
+    }
+    return best;
+  };
+
+  const um = lastTailMatch(unambiguousRe);
+  if (um) {
+    t = t.slice(0, um.index);
+  } else {
+    const am = lastTailMatch(ambiguousRe);
+    // For the ambiguous headers, test the WHOLE block from the header
+    // to EOF for edit vocabulary — only then is it meta commentary.
+    if (am && am.index !== undefined && editVocab.test(t.slice(am.index))) {
+      t = t.slice(0, am.index);
+    }
+  }
   return t.trim();
 }
 
 /** Deterministic cleanup of the LLM response, removing characters
  *  that throw Qwen3-TTS off. Runs as the last pass before persistence.
  *  The system prompt also forbids these characters, but smaller
- *  models don't always honor that. */
-function stripProblematicCharsForTts(s: string): string {
+ *  models don't always honor that. `lang` picks the verbalization
+ *  words for math symbols that survived the LLM pass. */
+function stripProblematicCharsForTts(s: string, lang: "de" | "en" = "de"): string {
   // Typographische Anführungszeichen — German low/high curly quotes
   // („…") und ihre englischen Pendants ("…", '…') sind im Qwen-
   // Tokenizer dünn vertreten, vor allem in Kombination mit ! oder ?
@@ -1662,7 +1693,11 @@ function stripProblematicCharsForTts(s: string): string {
     .replace(/\*/g, "")
     .replace(/\s*;\s*/g, ", ")
     .replace(/\s*—\s*/g, ", ")
-    .replace(/(\S)\s+–\s+(\S)/g, "$1, $2")
+    // En-dash between digits is a range → "bis"/"to"; any other
+    // en-dash becomes a comma pause. The old space-padded-only rule
+    // let "5–10" reach the TTS verbatim.
+    .replace(/(\d)\s*–\s*(\d)/g, lang === "de" ? "$1 bis $2" : "$1 to $2")
+    .replace(/\s*–\s*/g, ", ")
     // 5. Typographische Anführungszeichen (alle Varianten) → ersatzlos.
     //    TTS verbalisiert Quotes nicht, direkte Rede wird durch
     //    Sprechpausen und Modell-Intonation hörbar.
@@ -1671,15 +1706,27 @@ function stripProblematicCharsForTts(s: string): string {
     .replace(/…/g, "...")
     // 7. Soft-Hyphen (unsichtbar) → weg
     .replace(/­/g, "")
-    // 8. Diverse Unicode-Whitespaces → normales Leerzeichen
-    .replace(/[  -​  　]/g, " ")
+    // 8a. Zero-width chars → DELETE (they sit inside words as break
+    //     opportunities; a space would split the compound word)
+    .replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
+    // 8b. Real-width unicode whitespaces → regular space
+    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, " ")
     // 9. Bullet-Glyphen + Pfeile → ersatzlos
     .replace(/[•●◦▪▫►▶◀◁→←↔⇒⇐⇔✓✗]/g, "")
     // 10. Hochgestellte Ziffern (Footnote-Marker) → weg
     .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰ⁿ]/g, "")
-    // 11. Symbole die der Pre-Pass nicht hätte verbalisieren können —
-    //     wenn die hier ankommen, hat gemma sie reingelassen. Strip.
-    .replace(/[§©®™°±×÷~^\\|@#$&]/g, "")
+    // 11a. Math/percent symbols the prompt forbids — verbalize
+    //      instead of silently deleting ("3 × 4" must not become
+    //      "3 4"). Language picks the spoken words.
+    .replace(/\s*%/g, lang === "de" ? " Prozent" : " percent")
+    .replace(/\s*×\s*/g, lang === "de" ? " mal " : " times ")
+    .replace(/\s*÷\s*/g, lang === "de" ? " geteilt durch " : " divided by ")
+    .replace(/\s*=\s*/g, lang === "de" ? " gleich " : " equals ")
+    .replace(/(\d)\s*\+\s*(\d)/g, "$1 plus $2")
+    .replace(/(\s)<(\s)/g, lang === "de" ? "$1kleiner als$2" : "$1less than$2")
+    .replace(/(\s)>(\s)/g, lang === "de" ? "$1größer als$2" : "$1greater than$2")
+    // 11b. remaining symbols with no speakable meaning → strip
+    .replace(/[§©®™°±~^\\|@#$&+<>]/g, "")
     .replace(/,\s*,/g, ",")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -1810,6 +1857,13 @@ function fixGermanNumeralBleed(text: string): {
   });
 
   // 3) "Seite 104 f." / "Seite 104 ff." → "Seite 104 und folgende".
+  //    When the abbreviation dot doubles as the sentence period (next
+  //    word starts uppercase, or end of text), keep a period so two
+  //    sentences don't merge ungrammatically.
+  result = result.replace(
+    /\b(Seite\s+\d+)\s*ff?\.(?=\s+[A-ZÄÖÜ]|\s*$)/g,
+    "$1 und folgende.",
+  );
   result = result.replace(
     /\b(Seite\s+\d+)\s*ff?\.\s*/g,
     "$1 und folgende ",

@@ -58,6 +58,7 @@ import type {
 // upstream NAT box also see "data flowing" every 30s and stop
 // recycling idle connections.
 import * as http from "node:http";
+import * as https from "node:https";
 import { URL } from "node:url";
 
 const CUSTOM_VOICE_PREFIX = "custom:";
@@ -148,11 +149,17 @@ async function ttsFetch(
     "Content-Length": bodyBuf.length.toString(),
   };
 
+  // Pick the transport from the URL scheme — plain node:http against
+  // an https:// arbiter URL sent cleartext to port 80 and every
+  // synthesis failed with an opaque connection error.
+  const isHttps = u.protocol === "https:";
+  const transport = isHttps ? https : http;
+
   return new Promise((resolve, reject) => {
-    const req = http.request(
+    const req = transport.request(
       {
         hostname: u.hostname,
-        port: u.port ? Number(u.port) : 80,
+        port: u.port ? Number(u.port) : isHttps ? 443 : 80,
         path: u.pathname + (u.search || ""),
         method: init.method,
         headers,
@@ -161,6 +168,7 @@ async function ttsFetch(
         const chunks: Buffer[] = [];
         res.on("data", (c: Buffer) => chunks.push(c));
         res.on("end", () => {
+          detachAbort();
           const buf = Buffer.concat(chunks);
           const status = res.statusCode ?? 0;
           resolve({
@@ -175,14 +183,24 @@ async function ttsFetch(
               ) as ArrayBuffer,
           });
         });
-        res.on("error", (err: Error) => reject(err));
+        res.on("error", (err: Error) => {
+          detachAbort();
+          reject(err);
+        });
       }
     );
 
     // AbortSignal → req.destroy() so the Cancel button actually
     // terminates a running TTS call instead of just flipping UI state.
+    // The listener MUST be detached once the request settles: one
+    // audiobook run shares a single AbortController across hundreds
+    // of chunks, and undetached listeners accumulate (memory +
+    // MaxListenersExceededWarning).
     const onAbort = () => {
       req.destroy(new Error("TTS request aborted"));
+    };
+    const detachAbort = () => {
+      init.signal?.removeEventListener("abort", onAbort);
     };
     if (init.signal) {
       init.signal.addEventListener("abort", onAbort, { once: true });
@@ -207,7 +225,10 @@ async function ttsFetch(
       sock.setNoDelay(true);
     });
 
-    req.on("error", (err: Error) => reject(err));
+    req.on("error", (err: Error) => {
+      detachAbort();
+      reject(err);
+    });
     req.write(bodyBuf);
     req.end();
   });
@@ -733,8 +754,15 @@ export const qwenEngine: TtsEngine = {
   },
 
   async synthesize(params: SynthesizeParams): Promise<SynthesizeResult> {
-    const announce = params.announce ? `${params.announce}.\n\n` : "";
-    const text = announce + params.segment.paragraphs.join("\n\n");
+    // Use the orchestrator-prepared text verbatim: it already contains
+    // the announcement AND the ensureSentenceEnd guarantee (trailing
+    // period). Rebuilding from segment.paragraphs here dropped that
+    // guarantee — the "…Ihre Studienleitung" clipped-intonation bug —
+    // and made the .txt chunk dumps lie about what was synthesized.
+    const text =
+      params.text ||
+      (params.announce ? `${params.announce}.\n\n` : "") +
+        params.segment.paragraphs.join("\n\n");
     const speed = parseRate(params.rate);
     const t0 = Date.now();
 

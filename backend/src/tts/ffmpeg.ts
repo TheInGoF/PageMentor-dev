@@ -539,6 +539,19 @@ async function applyAppleBooksAtoms(file: string): Promise<void> {
   }
 }
 
+/** FFMETADATA1 requires `\`, `=`, `;`, `#` and newlines in values to
+ *  be backslash-escaped — an unescaped newline or trailing backslash
+ *  in a PDF-derived title corrupts the file (chapters vanish or the
+ *  M4B build fails). */
+function ffMetaEscape(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/=/g, "\\=")
+    .replace(/;/g, "\\;")
+    .replace(/#/g, "\\#")
+    .replace(/\r?\n/g, " ");
+}
+
 function buildFfMetadata(params: {
   title: string;
   artist: string;
@@ -562,22 +575,22 @@ function buildFfMetadata(params: {
   // Buch-Titel statt PDF-Titel. JETZT: kein album-Tag mehr,
   // movement_name + show tragen die Series-Info, title bleibt sauber.
   const lines: string[] = [";FFMETADATA1"];
-  lines.push(`title=${params.title}`);
-  lines.push(`artist=${params.artist}`);
+  lines.push(`title=${ffMetaEscape(params.title)}`);
+  lines.push(`artist=${ffMetaEscape(params.artist)}`);
   // Audiobookshelf takes artist as author, but album_artist is the
   // more official path — belt and suspenders.
-  lines.push(`album_artist=${params.artist}`);
+  lines.push(`album_artist=${ffMetaEscape(params.artist)}`);
   // album = title (Buch-Titel), NICHT series. Andere Player ohne
   // Audiobook-Mode zeigen oft album als Haupt-Label — dann ist
   // book-title als album besser als series-name als album.
-  lines.push(`album=${params.title}`);
+  lines.push(`album=${ffMetaEscape(params.title)}`);
   const seriesName = params.series?.trim();
   if (seriesName && seriesName.length > 0) {
     // movement_name + show als echte Series-Carrier. ABS liest beide
     // als series.name (mvnm und show sind in der Series-Detection-
     // Liste). Album bleibt Buch-Titel.
-    lines.push(`movement_name=${seriesName}`);
-    lines.push(`show=${seriesName}`);
+    lines.push(`movement_name=${ffMetaEscape(seriesName)}`);
+    lines.push(`show=${ffMetaEscape(seriesName)}`);
   }
   // No series/module name → album bleibt Buch-Titel, movement/show leer.
   lines.push(`genre=Audiobook`);
@@ -587,7 +600,7 @@ function buildFfMetadata(params: {
     // `comment`, but ABS reads that as description (semantically
     // wrong for a shortcode). `subtitle` is not an MP4-standard
     // atom and ffmpeg discards it — so we skip it.
-    lines.push(`grouping=${params.shortCode.trim()}`);
+    lines.push(`grouping=${ffMetaEscape(params.shortCode.trim())}`);
   }
   if (params.seriesSequence && params.seriesSequence.trim().length > 0) {
     // Series-Position als track + movement_index. Beide sind echte
@@ -608,7 +621,7 @@ function buildFfMetadata(params: {
     lines.push("TIMEBASE=1/1000");
     lines.push(`START=${start}`);
     lines.push(`END=${end}`);
-    lines.push(`title=${ch.title.replace(/\n/g, " ")}`);
+    lines.push(`title=${ffMetaEscape(ch.title)}`);
     start = end;
   }
   return lines.join("\n") + "\n";

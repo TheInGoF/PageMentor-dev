@@ -115,10 +115,16 @@ const MARKDOWN_STRIP: Rule[] = [
  *    "GmbH"           → mixed case
  *    Einzelbuchstabe  → bleibt
  */
+/** Roman numerals in the 2-3-caps window (II, III, IV, IX, XX, …) —
+ *  spelling them letter-by-letter would turn "Typ II" into "Typ I I".
+ *  They must stay intact so TTS reads them as numbers. */
+const ROMAN_NUMERAL_RE = /^X{0,3}(?:IX|IV|V?I{0,3})$/;
+
 const DE_CAPS_ACRONYMS: Rule[] = [
   {
     pattern: /\b([A-ZÄÖÜ]{2,3})\b/g,
-    replacement: (match: string) => match.split("").join(" "),
+    replacement: (match: string) =>
+      ROMAN_NUMERAL_RE.test(match) ? match : match.split("").join(" "),
   },
 ];
 
@@ -325,7 +331,13 @@ const DE_SINGLE: Rule[] = [
   { pattern: /\bTsd\b\.?/g, replacement: "Tausend" },
   // Bibliography: "S. 29 ff." / "S. 29ff" → "Seite 29 und folgende".
   // We handle "S." itself above in DE_WITH_NUMBER; here only the
-  // trailing ff./ff.
+  // trailing ff./ff. When the abbreviation dot doubles as the
+  // sentence period (next word starts uppercase, or end of text),
+  // keep a period — otherwise two sentences merge ungrammatically.
+  {
+    pattern: /(\d)\s*ff\.(?=\s+[A-ZÄÖÜ]|\s*$)/g,
+    replacement: "$1 und folgende.",
+  },
   { pattern: /(\d)\s*ff\b\.?/g, replacement: "$1 und folgende" },
   // Course-booklet specific (without a number — "siehe Abb. rechts")
   { pattern: /\bAbb\b\.?/g, replacement: "Abbildung" },
@@ -411,15 +423,27 @@ const DE_SYMBOLS: Rule[] = [
   { pattern: /\s&\s/g, replacement: " und " },
 ];
 
-/** Clock times: 14:30 → 14 Uhr 30, 14:00 → 14 Uhr. */
+/** Clock times: 14:30 → 14 Uhr 30, 14:00 → 14 Uhr.
+ *  Requires an explicit time context — either a trailing "Uhr" or a
+ *  preceding preposition ("um 14:30", "ab 9:00", "bis 17:15").
+ *  Without the guard, ratios and scales ("Maßstab 1:50",
+ *  "Verhältnis 1:10") were read as times of day. */
 const DE_TIMES: Rule[] = [
   {
-    pattern: /\b(\d{1,2}):(\d{2})(?:\s*Uhr)?\b/g,
-    replacement: (_m, h: string, min: string) => {
+    pattern: /\b(?:(um|ab|bis|gegen|von)\s+)?(\d{1,2}):(\d{2})(\s*Uhr)?\b/g,
+    replacement: (
+      _m,
+      prep: string | undefined,
+      h: string,
+      min: string,
+      uhr: string | undefined
+    ) => {
+      if (!prep && !uhr) return _m; // no time context — likely a ratio
       const hh = parseInt(h, 10);
       const mm = parseInt(min, 10);
       if (hh > 23 || mm > 59) return _m; // not a time format
-      return mm === 0 ? `${hh} Uhr` : `${hh} Uhr ${mm}`;
+      const prefix = prep ? `${prep} ` : "";
+      return mm === 0 ? `${prefix}${hh} Uhr` : `${prefix}${hh} Uhr ${mm}`;
     },
   },
 ];
@@ -518,7 +542,10 @@ export function expandGermanAbbreviations(text: string): string {
   // wieder etwas matchbares produziert.
   for (let i = 0; i < 5; i++) {
     const before = out;
-    out = out.replace(DE_ADJECTIVE_HYPHEN_PATTERN, "$1, $2");
+    // Space, not comma — must match the DE_ADJECTIVE_HYPHEN rule.
+    // The comma variant produced the fragmented "Ziel Leistungs,
+    // Aspekt" reading on second-level hyphens of a chain.
+    out = out.replace(DE_ADJECTIVE_HYPHEN_PATTERN, "$1 $2");
     if (out === before) break;
   }
   // Caps-Acronyms NOCHMAL nach dem Hyphen-Loop. Begründung: wenn
@@ -540,8 +567,11 @@ export function expandGermanAbbreviations(text: string): string {
 // ---------------------------------------------------------------------
 
 const EN_COMPOUND: Rule[] = [
-  { pattern: /\be\.?\s*g\.?/gi, replacement: "for example" },
-  { pattern: /\bi\.?\s*e\.?/gi, replacement: "that is" },
+  // Both dots are mandatory — with optional dots these patterns ate
+  // ordinary words ("the ego" → "the for exampleo", "I estimate" →
+  // "that isstimate").
+  { pattern: /\be\.\s*g\.(?!\w)/gi, replacement: "for example" },
+  { pattern: /\bi\.\s*e\.(?!\w)/gi, replacement: "that is" },
   { pattern: /\bet\s+al\.?/gi, replacement: "and others" },
   { pattern: /\bvs\b\.?/gi, replacement: "versus" },
   { pattern: /\betc\b\.?/gi, replacement: "and so on" },
@@ -578,10 +608,13 @@ const EN_SINGLE: Rule[] = [
   { pattern: /\bavg\b\.?/gi, replacement: "average" },
   { pattern: /\bFig\b\.?/g, replacement: "Figure" },
   { pattern: /\bTab\b\.?/g, replacement: "Table" },
-  { pattern: /\bCh\b\.?/g, replacement: "Chapter" },
-  { pattern: /\bNo\b\.?/gi, replacement: "Number" },
-  { pattern: /\bVol\b\.?/gi, replacement: "Volume" },
-  { pattern: /\bed\b\.?/gi, replacement: "edition" },
+  { pattern: /\bCh\.(?!\w)/g, replacement: "Chapter" },
+  // "No" only with the dot and before a number (EN_WITH_NUMBER
+  // covers "No. 5") — the bare-word rule turned every English
+  // "no"/"No" into "Number".
+  { pattern: /\bNo\.(?=\s*\d)/g, replacement: "Number" },
+  { pattern: /\bVol\.(?!\w)/gi, replacement: "Volume" },
+  { pattern: /\bed\.(?!\w)/g, replacement: "edition" },
 ];
 
 const EN_UNITS: Rule[] = [
