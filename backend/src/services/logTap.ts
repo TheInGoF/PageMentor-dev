@@ -262,6 +262,14 @@ const NOISE_PATTERNS: RegExp[] = [
   // RapidOCR/onnxruntime startup ack — fires for every chunk that
   // triggers an OCR pass, nothing actionable.
   /\[RapidOCR\] base\.py:\d+: Using engine_name: onnxruntime/,
+  // Tesseract OSD on tiny OCR rectangles (cover logos, near-empty
+  // pages): "Too few characters. Skipping this page" is the expected
+  // outcome, not a defect — OCR proceeds at 0°. The error arrives as
+  // two lines (header + detail); we drop the generic header and the
+  // benign detail. Real OSD failures (missing traineddata, crashes)
+  // have a different detail text and still come through.
+  /tesseract_ocr_cli_model:OSD failed \(doc .*OCR rectangle: \d+/,
+  /Invalid resolution 0 dpi\.[\s\S]*Too few characters\. Skipping this page/,
 ];
 
 function isNoiseLine(msg: string): boolean {
