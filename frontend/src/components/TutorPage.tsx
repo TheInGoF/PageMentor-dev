@@ -160,7 +160,7 @@ export function TutorPage(props: Props) {
     : null;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-full flex flex-col">
       <TopBar
         currentView="tutor"
         onGoDashboard={props.onGoDashboard}

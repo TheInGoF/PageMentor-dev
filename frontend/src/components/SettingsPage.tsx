@@ -74,7 +74,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
+    <div className="min-h-full bg-bg flex flex-col">
       <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur border-b border-border">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-3">
           <Button variant="ghost" onClick={back} aria-label={t("common.back")}>

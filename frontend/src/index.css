@@ -72,3 +72,8 @@
     @apply tag border-accent-subtle text-accent bg-accent/10;
   }
 }
+
+/* Vollflächige Overlays lassen die eigene Titelleiste frei */
+.fixed.inset-0 {
+  top: var(--titlebar-h);
+}

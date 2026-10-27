@@ -2,6 +2,7 @@ import { Button } from "./ui/Button";
 import { t } from "../lib/i18n";
 import { SearchOverlay } from "./SearchOverlay";
 import { Logo } from "./Logo";
+import { isFrameless } from "../lib/desktop";
 import { cn } from "../lib/cn";
 
 export type TopView = "dashboard" | "library" | "modules" | "tutor";
@@ -46,7 +47,8 @@ export function TopBar({
     <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex flex-col gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <Logo size={22} />
+          {/* Im rahmenlosen Fenster steht das Logo schon in der Titelleiste */}
+          {!isFrameless() && <Logo size={22} />}
           {(onGoDashboard || onGoLibrary || onGoModules || onGoTutor) && (
             <nav className="flex items-center gap-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
               {onGoDashboard && (

@@ -1,4 +1,8 @@
 export const common: Record<string, string> = {
+  "window.minimize": "Minimieren",
+  "window.maximize": "Maximieren",
+  "window.restore": "Verkleinern",
+  "window.close": "Schließen",
   "app.name": "PageMentor",
   "app.tagline": "Vorlesungs-PDFs → Hörbücher, Lernkarten, Zusammenfassungen",
   "common.loading": "Lade …",

@@ -10,6 +10,8 @@ import { EngineBanner } from "./components/engine/EngineBanner";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
+import { TitleBar } from "./components/TitleBar";
+import { isFrameless } from "./lib/desktop";
 import { useLocale } from "./lib/i18n";
 
 type View = "dashboard" | "library" | "modules" | "tutor" | "settings";
@@ -287,8 +289,14 @@ export function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <EngineBanner onOpen={() => openSettings("engine")} />
-        {renderShell()}
+        {/* Eigene Titelleiste im rahmenlosen Fenster, darunter scrollt die App */}
+        <div className="h-full flex flex-col">
+          {isFrameless() && <TitleBar />}
+          <div className="flex-1 min-h-0 overflow-auto">
+            <EngineBanner onOpen={() => openSettings("engine")} />
+            {renderShell()}
+          </div>
+        </div>
         <ShortcutsOverlay />
       </ToastProvider>
     </ErrorBoundary>

@@ -3,6 +3,8 @@
 
 :root {
   color-scheme: light;
+  /* Höhe der eigenen Titelleiste, 0 im Browser */
+  --titlebar-h: 0px;
   --bg: 242 242 247;
   --card: 255 255 255;
   --elevated: 248 248 251;

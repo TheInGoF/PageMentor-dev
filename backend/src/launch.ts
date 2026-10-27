@@ -75,6 +75,9 @@ function openWindow(url: string): void {
     if (ev.type === "open") {
       windowHandle = ev.hwnd;
       emitLog("info", "startup", "App-Fenster geöffnet");
+    } else if (ev.type === "frameless") {
+      if (ev.ok) emitLog("info", "startup", "App-Fenster rahmenlos");
+      else emitLog("warn", "startup", `App-Fenster mit Windows-Rahmen: ${ev.error}`);
     } else if (ev.type === "ready") {
       emitLog("info", "startup", "App-Fenster bereit");
     } else if (ev.type === "closed") {

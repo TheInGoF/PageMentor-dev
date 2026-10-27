@@ -1,6 +1,6 @@
 // App-Fenster (WebView2) in eigenem Thread; blockiert bis das Fenster zu ist
 import { SizeHint, Webview } from "webview-bun";
-import { lib } from "webview-bun/src/ffi";
+import { makeFrameless, windowCommand, type WindowCommand } from "./frameless";
 import { setWindowIcon } from "./win32";
 
 declare const self: Worker;
@@ -8,13 +8,20 @@ declare const self: Worker;
 export interface WindowStart {
   url: string;
   exePath: string;
-  // Für CI: nach dem Laden sofort wieder schließen
+  // Für CI: nach dem Laden kurz offen lassen, dann über die eigene Leiste schließen
   test?: boolean;
 }
 
-export type WindowEvent = { type: "open"; hwnd: number } | { type: "ready" } | { type: "closed" } | { type: "error"; message: string };
+export type WindowEvent =
+  | { type: "open"; hwnd: number }
+  | { type: "frameless"; ok: boolean; error?: string }
+  | { type: "ready" }
+  | { type: "closed" }
+  | { type: "error"; message: string };
 
 const send = (ev: WindowEvent) => self.postMessage(ev);
+
+const TEST_CLOSE_MS = 8000;
 
 self.onmessage = (e: MessageEvent<WindowStart>) => {
   const { url, exePath, test } = e.data;
@@ -27,12 +34,24 @@ self.onmessage = (e: MessageEvent<WindowStart>) => {
     } catch {
       // Ohne Icon geht es auch
     }
-    view.bind("__pmReady", () => {
-      send({ type: "ready" });
-      // Schleife beenden, run() kehrt dann zurück
-      if (test) lib.symbols.webview_terminate(view.unsafeHandle);
-    });
-    view.init("addEventListener('DOMContentLoaded', () => window.__pmReady && window.__pmReady())");
+
+    // Ohne Titelleiste; schlägt es fehl, bleibt der normale Rahmen
+    let frameless = false;
+    try {
+      makeFrameless(hwnd, (max) => view.eval(`window.__pmMax && window.__pmMax(${max})`));
+      frameless = true;
+      send({ type: "frameless", ok: true });
+    } catch (err) {
+      send({ type: "frameless", ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+
+    view.bind("__pmWin", (cmd: WindowCommand) => windowCommand(hwnd, cmd));
+    view.bind("__pmReady", () => send({ type: "ready" }));
+    view.init(
+      `window.__pmDesktop = { frameless: ${frameless} };` +
+        "addEventListener('DOMContentLoaded', () => window.__pmReady && window.__pmReady());" +
+        (test ? `setTimeout(() => window.__pmWin('close'), ${TEST_CLOSE_MS});` : "")
+    );
     send({ type: "open", hwnd });
     view.navigate(url);
     view.run();
