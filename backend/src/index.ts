@@ -1,3 +1,4 @@
+import { DATA_DIR } from "./paths";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
@@ -90,7 +91,7 @@ startDockerLogPumps();
 console.log("================================================================");
 console.log(`  PageMentor backend v${PKG_VERSION}`);
 console.log(`  started at ${new Date().toISOString()}`);
-console.log(`  node_env=${process.env.NODE_ENV ?? "development"} data_dir=${process.env.PM_DATA_DIR ?? "./data"}`);
+console.log(`  node_env=${process.env.NODE_ENV ?? "development"} data_dir=${DATA_DIR}`);
 console.log("================================================================");
 
 const app = new Hono();

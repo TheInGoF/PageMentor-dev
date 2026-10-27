@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { DATA_DIR } from "./paths";
 
-const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const DB_PATH = join(DATA_DIR, "pagementor.db");
 
 let _db: Database;

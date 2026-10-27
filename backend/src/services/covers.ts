@@ -17,8 +17,8 @@ import { dirname, join } from "node:path";
 import { db } from "../db";
 import { run } from "../tts/ffmpeg";
 import { which } from "./ocr";
+import { DATA_DIR } from "../paths";
 
-const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
 function coverTargetPath(docId: string, page: number): string {
   return join(DATA_DIR, "covers", `${docId}-p${page}.jpg`);

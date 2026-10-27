@@ -16,8 +16,8 @@ import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { db } from "../db";
+import { DATA_DIR } from "../paths";
 
-const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const VOICE_DIR = join(DATA_DIR, "voice-samples");
 
 // Upload limits — Qwen3-TTS-Base doesn't need more than 10 s for a

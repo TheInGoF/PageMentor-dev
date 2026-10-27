@@ -7,8 +7,8 @@ import { processDocument, cancelProcessing } from "../services/pipeline";
 import { doclingAlive } from "../services/docling";
 import { removeDocument as removeFromIndex } from "../services/search";
 import { tt } from "../lib/i18n";
+import { DATA_DIR } from "../paths";
 
-const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const UPLOAD_DIR = join(DATA_DIR, "uploads");
 
 export const documentRoutes = new Hono();

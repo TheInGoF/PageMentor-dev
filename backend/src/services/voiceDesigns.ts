@@ -21,8 +21,8 @@ import { randomUUID, randomInt } from "node:crypto";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { db } from "../db";
+import { DATA_DIR } from "../paths";
 
-const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const DESIGN_DIR = join(DATA_DIR, "voice-designs");
 
 export function ensureDesignDir(): void {

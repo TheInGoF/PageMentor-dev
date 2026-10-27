@@ -9,8 +9,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { DATA_DIR } from "../paths";
 
-const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 const CONFIG_PATH = join(DATA_DIR, "llm-config.json");
 
 export interface LlmConfig {

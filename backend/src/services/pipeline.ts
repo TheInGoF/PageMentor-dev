@@ -14,8 +14,8 @@ import {
   embeddingToBuffer,
 } from "./embeddings";
 import { pickLang, tLang } from "../lib/i18n";
+import { DATA_DIR } from "../paths";
 
-const DATA_DIR = process.env.PM_DATA_DIR || "./data";
 
 const running = new Map<string, AbortController>();
 
