@@ -59,7 +59,7 @@ export function AiSection({ st }: { st: SettingsState }) {
             type="url"
             value={llmConfig.ollamaUrl ?? ""}
             onChange={(e) => setLlmConfig({ ...llmConfig, ollamaUrl: e.target.value })}
-            placeholder="http://ollama:11434"
+            placeholder="http://localhost:11434"
           />
           <Input
             label={t("settings.llm.teiUrl")}

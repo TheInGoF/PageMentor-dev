@@ -15,8 +15,9 @@ Backend npm packages
 --------------------
 - hono                  (MIT)       https://github.com/honojs/hono
 - better-sqlite3        (MIT)       https://github.com/WiseLibs/better-sqlite3
-- msedge-tts            (MIT)       https://github.com/Migushthe2nd/MsEdgeTTS
 - pdf-parse             (MIT)       https://gitlab.com/autokent/pdf-parse
+- webview-bun           (MIT)       https://github.com/tr1ckydev/webview-bun
+  App-Fenster über WebView2; bringt libwebview (MIT) mit
 - meilisearch (client)  (MIT)       https://github.com/meilisearch/meilisearch-js
 
 Frontend npm packages
@@ -93,23 +94,6 @@ at runtime):
 - nomic-embed-text            (Apache 2.0)
   https://huggingface.co/nomic-ai/nomic-embed-text-v1
   last-resort fallback — smaller, English-focused.
-
-================================================================================
-Third-party service: Microsoft Edge Read-Aloud API (Azure Neural TTS)
-================================================================================
-
-PageMentor uses Microsoft's Edge Read-Aloud endpoint via the msedge-tts
-client library. The API is publicly reachable but is not officially
-documented for third-party use. The Microsoft Neural voice models
-themselves are proprietary and remain the property of Microsoft / Azure.
-
-- Voice playback is rate-limited and intended for personal, non-commercial
-  use of the kind a browser user would generate with Microsoft Edge.
-- Large-scale automated use may violate Microsoft's terms of service.
-
-If you need guaranteed-compliant TTS, use the Qwen3-TTS sidecar instead
-(Apache 2.0, runs on your own GPU host — see pm-gpu-arbiter/). Edge
-stays available as a no-setup fallback for environments without a GPU.
 
 ================================================================================
 Apache License 2.0 components

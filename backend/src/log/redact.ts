@@ -15,7 +15,6 @@ export function registerEnvSecrets(): void {
     "PM_ANTHROPIC_API_KEY",
     "PM_OPENAI_API_KEY",
     "PM_GOOGLE_API_KEY",
-    "PM_DOCKER_LOG_BRIDGE_TOKEN",
     "HF_TOKEN",
   ]) {
     registerSecret(process.env[k]);

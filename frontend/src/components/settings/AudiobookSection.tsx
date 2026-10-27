@@ -76,7 +76,7 @@ export function AudiobookSection({ st }: { st: SettingsState }) {
               onChange={(e) =>
                 setLlmConfig({ ...llmConfig, absUrl: e.target.value })
               }
-              placeholder="http://192.168.188.5:13378"
+              placeholder="http://audiobookshelf.local:13378"
             />
             <div className="flex items-end gap-2">
               <div className="flex-1">

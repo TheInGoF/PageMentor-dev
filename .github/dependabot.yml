@@ -1,29 +1,11 @@
 version: 2
 updates:
-  # msedge-tts tightens roughly every 6–12 months when Microsoft bumps
-  # the Edge Read-Aloud anti-abuse headers. Daily polling keeps the
-  # window between Microsoft's change and our fix within a day or two.
-  - package-ecosystem: "npm"
-    directory: "/backend"
-    schedule:
-      interval: "daily"
-    allow:
-      - dependency-name: "msedge-tts"
-    labels:
-      - "tts"
-      - "dependencies"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-
   # Weekly sweep for the rest of the backend + frontend.
   - package-ecosystem: "npm"
     directory: "/backend"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    ignore:
-      - dependency-name: "msedge-tts"
 
   - package-ecosystem: "npm"
     directory: "/frontend"

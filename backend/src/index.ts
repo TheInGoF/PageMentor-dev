@@ -34,11 +34,8 @@ import { initDb } from "./db";
 // Laufende Pumpen für Sidecar- und Container-Logs
 import {
   startSidecarLogPump,
-  startDockerLogPumps,
 } from "./services/logTap";
 startSidecarLogPump();
-// Docling-Logs über pm-docker-log-bridge, ohne URL ohne Wirkung
-startDockerLogPumps();
 
 startupHeader(APP_VERSION, {
   Daten: DATA_DIR,
