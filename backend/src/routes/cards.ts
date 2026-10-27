@@ -6,7 +6,7 @@ import {
   runCardBuild,
   cancelCardBuild,
   isCardBuildActive,
-} from "../services/cardGenerate";
+} from "../services/cards";
 import { tt } from "../lib/i18n";
 
 export const cardRoutes = new Hono();

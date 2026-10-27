@@ -1,4 +1,3 @@
-backend/src/services/cardGenerate.ts
 frontend/src/components/Audiobook.tsx
 frontend/src/components/Cards.tsx
 frontend/src/components/ExamTrainer.tsx
