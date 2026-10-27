@@ -4,4 +4,3 @@ frontend/src/components/ExamTrainer.tsx
 frontend/src/components/Library.tsx
 frontend/src/components/ModuleDetail.tsx
 frontend/src/components/SettingsPage.tsx
-frontend/src/lib/api.ts
