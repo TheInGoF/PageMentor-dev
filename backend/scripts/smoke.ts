@@ -131,6 +131,7 @@ async function run() {
   await call("GET", "/api/summary/status");
   await call("GET", `/api/audio/chapter-status/${docId}`);
   await call("GET", `/api/audio/document/${docId}`);
+  await call("GET", "/api/audio/voices");
 
   await call("DELETE", `/api/cards/${card.id}`);
   await call("DELETE", `/api/documents/${docId}`);

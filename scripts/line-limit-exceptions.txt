@@ -1,4 +1,3 @@
-backend/src/routes/audio.ts
 backend/src/services/cardGenerate.ts
 backend/src/services/docling.ts
 backend/src/services/germanAbbreviations.ts
