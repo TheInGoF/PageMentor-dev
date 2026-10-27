@@ -3,7 +3,6 @@ backend/src/services/cardGenerate.ts
 backend/src/services/docling.ts
 backend/src/services/germanAbbreviations.ts
 backend/src/services/tutor.ts
-backend/src/tts/engines/qwen.ts
 backend/src/tts/ffmpeg.ts
 frontend/src/components/Audiobook.tsx
 frontend/src/components/Cards.tsx
