@@ -1,11 +1,4 @@
-/**
- * Voice sample routes — user uploads for Qwen3-TTS voice clone.
- *
- *   GET    /api/voices/custom            → list
- *   POST   /api/voices/custom            → upload (multipart)
- *   DELETE /api/voices/custom/:id        → remove
- *   GET    /api/voices/custom/:id/preview?text=…  → short preview (MP3)
- */
+// Eigene Stimmen und Voice-Designs für Qwen3-TTS
 
 import { Hono } from "hono";
 import { randomInt } from "node:crypto";
@@ -40,15 +33,8 @@ import { setLlmConfig } from "../services/llmConfig";
 
 export const voiceRoutes = new Hono();
 
-/** Default preview text — deliberately **short** (~5-7 s audio @ 12Hz).
- *  Qwen-Base clone expects a reference of 3-10 s; longer audios
- *  confuse the model and produce gibberish synthesis ("backwards
- *  baby-speak" was one concrete user report with a ~25 s ref).
- *  voiceSamples enforces the same limit via MAX_BYTES for uploads.
- *
- *  Anyone wanting to hear Qwen's long-text drift can enter their own
- *  longer sample text in the tester's text field — the preview UI
- *  allows that. The default only matters for the stored ref audio file. */
+// Standard-Probetext kurz, ~5-7 s: Qwen-Klon braucht 3-10 s Referenz
+// Längere Texte kann man im Tester selbst eingeben
 function defaultPreviewText(language: string): string {
   if (language === "de") {
     return "Hallo, dies ist eine Sprachprobe dieser Stimme. So klingt sie beim Vorlesen eines Textes.";
@@ -56,15 +42,9 @@ function defaultPreviewText(language: string): string {
   return "Hello, this is a voice sample. This is how it sounds when reading a book.";
 }
 
-/* ------------------------------------------------------------------ */
-/* Voice designs: text-described voices via Qwen3-TTS VoiceDesign.    */
-/* ------------------------------------------------------------------ */
+// Voice-Designs: per Text beschriebene Stimmen
 
-/** Unsaved preview for the design wizard: rolls a seed (or takes the
- *  one passed in) and returns MP3 + the seed via `X-Voice-Seed`
- *  header. Unlike `/design/:id/preview`, NOTHING is created in the DB
- *  here — the user can keep rolling until they like a voice, then POST
- *  /design with the remembered seed to persist. */
+// Vorschau ohne Speichern: Seed würfeln, MP3 + Seed im Header X-Voice-Seed
 voiceRoutes.post("/design/preview", async (c) => {
   const body = await c.req.json<{
     description: string;
@@ -126,22 +106,9 @@ voiceRoutes.get("/design", (c) => {
   });
 });
 
-/** Creates a voice design row AND persists the reference audio file
- *  that all future synthesis calls will use as the clone prompt
- *  (Qwen's official "Voice Design then Clone" pattern).
- *
- *  Two content types accepted:
- *
- *  - **multipart/form-data** (recommended): contains `ref_blob` = the
- *    audio bytes the user just heard and approved in the preview
- *    wizard. Backend stores the bytes 1:1 as reference — guarantees
- *    that the saved voice sounds EXACTLY like what the user previewed.
- *
- *  - **application/json** (fallback): no audio bytes. Backend then
- *    lazily calls `ensureDesignReference` (server-side regeneration
- *    via VoiceDesign). Risk: the regenerated voice may differ from the
- *    preview due to Qwen's non-determinism.
- */
+// Design anlegen + Referenz-Audio speichern: "erst designen, dann klonen"
+// multipart mit ref_blob: genau die gehörte Vorschau wird Referenz
+// JSON ohne Audio: Server erzeugt neu, kann anders klingen
 voiceRoutes.post("/design", async (c) => {
   const contentType = c.req.header("content-type") ?? "";
   let label = "";
@@ -166,11 +133,7 @@ voiceRoutes.post("/design", async (c) => {
       }
       refText = form.ref_text ? String(form.ref_text) : null;
       const blob = form.ref_blob;
-      // Same pattern as the /custom route: multipart files arrive as
-      // File instances (File extends Blob). We used to duck-type
-      // here, which failed in practice → refBlob stayed null → silent
-      // fall-through to server regen, which generates a different
-      // voice. User: "preview clean, broken after save".
+      // Dateien kommen als File: instanceof prüfen, nicht duck-typen
       if (blob instanceof File) {
         refBlob = await blob.arrayBuffer();
       }
@@ -210,9 +173,7 @@ voiceRoutes.post("/design", async (c) => {
       seed,
     });
 
-    // Persist the reference audio. Prefer the blob upload from the
-    // client (exactly matches the user preview); otherwise generate
-    // on the server.
+    // Referenz speichern: Upload bevorzugt, sonst serverseitig erzeugen
     let finalDesign = design;
     if (refBlob) {
       const path = designRefPath(design.id);
@@ -224,8 +185,7 @@ voiceRoutes.post("/design", async (c) => {
         `[voices] design ${design.id} reference saved from upload: ${refBlob.byteLength}B → ${path}`
       );
     } else {
-      // Server-side generation. This is the fallback path (JSON
-      // clients without a blob). Can take ~30-60 s.
+      // Fallback ohne Upload, dauert ~30-60 s
       try {
         finalDesign = await ensureDesignReference(design);
       } catch (e) {
@@ -233,9 +193,7 @@ voiceRoutes.post("/design", async (c) => {
           `[voices] ensureDesignReference for ${design.id} failed:`,
           e
         );
-        // Row stays without ref_path — will be retried on first
-        // synthesis use. We still report success to the client so
-        // the UI can show the design voice and let the user delete it.
+        // Ohne Referenz weiter, Retry beim ersten Einsatz
       }
     }
 
@@ -264,11 +222,7 @@ voiceRoutes.delete("/design/:id", (c) => {
   return c.json({ ok: true });
 });
 
-// Regenerate the reference audio for an existing design voice. Used
-// after the project's default ref-text was lengthened (~6s → ~10s)
-// so old voices can be migrated without a delete-and-recreate. Drops
-// the old MP3 file + ref_text DB column, generates a fresh sample,
-// and writes the new pair atomically.
+// Referenz einer Design-Stimme neu erzeugen, z. B. nach längerem Referenztext
 voiceRoutes.post("/design/:id/regenerate-reference", async (c) => {
   const id = c.req.param("id");
   const design = getVoiceDesign(id);
@@ -387,14 +341,7 @@ voiceRoutes.delete("/custom/:id", (c) => {
   return c.json({ ok: true });
 });
 
-// ---- Audiobook-picker visibility toggles --------------------------
-//
-// Per voice: PATCH ../visibility { showInAudiobook: bool }
-// Per preset list: GET /presets/visibility, PUT /presets/visibility
-//
-// All three feed into `allVoices()` and the audiobook tab's voice
-// picker. Synthesis still works for hidden voices — the UI just
-// filters the dropdown so it's readable with N voices configured.
+// Sichtbarkeit im Hörbuch-Dropdown, Synthese geht auch für ausgeblendete
 voiceRoutes.patch("/custom/:id/visibility", async (c) => {
   const id = c.req.param("id");
   const body = await c.req
@@ -417,8 +364,7 @@ voiceRoutes.patch("/design/:id/visibility", async (c) => {
   return c.json({ ok: true, showInAudiobook: show });
 });
 
-// Patch the editable text/meta fields on a custom voice. Audio file
-// and seed are immutable — they define the voice identity.
+// Text und Metadaten einer eigenen Stimme ändern; Audio und Seed bleiben
 voiceRoutes.patch("/custom/:id", async (c) => {
   const id = c.req.param("id");
   const body = await c.req
@@ -436,8 +382,7 @@ voiceRoutes.patch("/custom/:id", async (c) => {
   }
 });
 
-// Patch design fields. Description IS editable (slight voice drift
-// is acceptable for refining wording); seed and ref audio stay frozen.
+// Design-Felder ändern; Seed und Referenz bleiben
 voiceRoutes.patch("/design/:id", async (c) => {
   const id = c.req.param("id");
   const body = await c.req
@@ -464,8 +409,7 @@ voiceRoutes.put("/presets/visibility", async (c) => {
     .json<{ visible?: string[] }>()
     .catch(() => ({} as { visible?: string[] }));
   const visible = new Set(body.visible ?? []);
-  // Hidden = every preset that is NOT in `visible`. Persist as a
-  // comma-separated string in llm-config.
+  // Ausgeblendet = alle Presets außerhalb von visible
   const allPresets = listPresetVisibility();
   const hidden = allPresets
     .filter((p) => !visible.has(p.voice.id))
@@ -482,9 +426,7 @@ voiceRoutes.get("/custom/:id/preview", async (c) => {
   const text = c.req.query("text") || defaultPreviewText(sample.language);
 
   try {
-    // Preview ID convention: `custom:<uuid>` is recognized by the
-    // qwen engine as a custom voice and the reference audio is
-    // loaded from the DB on the fly.
+    // custom:<uuid> lädt die Referenz direkt aus der DB
     const buf = await synthesizePreview({
       voice: `custom:${id}`,
       locale: sample.language === "de" ? "de-DE" : "en-US",
