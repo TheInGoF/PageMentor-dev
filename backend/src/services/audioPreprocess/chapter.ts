@@ -4,7 +4,7 @@
 
 import { db } from "../../db";
 import { generate, isAvailable as llmAvailable } from "../llm";
-import { expandAbbreviations } from "../germanAbbreviations";
+import { expandAbbreviations } from "../abbreviations";
 import { withGemmaLock } from "../gemmaLock";
 import { cleanupHints } from "../promptHints";
 import { SYSTEM_DE, SYSTEM_EN } from "./prompts";

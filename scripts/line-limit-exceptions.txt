@@ -1,5 +1,4 @@
 backend/src/services/cardGenerate.ts
-backend/src/services/germanAbbreviations.ts
 backend/src/services/tutor.ts
 backend/src/tts/ffmpeg.ts
 frontend/src/components/Audiobook.tsx
