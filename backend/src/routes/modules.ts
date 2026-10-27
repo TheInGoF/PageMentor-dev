@@ -17,7 +17,18 @@ interface Module {
    *  below the active ones. */
   completed: number;
   created_at: string;
+  // Aus der Prüfungsordnung
+  code: string | null;
+  cp: number | null;
+  study_semester: number | null;
+  exam_form: string | null;
+  area: string | null;
+  parent_code: string | null;
+  in_path: number;
 }
+
+// Felder, die PATCH und POST annehmen
+const STUDY_FIELDS = ["code", "cp", "study_semester", "exam_form", "area", "parent_code", "in_path"] as const;
 
 /** List all modules with per-module aggregates (doc/card/audio counts,
  *  last exam score, etc.) — used by the module grid. */
@@ -152,19 +163,32 @@ moduleRoutes.post("/", async (c) => {
   const body = await c.req.json<Partial<Module>>();
   if (!body.name) return c.json({ error: tt(c, "err.missingFields") }, 400);
   const id = randomUUID();
-  db()
-    .prepare(
-      "INSERT INTO modules (id, name, semester, description, color, icon, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    )
-    .run(
-      id,
-      body.name,
-      body.semester ?? null,
-      body.description ?? null,
-      body.color ?? "#ef4444",
-      body.icon ?? "📘",
-      body.sort_order ?? 0
-    );
+  try {
+    db()
+      .prepare(
+        `INSERT INTO modules (id, name, semester, description, color, icon, sort_order, code, cp, study_semester, exam_form, area, parent_code, in_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        body.name,
+        body.semester ?? null,
+        body.description ?? null,
+        body.color ?? "#3b82f6",
+        body.icon ?? "📘",
+        body.sort_order ?? 0,
+        body.code ?? null,
+        body.cp ?? null,
+        body.study_semester ?? null,
+        body.exam_form ?? null,
+        body.area ?? null,
+        body.parent_code ?? null,
+        body.in_path ?? 1
+      );
+  } catch (err) {
+    if (/UNIQUE/.test(String(err))) return c.json({ error: "Kürzel ist schon vergeben" }, 409);
+    throw err;
+  }
   return c.json({ id }, 201);
 });
 
@@ -177,7 +201,10 @@ moduleRoutes.patch("/:id", async (c) => {
   const sets: string[] = [];
   const vals: any[] = [];
   for (const [k, v] of Object.entries(body)) {
-    if (["name", "semester", "description", "color", "icon", "sort_order"].includes(k)) {
+    if (k === "code" && v != null && !/^[A-Z0-9-]{2,16}$/.test(String(v))) {
+      return c.json({ error: "Kürzel: 2 bis 16 Großbuchstaben, Ziffern oder Bindestrich" }, 400);
+    }
+    if (["name", "semester", "description", "color", "icon", "sort_order", ...STUDY_FIELDS].includes(k)) {
       sets.push(`${k} = ?`);
       vals.push(v);
     } else if (k === "completed") {
@@ -188,7 +215,12 @@ moduleRoutes.patch("/:id", async (c) => {
   }
   if (sets.length === 0) return c.json({ status: "noop" });
   vals.push(id);
-  db().prepare(`UPDATE modules SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+  try {
+    db().prepare(`UPDATE modules SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
+  } catch (err) {
+    if (/UNIQUE/.test(String(err))) return c.json({ error: "Kürzel ist schon vergeben" }, 409);
+    throw err;
+  }
   return c.json({ status: "ok" });
 });
 

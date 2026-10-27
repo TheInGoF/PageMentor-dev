@@ -5,6 +5,7 @@ import { toolStatus } from "./tools";
 import { startupHeader, startupStep, startupDone, startupNote } from "./log/startup";
 import { requestLogger, onRouteError } from "./log/http";
 import { logRoutes, clientLogRoutes } from "./routes/logs";
+import { studyRoutes } from "./routes/study";
 import { engineRoutes } from "./routes/engine";
 import { autoStart } from "./engine/manager";
 import { alreadyRunning, appWindowHandle, openUi, quitApp } from "./launch";
@@ -86,6 +87,7 @@ app.route("/api/admin", adminRoutes);
 app.route("/api/tutor", tutorRoutes);
 app.route("/api/logs", logRoutes);
 app.route("/api/engine", engineRoutes);
+app.route("/api/study", studyRoutes);
 // Für den zweiten Start: Fenster der laufenden Instanz
 app.get("/api/app/window", (c) => c.json({ hwnd: appWindowHandle() }));
 app.post("/api/app/quit", (c) => {

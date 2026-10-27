@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DATA_DIR } from "./paths";
+import { migrateStudy } from "./study/schema";
 
 const DB_PATH = join(DATA_DIR, "pagementor.db");
 
@@ -410,6 +411,10 @@ export function initDb() {
       `[db] reset ${stuck.changes} stuck extraction(s) to 'failed' on startup`
     );
   }
+
+  // Studien-Datenmodell, mit Backup vor jeder Hochstufung
+  const study = migrateStudy(d, DATA_DIR);
+  if (study.backup) console.log(`[db] Backup vor Schema-Hochstufung: ${study.backup}`);
 
   console.log("Database ready:", DB_PATH);
 }
