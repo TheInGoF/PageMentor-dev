@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+# Ältere Läufe desselben Branches abbrechen
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -39,3 +44,25 @@ jobs:
         run: |
           python3 -m pip install -q pyflakes
           python3 -m pyflakes pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer
+
+  engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose-Datei gültig
+        run: docker compose -f engine/compose.yaml config -q
+
+      - name: provision.sh in frischem Ubuntu 24.04, zweimal (idempotent)
+        run: |
+          docker run --rm -v "$PWD/engine:/engine:ro" -e PM_SKIP_START=1 ubuntu:24.04 bash -c '
+            set -e
+            /engine/provision.sh
+            echo "--- zweiter Lauf ---"
+            /engine/provision.sh | tee /tmp/second.log
+            grep -q "Schon vorhanden: docker-ce" /tmp/second.log
+            grep -q "compose.yaml unverändert" /tmp/second.log
+            docker --version
+            nvidia-ctk --version
+          '
+

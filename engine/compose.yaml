@@ -1,0 +1,138 @@
+# PageMentor-Engine: KI-Dienste in der WSL-Umgebung "PageMentor-Engine"
+# Wird von der App eingerichtet und gestartet, nicht von Hand
+# Alle Ports nur auf 127.0.0.1, Windows erreicht sie über localhost
+
+name: pagementor-engine
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  # LLM, z. B. Gemma; nur über den Arbiter erreichbar
+  ollama:
+    image: ollama/ollama:${OLLAMA_TAG:-latest}
+    container_name: pm-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+      OLLAMA_KEEP_ALIVE: "30m"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: "q8_0"
+      OLLAMA_CONTEXT_LENGTH: "8192"
+    <<: *gpu
+
+  # PDF-Extraktion mit deutschem OCR
+  docling:
+    image: ghcr.io/theingof/pm-docling-de:${PM_IMAGE_TAG:-latest}
+    container_name: pm-docling
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5001:5001"
+    user: "0:0"
+    environment:
+      UVICORN_PORT: "5001"
+      DOCLING_SERVE_MAX_FILE_SIZE: "209715200"
+      DOCLING_SERVE_MAX_NUM_PAGES: "2000"
+      DOCLING_SERVE_ENG_LOC_NUM_WORKERS: "1"
+      DOCLING_SERVE_LOAD_MODELS_AT_BOOT: "true"
+      DOCLING_DEVICE: cuda
+      DOCLING_PERF_PAGE_BATCH_SIZE: "4"
+      DOCLING_SERVE_OPTIONS_DO_FORMULA_ENRICHMENT: "true"
+      DOCLING_SERVE_OPTIONS_DO_CODE_ENRICHMENT: "true"
+    volumes:
+      - docling-cache:/opt/app-root/src/.cache
+    <<: *gpu
+
+  # Qwen3-TTS, startet und stoppt der Arbiter
+  qwen-tts:
+    image: ghcr.io/theingof/pm-qwen-tts:${PM_IMAGE_TAG:-latest}
+    container_name: pm-qwen-tts
+    restart: "no"
+    volumes:
+      - qwen-tts-hf:/root/.cache/huggingface
+    environment:
+      QWEN_TTS_MODEL: "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+      QWEN_TTS_DEVICE: "cuda"
+      QWEN_TTS_DTYPE: "bfloat16"
+      QWEN_TTS_ATTN_IMPL: "flash_attention_2"
+      QWEN_TTS_DEFAULT_LANGUAGE: "German"
+      QWEN_TTS_MAX_NEW_TOKENS: "22000"
+      QWEN_TTS_GENERATION_TIMEOUT: "900"
+      QWEN_TTS_DEFAULT_TEMPERATURE: "0.75"
+      QWEN_TTS_DEFAULT_TOP_P: "0.8"
+      QWEN_TTS_DEFAULT_TOP_K: "40"
+      QWEN_TTS_DEFAULT_REPETITION_PENALTY: "1.15"
+      QWEN_TTS_SUBTALKER_DOSAMPLE: "true"
+      QWEN_TTS_SUBTALKER_TEMPERATURE: "0.9"
+      QWEN_TTS_SUBTALKER_TOP_P: "1.0"
+      QWEN_TTS_SUBTALKER_TOP_K: "50"
+      QWEN_TTS_LOOP_DETECTION: "true"
+      QWEN_TTS_LOOP_WINDOW: "256"
+      QWEN_TTS_LOOP_MAX_UNIQUE: "20"
+      QWEN_TTS_LOOP_MIN_TOKENS: "1500"
+    <<: *gpu
+
+  # Türsteher: immer nur ein Modell im VRAM
+  pm-gpu-arbiter:
+    image: ghcr.io/theingof/pm-gpu-arbiter:${PM_IMAGE_TAG:-latest}
+    container_name: pm-gpu-arbiter
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8790:8790"
+    environment:
+      OLLAMA_URL: "http://ollama:11434"
+      OLLAMA_CONTAINER: "pm-ollama"
+      TTS_UPSTREAM_URL: "http://qwen-tts:8880"
+      TTS_CONTAINER: "pm-qwen-tts"
+      TTS_STARTUP_TIMEOUT: "600"
+      TTS_IDLE_LINGER_SECONDS: "60"
+      PROXY_REQUEST_TIMEOUT: "1800"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - ollama
+
+  # Embeddings für Tutor und Karten, dauerhaft geladen (~1 GB VRAM)
+  infinity:
+    image: michaelf34/infinity:0.0.76
+    container_name: pm-infinity
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:7997"
+    command: ["v2", "--model-id", "jinaai/jina-embeddings-v3", "--engine", "torch", "--port", "7997", "--batch-size", "32"]
+    environment:
+      HF_HOME: /app/.cache
+    volumes:
+      - infinity-cache:/app/.cache
+    <<: *gpu
+
+  # Volltextsuche
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: pm-meilisearch
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7700:7700"
+    environment:
+      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:-pm-dev-key}"
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili-data:/meili_data
+
+volumes:
+  ollama-models:
+  docling-cache:
+  qwen-tts-hf:
+  infinity-cache:
+  meili-data:

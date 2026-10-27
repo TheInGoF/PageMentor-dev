@@ -4,6 +4,11 @@ on:
   push:
   workflow_dispatch:
 
+# Ältere Läufe desselben Branches abbrechen
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
