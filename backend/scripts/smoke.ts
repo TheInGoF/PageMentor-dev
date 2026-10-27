@@ -26,10 +26,22 @@ const server = Bun.spawn(cmd, {
 let cookie = "";
 let failures = 0;
 
-function cleanup() {
+// Windows: Dateien bleiben gesperrt, bis der Prozess wirklich beendet ist
+async function cleanup() {
   server.kill();
-  if (!process.env.SMOKE_KEEP) rmSync(dataDir, { recursive: true, force: true });
-  else console.log("Daten behalten in", dataDir);
+  await server.exited;
+  if (process.env.SMOKE_KEEP) {
+    console.log("Daten behalten in", dataDir);
+    return;
+  }
+  for (let i = 0; i < 10; i++) {
+    try {
+      rmSync(dataDir, { recursive: true, force: true });
+      return;
+    } catch {
+      await Bun.sleep(300);
+    }
+  }
 }
 
 async function waitForHealth() {
@@ -173,6 +185,6 @@ if (failures > 0) {
   console.log(await new Response(server.stdout).text());
   console.log(await new Response(server.stderr).text());
 }
-cleanup();
+await cleanup();
 console.log(failures === 0 ? "\nSmoke-Test bestanden" : `\n${failures} Fehler`);
 process.exit(failures === 0 ? 0 : 1);

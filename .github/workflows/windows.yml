@@ -26,14 +26,22 @@ jobs:
         working-directory: backend
         run: PM_SMOKE_EXE="$(cygpath -w "$GITHUB_WORKSPACE/dist/PageMentor/PageMentor.exe")" bun scripts/smoke.ts
 
-      - name: Werkzeuge im Paket gefunden
+      - name: Start ohne Einstellungen, Dokumente-Ordner und Werkzeuge
         shell: pwsh
         run: |
-          $log = Get-ChildItem -Recurse -Filter startup.log $env:RUNNER_TEMP, $env:TEMP -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($log) { Get-Content $log.FullName }
-          foreach ($t in "ffmpeg.exe","ffprobe.exe","AtomicParsley.exe","poppler\pdftoppm.exe") {
-            if (-not (Test-Path "dist/PageMentor/bin/$t")) { throw "fehlt: $t" }
+          $p = Start-Process -FilePath "dist/PageMentor/PageMentor.exe" -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 1
+            try { Invoke-RestMethod http://127.0.0.1:3100/api/health | Out-Host; $ok = $true; break } catch {}
           }
+          Stop-Process -Id $p.Id -Force
+          if (-not $ok) { throw "App antwortet nicht auf Port 3100" }
+          $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PageMentor"
+          Get-Content (Join-Path $dir "logs/startup.log")
+          if (-not (Test-Path (Join-Path $dir "pagementor.db"))) { throw "Datenbank fehlt in $dir" }
+          $tools = Select-String -Path (Join-Path $dir "logs/startup.log") -Pattern "FEHLT"
+          if ($tools -and ($tools.Line -match "ffmpeg|ffprobe|pdftoppm|AtomicParsley")) { throw "Werkzeug fehlt: $($tools.Line)" }
 
       - uses: actions/upload-artifact@v4
         with:
