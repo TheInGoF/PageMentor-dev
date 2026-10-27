@@ -40,8 +40,10 @@ jobs:
           $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PageMentor"
           Get-Content (Join-Path $dir "logs/startup.log")
           if (-not (Test-Path (Join-Path $dir "pagementor.db"))) { throw "Datenbank fehlt in $dir" }
-          $tools = Select-String -Path (Join-Path $dir "logs/startup.log") -Pattern "FEHLT"
-          if ($tools -and ($tools.Line -match "ffmpeg|ffprobe|pdftoppm|AtomicParsley")) { throw "Werkzeug fehlt: $($tools.Line)" }
+          $log = Get-Content -Raw (Join-Path $dir "logs/startup.log")
+          foreach ($t in "ffmpeg","ffprobe","pdftoppm","AtomicParsley") {
+            if ($log -match ('"' + $t + '":"FEHLT"')) { throw "Werkzeug fehlt: $t" }
+          }
 
       - uses: actions/upload-artifact@v4
         with:
