@@ -8,7 +8,7 @@ interface ToastItem {
   variant: Variant;
 }
 
-interface ToastCtx {
+export interface ToastCtx {
   show: (message: string, variant?: Variant) => void;
 }
 

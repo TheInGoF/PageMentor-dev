@@ -1,4 +1,3 @@
-frontend/src/components/Audiobook.tsx
 frontend/src/components/Cards.tsx
 frontend/src/components/ExamTrainer.tsx
 frontend/src/components/Library.tsx
