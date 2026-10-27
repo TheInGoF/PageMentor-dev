@@ -44,6 +44,19 @@ export function EnginePanel() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
         <h3 className="text-xs uppercase tracking-wide text-neutral-500 flex-1">{t("engine.title")}</h3>
+        {status?.windows && (
+          <Button variant="ghost" onClick={() => repair("pull-images")} disabled={!!status?.task} title={t("engine.updateHint")}>
+            {t("engine.update")}
+          </Button>
+        )}
+        {status?.windows && (
+          <Button
+            variant="ghost"
+            onClick={() => confirm(t("engine.quitConfirm")) && api.engine.quitApp().catch(() => {})}
+          >
+            {t("engine.quit")}
+          </Button>
+        )}
         <Button variant="outline" onClick={selftest} disabled={testing || !!status?.checking}>
           {testing || status?.checking ? t("engine.testing") : t("engine.selftest")}
         </Button>

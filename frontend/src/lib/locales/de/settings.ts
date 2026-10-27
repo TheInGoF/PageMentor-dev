@@ -181,4 +181,8 @@ export const settings: Record<string, string> = {
   "engine.auto.braucht-hilfe": "Die Engine braucht Hilfe: unten die roten Kacheln reparieren.",
   "engine.banner.running": "Engine: {title}{pct} – {message}",
   "engine.banner.help": "Die KI-Engine braucht Hilfe. Hier klicken zum Reparieren.",
+  "engine.update": "Aktualisieren",
+  "engine.updateHint": "Neue Versionen der Programmpakete laden und Dienste neu starten",
+  "engine.quit": "PageMentor beenden",
+  "engine.quitConfirm": "PageMentor beenden? Laufende Hörbuch- oder Kartenjobs werden abgebrochen.",
 };

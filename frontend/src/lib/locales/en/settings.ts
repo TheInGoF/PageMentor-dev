@@ -181,4 +181,8 @@ export const settings: Record<string, string> = {
   "engine.auto.braucht-hilfe": "The engine needs help: repair the red tiles below.",
   "engine.banner.running": "Engine: {title}{pct} – {message}",
   "engine.banner.help": "The AI engine needs help. Click here to repair.",
+  "engine.update": "Update",
+  "engine.updateHint": "Download new package versions and restart services",
+  "engine.quit": "Quit PageMentor",
+  "engine.quitConfirm": "Quit PageMentor? Running audiobook or card jobs will stop.",
 };

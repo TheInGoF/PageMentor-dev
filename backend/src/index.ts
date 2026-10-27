@@ -7,6 +7,7 @@ import { requestLogger, onRouteError } from "./log/http";
 import { logRoutes, clientLogRoutes } from "./routes/logs";
 import { engineRoutes } from "./routes/engine";
 import { autoStart } from "./engine/manager";
+import { alreadyRunning, openBrowser, quitApp } from "./launch";
 import { registerDiagnostic } from "./log/diagnostics";
 import { publicConfig } from "./services/llmConfig";
 import { Hono } from "hono";
@@ -53,6 +54,14 @@ registerDiagnostic("werkzeuge", () => toolStatus());
 // Nur lokal erreichbar; PM_HOST=0.0.0.0 z. B. für Docker
 const HOST = process.env.PM_HOST || "127.0.0.1";
 const PORT = Number(process.env.PM_PORT_INTERNAL || process.env.PORT || 3100);
+const APP_URL = `http://127.0.0.1:${PORT}`;
+
+// Zweiter Start: vorhandene Instanz im Browser zeigen und beenden
+if (await alreadyRunning(APP_URL)) {
+  startupNote("PageMentor läuft schon, öffne nur den Browser");
+  openBrowser(APP_URL);
+  process.exit(0);
+}
 
 const app = new Hono();
 
@@ -81,6 +90,10 @@ app.route("/api/admin", adminRoutes);
 app.route("/api/tutor", tutorRoutes);
 app.route("/api/logs", logRoutes);
 app.route("/api/engine", engineRoutes);
+app.post("/api/app/quit", (c) => {
+  quitApp("über die Oberfläche");
+  return c.json({ ok: true });
+});
 
 // Static frontend (production)
 app.use("/*", serveStatic({ root: PUBLIC_DIR }));
@@ -107,6 +120,7 @@ export default {
 
 startupNote(`API läuft auf http://${HOST}:${PORT}, Version ${APP_VERSION}`);
 startupDone();
+openBrowser(APP_URL);
 
 // Engine im Hintergrund prüfen und starten, blockiert die App nicht
 void autoStart().catch((err) => console.error("[engine] Autostart fehlgeschlagen", err));

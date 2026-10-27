@@ -44,6 +44,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PM_ENGINE_AUTOSTART = "0"
+          $env:PM_OPEN_BROWSER = "0"
           $p = Start-Process -FilePath "dist/PageMentor/PageMentor.exe" -PassThru
           $ok = $false
           for ($i = 0; $i -lt 30; $i++) {
@@ -61,6 +62,40 @@ jobs:
           foreach ($t in "ffmpeg","ffprobe","pdftoppm","AtomicParsley") {
             if ($log -match ('"' + $t + '":"FEHLT"')) { throw "Werkzeug fehlt: $t" }
           }
+
+      - name: Installer bauen
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $version = (Get-Content VERSION -Raw).Trim()
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$env:GITHUB_WORKSPACE\dist\PageMentor" packaging\windows\PageMentor.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC fehlgeschlagen" }
+
+      - name: Installer still installieren, starten, deinstallieren
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\PageMentor-Setup-*.exe | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/NOWSL=1","/LOG=$env:RUNNER_TEMP\setup.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log" -Tail 40; throw "Setup Exit $($p.ExitCode)" }
+          $app = "$env:LOCALAPPDATA\Programs\PageMentor"
+          foreach ($f in "PageMentor.exe","public\index.html","bin\ffmpeg.exe","engine\provision.sh") {
+            if (-not (Test-Path "$app\$f")) { throw "fehlt nach Installation: $f" }
+          }
+          if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\PageMentor.lnk")) { throw "Startmenü-Eintrag fehlt" }
+          Get-ChildItem ([Environment]::GetFolderPath('MyDocuments') + "\PageMentor\logs") | Out-Host
+          Stop-Process -Name PageMentor -Force -ErrorAction SilentlyContinue
+          $u = Start-Process "$app\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES" -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "Deinstallation Exit $($u.ExitCode)" }
+          Start-Sleep -Seconds 3
+          if (Test-Path "$app\PageMentor.exe") { throw "Exe nach Deinstallation noch da" }
+          if (-not (Test-Path ([Environment]::GetFolderPath('MyDocuments') + "\PageMentor"))) { throw "Nutzerdaten wurden gelöscht" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PageMentor-Setup
+          path: dist/PageMentor-Setup-*.exe
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:
