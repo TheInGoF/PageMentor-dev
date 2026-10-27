@@ -3,8 +3,8 @@ import { join } from "path";
 import { existsSync } from "fs";
 import { db } from "../../db";
 import { DATA_DIR } from "../../paths";
-import { findVoice, defaultVoiceFor } from "../../tts/voices";
-import { generateSingleChapterAudio, isGenerating } from "../../services/audiobook";
+import { defaultVoiceFor } from "../../tts/voices";
+import { generateSingleChapterAudio } from "../../services/audiobook";
 import { preprocessChapterForAudio, clearAudioTextCache } from "../../services/audioPreprocess";
 import { tt } from "../../lib/i18n";
 

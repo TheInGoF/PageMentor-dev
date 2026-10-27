@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { allVoices, findVoice, defaultVoiceFor } from "../../tts/voices";
+import { allVoices, findVoice } from "../../tts/voices";
 import { synthesizePreview } from "../../tts/synth";
 import { tt } from "../../lib/i18n";
 

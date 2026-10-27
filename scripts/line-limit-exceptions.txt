@@ -1,6 +1,5 @@
 backend/src/services/cardGenerate.ts
 backend/src/services/tutor.ts
-backend/src/tts/ffmpeg.ts
 frontend/src/components/Audiobook.tsx
 frontend/src/components/Cards.tsx
 frontend/src/components/ExamTrainer.tsx

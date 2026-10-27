@@ -3,7 +3,7 @@ import { join } from "path";
 import { existsSync } from "fs";
 import { db } from "../../db";
 import { DATA_DIR } from "../../paths";
-import { findVoice, defaultVoiceFor } from "../../tts/voices";
+import { defaultVoiceFor } from "../../tts/voices";
 import { generateIntroAudio } from "../../services/audiobook";
 import { preprocessIntroForAudio, clearAudioIntroTtsCache } from "../../services/audioPreprocess";
 import { tt } from "../../lib/i18n";
