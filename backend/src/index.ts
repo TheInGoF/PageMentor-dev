@@ -5,6 +5,8 @@ import { toolStatus } from "./tools";
 import { startupHeader, startupStep, startupDone, startupNote } from "./log/startup";
 import { requestLogger, onRouteError } from "./log/http";
 import { logRoutes, clientLogRoutes } from "./routes/logs";
+import { engineRoutes } from "./routes/engine";
+import { autoStart } from "./engine/manager";
 import { registerDiagnostic } from "./log/diagnostics";
 import { publicConfig } from "./services/llmConfig";
 import { Hono } from "hono";
@@ -78,6 +80,7 @@ app.route("/api/voices", voiceRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/tutor", tutorRoutes);
 app.route("/api/logs", logRoutes);
+app.route("/api/engine", engineRoutes);
 
 // Static frontend (production)
 app.use("/*", serveStatic({ root: PUBLIC_DIR }));
@@ -104,6 +107,9 @@ export default {
 
 startupNote(`API läuft auf http://${HOST}:${PORT}, Version ${APP_VERSION}`);
 startupDone();
+
+// Engine im Hintergrund prüfen und starten, blockiert die App nicht
+void autoStart().catch((err) => console.error("[engine] Autostart fehlgeschlagen", err));
 
 // Konfigurierte Dienst-Adressen, ohne Schlüssel
 function serviceUrls(): Record<string, unknown> {

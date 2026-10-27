@@ -1,0 +1,3 @@
+# Skripte für Linux/WSL immer mit LF, auch beim Auschecken unter Windows
+*.sh text eol=lf
+engine/* text eol=lf

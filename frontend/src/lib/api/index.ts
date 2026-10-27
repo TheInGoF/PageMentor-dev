@@ -2,12 +2,14 @@ export * from "./types";
 export { ApiError } from "./request";
 export { subscribeProgress } from "./progress";
 export type { StoredLogLine, LogErrorInfo, LogLevel } from "./logs";
+export type { EngineStatus, EngineCheck, CheckStatus } from "./engine";
 import { libraryApi } from "./library";
 import { learningApi } from "./learning";
 import { settingsApi } from "./settings";
 import { voicesApi } from "./voices";
 import { audioApi } from "./audio";
 import { logsApi } from "./logs";
+import { engineApi } from "./engine";
 
 export const api = {
   ...libraryApi,
@@ -16,4 +18,5 @@ export const api = {
   ...voicesApi,
   ...audioApi,
   ...logsApi,
+  ...engineApi,
 };

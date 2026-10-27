@@ -15,6 +15,7 @@ const server = Bun.spawn(cmd, {
   env: {
     ...process.env,
     PORT: String(PORT),
+    PM_ENGINE_AUTOSTART: "0",
     PM_DATA_DIR: dataDir,
     MEILI_URL: "http://127.0.0.1:1",
     PM_DOCLING_URL: "http://127.0.0.1:1",
@@ -167,6 +168,12 @@ async function run() {
     failures++;
     console.log("FAIL Diagnosepaket ist kein ZIP");
   } else console.log(`OK   Diagnosepaket ${diag.name} (${bytes.length} Bytes)`);
+  const engine = await call("GET", "/api/engine/status");
+  const selftest = await call("POST", "/api/engine/selftest");
+  if (!Array.isArray(selftest.results) || selftest.results.length < 8 || typeof engine.windows !== "boolean") {
+    failures++;
+    console.log("FAIL Selbsttest liefert keine Ergebnisse");
+  } else console.log(`OK   Selbsttest: ${selftest.results.map((r: { id: string; status: string }) => `${r.id}=${r.status}`).join(" ")}`);
   await call("DELETE", `/api/cards/${card.id}`);
   await call("DELETE", `/api/documents/${docId}`);
   await call("DELETE", `/api/modules/${moduleId}`);

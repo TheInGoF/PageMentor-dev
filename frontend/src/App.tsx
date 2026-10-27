@@ -5,7 +5,8 @@ import { Dashboard } from "./components/Dashboard";
 import { Modules } from "./components/Modules";
 import { ModuleDetail } from "./components/ModuleDetail";
 import { TutorPage } from "./components/TutorPage";
-import { SettingsPage } from "./components/SettingsPage";
+import { SettingsPage, type SettingsTab } from "./components/SettingsPage";
+import { EngineBanner } from "./components/engine/EngineBanner";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
@@ -116,6 +117,7 @@ function initialDeepLink(): { docId: string; page: number } | null {
 }
 
 export function App() {
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | undefined>(undefined);
   const [view, setView] = useState<View>(() => initialNav().view);
   const [openDocId, setOpenDocId] = useState<string | null>(
     () => initialNav().openDocId
@@ -189,10 +191,11 @@ export function App() {
   /** Open settings as a real page. Remembers where the user came
    *  from so the Back button takes them back to that exact view
    *  (library / modules / dashboard / a specific document). */
-  function openSettings() {
+  function openSettings(tab?: SettingsTab) {
     if (view !== "settings") {
       setReturnTo(view);
     }
+    setSettingsTab(tab);
     setView("settings");
   }
   function closeOverlayPage() {
@@ -204,7 +207,7 @@ export function App() {
     // Settings is the only overlay page — it includes the Logs tab,
     // so the Back button returns to wherever the user came from.
     if (view === "settings")
-      return <SettingsPage onBack={closeOverlayPage} />;
+      return <SettingsPage onBack={closeOverlayPage} initialTab={settingsTab} />;
 
     if (openDocId)
       return (
@@ -217,7 +220,7 @@ export function App() {
           }
           onBack={() => setOpenDocId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => openSettings()}
         />
       );
     if (openModuleId)
@@ -226,7 +229,7 @@ export function App() {
           moduleId={openModuleId}
           onBack={() => setOpenModuleId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => openSettings()}
         />
       );
     if (view === "modules")
@@ -237,7 +240,7 @@ export function App() {
           onGoDashboard={() => setView("dashboard")}
           onGoLibrary={() => setView("library")}
           onGoTutor={() => setView("tutor")}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => openSettings()}
         />
       );
     if (view === "library")
@@ -248,7 +251,7 @@ export function App() {
           onGoModules={() => setView("modules")}
           onGoTutor={() => setView("tutor")}
           onOpenModule={(id) => setOpenModuleId(id)}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => openSettings()}
         />
       );
     if (view === "tutor")
@@ -257,7 +260,7 @@ export function App() {
           onGoDashboard={() => setView("dashboard")}
           onGoLibrary={() => setView("library")}
           onGoModules={() => setView("modules")}
-          onOpenSettings={openSettings}
+          onOpenSettings={() => openSettings()}
           onOpenDocument={(id) => setOpenDocId(id)}
           onOpenDocumentSource={(docId, page) => {
             // Open the document's PDF reader in a new tab at the
@@ -275,7 +278,7 @@ export function App() {
         onOpenModules={() => setView("modules")}
         onOpenTutor={() => setView("tutor")}
         onOpenDocument={(id) => setOpenDocId(id)}
-        onOpenSettings={openSettings}
+        onOpenSettings={() => openSettings()}
       />
     );
   }
@@ -283,6 +286,7 @@ export function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
+        <EngineBanner onOpen={() => openSettings("engine")} />
         {renderShell()}
         <ShortcutsOverlay />
       </ToastProvider>

@@ -1,7 +1,16 @@
 name: windows
 
+# Nur wenn sich App, Build oder Paket ändern; sonst von Hand
 on:
   push:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "engine/**"
+      - "packaging/**"
+      - "scripts/build-windows.sh"
+      - "scripts/fetch-windows-tools.sh"
+      - ".github/workflows/windows.yml"
   workflow_dispatch:
 
 # Ältere Läufe desselben Branches abbrechen
@@ -34,6 +43,7 @@ jobs:
       - name: Start ohne Einstellungen, Dokumente-Ordner und Werkzeuge
         shell: pwsh
         run: |
+          $env:PM_ENGINE_AUTOSTART = "0"
           $p = Start-Process -FilePath "dist/PageMentor/PageMentor.exe" -PassThru
           $ok = $false
           for ($i = 0; $i -lt 30; $i++) {
@@ -42,6 +52,8 @@ jobs:
           }
           Stop-Process -Id $p.Id -Force
           if (-not $ok) { throw "App antwortet nicht auf Port 3100" }
+          if (-not (Test-Path "dist/PageMentor/engine/provision.sh")) { throw "Engine-Skripte fehlen im Paket" }
+          if ((Get-Content -Raw "dist/PageMentor/engine/provision.sh") -match "`r") { throw "provision.sh hat CRLF" }
           $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PageMentor"
           Get-Content (Join-Path $dir "logs/startup.log")
           if (-not (Test-Path (Join-Path $dir "pagementor.db"))) { throw "Datenbank fehlt in $dir" }

@@ -33,4 +33,7 @@ if [ -z "${SKIP_TOOLS:-}" ]; then
   scripts/fetch-windows-tools.sh "$OUT/bin"
 fi
 cp VERSION LICENSE NOTICE "$OUT/"
+# Engine-Skripte für die WSL-Umgebung
+mkdir -p "$OUT/engine"
+cp engine/provision.sh engine/compose.yaml "$OUT/engine/"
 echo "Fertig: $OUT"

@@ -32,6 +32,10 @@ jobs:
         working-directory: backend
         run: npx tsc --noEmit -p .
 
+      - name: Backend Unit-Tests
+        working-directory: backend
+        run: bun test
+
       - name: Backend Smoke-Test
         working-directory: backend
         run: bun scripts/smoke.ts

@@ -3,6 +3,7 @@ import { Input } from "./ui/Input";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
 import { LogsContent } from "./LogsPage";
+import { EnginePanel } from "./engine/EnginePanel";
 import { getSettings, setSettings, type Settings } from "../lib/settings";
 import {
   api,
@@ -45,9 +46,11 @@ interface Props {
   /** Where the back-button takes the user (back to library, modules,
    *  dashboard, …). Decided by App.tsx based on previous nav state. */
   onBack: () => void;
+  // Direkt einen Tab öffnen, z. B. Engine aus dem Hinweisbalken
+  initialTab?: SettingsTab;
 }
 
-type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "logs";
+export type SettingsTab = "general" | "audiobook" | "tts" | "llm" | "engine" | "logs";
 
 /** Event name for "voice list has changed" — other components
  *  (audiobook picker) listen for it and reload voices. */
@@ -62,6 +65,7 @@ const TABS: Array<{ id: SettingsTab; labelKey: string }> = [
   { id: "audiobook", labelKey: "settings.tab.audiobook" },
   { id: "tts", labelKey: "settings.tab.tts" },
   { id: "llm", labelKey: "settings.tab.llm" },
+  { id: "engine", labelKey: "settings.tab.engine" },
   { id: "logs", labelKey: "settings.tab.logs" },
 ];
 
@@ -77,7 +81,7 @@ const RATES: Array<{ value: string; label: string }> = (() => {
   return out;
 })();
 
-export function SettingsPage({ onBack }: Props) {
+export function SettingsPage({ onBack, initialTab }: Props) {
   useLocale();
   const [s, setS] = useState<Settings>(getSettings());
   const [voices, setVoices] = useState<Voice[]>([]);
@@ -161,7 +165,7 @@ export function SettingsPage({ onBack }: Props) {
   const [designPreviewUrl, setDesignPreviewUrl] = useState<string | null>(null);
   const [designPreviewSeed, setDesignPreviewSeed] = useState<number | null>(null);
   const [designPreviewBlob, setDesignPreviewBlob] = useState<Blob | null>(null);
-  const [tab, setTab] = useState<SettingsTab>("general");
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? "general");
   const [llmBusy, setLlmBusy] = useState(false);
   const [gpuResetBusy, setGpuResetBusy] = useState(false);
   const [previewVoiceId, setPreviewVoiceId] = useState<string>("");
@@ -1974,6 +1978,12 @@ export function SettingsPage({ onBack }: Props) {
               {backendVersion ?? "—"}
             </code>
           </div>
+        </section>
+        )}
+
+        {tab === "engine" && (
+        <section className="flex flex-col gap-3">
+          <EnginePanel />
         </section>
         )}
 
