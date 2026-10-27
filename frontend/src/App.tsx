@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { NavContext } from "./lib/nav";
+import { PlanPage } from "./components/plan/PlanPage";
 import { Library } from "./components/Library";
 import { LearningMenu } from "./components/LearningMenu";
 import { Dashboard } from "./components/Dashboard";
@@ -14,7 +16,7 @@ import { TitleBar } from "./components/TitleBar";
 import { isFrameless } from "./lib/desktop";
 import { useLocale } from "./lib/i18n";
 
-type View = "dashboard" | "library" | "modules" | "tutor" | "settings";
+type View = "dashboard" | "plan" | "library" | "modules" | "tutor" | "settings";
 
 interface NavState {
   view: View;
@@ -38,6 +40,7 @@ function loadNav(): NavState | null {
     const p = JSON.parse(raw);
     const validViews: View[] = [
       "dashboard",
+      "plan",
       "library",
       "modules",
       "tutor",
@@ -256,6 +259,10 @@ export function App() {
           onOpenSettings={() => openSettings()}
         />
       );
+    if (view === "plan")
+      return (
+        <PlanPage onOpenModule={(id) => setOpenModuleId(id)} onOpenDocument={(id) => setOpenDocId(id)} onOpenSettings={() => openSettings()} />
+      );
     if (view === "tutor")
       return (
         <TutorPage
@@ -294,7 +301,18 @@ export function App() {
           {isFrameless() && <TitleBar />}
           <div className="flex-1 min-h-0 overflow-auto">
             <EngineBanner onOpen={() => openSettings("engine")} />
-            {renderShell()}
+            <NavContext.Provider
+              value={{
+                view,
+                go: (v) => {
+                  setOpenDocId(null);
+                  setOpenModuleId(null);
+                  setView(v);
+                },
+              }}
+            >
+              {renderShell()}
+            </NavContext.Provider>
           </div>
         </div>
         <ShortcutsOverlay />

@@ -16,6 +16,7 @@ import { confirmAssignment, listPrefixes, setPrefixes } from "../study/assign/st
 import { emitLog } from "../log/logger";
 import { extractFromDocument, extractProblem, synthesizeRecipes } from "../study/material/extract";
 import type { ExtractKind } from "../study/material/prompts";
+import { allExamSlots, shiftAssessment } from "../study/plan";
 import { getTrainer, listTrainers, selfTest, trainerSource } from "../study/trainer/store";
 import { getMaterial, listMaterial, materialCounts, setUncertain, uncertainItems, type MaterialKind } from "../study/material";
 
@@ -39,6 +40,9 @@ studyRoutes.get("/assessments", (c) => c.json({ assessments: listAssessments(c.r
 studyRoutes.post("/assessments", (c) => guard(c, async () => createAssessment(await c.req.json())));
 studyRoutes.patch("/assessments/:id", (c) => guard(c, async () => updateAssessment(c.req.param("id"), await c.req.json())));
 studyRoutes.delete("/assessments/:id", (c) => c.json({ deleted: deleteAssessment(c.req.param("id")) }));
+// Verschieben mit Nachrücken: ohne apply nur Vorschau
+studyRoutes.post("/assessments/:id/shift", (c) => guard(c, () => shiftAssessment(c.req.param("id"), c.req.query("apply") === "1")));
+studyRoutes.get("/exam-dates", (c) => c.json({ slots: allExamSlots() }));
 studyRoutes.post("/assessments/:id/retry", (c) => guard(c, () => scheduleRetry(c.req.param("id"))));
 
 studyRoutes.get("/time", (c) => {

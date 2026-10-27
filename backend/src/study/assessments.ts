@@ -1,6 +1,7 @@
 // Leistungen: Klausuren, Einsendeaufgaben, Labore, Projekte; Termine, Versuche, Noten
 import { randomUUID } from "crypto";
 import { db } from "../db";
+import { followUp, retryTarget } from "./plan";
 
 // H: Studienheft durcharbeiten, zählt nicht als Prüfung
 export const ASSESSMENT_KINDS = ["K", "B", "L", "S", "P", "A", "M", "X", "H"] as const;
@@ -90,9 +91,9 @@ export function deleteAssessment(id: string): boolean {
 }
 
 // Nicht bestanden: nächster Versuch als neue geplante Leistung, Termin offen
+// Höchstens drei Versuche; ein vorhandener Folgeversuch wird zurückgegeben statt verdoppelt
 export function scheduleRetry(id: string): Assessment {
-  const a = getAssessment(id);
-  if (!a) throw new StudyInputError("Leistung nicht gefunden");
+  const a = retryTarget(id);
   if (a.status !== "nicht_bestanden") throw new StudyInputError("Nur nach nicht bestandenem Versuch");
-  return createAssessment({ module_id: a.module_id, kind: a.kind, title: a.title, attempt: a.attempt + 1, status: "geplant" });
+  return followUp(a) ?? createAssessment({ module_id: a.module_id, kind: a.kind, title: a.title, attempt: a.attempt + 1, status: "geplant", note: `Wiederholung (Versuch ${a.attempt} nicht bestanden)` });
 }

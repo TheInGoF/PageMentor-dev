@@ -4,8 +4,9 @@ import { SearchOverlay } from "./SearchOverlay";
 import { Logo } from "./Logo";
 import { isFrameless } from "../lib/desktop";
 import { cn } from "../lib/cn";
+import { MAIN_VIEWS, useNav } from "../lib/nav";
 
-export type TopView = "dashboard" | "library" | "modules" | "tutor";
+export type TopView = "dashboard" | "plan" | "library" | "modules" | "tutor";
 
 interface Props {
   onUpload?: () => void;
@@ -43,13 +44,21 @@ export function TopBar({
   onGoTutor,
   onOpenSettings,
 }: Props) {
+  // Mit Kontext: immer alle Bereiche; ohne (z. B. in Tests): die übergebenen Ziele
+  const nav = useNav();
   return (
     <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex flex-col gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           {/* Im rahmenlosen Fenster steht das Logo schon in der Titelleiste */}
           {!isFrameless() && <Logo size={22} />}
-          {(onGoDashboard || onGoLibrary || onGoModules || onGoTutor) && (
+          {nav ? (
+            <nav className="flex items-center gap-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+              {MAIN_VIEWS.map((v) => (
+                <NavButton key={v.id} label={t(v.key)} active={nav.view === v.id} onClick={() => nav.go(v.id)} />
+              ))}
+            </nav>
+          ) : (onGoDashboard || onGoLibrary || onGoModules || onGoTutor) && (
             <nav className="flex items-center gap-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
               {onGoDashboard && (
                 <NavButton

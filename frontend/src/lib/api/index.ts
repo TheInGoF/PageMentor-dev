@@ -4,6 +4,7 @@ export { subscribeProgress } from "./progress";
 export type { StoredLogLine, LogErrorInfo, LogLevel } from "./logs";
 export type { EngineStatus, EngineCheck, CheckStatus, TtsEnginesInfo } from "./engine";
 export type { CompareRun, CompareItem } from "./audio";
+export type { Assessment, AssessmentKind, AssessmentStatus, StudyProgress, ExamSlot, ShiftPlan, StudyTimeInfo } from "./plan";
 export type { StudyImportReport, ImportCount, ModulePrefix, MaterialItem, MaterialKind, MaterialCounts, Trainer, TrainerCheck } from "./study";
 import { libraryApi } from "./library";
 import { learningApi } from "./learning";
@@ -13,6 +14,7 @@ import { audioApi } from "./audio";
 import { logsApi } from "./logs";
 import { engineApi } from "./engine";
 import { studyApi } from "./study";
+import { planApi } from "./plan";
 
 export const api = {
   ...libraryApi,
@@ -23,4 +25,5 @@ export const api = {
   ...logsApi,
   ...engineApi,
   ...studyApi,
+  ...planApi,
 };
