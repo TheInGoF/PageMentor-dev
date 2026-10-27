@@ -11,8 +11,10 @@
   <img src="https://img.shields.io/badge/data-stays%20local-2fd07a" alt="Data stays local">
 </p>
 
-*Turn lecture PDFs into **audiobooks, flashcards and exam sessions** — entirely on
-your own Windows PC. No cloud, no API credits, no subscription.*
+*Turn lecture PDFs into **audiobooks, flashcards and exam sessions**, keep your
+**whole degree** in one place — plan, study material, task trainers and a searchable
+knowledge base — entirely on your own Windows PC. No cloud, no API credits, no
+subscription.*
 
 > Personal hobby project. Provided as-is, with no warranties or support
 > guarantees. Not intended for commercial use.
@@ -53,7 +55,7 @@ PageMentor is a fresh build and does not fork any existing project.
 
 ## What it does
 
-Three things, one drag-and-drop:
+Four things around one library:
 
 ### 🎧 Listen
 
@@ -91,12 +93,37 @@ review loop tracks your progress with keyboard shortcuts.
 times you, gives you a side-by-side review of your answers versus the reference —
 and plots the trend as a sparkline.
 
+### 🎓 Study
+
+![Start page](docs/screenshots/start.png)
+
+**One app for the whole degree.** Five areas: *Start · Plan · Modules · Library · Tutor*.
+
+- **Plan** — assessments by month with status, attempts and grades, CP-weighted
+  average, known and estimated (TBA) exam dates, *move with follow-ups* when an
+  exam is postponed, and study time as a heatmap.
+- **Material** — key rules, formulas, recipes and exam tasks per module, each with
+  a grep-able ID. Extracted from your booklets by the local model with a JSON
+  schema; uncertain entries are flagged until you tick them off. Read them aloud
+  as an audiobook (formulas spoken as words) or learn them as flashcards.
+- **Task trainer** — your own task generators run sandboxed in the app; solutions
+  are revealed step by step with KaTeX and jump into the booklet chapter.
+- **Knowledge base** — hybrid search (full text + vectors in SQLite via
+  sqlite-vec) over all booklets and literature, batch import with a resumable
+  night queue, test questions that measure the hit rate, and a map of related
+  chapters across booklets.
+
+![Plan](docs/screenshots/plan.png)
+![Material](docs/screenshots/material.png)
+
 ## Why local
 
 - 🔒 **Your PDFs never leave your PC** — ideal for university scripts, internal
   training material, anything you don't want in a SaaS log.
 - 🆓 **No API keys required** — every feature runs against local models. Cloud
-  LLMs (Anthropic / OpenAI / Google) are optional fallbacks, configured from the UI.
+  LLMs (Anthropic / OpenAI / Google) are optional, configured from the UI. The
+  optional *cloud help* (review, second opinion, failure diagnosis) shows you the
+  exact text before anything is sent and sends nothing without your click.
 - 🪟 **One installer** — the app sets up and checks its own AI engine. No
   terminal, no Docker commands.
 
@@ -197,10 +224,41 @@ Source: [`docs/diagrams/pipeline.puml`](docs/diagrams/pipeline.puml).
 - **Tutor (RAG chat)** — ask questions across your whole library or a single
   module; answers cite their sources and open the PDF at the cited page.
 - **Full-text search** — Meilisearch over documents and chapters.
+- **Study plan** — assessments, attempts (max. three), grades, CP and CP-weighted
+  average, exam dates incl. estimated ones, move-with-follow-ups, print or PDF.
+- **Study time** — booked automatically while you practise or review cards, heatmap
+  and per-module totals.
+- **Module assignment with evidence** — a document joins a module only if its file
+  name or first page carries the module code or a known booklet prefix; otherwise
+  it waits under *No module* with a suggestion. Prefixes are edited per module.
+- **Quality check** — after each conversion: lost formulas, characters per page,
+  empty table cells, OCR fragments.
+- **Material catalogs** — extraction per section with schema, cache and retry;
+  review list for uncertain entries; *listen & cards* from rules and formulas.
+- **Task trainer** — sandboxed generator files with a self-test (structure, 200
+  random runs, exam vectors, booklet references).
+- **Knowledge base** — sqlite-vec + FTS5, reciprocal rank fusion, batch import
+  (recursive, resumable, night mode, ETA, adopts existing Docling Markdown),
+  literature as its own type, test questions with hit rate and MRR, chapter map.
+- **Import from Studium Maker** — modules, exam dates, assessments, study time,
+  catalogs, trainers and the module map, with a dry run first.
+- **Cloud help (optional)** — review of catalog entries, recipe synthesis, second
+  opinion in the tutor, diagnosis of failed local runs; preview and consent before
+  every send, everything logged.
 - **Diagnostics** — app, startup and engine logs in `Documents\PageMentor\logs`,
   a live log view and a one-click *diagnostic bundle* (ZIP) for bug reports.
 - **Appearance** — light and dark theme (follows Windows), three accent palettes.
 - **i18n** — English + German UI.
+
+## Coming from Studium Maker
+
+*Settings → General → Import from Studium Maker*: pick your Studium Maker folder,
+run the **preview**, check the report (CP and average should match the old
+planner), then **import**. Running it again creates no duplicates. Your data is
+copied into `Documents\PageMentor`; the old folder stays untouched and can be
+archived once you're happy. Already converted booklets (`10_temp/md`) can be
+adopted via *Library → Batch import* instead of converting them again.
+A German walkthrough is in [docs/HILFE.md](docs/HILFE.md).
 
 ## Troubleshooting
 
@@ -246,13 +304,15 @@ All optional; the installed app needs none.
 | `PM_ENGINE_HOST` | `localhost` | Host of the AI services |
 | `PM_ENGINE_AUTOSTART` | `1` | `0` disables automatic engine setup and repair |
 | `PM_UI` | `window` | `window`, `browser` or `none` |
+| `PM_SQLITE_VEC` | *(next to the exe)* | Path to the sqlite-vec extension |
+| `PM_CLOUD_CLAUDE_MODEL` | `claude-opus-5-5` | Model for the optional cloud help |
 
 Everything AI-related is configured from the Settings page and stored in
 `llm-config.json` in the data folder.
 
 ## Stack
 
-- **App:** Bun + Hono + SQLite, compiled to one Windows executable; UI in React 19
+- **App:** Bun + Hono + SQLite (FTS5 + sqlite-vec for the knowledge base), compiled to one Windows executable; UI in React 19
   + Vite + Tailwind, shown via WebView2
 - **Engine:** WSL 2 + Docker: Ollama, Docling-Serve, infinity (jina-embeddings-v3),
   Meilisearch, the TTS sidecars and [pm-gpu-arbiter](pm-gpu-arbiter/)
@@ -273,9 +333,13 @@ backend/src/
   log/          # structured logs, diagnostic bundle
   routes/       # documents, chapters, audio, cards, exam, search, tutor, …
   services/     # pipeline, cleanup, audiobook, card generation, embeddings, …
+    rag/        #   vector index, full text, hybrid search, test questions, chapter map
+    batch/      #   batch import queue, adopting Docling Markdown
+    cloud/      #   optional cloud help with consent
+  study/        # modules, assessments, plan, study time, material, trainers, import
   tts/          # voice catalog, segmenter, ffmpeg, engines (qwen, extra)
 frontend/src/
-  components/   # pages, settings/, engine/, audiobook/, ui/
+  components/   # pages, plan/, module/, practice/, settings/, engine/, audiobook/, ui/
   lib/          # API client, i18n, theme
 engine/         # compose.yaml + provision.sh for the WSL environment
 packaging/      # Windows installer
