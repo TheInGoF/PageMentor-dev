@@ -35,5 +35,7 @@ jobs:
         working-directory: frontend
         run: npm ci --no-audit --no-fund && npm run build
 
-      - name: Python Syntax
-        run: python3 -m compileall -q pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer
+      - name: Python Syntax + undefinierte Namen
+        run: |
+          python3 -m pip install -q pyflakes
+          python3 -m pyflakes pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer

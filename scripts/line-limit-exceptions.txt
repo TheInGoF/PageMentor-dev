@@ -5,5 +5,3 @@ frontend/src/components/Library.tsx
 frontend/src/components/ModuleDetail.tsx
 frontend/src/components/SettingsPage.tsx
 frontend/src/lib/api.ts
-frontend/src/lib/i18n.ts
-pm-qwen-tts/main.py

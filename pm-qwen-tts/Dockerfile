@@ -62,7 +62,7 @@ RUN pip install --no-cache-dir /tmp/wheels/flash_attn-*.whl \
  && rm -rf /tmp/wheels \
  && python -c "import flash_attn; print(f'[build-verify] flash-attn {flash_attn.__version__} ready')"
 
-COPY main.py ./
+COPY *.py ./
 
 EXPOSE 8880
 
