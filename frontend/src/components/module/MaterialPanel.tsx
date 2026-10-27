@@ -4,6 +4,7 @@ import { api, type MaterialCounts, type MaterialItem, type MaterialKind, type Mo
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
+import { useToast } from "../ui/Toast";
 import { MaterialItemCard } from "./MaterialItemCard";
 import { MaterialExtract } from "./MaterialExtract";
 
@@ -25,6 +26,7 @@ export function MaterialPanel({
   const [counts, setCounts] = useState<MaterialCounts | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const toast = useToast();
 
   const load = useCallback(async () => {
     const r = await api.study.material(moduleId);
@@ -44,6 +46,16 @@ export function MaterialPanel({
         (!q || it.id.toLowerCase().includes(q) || it.title.toLowerCase().includes(q) || it.body_md.toLowerCase().includes(q))
     );
   }, [items, filter, query]);
+
+  async function catalog() {
+    try {
+      const r = await api.study.buildCatalog(moduleId, { audio: true, cards: true });
+      toast.show(t("material.catalogDone", { cards: r.cards, chapters: r.chapters, skipped: r.skippedUncertain }), "success");
+      onOpenDocument(r.documentId);
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
 
   if (!items || !counts) return <div className="text-sm text-neutral-500">{t("common.loading")}</div>;
 
@@ -68,6 +80,9 @@ export function MaterialPanel({
         {KINDS.map((k) => chip(k, t(`material.kind.${k}`), counts[k]))}
         {chip("uncertain", t("material.toCheck"), counts.uncertain)}
         <input className="input !w-full sm:!w-56 sm:ml-auto" placeholder={t("material.search")} value={query} onChange={(e) => setQuery(e.target.value)} />
+        <Button variant="outline" onClick={() => void catalog()} disabled={!counts.merksatz && !counts.formel} title={t("material.catalogHint")}>
+          {t("material.catalog")}
+        </Button>
         <Button variant="outline" onClick={() => window.print()} disabled={!shown.length}>
           {t("material.print")}
         </Button>

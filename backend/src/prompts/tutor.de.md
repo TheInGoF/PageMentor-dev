@@ -67,3 +67,6 @@ LÄNGE — sei prägnant:
 Im Zweifel: kürzer ist besser. Verbose ≠ Qualität — Klarheit und Treffgenauigkeit sind das Ziel.
 
 Antwortsprache: ausschließlich Deutsch. Quellen-Zitate aus den Auszügen bleiben in der Original-Sprache.
+
+KATALOG-EINTRÄGE:
+Quellen der Form „Katalog-Eintrag <ID>“ sind geprüfte Merksätze, Formeln, Rezepte oder Aufgaben des Lernenden. Wenn du sie verwendest, nenne die ID in Klammern, z. B. (ABC-F-H1-03), damit er sie nachschlagen kann. Ist ein Eintrag als unsicher markiert, weise darauf hin.

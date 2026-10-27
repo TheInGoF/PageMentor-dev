@@ -10,6 +10,7 @@ import promptEn from "../../prompts/tutor.en.md" with { type: "text" };
 import { MAX_HISTORY_TURNS, type ChatMessageRow, type TutorAnswer, type TutorSource } from "./types";
 import { getChatSession, listChatMessages } from "./sessions";
 import { retrieveChunks, formatSourcesForPrompt } from "./retrieve";
+import { materialSources, retrieveMaterial } from "./material";
 import { runJob } from "../../log/jobs";
 
 const SYSTEM_PROMPT_DE = promptDe;
@@ -156,7 +157,15 @@ async function askImpl(params: {
   if (!question) throw new Error("question_empty");
 
   const history = listChatMessages(params.sessionId);
-  const sources = await retrieveChunks(question, session.module_id);
+  // Heftstellen plus Katalog-Einträge; ohne Embedder reichen auch Katalog-Treffer
+  const hits = retrieveMaterial(question, session.module_id);
+  let chunks: TutorSource[] = [];
+  try {
+    chunks = await retrieveChunks(question, session.module_id);
+  } catch (err) {
+    if (!hits.length) throw err;
+  }
+  const sources = [...chunks, ...materialSources(hits, chunks.length + 1)];
   if (sources.length === 0) {
     throw new Error("no_chunks_in_scope");
   }

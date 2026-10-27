@@ -4,7 +4,7 @@ export { subscribeProgress } from "./progress";
 export type { StoredLogLine, LogErrorInfo, LogLevel } from "./logs";
 export type { EngineStatus, EngineCheck, CheckStatus, TtsEnginesInfo } from "./engine";
 export type { CompareRun, CompareItem } from "./audio";
-export type { Assessment, AssessmentKind, AssessmentStatus, StudyProgress, ExamSlot, ShiftPlan, StudyTimeInfo } from "./plan";
+export type { Assessment, AssessmentKind, AssessmentStatus, StudyProgress, ExamSlot, ShiftPlan, StudyTimeInfo, ExamFocus } from "./plan";
 export type { StudyImportReport, ImportCount, ModulePrefix, MaterialItem, MaterialKind, MaterialCounts, Trainer, TrainerCheck } from "./study";
 import { libraryApi } from "./library";
 import { learningApi } from "./learning";

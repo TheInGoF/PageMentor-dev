@@ -17,6 +17,8 @@ export interface TutorSource {
   startPage: number;
   endPage: number;
   snippet: string;
+  // Katalog-Eintrag statt Heftstelle: Grep-ID zum Nachschlagen
+  grepId?: string | null;
 }
 
 export interface TutorAnswer {

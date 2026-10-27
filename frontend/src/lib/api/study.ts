@@ -85,6 +85,11 @@ export const studyApi = {
     trainerCheck: (id: string) => request<TrainerCheck>(`/api/study/trainers/${id}/check`),
     addTime: (body: { date: string; module_id: string | null; kind: string; minutes: number; origin?: "auto" | "manual"; note?: string }) =>
       request<unknown>("/api/study/time", { method: "POST", body: JSON.stringify(body) }),
+    buildCatalog: (moduleId: string, opts: { audio: boolean; cards: boolean }) =>
+      request<{ documentId: string; chapters: number; cards: number; skippedUncertain: number }>(`/api/study/material/${moduleId}/catalog`, {
+        method: "POST",
+        body: JSON.stringify(opts),
+      }),
     pickFolder: () => request<{ folder: string | null }>("/api/study/import/pick", { method: "POST" }),
     import: (folder: string, dryRun: boolean) =>
       request<StudyImportReport>("/api/study/import", { method: "POST", body: JSON.stringify({ folder, dryRun }) }),

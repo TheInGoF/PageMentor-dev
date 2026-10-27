@@ -4,6 +4,7 @@ import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { TopBar } from "./TopBar";
+import { FocusCard } from "./dashboard/FocusCard";
 import { ServicesCard } from "./dashboard/ServicesCard";
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
   onOpenSettings: () => void;
   // Engine-Einstellungen direkt öffnen
   onOpenEngine?: () => void;
+  onOpenModule?: (id: string) => void;
 }
 
 export function Dashboard({
@@ -23,6 +25,7 @@ export function Dashboard({
   onOpenDocument,
   onOpenSettings,
   onOpenEngine,
+  onOpenModule,
 }: Props) {
   useLocale();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -59,6 +62,8 @@ export function Dashboard({
           <h1 className="text-2xl font-semibold">{t("dash.title")}</h1>
           <p className="text-sm text-neutral-500 mt-1">{t("dash.subtitle")}</p>
         </section>
+
+        {onOpenModule && <FocusCard onOpenModule={onOpenModule} />}
 
         {!data ? (
           <div className="text-sm text-neutral-500">{t("common.loading")}</div>

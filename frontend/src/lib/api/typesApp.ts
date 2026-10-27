@@ -262,6 +262,8 @@ export interface TutorSource {
   startPage: number;
   endPage: number;
   snippet: string;
+  // Katalog-Eintrag statt Heftstelle
+  grepId?: string | null;
 }
 
 export interface TutorAnswer {

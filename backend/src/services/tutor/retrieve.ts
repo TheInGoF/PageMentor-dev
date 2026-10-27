@@ -80,6 +80,7 @@ function truncate(s: string, max: number): string {
 export function formatSourcesForPrompt(sources: TutorSource[]): string {
   return sources
     .map((s) => {
+      if (s.grepId) return `[Quelle ${s.n}] Katalog-Eintrag ${s.grepId}\n${s.snippet}`;
       const heft = s.docShortCode
         ? `Heft „${s.docTitle}" (${s.docShortCode})`
         : `Heft „${s.docTitle}"`;

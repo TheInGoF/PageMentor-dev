@@ -289,6 +289,7 @@ export function App() {
         onOpenDocument={(id) => setOpenDocId(id)}
         onOpenSettings={() => openSettings()}
         onOpenEngine={() => openSettings("engine")}
+        onOpenModule={(id) => setOpenModuleId(id)}
       />
     );
   }

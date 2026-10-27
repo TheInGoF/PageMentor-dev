@@ -17,6 +17,8 @@ import { emitLog } from "../log/logger";
 import { extractFromDocument, extractProblem, synthesizeRecipes } from "../study/material/extract";
 import type { ExtractKind } from "../study/material/prompts";
 import { allExamSlots, shiftAssessment } from "../study/plan";
+import { examFocus } from "../study/focus";
+import { buildCatalog } from "../study/material/catalogDoc";
 import { getTrainer, listTrainers, selfTest, trainerSource } from "../study/trainer/store";
 import { getMaterial, listMaterial, materialCounts, setUncertain, uncertainItems, type MaterialKind } from "../study/material";
 
@@ -35,6 +37,7 @@ async function guard(c: Context, fn: () => unknown | Promise<unknown>) {
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 studyRoutes.get("/progress", (c) => c.json(studyProgress()));
+studyRoutes.get("/focus", (c) => c.json(examFocus()));
 
 studyRoutes.get("/assessments", (c) => c.json({ assessments: listAssessments(c.req.query("module") || undefined) }));
 studyRoutes.post("/assessments", (c) => guard(c, async () => createAssessment(await c.req.json())));
@@ -148,5 +151,13 @@ studyRoutes.get("/trainers/:id/check", (c) => {
   if (!t) return c.json({ error: "nicht gefunden" }, 404);
   const r = selfTest(t);
   emitLog(r.ok ? "info" : "warn", "trainer", `Selbsttest ${t.title}: ${r.generators} Generatoren, ${r.runs} Läufe, ${r.problems.length} Probleme`);
+  return c.json(r);
+});
+
+// Lernkatalog: Merksätze und Formeln als Hörbuch-Kapitel und Karten
+studyRoutes.post("/material/:moduleId/catalog", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { audio?: boolean; cards?: boolean };
+  const r = buildCatalog(c.req.param("moduleId"), { audio: body.audio !== false, cards: body.cards !== false });
+  emitLog("info", "material", `Lernkatalog: ${r.chapters} Kapitel, ${r.cards} Karten, ${r.skippedUncertain} unsichere ausgelassen`);
   return c.json(r);
 });

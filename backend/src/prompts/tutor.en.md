@@ -66,3 +66,6 @@ LENGTH — be concise:
 When in doubt: shorter is better. Verbose ≠ quality — clarity and precision are the goal.
 
 Response language: English only. Source quotes from the excerpts stay in the original language.
+
+CATALOG ENTRIES:
+Sources of the form “Katalog-Eintrag <ID>” are the student's checked rules, formulas, recipes or tasks. When you use one, name its ID in parentheses, e.g. (ABC-F-H1-03), so the student can look it up.

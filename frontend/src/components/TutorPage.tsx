@@ -413,14 +413,15 @@ function SourcePill({
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={source.docId ? onOpen : () => source.grepId && void navigator.clipboard?.writeText(source.grepId)}
       className="text-left text-xs bg-neutral-800 hover:bg-neutral-700 border border-border rounded px-2 py-1.5"
       title={t("tutor.openSource")}
     >
       <span className="font-semibold text-accent">[{source.n}]</span>{" "}
+      {source.grepId && <span className="font-mono text-accent mr-1">{source.grepId}</span>}
       <span className="text-neutral-200">{heft}</span>
       {kapitel && <span className="text-neutral-400"> — {kapitel}</span>}
-      <span className="text-neutral-400">, {pages}</span>
+      {(!source.grepId || source.docId) && <span className="text-neutral-400">, {pages}</span>}
     </button>
   );
 }

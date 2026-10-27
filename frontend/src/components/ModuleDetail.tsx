@@ -13,8 +13,9 @@ import { CardReview } from "./CardReview";
 import { MaterialPanel } from "./module/MaterialPanel";
 import { Documents, AudioPanel, SummariesPanel } from "./module/ModulePanels";
 import { PracticePanel } from "./module/PracticePanel";
+import { takeModuleTab, type ModuleTab } from "../lib/moduleTab";
 
-type Tab = "overview" | "documents" | "material" | "practice" | "audio" | "summaries";
+type Tab = ModuleTab;
 
 const TABS: Array<{ id: Tab; key: string }> = [
   { id: "overview", key: "module.tab.overview" },
@@ -40,7 +41,7 @@ export function ModuleDetail({
 }: Props) {
   useLocale();
   const [data, setData] = useState<ModuleDetailData | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(() => takeModuleTab() ?? "overview");
   const [reviewing, setReviewing] = useState<Card[] | null>(null);
   const toast = useToast();
 

@@ -41,10 +41,17 @@ export interface StudyTimeInfo {
   perModule: Array<{ module_id: string | null; minutes: number }>;
 }
 
+export interface ExamFocus {
+  exam: { id: string; title: string; date: string; days: number; moduleId: string | null; moduleCode: string | null } | null;
+  todo: Array<{ key: "uncertain" | "dueCards" | "noMaterial" | "trainer" | "noTime"; count: number }>;
+  minutes7: number;
+}
+
 const json = (method: string, body?: unknown): RequestInit => ({ method, body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const planApi = {
   plan: {
+    focus: () => request<ExamFocus>("/api/study/focus"),
     progress: () => request<StudyProgress>("/api/study/progress"),
     list: () => request<{ assessments: Assessment[] }>("/api/study/assessments"),
     create: (a: Partial<Assessment> & { title: string }) => request<Assessment>("/api/study/assessments", json("POST", a)),

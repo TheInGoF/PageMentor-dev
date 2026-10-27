@@ -169,7 +169,8 @@ export function LearningMenu({
           </div>
         </div>
         <nav className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto">
-          {TABS.map((tb) => {
+          {/* Lernkatalog ohne PDF: kein Leser-Reiter */}
+          {TABS.filter((tb) => tb.id !== "reader" || doc?.mime_type !== "text/markdown").map((tb) => {
             const locked = tb.requiresExtraction && !extractionDone;
             return (
               <button
