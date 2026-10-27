@@ -35,6 +35,14 @@
 }
 
 @layer components {
+  /* Filter-Chip: wie die Modul-Chips der Bibliothek */
+  .chip {
+    @apply px-3 py-1 rounded-full text-xs border border-border text-neutral-400 transition-colors
+           hover:border-border-strong hover:text-neutral-200;
+  }
+  .chip-active {
+    @apply bg-accent/15 border-accent-subtle text-accent hover:text-accent;
+  }
   .card {
     @apply bg-bg-card border border-border rounded-lg shadow-card;
   }
@@ -76,4 +84,24 @@
 /* Vollflächige Overlays lassen die eigene Titelleiste frei */
 .fixed.inset-0 {
   top: var(--titlebar-h);
+}
+
+/* Drucken: nur der Druckbereich, ohne Leisten und Knöpfe */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+  .print-area .card {
+    box-shadow: none;
+    margin-bottom: 8px;
+  }
 }

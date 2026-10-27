@@ -21,11 +21,16 @@ export async function generate(params: {
   system?: string;
   model?: string;
   options?: Record<string, unknown>;
+  // JSON-Schema: Ollama erzwingt die Struktur grammatisch, andere Anbieter bekommen es als Hinweis
+  format?: Record<string, unknown>;
 }): Promise<GenerateResult> {
   const p = await pickProvider();
   if (!p) throw new Error("No LLM provider configured");
   const started = Date.now();
   let model = params.model || p.model;
+  if (params.format && p.type !== "ollama") {
+    params = { ...params, system: `${params.system ?? ""}\n\nAntworte nur mit JSON nach diesem Schema:\n${JSON.stringify(params.format)}` };
+  }
 
   if (p.type === "ollama" && p.url) {
     model = await resolveOllamaModel(p.url, model);
@@ -38,6 +43,7 @@ export async function generate(params: {
         prompt: params.prompt,
         system: params.system,
         stream: false,
+        ...(params.format ? { format: params.format } : {}),
         options: { temperature: 0.3, top_p: 0.9, ...params.options },
       }),
       signal: AbortSignal.timeout(15 * 60 * 1000),

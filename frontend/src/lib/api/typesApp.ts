@@ -216,7 +216,11 @@ export type ProgressPhase =
   | "cards.progress"
   | "cards.done"
   | "cards.failed"
-  | "cards.canceled";
+  | "cards.canceled"
+  | "material.start"
+  | "material.progress"
+  | "material.done"
+  | "material.failed";
 
 export interface ProgressEvent {
   phase: ProgressPhase;

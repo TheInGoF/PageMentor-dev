@@ -10,13 +10,15 @@ import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { CardReview } from "./CardReview";
+import { MaterialPanel } from "./module/MaterialPanel";
 import { Documents, CardsPanel, ExamsPanel, AudioPanel, SummariesPanel } from "./module/ModulePanels";
 
-type Tab = "overview" | "documents" | "cards" | "exams" | "audio" | "summaries";
+type Tab = "overview" | "documents" | "material" | "cards" | "exams" | "audio" | "summaries";
 
 const TABS: Array<{ id: Tab; key: string }> = [
   { id: "overview", key: "module.tab.overview" },
   { id: "documents", key: "module.tab.documents" },
+  { id: "material", key: "module.tab.material" },
   { id: "cards", key: "module.tab.cards" },
   { id: "exams", key: "module.tab.exams" },
   { id: "audio", key: "module.tab.audio" },
@@ -146,6 +148,9 @@ export function ModuleDetail({
         )}
         {tab === "documents" && (
           <Documents data={data} onOpen={onOpenDocument} />
+        )}
+        {tab === "material" && (
+          <MaterialPanel moduleId={moduleId} moduleName={m.name} docs={data.documents} onOpenDocument={onOpenDocument} />
         )}
         {tab === "cards" && (
           <CardsPanel data={data} onStart={startReview} />

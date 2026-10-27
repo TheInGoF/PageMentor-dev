@@ -28,6 +28,24 @@ export interface ModulePrefix {
   evidence: string | null;
 }
 
+export type MaterialKind = "aufgabe" | "rezept" | "merksatz" | "formel";
+
+export interface MaterialItem {
+  id: string;
+  module_id: string | null;
+  kind: MaterialKind;
+  title: string;
+  body_md: string;
+  category: string | null;
+  source_document_id: string | null;
+  source_ref: string | null;
+  uncertain: number;
+  sort_order: number;
+  checked_at?: string | null;
+}
+
+export type MaterialCounts = Record<MaterialKind | "uncertain", number>;
+
 export const studyApi = {
   study: {
     prefixes: (moduleId: string) => request<{ prefixes: ModulePrefix[] }>(`/api/study/prefixes?module=${encodeURIComponent(moduleId)}`),
@@ -35,6 +53,12 @@ export const studyApi = {
       request<{ prefixes: ModulePrefix[] }>(`/api/study/prefixes/${moduleId}`, { method: "PUT", body: JSON.stringify({ items }) }),
     assign: (docId: string, moduleId: string | null) =>
       request<{ updated: boolean }>(`/api/study/assign/${docId}`, { method: "POST", body: JSON.stringify({ moduleId }) }),
+    material: (moduleId: string) => request<{ items: MaterialItem[]; counts: MaterialCounts }>(`/api/study/material/${moduleId}`),
+    setChecked: (id: string, checked: boolean) =>
+      request<{ updated: boolean }>(`/api/study/material/item/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ uncertain: !checked }) }),
+    extract: (documentId: string) =>
+      request<{ started: boolean }>("/api/study/material/extract", { method: "POST", body: JSON.stringify({ documentId }) }),
+    recipes: (moduleId: string) => request<{ started: boolean }>(`/api/study/material/recipes/${moduleId}`, { method: "POST" }),
     pickFolder: () => request<{ folder: string | null }>("/api/study/import/pick", { method: "POST" }),
     import: (folder: string, dryRun: boolean) =>
       request<StudyImportReport>("/api/study/import", { method: "POST", body: JSON.stringify({ folder, dryRun }) }),

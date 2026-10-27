@@ -14,6 +14,8 @@ import { runImport } from "../study/import/run";
 import { pickFolder } from "../study/import/pickFolder";
 import { confirmAssignment, listPrefixes, setPrefixes } from "../study/assign/store";
 import { emitLog } from "../log/logger";
+import { extractFromDocument, extractProblem, synthesizeRecipes } from "../study/material/extract";
+import type { ExtractKind } from "../study/material/prompts";
 import { getMaterial, listMaterial, materialCounts, setUncertain, uncertainItems, type MaterialKind } from "../study/material";
 
 export const studyRoutes = new Hono();
@@ -100,4 +102,30 @@ studyRoutes.put("/prefixes/:moduleId", (c) =>
 studyRoutes.post("/assign/:docId", async (c) => {
   const body = (await c.req.json()) as { moduleId?: string | null };
   return c.json({ updated: confirmAssignment(c.req.param("docId"), body.moduleId ?? null) });
+});
+
+// Material per KI: läuft im Hintergrund, Fortschritt über die Dokument-Ereignisse
+const extracting = new Set<string>();
+function background(key: string, run: () => Promise<unknown>): void {
+  extracting.add(key);
+  run()
+    .catch((err) => emitLog("error", "material", `Extraktion fehlgeschlagen: ${key}`, { err }))
+    .finally(() => extracting.delete(key));
+}
+
+studyRoutes.post("/material/extract", async (c) => {
+  const body = (await c.req.json()) as { documentId?: string; kinds?: ExtractKind[] };
+  const id = body.documentId ?? "";
+  const problem = extractProblem(id);
+  if (problem) return c.json({ error: problem }, 400);
+  if (extracting.has(id)) return c.json({ error: "Läuft schon" }, 409);
+  background(id, () => extractFromDocument(id, body.kinds));
+  return c.json({ started: true }, 202);
+});
+
+studyRoutes.post("/material/recipes/:moduleId", (c) => {
+  const id = c.req.param("moduleId");
+  if (extracting.has(id)) return c.json({ error: "Läuft schon" }, 409);
+  background(id, () => synthesizeRecipes(id));
+  return c.json({ started: true }, 202);
 });

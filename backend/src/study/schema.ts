@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
-export const STUDY_SCHEMA_VERSION = 3;
+export const STUDY_SCHEMA_VERSION = 4;
 
 function columns(d: Database, table: string): Set<string> {
   return new Set((d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name));
@@ -144,7 +144,20 @@ function migrateV3(d: Database): void {
   });
 }
 
-const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3];
+// Material: strukturierte Felder je Eintrag; Cache der KI-Antworten je Abschnitt
+function migrateV4(d: Database): void {
+  addColumns(d, "material_items", { data_json: "TEXT", checked_at: "TEXT" });
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS llm_cache (
+      key TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      result_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}
+
+const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3, migrateV4];
 
 // Sicherung vor der Hochstufung; nur wenn schon Daten da sind
 function backup(d: Database, dbFile: string, from: number): string | null {

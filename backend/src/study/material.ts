@@ -16,6 +16,8 @@ export interface MaterialItem {
   source_ref: string | null;
   uncertain: number;
   sort_order: number;
+  data_json?: string | null;
+  checked_at?: string | null;
 }
 
 // Grep-ID wie MOD-F-HEFT1-05: Großbuchstaben, Ziffern, Bindestriche
@@ -71,6 +73,9 @@ export function uncertainItems(limit = 200): MaterialItem[] {
   return db().prepare("SELECT * FROM material_items WHERE uncertain = 1 ORDER BY module_id, id LIMIT ?").all(limit) as MaterialItem[];
 }
 
+// Abhaken merkt sich, wann geprüft wurde
 export function setUncertain(id: string, uncertain: boolean): boolean {
-  return db().prepare("UPDATE material_items SET uncertain = ?, updated_at = datetime('now') WHERE id = ?").run(uncertain ? 1 : 0, id).changes > 0;
+  return db()
+    .prepare("UPDATE material_items SET uncertain = ?, checked_at = CASE WHEN ? THEN NULL ELSE datetime('now') END, updated_at = datetime('now') WHERE id = ?")
+    .run(uncertain ? 1 : 0, uncertain ? 1 : 0, id).changes > 0;
 }
