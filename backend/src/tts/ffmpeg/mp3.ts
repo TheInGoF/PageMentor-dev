@@ -39,7 +39,10 @@ export async function applyAtempo(
 
 export async function concatMp3(inputs: string[], output: string): Promise<void> {
   const listPath = join(dirname(output), `.concat-${basename(output)}.txt`);
-  const content = inputs.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n");
+  // Vorwärts-Slashes: ffmpeg versteht sie auch unter Windows
+  const content = inputs
+    .map((p) => `file '${p.replace(/\\/g, "/").replace(/'/g, "'\\''")}'`)
+    .join("\n");
   writeFileSync(listPath, content);
   await run("ffmpeg", [
     "-y",
