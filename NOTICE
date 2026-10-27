@@ -118,3 +118,19 @@ subdirectories. The following statement is required:
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
   implied. See the License for the specific language governing
   permissions and limitations under the License.
+
+================================================================================
+Bundled Windows tools (Windows package only, in bin/)
+================================================================================
+
+- FFmpeg / FFprobe — LGPL-2.1-or-later build from
+  https://github.com/BtbN/FFmpeg-Builds (win64-lgpl). Unmodified binaries,
+  source: https://ffmpeg.org/download.html
+- Poppler (pdftoppm and DLLs) — GPL-2.0-or-later, build from
+  https://github.com/oschwartz10612/poppler-windows. Invoked as a separate
+  process, not linked. Source: https://poppler.freedesktop.org/
+- AtomicParsley — GPL-2.0, https://github.com/wez/atomicparsley. Invoked as
+  a separate process, not linked.
+
+These programs keep their own licenses. PageMentor only calls them as
+external processes.
