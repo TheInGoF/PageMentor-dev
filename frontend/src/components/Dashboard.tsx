@@ -5,12 +5,10 @@ import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { TopBar } from "./TopBar";
 import { FocusCard } from "./dashboard/FocusCard";
+import { useNav } from "../lib/nav";
 import { ServicesCard } from "./dashboard/ServicesCard";
 
 interface Props {
-  onOpenLibrary: () => void;
-  onOpenModules: () => void;
-  onOpenTutor?: () => void;
   onOpenDocument: (docId: string) => void;
   onOpenSettings: () => void;
   // Engine-Einstellungen direkt öffnen
@@ -19,9 +17,6 @@ interface Props {
 }
 
 export function Dashboard({
-  onOpenLibrary,
-  onOpenModules,
-  onOpenTutor,
   onOpenDocument,
   onOpenSettings,
   onOpenEngine,
@@ -30,6 +25,15 @@ export function Dashboard({
   useLocale();
   const [data, setData] = useState<DashboardData | null>(null);
   const toast = useToast();
+  const nav = useNav();
+  const [minutes7, setMinutes7] = useState<number | null>(null);
+  const [cp, setCp] = useState<string | null>(null);
+
+  useEffect(() => {
+    const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+    void api.plan.time(day(6), day(0)).then((r) => setMinutes7(r.perDay.reduce((sum, d) => sum + d.minutes, 0))).catch(() => undefined);
+    void api.plan.progress().then((p) => setCp(p.totalCp ? `${p.earnedCp} / ${p.totalCp}` : String(p.earnedCp))).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     api.dashboard
@@ -49,11 +53,6 @@ export function Dashboard({
     <div className="min-h-full flex flex-col">
       <TopBar
         onOpenDocument={onOpenDocument}
-        currentView="dashboard"
-        onGoDashboard={() => {}}
-        onGoLibrary={onOpenLibrary}
-        onGoModules={onOpenModules}
-        onGoTutor={onOpenTutor}
         onOpenSettings={onOpenSettings}
       />
 
@@ -69,26 +68,12 @@ export function Dashboard({
           <div className="text-sm text-neutral-500">{t("common.loading")}</div>
         ) : (
           <>
-            <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              <StatCard label={t("dash.stats.documents")} value={data.totals.documents} />
-              <StatCard label={t("dash.stats.cards")} value={data.totals.cards} />
-              <StatCard
-                label={t("dash.stats.due")}
-                value={data.totals.due}
-                accent={data.totals.due > 0}
-              />
-              <StatCard label={t("dash.stats.learned")} value={data.totals.learned} />
-              <StatCard label={t("dash.stats.audio")} value={data.totals.audio_done} />
-              <StatCard label={t("dash.stats.exams")} value={data.totals.exams} />
-              <StatCard
-                label={t("dash.stats.avgScore")}
-                value={data.totals.exams > 0 ? `${Math.round(data.totals.exam_avg_score)}%` : "—"}
-              />
-            </section>
-
-            <section className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4">
-              <StreakCard streak={data.streak} />
-              <ActivityCard activity={data.activity} />
+            {/* Vier Kennzahlen; Verlauf und Heatmap stehen unter Plan → Fortschritt */}
+            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard label={t("dash.stats.due")} value={data.totals.due} accent={data.totals.due > 0} />
+              <StatCard label={t("dash.stats.week")} value={minutes7 != null ? `${Math.floor(minutes7 / 60)} h ${minutes7 % 60} min` : "–"} onClick={() => nav?.go("plan")} />
+              <StatCard label={t("dash.stats.streak")} value={`${data.streak} ${t("dash.days")}`} />
+              <StatCard label={t("plan.cp")} value={cp ?? "–"} onClick={() => nav?.go("plan")} />
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -129,98 +114,24 @@ function StatCard({
   label,
   value,
   accent,
+  onClick,
 }: {
   label: string;
   value: number | string;
   accent?: boolean;
+  onClick?: () => void;
 }) {
+  const hot = accent && typeof value === "number" && value > 0;
   return (
-    <div
-      className={cn(
-        "card p-4",
-        accent && typeof value === "number" && value > 0 && "border-accent/30 bg-accent/5"
-      )}
+    <button
+      type="button"
+      disabled={!onClick}
+      onClick={onClick}
+      className={cn("card p-4 text-left", onClick && "card-hover", hot && "border-accent/30 bg-accent/5")}
     >
-      <div
-        className={cn(
-          "text-3xl font-semibold tabular-nums",
-          accent && typeof value === "number" && value > 0 && "text-accent"
-        )}
-      >
-        {value}
-      </div>
+      <div className={cn("text-2xl font-semibold tabular-nums", hot && "text-accent")}>{value}</div>
       <div className="text-xs text-neutral-500 mt-0.5">{label}</div>
-    </div>
-  );
-}
-
-function StreakCard({ streak }: { streak: number }) {
-  return (
-    <div className="card p-5 flex flex-col justify-between min-h-[140px]">
-      <div>
-        <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-2">
-          {t("dash.streak.title")}
-        </h3>
-        <div className="flex items-baseline gap-2">
-          <span className="text-4xl font-semibold text-accent">{streak}</span>
-          <span className="text-sm text-neutral-400">
-            {t("dash.streak.days", { n: streak })}
-          </span>
-        </div>
-      </div>
-      {streak === 0 && (
-        <p className="text-xs text-neutral-500 mt-3">{t("dash.streak.none")}</p>
-      )}
-      <div className="flex gap-0.5 mt-3">
-        {Array.from({ length: 14 }).map((_, i) => (
-          <span
-            key={i}
-            className={cn(
-              "flex-1 h-5 rounded-sm",
-              i < streak ? "bg-accent" : "bg-bg-elevated border border-border"
-            )}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ActivityCard({ activity }: { activity: DashboardData["activity"] }) {
-  const max = Math.max(1, ...activity.map((a) => a.count));
-  const empty = activity.every((a) => a.count === 0);
-
-  return (
-    <div className="card p-5">
-      <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-4">
-        {t("dash.activity.title")}
-      </h3>
-      {empty ? (
-        <p className="text-xs text-neutral-500">{t("dash.activity.empty")}</p>
-      ) : (
-        <>
-          <div className="flex items-end gap-0.5 h-24">
-            {activity.map((day) => (
-              <div
-                key={day.date}
-                className="flex-1 bg-accent/60 rounded-sm transition-colors hover:bg-accent"
-                style={{
-                  height: `${(day.count / max) * 100}%`,
-                  minHeight: day.count > 0 ? "4px" : "2px",
-                  background:
-                    day.count === 0 ? "rgba(64,64,64,0.4)" : undefined,
-                }}
-                title={`${day.date}: ${day.count}`}
-              />
-            ))}
-          </div>
-          <div className="flex justify-between text-xs text-neutral-500 mt-1 font-mono">
-            <span>{activity[0]?.date.slice(5)}</span>
-            <span>{activity[activity.length - 1]?.date.slice(5)}</span>
-          </div>
-        </>
-      )}
-    </div>
+    </button>
   );
 }
 

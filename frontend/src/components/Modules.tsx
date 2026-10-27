@@ -10,18 +10,12 @@ import { ModuleEditModal } from "./module/ModuleEditModal";
 interface Props {
   onOpenModule: (moduleId: string) => void;
   onOpenDocument: (docId: string) => void;
-  onGoDashboard: () => void;
-  onGoLibrary: () => void;
-  onGoTutor?: () => void;
   onOpenSettings: () => void;
 }
 
 export function Modules({
   onOpenModule,
   onOpenDocument,
-  onGoDashboard,
-  onGoLibrary,
-  onGoTutor,
   onOpenSettings,
 }: Props) {
   useLocale();
@@ -60,11 +54,6 @@ export function Modules({
     <div className="min-h-full flex flex-col">
       <TopBar
         onOpenDocument={onOpenDocument}
-        currentView="modules"
-        onGoDashboard={onGoDashboard}
-        onGoLibrary={onGoLibrary}
-        onGoModules={() => {}}
-        onGoTutor={onGoTutor}
         onOpenSettings={onOpenSettings}
       />
 

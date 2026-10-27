@@ -20,12 +20,7 @@ export function ModuleChip({
     <button
       type="button"
       onClick={onClick}
-      className={
-        "px-3 py-1 rounded-full text-xs border transition-colors " +
-        (active
-          ? "bg-accent/15 border-accent-subtle text-accent"
-          : "border-border text-neutral-400 hover:border-border-strong hover:text-neutral-200")
-      }
+      className={active ? "chip chip-active" : "chip"}
       style={active && color ? { borderColor: color, color } : undefined}
     >
       {label}

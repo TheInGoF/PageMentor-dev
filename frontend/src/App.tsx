@@ -242,9 +242,6 @@ export function App() {
         <Modules
           onOpenModule={(id) => setOpenModuleId(id)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onGoDashboard={() => setView("dashboard")}
-          onGoLibrary={() => setView("library")}
-          onGoTutor={() => setView("tutor")}
           onOpenSettings={() => openSettings()}
         />
       );
@@ -252,9 +249,6 @@ export function App() {
       return (
         <Library
           onOpen={(id) => setOpenDocId(id)}
-          onGoDashboard={() => setView("dashboard")}
-          onGoModules={() => setView("modules")}
-          onGoTutor={() => setView("tutor")}
           onOpenModule={(id) => setOpenModuleId(id)}
           onOpenSettings={() => openSettings()}
         />
@@ -266,9 +260,6 @@ export function App() {
     if (view === "tutor")
       return (
         <TutorPage
-          onGoDashboard={() => setView("dashboard")}
-          onGoLibrary={() => setView("library")}
-          onGoModules={() => setView("modules")}
           onOpenSettings={() => openSettings()}
           onOpenDocument={(id) => setOpenDocId(id)}
           onOpenDocumentSource={(docId, page) => {
@@ -283,9 +274,6 @@ export function App() {
       );
     return (
       <Dashboard
-        onOpenLibrary={() => setView("library")}
-        onOpenModules={() => setView("modules")}
-        onOpenTutor={() => setView("tutor")}
         onOpenDocument={(id) => setOpenDocId(id)}
         onOpenSettings={() => openSettings()}
         onOpenEngine={() => openSettings("engine")}
@@ -300,7 +288,7 @@ export function App() {
         {/* Eigene Titelleiste im rahmenlosen Fenster, darunter scrollt die App */}
         <div className="h-full flex flex-col">
           {isFrameless() && <TitleBar />}
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className="flex-1 min-h-0 overflow-auto pb-16 sm:pb-0">
             <EngineBanner onOpen={() => openSettings("engine")} />
             <NavContext.Provider
               value={{

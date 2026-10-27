@@ -15,6 +15,9 @@ import { Documents, AudioPanel, SummariesPanel } from "./module/ModulePanels";
 import { PracticePanel } from "./module/PracticePanel";
 import { GraphPanel } from "./module/GraphPanel";
 import { takeModuleTab, type ModuleTab } from "../lib/moduleTab";
+import { ModuleEditModal } from "./module/ModuleEditModal";
+import { OverviewNext } from "./module/OverviewNext";
+import { formatDate } from "./plan/AssessmentRow";
 
 type Tab = ModuleTab;
 
@@ -23,9 +26,8 @@ const TABS: Array<{ id: Tab; key: string }> = [
   { id: "documents", key: "module.tab.documents" },
   { id: "material", key: "module.tab.material" },
   { id: "practice", key: "module.tab.practice" },
+  { id: "audio", key: "module.tab.listen" },
   { id: "graph", key: "module.tab.graph" },
-  { id: "audio", key: "module.tab.audio" },
-  { id: "summaries", key: "module.tab.summaries" },
 ];
 
 interface Props {
@@ -46,6 +48,20 @@ export function ModuleDetail({
   const [tab, setTab] = useState<Tab>(() => takeModuleTab() ?? "overview");
   const [reviewing, setReviewing] = useState<Card[] | null>(null);
   const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [status, setStatus] = useState<{ label: string; passed: boolean } | null>(null);
+
+  // Status aus den Leistungen: bestanden (mit Note) oder nächster Termin
+  useEffect(() => {
+    void api.plan.list().then(({ assessments }) => {
+      const own = assessments.filter((a) => a.module_id === moduleId && a.kind !== "H");
+      const passed = own.find((a) => a.status === "bestanden");
+      const next = own.filter((a) => a.date && !["bestanden", "nicht_bestanden", "abgemeldet"].includes(a.status)).sort((a, b) => a.date!.localeCompare(b.date!))[0];
+      if (passed) setStatus({ label: `${t("plan.status.bestanden")}${passed.grade ? ` · ${String(passed.grade).replace(".", ",")}` : ""}`, passed: true });
+      else if (next) setStatus({ label: `${t(`plan.kind.${next.kind}`)} ${formatDate(next.date)}`, passed: false });
+      else setStatus(null);
+    });
+  }, [moduleId]);
 
   const load = useCallback(async () => {
     try {
@@ -109,12 +125,19 @@ export function ModuleDetail({
             </div>
             <div className="min-w-0">
               <h1 className="font-semibold truncate">{m.name}</h1>
-              {m.semester && (
-                <p className="text-xs text-neutral-500">{m.semester}</p>
-              )}
+              {/* Kopf wie in der Modul-Vorlage: Kürzel, CP, Status bzw. nächster Termin */}
+              <p className="text-xs text-neutral-500 flex flex-wrap gap-x-2">
+                {m.code && <span className="font-mono">{m.code}</span>}
+                {m.cp != null && <span>{m.cp} CP</span>}
+                {status && <span className={status.passed ? "text-green-600" : ""}>{status.label}</span>}
+                {!m.code && m.semester && <span>{m.semester}</span>}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <Button variant="ghost" onClick={() => setEditing(true)} className="!px-2" title={t("common.edit")} aria-label={t("common.edit")}>
+              ✎
+            </Button>
             <Button
               variant="ghost"
               onClick={onOpenSettings}
@@ -147,10 +170,18 @@ export function ModuleDetail({
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-5">
         {tab === "overview" && (
-          <Overview data={data} onOpenDocument={onOpenDocument} onStartReview={startReview} />
+          <Overview data={data} onStartReview={startReview} onTab={setTab} />
         )}
         {tab === "documents" && (
-          <Documents data={data} onOpen={onOpenDocument} />
+          <>
+            <Documents data={data} onOpen={onOpenDocument} />
+            {data.summaries.length > 0 && (
+              <section className="flex flex-col gap-2">
+                <h3 className="text-xs uppercase tracking-wide text-neutral-500">{t("module.tab.summaries")}</h3>
+                <SummariesPanel summaries={data.summaries} />
+              </section>
+            )}
+          </>
         )}
         {tab === "material" && (
           <MaterialPanel moduleId={moduleId} moduleName={m.name} docs={data.documents} onOpenDocument={onOpenDocument} />
@@ -160,8 +191,18 @@ export function ModuleDetail({
         {tab === "audio" && (
           <AudioPanel chapters={data.audioChapters} color={m.color} />
         )}
-        {tab === "summaries" && <SummariesPanel summaries={data.summaries} />}
+
       </main>
+
+      <ModuleEditModal
+        open={editing}
+        module={m}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          void load();
+        }}
+      />
 
       {reviewing && (
         <CardReview
@@ -179,14 +220,14 @@ export function ModuleDetail({
 
 function Overview({
   data,
-  onOpenDocument,
   onStartReview,
+  onTab,
 }: {
   data: ModuleDetailData;
-  onOpenDocument: (id: string) => void;
   onStartReview: () => void;
+  onTab: (tab: Tab) => void;
 }) {
-  const { module: m, documents, cardStats, exams, audioChapters, summaries } = data;
+  const { module: m, documents, cardStats, exams, audioChapters } = data;
   const closedExams = exams.filter((e) => e.status === "closed");
   const latestExams = closedExams.slice(0, 10).reverse();
 
@@ -241,72 +282,7 @@ function Overview({
         </section>
       )}
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="card p-5">
-          <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-3">
-            {t("module.tab.documents")}
-          </h3>
-          {documents.length === 0 ? (
-            <p className="text-sm text-neutral-500">
-              {t("modules.empty.hint")}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1.5">
-              {documents.slice(0, 8).map((d) => (
-                <li
-                  key={d.id}
-                  onClick={() => onOpenDocument(d.id)}
-                  className="px-3 py-2 rounded border border-border hover:border-accent cursor-pointer flex items-center gap-3"
-                >
-                  <span className="tag-accent text-xs">
-                    {t(`type.${d.type}`)}
-                  </span>
-                  <span className="text-sm truncate flex-1">{d.title}</span>
-                  <span className="text-xs text-neutral-500 font-mono">
-                    {d.chapter_count} {t("learn.tab.chapters").charAt(0).toLowerCase()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="card p-5">
-          <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-3">
-            {t("module.tab.summaries")}
-          </h3>
-          {summaries.length === 0 ? (
-            <p className="text-sm text-neutral-500">
-              {t("module.summaries.empty")}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-1.5">
-              {summaries.slice(0, 6).map((s) => (
-                <li
-                  key={s.id}
-                  onClick={() => onOpenDocument(s.document_id)}
-                  className="px-3 py-2 rounded border border-border hover:border-accent cursor-pointer"
-                >
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-accent font-mono">
-                      {String(s.chapter_number).padStart(2, "0")}
-                    </span>
-                    <span className="text-sm truncate">
-                      {s.chapter_title || `${t("learn.tab.chapters")} ${s.chapter_number}`}
-                    </span>
-                    <span className="text-xs text-neutral-500 ml-auto">
-                      {t(`summary.level.${s.level}`)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-neutral-500 truncate mt-0.5">
-                    {s.document_title}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
+      <OverviewNext moduleId={m.id} due={cardStats.due} docs={documents.length} onTab={onTab} />
     </>
   );
 }

@@ -258,6 +258,15 @@ function DocumentThumbnail({ doc }: { doc: Document }) {
   const [failed, setFailed] = useState(false);
   const page = doc.thumb_page && doc.thumb_page > 0 ? doc.thumb_page : 1;
 
+  // Lernkatalog und andere Dokumente ohne PDF: eigenes Symbol statt PDF-Vorschau
+  if (doc.mime_type !== "application/pdf") {
+    return (
+      <div className="flex-shrink-0 w-[72px] h-[96px] rounded border border-border bg-accent/10 text-accent grid place-items-center text-3xl" aria-hidden>
+        ✦
+      </div>
+    );
+  }
+
   if (failed || doc.ocr_status === "pending") {
     return (
       <div

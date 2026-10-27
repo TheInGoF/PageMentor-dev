@@ -3,12 +3,12 @@ import { createContext, useContext } from "react";
 
 export type MainView = "dashboard" | "plan" | "modules" | "library" | "tutor";
 
-export const MAIN_VIEWS: Array<{ id: MainView; key: string }> = [
-  { id: "dashboard", key: "nav.home" },
-  { id: "plan", key: "nav.plan" },
-  { id: "modules", key: "nav.modules" },
-  { id: "library", key: "nav.library" },
-  { id: "tutor", key: "nav.tutor" },
+export const MAIN_VIEWS: Array<{ id: MainView; key: string; icon: string }> = [
+  { id: "dashboard", key: "nav.home", icon: "⌂" },
+  { id: "plan", key: "nav.plan", icon: "▦" },
+  { id: "modules", key: "nav.modules", icon: "◫" },
+  { id: "library", key: "nav.library", icon: "▤" },
+  { id: "tutor", key: "nav.tutor", icon: "✦" },
 ];
 
 export const NavContext = createContext<{ view: string; go: (v: MainView) => void } | null>(null);

@@ -20,9 +20,6 @@ type ModuleFilter = "all" | "unassigned" | string;
 
 interface Props {
   onOpen: (docId: string) => void;
-  onGoDashboard?: () => void;
-  onGoModules?: () => void;
-  onGoTutor?: () => void;
   onOpenModule?: (id: string) => void;
   onOpenSettings: () => void;
 }
@@ -39,9 +36,6 @@ const TYPE_FILTERS: Array<"all" | DocType> = [
 
 export function Library({
   onOpen,
-  onGoDashboard,
-  onGoModules,
-  onGoTutor,
   onOpenModule,
   onOpenSettings,
 }: Props) {
@@ -282,11 +276,6 @@ export function Library({
       <TopBar
         onUpload={() => setUploadOpen(true)}
         onOpenDocument={onOpen}
-        currentView="library"
-        onGoDashboard={onGoDashboard}
-        onGoLibrary={() => {}}
-        onGoModules={onGoModules}
-        onGoTutor={onGoTutor}
         onOpenSettings={onOpenSettings}
       />
 
@@ -299,12 +288,7 @@ export function Library({
             <button
               key={ty}
               onClick={() => setTypeFilter(ty)}
-              className={
-                "px-3 py-1 rounded-full text-xs border transition-colors " +
-                (typeFilter === ty
-                  ? "bg-accent/15 border-accent-subtle text-accent"
-                  : "border-border text-neutral-400 hover:border-border-strong hover:text-neutral-200")
-              }
+              className={typeFilter === ty ? "chip chip-active" : "chip"}
             >
               {ty === "all" ? t("common.all") : t(`type.${ty}`)}
             </button>

@@ -255,4 +255,12 @@ export const learning: Record<string, string> = {
   "graph.empty": "No connections yet: the module's booklets need embedded sections (knowledge base).",
   "graph.more": "more booklets",
   "graph.truncated": "Only the first 150 chapters are shown.",
+  "dash.stats.week": "Study time 7 days",
+  "dash.stats.streak": "Study streak",
+  "dash.days": "days",
+  "module.tab.listen": "Listen",
+  "overview.next": "Next steps",
+  "overview.noMaterial": "No material yet: generate it from the documents",
+  "overview.material": "Review {n} material entries",
+  "overview.listen": "Listen to audiobook and study catalog",
 };

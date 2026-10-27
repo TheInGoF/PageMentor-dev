@@ -255,4 +255,12 @@ export const learning: Record<string, string> = {
   "graph.empty": "Noch keine Zusammenhänge: Dafür brauchen die Hefte des Moduls eingebettete Abschnitte (Wissensdatenbank).",
   "graph.more": "weitere Hefte",
   "graph.truncated": "Nur die ersten 150 Kapitel werden gezeigt.",
+  "dash.stats.week": "Lernzeit 7 Tage",
+  "dash.stats.streak": "Lern-Streak",
+  "dash.days": "Tage",
+  "module.tab.listen": "Hören",
+  "overview.next": "Nächste Schritte",
+  "overview.noMaterial": "Noch kein Material: aus den Dokumenten erzeugen",
+  "overview.material": "{n} Einträge im Material wiederholen",
+  "overview.listen": "Hörbuch und Lernkatalog anhören",
 };

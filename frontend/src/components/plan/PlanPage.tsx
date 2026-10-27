@@ -91,7 +91,7 @@ export function PlanPage({ onOpenModule, onOpenDocument, onOpenSettings }: { onO
   const next = progress?.nextExam;
   return (
     <div className="min-h-full flex flex-col">
-      <TopBar currentView="plan" onOpenDocument={onOpenDocument} onOpenSettings={onOpenSettings} />
+      <TopBar onOpenDocument={onOpenDocument} onOpenSettings={onOpenSettings} />
       <main className="max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col gap-5">
         {progress && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

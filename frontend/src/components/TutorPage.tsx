@@ -28,9 +28,6 @@ import { CloudDialog } from "./cloud/CloudDialog";
 import { renderMarkdown } from "../lib/markdown";
 
 interface Props {
-  onGoDashboard: () => void;
-  onGoLibrary: () => void;
-  onGoModules: () => void;
   onOpenSettings: () => void;
   /** SearchOverlay in the TopBar uses this to navigate to a learning
    *  menu when the user picks a document from the full-text search. */
@@ -164,11 +161,6 @@ export function TutorPage(props: Props) {
   return (
     <div className="min-h-full flex flex-col">
       <TopBar
-        currentView="tutor"
-        onGoDashboard={props.onGoDashboard}
-        onGoLibrary={props.onGoLibrary}
-        onGoModules={props.onGoModules}
-        onGoTutor={() => {}}
         onOpenSettings={props.onOpenSettings}
         onOpenDocument={props.onOpenDocument}
       />
