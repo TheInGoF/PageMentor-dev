@@ -1,6 +1,6 @@
 // Konfiguration und Typen für docling-serve
 
-export const DOCLING_URL = process.env.PM_DOCLING_URL || "http://docling:5001";
+export const DOCLING_URL = process.env.PM_DOCLING_URL || `http://${process.env.PM_ENGINE_HOST || "localhost"}:5001`;
 export const DOCLING_API_KEY = process.env.PM_DOCLING_API_KEY || "";
 export const POLL_INTERVAL_MS = 4000;
 

@@ -380,7 +380,18 @@ export function useAudiobookActions(
     previewAudioRef.current = audio;
     audio.play().catch(() => toast.show(t("audiobook.previewFailed"), "error"));
   }
+  // Hörbuch im Ordner Hörbücher zeigen, sonst Pfad melden
+  async function revealBook() {
+    try {
+      const r = await api.audio.reveal(docId);
+      if (!r.opened) toast.show(t("audiobook.revealPath", { path: r.path }), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
   return {
+    revealBook,
     generate,
     uploadToAbs,
     rebuildM4B,

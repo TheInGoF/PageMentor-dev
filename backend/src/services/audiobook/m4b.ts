@@ -2,13 +2,14 @@
 import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { db } from "../../db";
-import { DATA_DIR } from "../../paths";
+import { DATA_DIR, fromDataPath } from "../../paths";
 import { buildM4B, probeDurationMs } from "../../tts/ffmpeg";
 import { ensureCover } from "../covers";
 import { emit } from "../events";
 import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
 import type { Document } from "./state";
 import { runJob } from "../../log/jobs";
+import { exportBook } from "./export";
 
 // M4B aus allen fertigen Kapitel-MP3s bauen
 async function rebuildM4BImpl(docId: string): Promise<{
@@ -68,7 +69,7 @@ async function rebuildM4BImpl(docId: string): Promise<{
   }
 
   for (const r of rows) {
-    const full = join(DATA_DIR, r.stored_path);
+    const full = fromDataPath(r.stored_path);
     if (!existsSync(full)) continue;
     inputs.push(full);
     m4bChapters.push({
@@ -108,6 +109,7 @@ async function rebuildM4BImpl(docId: string): Promise<{
       });
     },
   });
+  exportBook(docId);
   emit({
     phase: "audiobook.m4b.done",
     docId,

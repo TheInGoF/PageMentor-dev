@@ -21,7 +21,6 @@ export const library: Record<string, string> = {
   "library.module.markActive": "Wieder öffnen",
   "library.module.completedToast": "{name} als abgeschlossen markiert",
   "library.module.reopened": "{name} wieder geöffnet",
-  "library.logout": "Abmelden",
   "library.openDoc": "Öffnen",
   "library.delete": "Löschen",
   "library.deleteConfirm": "Dokument wirklich löschen?",

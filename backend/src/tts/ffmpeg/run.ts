@@ -1,5 +1,6 @@
-// ffmpeg/ffprobe als Unterprozess, muss im PATH liegen
+// ffmpeg/ffprobe als Unterprozess, Pfad über tools.ts
 import { spawn } from "child_process";
+import { toolPath } from "../../tools";
 
 
 export async function run(
@@ -13,7 +14,7 @@ export async function run(
   }
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args);
+    const child = spawn(toolPath(bin), args, { windowsHide: true });
     let stdout = "";
     let stderr = "";
     const prefix = opts?.logPrefix ?? `[${bin}]`;

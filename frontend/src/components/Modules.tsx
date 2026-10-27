@@ -14,7 +14,6 @@ interface Props {
   onGoDashboard: () => void;
   onGoLibrary: () => void;
   onGoTutor?: () => void;
-  onLogout: () => void;
   onOpenSettings: () => void;
 }
 
@@ -24,7 +23,6 @@ export function Modules({
   onGoDashboard,
   onGoLibrary,
   onGoTutor,
-  onLogout,
   onOpenSettings,
 }: Props) {
   useLocale();
@@ -62,7 +60,6 @@ export function Modules({
   return (
     <div className="min-h-full flex flex-col">
       <TopBar
-        onLogout={onLogout}
         onOpenDocument={onOpenDocument}
         currentView="modules"
         onGoDashboard={onGoDashboard}

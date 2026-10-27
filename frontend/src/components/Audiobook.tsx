@@ -71,6 +71,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     generateChapter,
     clearAll,
     playPreview,
+    revealBook,
   } = useAudiobookActions(docId, documentLanguage, d);
 
   // Zähler für die Knopf-Beschriftung, fertige Kapitel werden übersprungen
@@ -151,6 +152,11 @@ export function Audiobook({ docId, documentLanguage }: Props) {
               <a href={state.book.url} className="btn-outline" download>
                 {t("audiobook.download.m4b")}
               </a>
+            )}
+            {state?.book && !m4bProgress && (
+              <Button variant="outline" onClick={revealBook}>
+                {t("audiobook.reveal")}
+              </Button>
             )}
             {(state?.audio.filter((a) => a.status === "done").length ?? 0) > 0 && (
               <Button

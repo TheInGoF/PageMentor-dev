@@ -10,7 +10,6 @@ interface Props {
   onOpenModules: () => void;
   onOpenTutor?: () => void;
   onOpenDocument: (docId: string) => void;
-  onLogout: () => void;
   onOpenSettings: () => void;
 }
 
@@ -19,7 +18,6 @@ export function Dashboard({
   onOpenModules,
   onOpenTutor,
   onOpenDocument,
-  onLogout,
   onOpenSettings,
 }: Props) {
   useLocale();
@@ -43,7 +41,6 @@ export function Dashboard({
   return (
     <div className="min-h-full flex flex-col">
       <TopBar
-        onLogout={onLogout}
         onOpenDocument={onOpenDocument}
         currentView="dashboard"
         onGoDashboard={() => {}}

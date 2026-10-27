@@ -30,6 +30,7 @@ interface LlmConfig {
   qwenTtsUrl?: string;
   qwenTtsApiKeyPresent?: boolean;
   qwenTtsInstruction?: string;
+  absEnabled?: string;
   absUrl?: string;
   absApiKeyPresent?: boolean;
   absLibraryId?: string;
@@ -210,7 +211,7 @@ export function SettingsPage({ onBack }: Props) {
         setOllama(r.status);
         // Library-Liste automatisch nachladen wenn ABS konfiguriert ist,
         // damit das Dropdown nach Neustart die gespeicherte Auswahl anzeigt.
-        if (r.config.absUrl && r.config.absApiKeyPresent) {
+        if (r.config.absEnabled === "1" && r.config.absUrl && r.config.absApiKeyPresent) {
           api.abs
             .libraries()
             .then((libs) =>
@@ -276,6 +277,7 @@ export function SettingsPage({ onBack }: Props) {
         qwenTtsTopK: llmConfig.qwenTtsTopK ?? "",
         qwenTtsRepetitionPenalty: llmConfig.qwenTtsRepetitionPenalty ?? "",
         ttsMaxChunk: llmConfig.ttsMaxChunk ?? "",
+        absEnabled: llmConfig.absEnabled === "1" ? "1" : "",
         absUrl: llmConfig.absUrl ?? "",
         absLibraryId: llmConfig.absLibraryId ?? "",
       };
@@ -905,6 +907,18 @@ export function SettingsPage({ onBack }: Props) {
             <p className="text-[11px] text-neutral-500">
               {t("settings.abs.subtitle")}
             </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={llmConfig.absEnabled === "1"}
+                onChange={(e) =>
+                  setLlmConfig({ ...llmConfig, absEnabled: e.target.checked ? "1" : "" })
+                }
+              />
+              {t("settings.abs.enable")}
+            </label>
+            {llmConfig.absEnabled === "1" && (
+            <>
             <Input
               label={t("settings.abs.url")}
               type="url"
@@ -986,6 +1000,8 @@ export function SettingsPage({ onBack }: Props) {
             <p className="text-[11px] text-neutral-500">
               {t("settings.abs.hint")}
             </p>
+            </>
+            )}
 
             <Button onClick={saveLlmConfig} disabled={llmBusy}>
               {llmBusy ? t("common.saving") : t("settings.llm.save")}

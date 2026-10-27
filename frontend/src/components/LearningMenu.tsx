@@ -41,7 +41,6 @@ interface Props {
   initialPage?: number;
   onBack: () => void;
   onOpenDocument: (docId: string) => void;
-  onLogout: () => void;
   onOpenSettings: () => void;
 }
 
@@ -50,7 +49,6 @@ export function LearningMenu({
   initialPage,
   onBack,
   onOpenDocument: _onOpenDocument,
-  onLogout,
   onOpenSettings,
 }: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
@@ -167,9 +165,6 @@ export function LearningMenu({
               aria-label={t("settings.title")}
             >
               ⚙
-            </Button>
-            <Button variant="ghost" onClick={onLogout}>
-              {t("library.logout")}
             </Button>
           </div>
         </div>

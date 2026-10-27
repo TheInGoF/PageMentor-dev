@@ -16,7 +16,8 @@ import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { db } from "../db";
-import { DATA_DIR } from "../paths";
+import { DATA_DIR, fromDataPath, toDataRel } from "../paths";
+import { toolPath } from "../tools";
 
 const VOICE_DIR = join(DATA_DIR, "voice-samples");
 
@@ -84,7 +85,7 @@ async function cleanupAudioForQwen(
       outPath,
     ];
 
-    const ff = spawn("ffmpeg", args);
+    const ff = spawn(toolPath("ffmpeg"), args, { windowsHide: true });
     let stderrBuf = "";
     ff.stderr.on("data", (d: Buffer) => {
       stderrBuf += d.toString();
@@ -189,7 +190,7 @@ function rowToSample(r: Row): VoiceSample {
     label: r.label,
     gender: r.gender === "male" ? "male" : "female",
     language: r.language,
-    refPath: r.ref_path,
+    refPath: fromDataPath(r.ref_path),
     refText: r.ref_text,
     seed: r.seed,
     bytes: r.bytes,
@@ -353,7 +354,7 @@ export async function createVoiceSample(
       label,
       input.gender,
       input.language ?? "de",
-      refPath,
+      toDataRel(refPath),
       input.refText?.trim() || null,
       seed,
       cleanedBytes.byteLength,

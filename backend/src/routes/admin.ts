@@ -15,6 +15,7 @@ import {
   uploadBook as absUploadBook,
 } from "../services/audiobookshelf";
 import { recent as recentLogs, subscribe as subscribeLogs } from "../services/logBus";
+import { absEnabled } from "../services/llmConfig";
 
 export const adminRoutes = new Hono();
 
@@ -34,6 +35,12 @@ function arbiterAuthHeaders(): Record<string, string> {
 // =====================================================================
 // Audiobookshelf integration
 // =====================================================================
+
+// Audiobookshelf aus: alle /abs-Routen gibt es nicht
+adminRoutes.use("/abs/*", async (c, next) => {
+  if (!absEnabled()) return c.json({ error: "Audiobookshelf ist ausgeschaltet" }, 404);
+  return next();
+});
 
 adminRoutes.get("/abs/test", async (c) => {
   const res = await absTestConnection();

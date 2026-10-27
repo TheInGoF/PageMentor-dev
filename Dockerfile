@@ -44,5 +44,7 @@ COPY --from=frontend /app/dist ./public
 # Startup-Banner, Frontend zeigt sie im Settings-Modal.
 COPY VERSION /app/VERSION
 
+# Docker: von außen erreichbar, Port wie bisher
+ENV PM_HOST=0.0.0.0 PM_ALLOW_REMOTE=1 PORT=3000
 EXPOSE 3000
 CMD ["bun", "src/index.ts"]

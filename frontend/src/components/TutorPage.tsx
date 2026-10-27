@@ -26,7 +26,6 @@ import { cn } from "../lib/cn";
 import { renderMarkdown } from "../lib/markdown";
 
 interface Props {
-  onLogout: () => void;
   onGoDashboard: () => void;
   onGoLibrary: () => void;
   onGoModules: () => void;
@@ -163,7 +162,6 @@ export function TutorPage(props: Props) {
   return (
     <div className="min-h-screen flex flex-col">
       <TopBar
-        onLogout={props.onLogout}
         currentView="tutor"
         onGoDashboard={props.onGoDashboard}
         onGoLibrary={props.onGoLibrary}

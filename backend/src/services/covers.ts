@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { db } from "../db";
 import { run } from "../tts/ffmpeg";
 import { which } from "./ocr";
-import { DATA_DIR } from "../paths";
+import { DATA_DIR, fromDataPath } from "../paths";
 
 
 function coverTargetPath(docId: string, page: number): string {
@@ -61,7 +61,7 @@ export async function ensureCover(
   // stored_path is relative to DATA_DIR (see upload pipeline).
   const pdfFullPath = doc.stored_path.startsWith("/")
     ? doc.stored_path
-    : join(DATA_DIR, doc.stored_path);
+    : fromDataPath(doc.stored_path);
   const tmpBase = join(DATA_DIR, "covers", `${docId}-tmp-${Date.now()}`);
   try {
     await run("pdftoppm", [

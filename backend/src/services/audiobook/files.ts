@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "crypto";
 import { existsSync, readdirSync, rmSync } from "fs";
 import { join, join as pathJoin } from "path";
 import { db } from "../../db";
-import { DATA_DIR } from "../../paths";
+import { DATA_DIR, fromDataPath, toDataRel } from "../../paths";
 import type { EngineId } from "../../tts/engines/base";
 import type { Chapter } from "./state";
 
@@ -44,9 +44,7 @@ export async function documentTitle(docId: string): Promise<string> {
 }
 
 export function relPath(abs: string): string {
-  return abs.startsWith(DATA_DIR + "/") || abs.startsWith(DATA_DIR + "\\")
-    ? abs.slice(DATA_DIR.length + 1)
-    : abs;
+  return toDataRel(abs).replace(/\\/g, "/");
 }
 
 export function chapterFile(dir: string, ch: Chapter): string {
@@ -127,7 +125,7 @@ export function clearAudioForChapter(audioId: string): boolean {
     .get(audioId) as { id: string; stored_path: string; document_id: string } | undefined;
   if (!row) return false;
 
-  const fullPath = join(DATA_DIR, row.stored_path);
+  const fullPath = fromDataPath(row.stored_path);
   if (existsSync(fullPath)) {
     try {
       rmSync(fullPath, { force: true });

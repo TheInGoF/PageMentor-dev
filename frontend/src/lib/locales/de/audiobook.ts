@@ -127,4 +127,6 @@ export const audiobook: Record<string, string> = {
   "rate.+10": "+10 %",
   "rate.+20": "+20 %",
   "rate.+30": "+30 %",
+  "audiobook.reveal": "Im Ordner anzeigen",
+  "audiobook.revealPath": "Gespeichert unter {path}",
 };

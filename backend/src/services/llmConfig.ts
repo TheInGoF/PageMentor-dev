@@ -79,6 +79,8 @@ export interface LlmConfig {
   hiddenAudiobookPresets?: string;
   /** Audiobookshelf server URL (e.g. http://192.168.188.5:13378).
    *  Empty = ABS integration disabled. */
+  // "1" = Audiobookshelf-Upload aktiv, sonst ausgeblendet
+  absEnabled?: string;
   absUrl?: string;
   /** Audiobookshelf API token. Generate in ABS under Settings →
    *  Users → <your user> → API token. Bearer auth. */
@@ -130,14 +132,28 @@ function registerConfigSecrets(cfg: LlmConfig): void {
   }
 }
 
+// Audiobookshelf eingeschaltet?
+export function absEnabled(): boolean {
+  return getLlmConfig().absEnabled === "1";
+}
+
 /** Effective value: DB override > ENV > undefined */
 export function effective(key: keyof LlmConfig, envKey: string): string | undefined {
   const cfg = getLlmConfig()[key];
   if (cfg && cfg.length > 0) return cfg;
   const env = process.env[envKey];
   if (env && env.length > 0) return env;
-  return undefined;
+  return ENGINE_DEFAULTS[key];
 }
+
+// Engine-Dienste laufen lokal in der WSL-Umgebung
+// PM_ENGINE_HOST überschreibt den Rechner, z. B. für einen GPU-Host im LAN
+export const ENGINE_HOST = process.env.PM_ENGINE_HOST || "localhost";
+const ENGINE_DEFAULTS: Partial<Record<keyof LlmConfig, string>> = {
+  qwenTtsUrl: `http://${ENGINE_HOST}:8790`,
+  ollamaUrlPc: `http://${ENGINE_HOST}:8790`,
+  teiUrl: `http://${ENGINE_HOST}:8080`,
+};
 
 /** Sanitised view (never returns raw API keys) for the UI. */
 export function publicConfig() {

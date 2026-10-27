@@ -1,0 +1,42 @@
+name: windows
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Exe und Paket bauen
+        run: scripts/build-windows.sh dist/PageMentor
+
+      - name: Smoke-Test der Exe unter Windows
+        working-directory: backend
+        run: PM_SMOKE_EXE="$(cygpath -w "$GITHUB_WORKSPACE/dist/PageMentor/PageMentor.exe")" bun scripts/smoke.ts
+
+      - name: Werkzeuge im Paket gefunden
+        shell: pwsh
+        run: |
+          $log = Get-ChildItem -Recurse -Filter startup.log $env:RUNNER_TEMP, $env:TEMP -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($log) { Get-Content $log.FullName }
+          foreach ($t in "ffmpeg.exe","ffprobe.exe","AtomicParsley.exe","poppler\pdftoppm.exe") {
+            if (-not (Test-Path "dist/PageMentor/bin/$t")) { throw "fehlt: $t" }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PageMentor-windows
+          path: dist/PageMentor
+          retention-days: 14

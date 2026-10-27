@@ -30,7 +30,6 @@ interface Props {
   moduleId: string;
   onBack: () => void;
   onOpenDocument: (docId: string) => void;
-  onLogout: () => void;
   onOpenSettings: () => void;
 }
 
@@ -38,7 +37,6 @@ export function ModuleDetail({
   moduleId,
   onBack,
   onOpenDocument,
-  onLogout,
   onOpenSettings,
 }: Props) {
   useLocale();
@@ -123,9 +121,6 @@ export function ModuleDetail({
               aria-label={t("settings.title")}
             >
               ⚙
-            </Button>
-            <Button variant="ghost" onClick={onLogout}>
-              {t("library.logout")}
             </Button>
           </div>
         </div>

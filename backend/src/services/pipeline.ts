@@ -14,7 +14,7 @@ import {
   embeddingToBuffer,
 } from "./embeddings";
 import { pickLang, tLang } from "../lib/i18n";
-import { DATA_DIR } from "../paths";
+import { DATA_DIR, fromDataPath } from "../paths";
 import { runJob } from "../log/jobs";
 
 
@@ -61,7 +61,7 @@ async function processDocumentImpl(docId: string): Promise<void> {
   emit({ phase: "pipeline.start", docId });
 
   try {
-    const fullPath = join(DATA_DIR, doc.stored_path);
+    const fullPath = fromDataPath(doc.stored_path);
 
     emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
     if (!(await doclingAlive())) {

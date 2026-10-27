@@ -5,14 +5,16 @@ import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-const BASE = "http://127.0.0.1:3000";
-const PASSWORD = "smoke";
+const PORT = 3199;
+const BASE = `http://127.0.0.1:${PORT}`;
 const dataDir = mkdtempSync(join(tmpdir(), "pm-smoke-"));
 
-const server = Bun.spawn(["bun", "src/index.ts"], {
+// PM_SMOKE_EXE: fertig gebaute Exe statt Quellcode testen
+const cmd = process.env.PM_SMOKE_EXE ? [process.env.PM_SMOKE_EXE] : ["bun", "src/index.ts"];
+const server = Bun.spawn(cmd, {
   env: {
     ...process.env,
-    PM_PASSWORD: PASSWORD,
+    PORT: String(PORT),
     PM_DATA_DIR: dataDir,
     MEILI_URL: "http://127.0.0.1:1",
     PM_DOCLING_URL: "http://127.0.0.1:1",
@@ -72,13 +74,18 @@ trailer<</Root 1 0 R>>
 async function run() {
   await waitForHealth();
 
-  const login = await fetch(`${BASE}/api/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ password: PASSWORD }),
-  });
-  cookie = (login.headers.get("set-cookie") ?? "").split(";")[0];
   await call("GET", "/api/auth/check");
+  // Fremder Host wird abgewiesen
+  const foreign = await fetch(`${BASE}/api/documents`, { headers: { host: "evil.example:3199" } });
+  if (foreign.status !== 403) {
+    failures++;
+    console.log(`FAIL fremder Host nicht abgewiesen (${foreign.status})`);
+  } else console.log("OK   fremder Host → 403");
+  const foreignOrigin = await fetch(`${BASE}/api/documents`, { headers: { origin: "https://evil.example" } });
+  if (foreignOrigin.status !== 403) {
+    failures++;
+    console.log(`FAIL fremder Origin nicht abgewiesen (${foreignOrigin.status})`);
+  } else console.log("OK   fremder Origin → 403");
 
   const mod = await call("POST", "/api/modules", { name: "Smoke-Modul" });
   const moduleId = mod.id;

@@ -27,6 +27,7 @@ export const settingsApi = {
           qwenTtsTopK?: string;
           qwenTtsRepetitionPenalty?: string;
           ttsMaxChunk?: string;
+          absEnabled?: string;
           absUrl?: string;
           absApiKeyPresent?: boolean;
           absLibraryId?: string;
@@ -52,6 +53,7 @@ export const settingsApi = {
       qwenTtsTopK?: string;
       qwenTtsRepetitionPenalty?: string;
       ttsMaxChunk?: string;
+      absEnabled?: string;
       absUrl?: string;
       absApiKey?: string;
       absLibraryId?: string;

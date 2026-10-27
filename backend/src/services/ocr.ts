@@ -13,6 +13,7 @@ import { spawn } from "child_process";
 import { readFileSync, existsSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { resolveTool, toolPath } from "../tools";
 
 const MIN_CHARS_PER_PAGE = 40;
 
@@ -32,16 +33,12 @@ export async function isOcrAvailable(): Promise<boolean> {
 }
 
 export async function which(cmd: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const child = spawn("which", [cmd]);
-    child.on("close", (code) => resolve(code === 0));
-    child.on("error", () => resolve(false));
-  });
+  return resolveTool(cmd) !== null;
 }
 
 async function run(bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args);
+    const child = spawn(toolPath(bin), args, { windowsHide: true });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (b) => (stdout += b.toString()));

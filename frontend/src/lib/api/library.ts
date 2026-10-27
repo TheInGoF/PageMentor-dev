@@ -13,15 +13,6 @@ import type {
 export const libraryApi = {
   health: () =>
     request<{ status: string; version: string }>("/api/health"),
-  auth: {
-    check: () => request<{ authenticated: boolean }>("/api/auth/check"),
-    login: (password: string) =>
-      request<{ status: string }>("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ password }),
-      }),
-    logout: () => request<{ status: string }>("/api/auth/logout", { method: "POST" }),
-  },
   documents: {
     list: () => request<Document[]>("/api/documents"),
     get: (id: string) => request<Document>(`/api/documents/${id}`),

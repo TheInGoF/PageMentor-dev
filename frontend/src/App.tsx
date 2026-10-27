@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "./lib/api";
-import { LoginScreen } from "./components/LoginScreen";
 import { Library } from "./components/Library";
 import { LearningMenu } from "./components/LearningMenu";
 import { Dashboard } from "./components/Dashboard";
@@ -11,9 +9,8 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
-import { t, useLocale } from "./lib/i18n";
+import { useLocale } from "./lib/i18n";
 
-type AuthState = "checking" | "out" | "in";
 type View = "dashboard" | "library" | "modules" | "tutor" | "settings";
 
 interface NavState {
@@ -119,7 +116,6 @@ function initialDeepLink(): { docId: string; page: number } | null {
 }
 
 export function App() {
-  const [auth, setAuth] = useState<AuthState>("checking");
   const [view, setView] = useState<View>(() => initialNav().view);
   const [openDocId, setOpenDocId] = useState<string | null>(
     () => initialNav().openDocId
@@ -204,41 +200,7 @@ export function App() {
     setReturnTo(null);
   }
 
-  useEffect(() => {
-    // Dev-only UI review mode: skip auth so the shell is reachable
-    // without a backend running. Production builds hit the real API.
-    if (import.meta.env.DEV) {
-      setAuth("in");
-      return;
-    }
-    api.auth
-      .check()
-      .then((r) => setAuth(r.authenticated ? "in" : "out"))
-      .catch(() => setAuth("out"));
-  }, []);
-
-  if (auth === "checking") {
-    return (
-      <div className="min-h-full grid place-items-center text-sm text-neutral-500">
-        {t("common.loading")}
-      </div>
-    );
-  }
-
-  const handleLogout = () => {
-    try {
-      localStorage.removeItem(NAV_STORAGE_KEY);
-    } catch {
-      // best effort
-    }
-    setOpenDocId(null);
-    setOpenModuleId(null);
-    setView("dashboard");
-    setAuth("out");
-  };
-
   function renderShell() {
-    if (auth === "out") return <LoginScreen onSuccess={() => setAuth("in")} />;
     // Settings is the only overlay page — it includes the Logs tab,
     // so the Back button returns to wherever the user came from.
     if (view === "settings")
@@ -255,7 +217,6 @@ export function App() {
           }
           onBack={() => setOpenDocId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onLogout={handleLogout}
           onOpenSettings={openSettings}
         />
       );
@@ -265,7 +226,6 @@ export function App() {
           moduleId={openModuleId}
           onBack={() => setOpenModuleId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onLogout={handleLogout}
           onOpenSettings={openSettings}
         />
       );
@@ -277,14 +237,12 @@ export function App() {
           onGoDashboard={() => setView("dashboard")}
           onGoLibrary={() => setView("library")}
           onGoTutor={() => setView("tutor")}
-          onLogout={handleLogout}
           onOpenSettings={openSettings}
         />
       );
     if (view === "library")
       return (
         <Library
-          onLogout={handleLogout}
           onOpen={(id) => setOpenDocId(id)}
           onGoDashboard={() => setView("dashboard")}
           onGoModules={() => setView("modules")}
@@ -296,7 +254,6 @@ export function App() {
     if (view === "tutor")
       return (
         <TutorPage
-          onLogout={handleLogout}
           onGoDashboard={() => setView("dashboard")}
           onGoLibrary={() => setView("library")}
           onGoModules={() => setView("modules")}
@@ -318,7 +275,6 @@ export function App() {
         onOpenModules={() => setView("modules")}
         onOpenTutor={() => setView("tutor")}
         onOpenDocument={(id) => setOpenDocId(id)}
-        onLogout={handleLogout}
         onOpenSettings={openSettings}
       />
     );
@@ -328,7 +284,7 @@ export function App() {
     <ErrorBoundary>
       <ToastProvider>
         {renderShell()}
-        {auth === "in" && <ShortcutsOverlay />}
+        <ShortcutsOverlay />
       </ToastProvider>
     </ErrorBoundary>
   );

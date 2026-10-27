@@ -4,6 +4,9 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
 export const APP_VERSION = ((): string => {
+  // Beim Exe-Build per --define eingesetzt
+  const built = process.env.PM_BUILD_VERSION;
+  if (built) return built;
   const here = dirname(fileURLToPath(import.meta.url));
   for (const path of [join(here, "..", "..", "VERSION"), join(here, "..", "VERSION")]) {
     try {

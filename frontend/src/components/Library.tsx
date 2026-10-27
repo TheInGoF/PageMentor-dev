@@ -18,7 +18,6 @@ import { DocumentEditModal } from "./DocumentEditModal";
 type ModuleFilter = "all" | "unassigned" | string;
 
 interface Props {
-  onLogout: () => void;
   onOpen: (docId: string) => void;
   onGoDashboard?: () => void;
   onGoModules?: () => void;
@@ -37,7 +36,6 @@ const TYPE_FILTERS: Array<"all" | DocType> = [
 ];
 
 export function Library({
-  onLogout,
   onOpen,
   onGoDashboard,
   onGoModules,
@@ -276,18 +274,9 @@ export function Library({
     }
   }
 
-  async function handleLogout() {
-    try {
-      await api.auth.logout();
-    } finally {
-      onLogout();
-    }
-  }
-
   return (
     <div className="min-h-full flex flex-col">
       <TopBar
-        onLogout={handleLogout}
         onUpload={() => setUploadOpen(true)}
         onOpenDocument={onOpen}
         currentView="library"

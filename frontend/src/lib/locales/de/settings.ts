@@ -167,4 +167,5 @@ export const settings: Record<string, string> = {
   "settings.status.checking": "prüfe …",
   "settings.status.online": "online",
   "settings.status.offline": "offline",
+  "settings.abs.enable": "Fertige Hörbücher zu Audiobookshelf hochladen",
 };

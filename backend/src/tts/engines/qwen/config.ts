@@ -8,7 +8,7 @@ export function baseUrl(): string {
   const u =
     effective("qwenTtsUrl", "PM_QWEN_TTS_URL") ||
     process.env.PM_GPU_ARBITER_URL ||
-    "http://pm-gpu-arbiter:8790";
+    `http://${process.env.PM_ENGINE_HOST || "localhost"}:8790`;
   return u.replace(/\/+$/, "");
 }
 

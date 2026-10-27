@@ -7,7 +7,6 @@ import { cn } from "../lib/cn";
 export type TopView = "dashboard" | "library" | "modules" | "tutor";
 
 interface Props {
-  onLogout: () => void;
   onUpload?: () => void;
   onOpenDocument: (docId: string) => void;
   currentView?: TopView;
@@ -34,7 +33,6 @@ interface Props {
  * Seite mit. Jetzt: eine Suche, wrappt nie horizontal.
  */
 export function TopBar({
-  onLogout,
   onUpload,
   onOpenDocument,
   currentView,
@@ -95,9 +93,6 @@ export function TopBar({
               aria-label={t("settings.title")}
             >
               ⚙
-            </Button>
-            <Button variant="ghost" onClick={onLogout}>
-              {t("library.logout")}
             </Button>
           </div>
         </div>

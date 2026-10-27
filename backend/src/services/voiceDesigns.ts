@@ -21,7 +21,7 @@ import { randomUUID, randomInt } from "node:crypto";
 import { existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { db } from "../db";
-import { DATA_DIR } from "../paths";
+import { DATA_DIR, fromDataPath, toDataRel } from "../paths";
 
 const DESIGN_DIR = join(DATA_DIR, "voice-designs");
 
@@ -87,7 +87,7 @@ function rowToDesign(r: Row): VoiceDesign {
     createdAt: r.created_at,
     msPerChar: r.ms_per_char ?? null,
     samplesCount: r.samples_count ?? 0,
-    refPath: r.ref_path ?? null,
+    refPath: r.ref_path ? fromDataPath(r.ref_path) : null,
     refText: r.ref_text ?? null,
     showInAudiobook: (r.show_in_audiobook ?? 1) === 1,
   };
@@ -234,7 +234,7 @@ export function setDesignReference(
     .prepare(
       "UPDATE voice_designs SET ref_path = ?, ref_text = ? WHERE id = ?"
     )
-    .run(refPath, refText, id);
+    .run(toDataRel(refPath), refText, id);
 }
 
 /** EMA update analogous to voiceSamples.recordChunkTiming — the

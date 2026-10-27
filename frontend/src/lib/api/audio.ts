@@ -49,6 +49,9 @@ export const audioApi = {
       request<{ status: string }>(`/api/audio/chapter/${audioId}`, { method: "DELETE" }),
     cancel: (docId: string) =>
       request<{ status: string }>(`/api/audio/cancel/${docId}`, { method: "POST" }),
+    // Fertiges Hörbuch im Explorer zeigen
+    reveal: (docId: string) =>
+      request<{ path: string; opened: boolean }>(`/api/audio/reveal/${docId}`, { method: "POST" }),
     progress: (docId: string) =>
       request<
         | { running: false }

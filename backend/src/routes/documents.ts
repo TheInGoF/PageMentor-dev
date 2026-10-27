@@ -7,7 +7,7 @@ import { processDocument, cancelProcessing } from "../services/pipeline";
 import { doclingAlive } from "../services/docling";
 import { removeDocument as removeFromIndex } from "../services/search";
 import { tt } from "../lib/i18n";
-import { DATA_DIR } from "../paths";
+import { DATA_DIR, fromDataPath } from "../paths";
 
 const UPLOAD_DIR = join(DATA_DIR, "uploads");
 
@@ -114,7 +114,7 @@ documentRoutes.get("/:id/pdf", (c) => {
   if (!row) return c.json({ error: tt(c, "err.docNotFound") }, 404);
 
   const { createReadStream, existsSync, statSync } = require("fs") as typeof import("fs");
-  const fullPath = join(DATA_DIR, row.stored_path);
+  const fullPath = fromDataPath(row.stored_path);
   if (!existsSync(fullPath)) return c.json({ error: tt(c, "err.fileMissing") }, 404);
 
   const stat = statSync(fullPath);
@@ -254,7 +254,7 @@ documentRoutes.delete("/:id", (c) => {
   const doc = db().prepare("SELECT stored_path FROM documents WHERE id = ?").get(id) as { stored_path: string } | undefined;
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
 
-  const fullPath = join(DATA_DIR, doc.stored_path);
+  const fullPath = fromDataPath(doc.stored_path);
   if (existsSync(fullPath)) unlinkSync(fullPath);
 
   // Remove per-document folders (upload dir + any generated audio).

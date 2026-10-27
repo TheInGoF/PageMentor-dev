@@ -20,6 +20,7 @@ import {
 import { chapterFile, deleteAudioForChapter, relPath, upsertAudio } from "./files";
 import { synthesizeChapter } from "./synthChapter";
 import { runJob } from "../../log/jobs";
+import { exportBook } from "./export";
 
 async function generateAudiobookImpl(params: {
   docId: string;
@@ -359,6 +360,7 @@ async function generateAudiobookImpl(params: {
               });
             },
           });
+          exportBook(doc.id);
           emit({
             phase: "audiobook.m4b.done",
             docId: doc.id,

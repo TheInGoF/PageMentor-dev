@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { join } from "path";
 import { existsSync, createReadStream, statSync } from "fs";
 import { db } from "../../db";
-import { DATA_DIR } from "../../paths";
+import { DATA_DIR, fromDataPath } from "../../paths";
 import { tt } from "../../lib/i18n";
+import { bookFileName, exportBook, exportedBookPath, revealInFolder } from "../../services/audiobook/export";
 
 export const fileRoutes = new Hono();
 
@@ -14,7 +15,7 @@ fileRoutes.get("/file/:audioId", (c) => {
     | undefined;
   if (!row || row.status !== "done") return c.json({ error: tt(c, "err.notReady") }, 404);
 
-  const fullPath = join(DATA_DIR, row.stored_path);
+  const fullPath = fromDataPath(row.stored_path);
   if (!existsSync(fullPath)) return c.json({ error: tt(c, "err.fileMissing") }, 404);
 
   return serveFileWithRange(c, fullPath, "audio/mpeg");
@@ -25,45 +26,17 @@ fileRoutes.get("/book/:docId", (c) => {
   const docId = c.req.param("docId");
   const fullPath = join(DATA_DIR, "audio", docId, "book.m4b");
   if (!existsSync(fullPath)) return c.json({ error: tt(c, "err.notReady") }, 404);
-  const doc = db()
-    .prepare(
-      "SELECT title, doc_title, author, short_code FROM documents WHERE id = ?"
-    )
-    .get(docId) as
-    | {
-        title: string;
-        doc_title: string | null;
-        author: string | null;
-        short_code: string | null;
-      }
-    | undefined;
-  const baseTitle = doc?.doc_title?.trim() || doc?.title || "audiobook";
-  // Kürzel_Autor_Titel, leere Teile weglassen
-  const parts = [
-    doc?.short_code?.trim(),
-    doc?.author?.trim(),
-    baseTitle,
-  ]
-    .map((s) => (s ? safeFilename(s) : ""))
-    .filter((s) => s.length > 0);
-  const downloadName = `${parts.join("_")}.m4b`;
+  const downloadName = bookFileName(docId);
   return serveFileWithRange(c, fullPath, "audio/mp4", downloadName);
 });
 
-// Titel für Dateinamen und Header säubern
-// Umlaute ausschreiben, Sonderzeichen → _, max. 120 Zeichen
-function safeFilename(s: string): string {
-  return s
-    .replace(/ä/g, "ae").replace(/Ä/g, "Ae")
-    .replace(/ö/g, "oe").replace(/Ö/g, "Oe")
-    .replace(/ü/g, "ue").replace(/Ü/g, "Ue")
-    .replace(/ß/g, "ss")
-    .replace(/[^\p{L}\p{N}\- ]/gu, "_")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 120) || "audiobook";
-}
-
+// Fertiges Hörbuch im Explorer zeigen
+fileRoutes.post("/reveal/:docId", (c) => {
+  const docId = c.req.param("docId");
+  const path = exportedBookPath(docId);
+  if (!existsSync(path) && !exportBook(docId)) return c.json({ error: tt(c, "err.notReady") }, 404);
+  return c.json({ path, opened: revealInFolder(path) });
+});
 
 export function serveFileWithRange(c: any, fullPath: string, mime: string, download?: string): Response {
   const stat = statSync(fullPath);

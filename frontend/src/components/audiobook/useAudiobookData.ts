@@ -148,7 +148,7 @@ export function useAudiobookData(docId: string, documentLanguage: string) {
       .get()
       .then((r) => {
         setAbsConfigured(
-          !!(r.config.absUrl && r.config.absApiKeyPresent && r.config.absLibraryId)
+          !!(r.config.absEnabled === "1" && r.config.absUrl && r.config.absApiKeyPresent && r.config.absLibraryId)
         );
       })
       .catch(() => setAbsConfigured(false));

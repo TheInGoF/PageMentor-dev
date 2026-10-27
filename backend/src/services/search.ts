@@ -12,7 +12,7 @@
 
 import { Meilisearch } from "meilisearch";
 
-const MEILI_URL = process.env.MEILI_URL || "http://localhost:7700";
+const MEILI_URL = process.env.MEILI_URL || `http://${process.env.PM_ENGINE_HOST || "localhost"}:7700`;
 const MEILI_KEY = process.env.MEILI_MASTER_KEY || "pm-dev-key";
 
 const DOC_INDEX = "pm_documents";
