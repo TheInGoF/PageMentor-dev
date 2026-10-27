@@ -24,6 +24,7 @@ const user32 = dlopen("user32.dll", {
     returns: FFIType.i32,
   },
   GetDpiForWindow: { args: [FFIType.ptr], returns: FFIType.u32 },
+  SystemParametersInfoW: { args: [FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
   GetSystemMetricsForDpi: { args: [FFIType.i32, FFIType.u32], returns: FFIType.i32 },
 }).symbols;
 
@@ -73,6 +74,18 @@ export function makeFrameless(hwndNum: number, onMaximize: (max: boolean) => voi
   dwmapi.DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ptr(corner), 4);
   // Rahmen neu berechnen lassen: SWP_FRAMECHANGED | NOMOVE | NOSIZE | NOZORDER | NOACTIVATE
   user32.SetWindowPos(hwnd, null, 0, 0, 0, 0, 0x20 | 0x2 | 0x1 | 0x4 | 0x10);
+}
+
+// Startgröße an den Bildschirm anpassen und zentrieren, höchstens 90 % der Arbeitsfläche
+export function fitToScreen(hwndNum: number, width: number, height: number): void {
+  const work = new Int32Array(4);
+  if (!user32.SystemParametersInfoW(0x0030, 0, ptr(work), 0)) return; // SPI_GETWORKAREA
+  const [left, top, right, bottom] = work;
+  const dpi = user32.GetDpiForWindow(P(hwndNum)) || 96;
+  const w = Math.min(Math.round((width * dpi) / 96), Math.round((right - left) * 0.9));
+  const h = Math.min(Math.round((height * dpi) / 96), Math.round((bottom - top) * 0.9));
+  // SWP_NOZORDER | SWP_NOACTIVATE
+  user32.SetWindowPos(P(hwndNum), null, left + Math.round((right - left - w) / 2), top + Math.round((bottom - top - h) / 2), w, h, 0x4 | 0x10);
 }
 
 export type WindowCommand = "drag" | "min" | "max" | "close" | "state";

@@ -1,6 +1,6 @@
 // App-Fenster (WebView2) in eigenem Thread; blockiert bis das Fenster zu ist
 import { SizeHint, Webview } from "webview-bun";
-import { makeFrameless, windowCommand, type WindowCommand } from "./frameless";
+import { fitToScreen, makeFrameless, windowCommand, type WindowCommand } from "./frameless";
 import { setWindowIcon } from "./win32";
 
 declare const self: Worker;
@@ -33,6 +33,12 @@ self.onmessage = (e: MessageEvent<WindowStart>) => {
       setWindowIcon(hwnd, exePath);
     } catch {
       // Ohne Icon geht es auch
+    }
+
+    try {
+      fitToScreen(hwnd, 1360, 880);
+    } catch {
+      // Standardgröße bleibt
     }
 
     // Ohne Titelleiste; schlägt es fehl, bleibt der normale Rahmen
