@@ -1,49 +1,27 @@
+// Karten-Tab: Liste, Erzeugung, Wiederholung
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   subscribeProgress,
   type Card,
   type CardStats,
-  type ProgressEvent,
 } from "../lib/api";
 import { Button } from "./ui/Button";
-import { Modal } from "./ui/Modal";
 import { useToast } from "./ui/Toast";
 import { CardReview } from "./CardReview";
 import { cn } from "../lib/cn";
 import { t } from "../lib/i18n";
-import { renderMarkdown } from "../lib/markdown";
 import { getSettings } from "../lib/settings";
+import { INITIAL_BUILD, reduceBuild, BuildProgressPanel, type BuildState } from "./cards/buildProgress";
+import { CardRow, StatPill } from "./cards/CardRow";
+import { EditCardModal } from "./cards/EditCardModal";
 
-type Difficulty = "easy" | "medium" | "hard";
+export type Difficulty = "easy" | "medium" | "hard";
 
 interface Props {
   docId: string;
 }
 
-interface BuildState {
-  active: boolean;
-  chapterCurrent: number;
-  chapterTotal: number;
-  chapterTitle: string | null;
-  chunkCurrent: number;
-  chunkTotal: number;
-  cardsCount: number;
-  error: string | null;
-  finished: "done" | "failed" | "canceled" | null;
-}
-
-const INITIAL_BUILD: BuildState = {
-  active: false,
-  chapterCurrent: 0,
-  chapterTotal: 0,
-  chapterTitle: null,
-  chunkCurrent: 0,
-  chunkTotal: 0,
-  cardsCount: 0,
-  error: null,
-  finished: null,
-};
 
 export function Cards({ docId }: Props) {
   const [cards, setCards] = useState<Card[] | null>(null);
@@ -70,9 +48,7 @@ export function Cards({ docId }: Props) {
     load();
   }, [load]);
 
-  // Recover after refresh: ask the server whether a build is still
-  // running, and either re-subscribe or just sit idle. Without this,
-  // refreshing the page mid-build would lose the progress display.
+  // Nach Reload: läuft noch ein Build? Dann Fortschritt wieder anzeigen
   useEffect(() => {
     let mounted = true;
     api.cards
@@ -87,17 +63,12 @@ export function Cards({ docId }: Props) {
     };
   }, [docId]);
 
-  // SSE subscription is always-on. Phases outside cards.* are ignored
-  // here (audiobook reuses the same channel).
+  // SSE immer aktiv, nur cards.*-Phasen zählen
   useEffect(() => {
     const unsub = subscribeProgress(docId, (ev) => {
       if (!ev.phase.startsWith("cards.")) return;
       setBuild((prev) => reduceBuild(prev, ev));
-      // Live-reload list + stats on every progress hop so the user sees
-      // cards appearing as they're extracted, not just at the end.
-      // cards.chapter / cards.progress fire often; load() is cheap (one
-      // SELECT each). cards.done / canceled / failed also reload to be
-      // sure.
+      // Liste und Statistik bei jedem Schritt neu laden: Karten erscheinen live
       if (
         ev.phase === "cards.progress" ||
         ev.phase === "cards.chapter" ||
@@ -149,11 +120,7 @@ export function Cards({ docId }: Props) {
   }
 
   async function buildResume() {
-    // Resume: keep what we have, walk un-processed chapters.
-    // Send the per-user model from localStorage (same Settings field
-    // the Audio tab uses) so the backend doesn't have to fall back
-    // to its own llm-config — Audio already proved this path is
-    // reliable.
+    // Fortsetzen mit dem Modell aus den Einstellungen, wie im Hörbuch-Tab
     setBuild({ ...INITIAL_BUILD, active: true });
     try {
       await api.cards.build(docId, {
@@ -395,362 +362,5 @@ export function Cards({ docId }: Props) {
         }}
       />
     </div>
-  );
-}
-
-function reduceBuild(prev: BuildState, ev: ProgressEvent): BuildState {
-  switch (ev.phase) {
-    case "cards.start":
-      return {
-        ...INITIAL_BUILD,
-        active: true,
-        chapterTotal: ev.total ?? 0,
-      };
-    case "cards.chapter":
-      return {
-        ...prev,
-        active: true,
-        chapterCurrent: (ev.current ?? 0) + 1,
-        chapterTotal: ev.total ?? prev.chapterTotal,
-        chapterTitle: ev.message ?? null,
-        chunkCurrent: 0,
-        chunkTotal: 0,
-      };
-    case "cards.chunk":
-      return {
-        ...prev,
-        active: true,
-        chunkCurrent: ev.current ?? 0,
-        chunkTotal: ev.total ?? 0,
-      };
-    case "cards.progress":
-      return {
-        ...prev,
-        active: true,
-        cardsCount: ev.current ?? prev.cardsCount,
-      };
-    case "cards.done":
-      return {
-        ...prev,
-        active: false,
-        chapterCurrent: prev.chapterTotal,
-        chunkCurrent: prev.chunkTotal,
-        cardsCount: ev.current ?? prev.cardsCount,
-        finished: "done",
-      };
-    case "cards.canceled":
-      return { ...prev, active: false, finished: "canceled" };
-    case "cards.failed":
-      return {
-        ...prev,
-        active: false,
-        finished: "failed",
-        error: ev.message ?? "unknown",
-      };
-    default:
-      return prev;
-  }
-}
-
-function BuildProgressPanel({ state }: { state: BuildState }) {
-  const chapterPct =
-    state.chapterTotal > 0
-      ? Math.round(((state.chapterCurrent - 1) / state.chapterTotal) * 100)
-      : 0;
-  const chunkPct =
-    state.chunkTotal > 0
-      ? Math.round((state.chunkCurrent / state.chunkTotal) * 100)
-      : 0;
-
-  return (
-    <div
-      className={cn(
-        "border rounded-md p-3 flex flex-col gap-2 text-xs font-mono",
-        state.finished === "failed"
-          ? "border-accent-subtle bg-accent/5"
-          : state.finished === "canceled"
-            ? "border-border bg-bg-elevated"
-            : "border-accent-subtle bg-accent/5"
-      )}
-    >
-      <div className="flex items-baseline justify-between gap-3">
-        <span
-          className={cn(
-            "uppercase tracking-wide",
-            state.finished === "failed" ? "text-accent" : "text-accent"
-          )}
-        >
-          {state.finished === "done"
-            ? t("cards.build.donePhase")
-            : state.finished === "failed"
-              ? t("cards.build.failedPhase")
-              : state.finished === "canceled"
-                ? t("cards.build.canceledPhase")
-                : t("cards.build.runningPhase")}
-        </span>
-        <span className="text-neutral-500">
-          {t("cards.build.cardsSoFar", { n: state.cardsCount })}
-        </span>
-      </div>
-
-      {state.chapterTotal > 0 && (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-neutral-400 truncate">
-              {t("cards.build.chapterLabel", {
-                current: Math.max(1, state.chapterCurrent),
-                total: state.chapterTotal,
-              })}
-              {state.chapterTitle ? ` — ${state.chapterTitle}` : ""}
-            </span>
-            <span className="text-neutral-500 shrink-0">{chapterPct}%</span>
-          </div>
-          <div className="h-1 bg-black/40 rounded overflow-hidden">
-            <div
-              className="h-full bg-accent transition-all"
-              style={{ width: `${chapterPct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {state.chunkTotal > 0 && state.active && (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-neutral-500">
-              {t("cards.build.chunkLabel", {
-                current: state.chunkCurrent,
-                total: state.chunkTotal,
-              })}
-            </span>
-            <span className="text-neutral-500 shrink-0">{chunkPct}%</span>
-          </div>
-          <div className="h-1 bg-black/40 rounded overflow-hidden">
-            <div
-              className="h-full bg-accent/60 transition-all"
-              style={{ width: `${chunkPct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {state.error && (
-        <p className="text-accent text-[11px] mt-1 break-words">{state.error}</p>
-      )}
-    </div>
-  );
-}
-
-function StatPill({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div
-      className={cn(
-        "card p-3 text-center",
-        accent && value > 0 ? "border-accent-subtle bg-accent/5" : ""
-      )}
-    >
-      <div className={cn("text-2xl font-semibold", accent && value > 0 ? "text-accent" : "")}>
-        {value}
-      </div>
-      <div className="text-xs text-neutral-500 mt-0.5">{label}</div>
-    </div>
-  );
-}
-
-function sourceLabel(source: Card["source"]): string {
-  if (source === "ai_generated") return t("cards.source.ai");
-  return t("cards.source.manual");
-}
-
-function CardRow({
-  card,
-  onDelete,
-  onEdit,
-}: {
-  card: Card;
-  onDelete: () => void;
-  onEdit: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <li className="card card-hover p-4">
-      <div className="flex items-start gap-3">
-        <button
-          onClick={() => setOpen(!open)}
-          className="text-xs text-accent w-5 flex-shrink-0 mt-1"
-          aria-label="toggle"
-        >
-          {open ? "▾" : "▸"}
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-neutral-100 line-clamp-2">
-            {renderMarkdown(card.question)}
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-1">
-            {card.chapter_number && (
-              <span>
-                {t("library.chaptersShort")} {String(card.chapter_number).padStart(2, "0")}
-              </span>
-            )}
-            <span>·</span>
-            <span>{sourceLabel(card.source)}</span>
-            {card.hint && (
-              <>
-                <span>·</span>
-                <span className="text-amber-400">{t("cards.hintChip")}</span>
-              </>
-            )}
-            {typeof card.reps === "number" && card.reps > 0 && (
-              <>
-                <span>·</span>
-                <span>{t("cards.reviewed", { n: card.reps })}</span>
-              </>
-            )}
-          </div>
-          {open && (
-            <div className="mt-3 pt-3 border-t border-border text-sm text-neutral-300 space-y-2">
-              {card.hint && (
-                <div className="text-amber-400/90 text-xs italic">
-                  💡 {renderMarkdown(card.hint)}
-                </div>
-              )}
-              {card.answer ? (
-                <div>{renderMarkdown(card.answer)}</div>
-              ) : (
-                <span className="text-neutral-500 italic">{t("cards.noAnswer")}</span>
-              )}
-            </div>
-          )}
-        </div>
-        <button
-          onClick={onEdit}
-          className="text-xs text-neutral-500 hover:text-accent"
-          aria-label={t("common.edit")}
-          title={t("common.edit")}
-        >
-          ✎
-        </button>
-        <button
-          onClick={onDelete}
-          className="text-xs text-neutral-500 hover:text-accent"
-          aria-label={t("common.delete")}
-          title={t("common.delete")}
-        >
-          ✕
-        </button>
-      </div>
-    </li>
-  );
-}
-
-function EditCardModal({
-  open,
-  card,
-  onClose,
-  onSaved,
-}: {
-  open: boolean;
-  card: Card | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [hint, setHint] = useState("");
-  const [difficulty, setDifficulty] = useState<Difficulty>("medium");
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
-
-  useEffect(() => {
-    if (open && card) {
-      setQuestion(card.question);
-      setAnswer(card.answer ?? "");
-      setHint(card.hint ?? "");
-      setDifficulty(card.difficulty ?? "medium");
-    }
-  }, [open, card]);
-
-  async function submit() {
-    if (!card || !question.trim()) return;
-    setBusy(true);
-    try {
-      await api.cards.patch(card.id, {
-        question: question.trim(),
-        answer: answer.trim(),
-        hint: hint.trim() || null,
-        difficulty,
-      });
-      onSaved();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={t("cards.modal.edit")}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose} disabled={busy}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={submit} disabled={busy || !question.trim()}>
-            {t("common.save")}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-neutral-400">
-            {t("cards.field.question")}
-          </label>
-          <textarea
-            className="input min-h-[90px] resize-y"
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            autoFocus
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-neutral-400">
-            {t("cards.field.answer")}
-          </label>
-          <textarea
-            className="input min-h-[90px] resize-y"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-neutral-400">
-            {t("cards.field.hint")}
-          </label>
-          <textarea
-            className="input min-h-[60px] resize-y"
-            value={hint}
-            onChange={(e) => setHint(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-neutral-400">
-            {t("cards.field.difficulty")}
-          </label>
-          <select
-            className="input"
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-          >
-            <option value="easy">{t("cards.diff.easy")}</option>
-            <option value="medium">{t("cards.diff.medium")}</option>
-            <option value="hard">{t("cards.diff.hard")}</option>
-          </select>
-        </div>
-      </div>
-    </Modal>
   );
 }
