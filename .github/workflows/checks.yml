@@ -47,7 +47,12 @@ jobs:
       - name: Python Syntax + undefinierte Namen
         run: |
           python3 -m pip install -q pyflakes
-          python3 -m pyflakes pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer
+          python3 -m pyflakes pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer pm-tts-common pm-kokoro-tts pm-f5-tts pm-tada-tts
+
+      - name: Arbiter mit mehreren Engines
+        run: |
+          python3 -m pip install -q fastapi httpx docker
+          python3 pm-gpu-arbiter/tests/test_arbiter.py
 
   engine:
     runs-on: ubuntu-latest

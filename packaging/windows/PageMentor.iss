@@ -149,7 +149,7 @@ var
   Dest: String;
 begin
   Dest := ExpandConstant('{userdocs}\PageMentor\logs\install-') + GetDateTimeString('yyyy-mm-dd-hhnnss', '-', '-') + '.log';
-  if FileCopy(ExpandConstant('{log}'), Dest, False) then
+  if CopyFile(ExpandConstant('{log}'), Dest, False) then
     Log('Setup-Log kopiert nach ' + Dest);
 end;
 

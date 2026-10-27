@@ -16,6 +16,7 @@ import {
   ROOTFS_URL,
 } from "./config";
 import { failText, inDistro, logEngine, run, wsl } from "./exec";
+import { extraServices, writeEngineEnv } from "./extraEngines";
 
 export type Progress = (message: string, fraction?: number) => void;
 
@@ -112,6 +113,8 @@ async function startDocker(progress: Progress): Promise<void> {
 }
 
 async function pullImages(progress: Progress): Promise<void> {
+  // Profile der zusätzlichen Stimmen zuerst, sonst fehlen ihre Pakete
+  await writeEngineEnv();
   progress("Lade Programmpakete, das dauert beim ersten Mal (ca. 30 GB) …");
   const r = await inDistro(`docker compose -f ${COMPOSE_IN_DISTRO} pull`, {
     timeoutMs: 6 * 3600_000,
@@ -124,7 +127,8 @@ async function pullImages(progress: Progress): Promise<void> {
 async function startServices(progress: Progress): Promise<void> {
   progress("Starte Dienste …");
   const compose = `docker compose -f ${COMPOSE_IN_DISTRO}`;
-  const r = await inDistro(`${compose} up -d --remove-orphans ${ALWAYS_ON.join(" ")} && ${compose} up --no-start qwen-tts`, {
+  const extra = extraServices();
+  const r = await inDistro(`${compose} up -d --remove-orphans ${[...ALWAYS_ON, ...extra.up].join(" ")} && ${compose} up --no-start ${["qwen-tts", ...extra.create].join(" ")} && docker rm -f ${extra.off.join(" ")} >/dev/null 2>&1; true`, {
     timeoutMs: 15 * 60_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
   });
@@ -162,6 +166,7 @@ const REPAIRS: Record<RepairId, { title: string; fn: (p: Progress) => Promise<vo
   "pull-images": { title: "Programmpakete laden", fn: pullImages },
   "start-services": { title: "Dienste starten", fn: startServices },
   "pull-model": { title: "Sprachmodell laden", fn: pullModel },
+  "apply-tts-engines": { title: "Stimmen-Engines übernehmen", fn: pullImages },
 };
 
 export function repairTitle(id: RepairId): string {

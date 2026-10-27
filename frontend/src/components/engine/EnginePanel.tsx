@@ -5,6 +5,7 @@ import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
 import { useEngineStatus } from "./useEngineStatus";
+import { TtsEnginesPanel } from "./TtsEnginesPanel";
 
 const DOT: Record<string, string> = {
   ok: "bg-emerald-500",
@@ -87,6 +88,7 @@ export function EnginePanel() {
           {t("engine.checkedAt", { time: new Date(status.checkedAt).toLocaleTimeString() })}
         </p>
       ) : null}
+      <TtsEnginesPanel />
     </div>
   );
 }

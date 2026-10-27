@@ -8,7 +8,7 @@
 
 import type { Segment } from "../segment";
 
-export type EngineId = "qwen";
+export type EngineId = "qwen" | "kokoro" | "f5" | "tada";
 
 export interface Voice {
   id: string;

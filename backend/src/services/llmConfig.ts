@@ -88,6 +88,10 @@ export interface LlmConfig {
   /** Target library ID in Audiobookshelf (UUID). Listed via
    *  /api/libraries and picked by the user. Uploads always go there. */
   absLibraryId?: string;
+  // Weitere TTS-Engines in der Engine-Umgebung, z. B. "kokoro,f5"
+  ttsEngines?: string;
+  // Hugging-Face-Token, für TADA (Llama-Freigabe)
+  hfToken?: string;
 }
 
 let cached: LlmConfig | null = null;
@@ -164,6 +168,7 @@ export function publicConfig() {
     googleApiKey,
     qwenTtsApiKey,
     absApiKey,
+    hfToken,
     ...rest
   } = cfg;
   return {
@@ -173,5 +178,6 @@ export function publicConfig() {
     googleApiKeyPresent: !!googleApiKey,
     qwenTtsApiKeyPresent: !!qwenTtsApiKey,
     absApiKeyPresent: !!absApiKey,
+    hfTokenPresent: !!hfToken,
   };
 }

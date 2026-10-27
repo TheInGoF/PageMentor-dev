@@ -57,7 +57,7 @@ export interface Chapter {
   kind?: ChapterKind;
 }
 
-export type TtsEngine = "qwen";
+export type TtsEngine = "qwen" | "kokoro" | "f5" | "tada";
 
 export interface Voice {
   id: string;

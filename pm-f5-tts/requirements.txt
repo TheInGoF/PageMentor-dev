@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9
+f5-tts==1.1.22
+soundfile>=0.12
+scipy>=1.11
+pydub>=0.25
+torchcodec==0.5
+cached_path

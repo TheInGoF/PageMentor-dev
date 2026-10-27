@@ -82,6 +82,42 @@ services:
       QWEN_TTS_LOOP_MIN_TOKENS: "1500"
     <<: *gpu
 
+  # Weitere Stimmen, optional über COMPOSE_PROFILES in /opt/pagementor/.env
+  # Kokoro: feste Stimme Martin, CPU, läuft dauerhaft
+  kokoro-tts:
+    image: ghcr.io/theingof/pm-kokoro-tts:${PM_IMAGE_TAG:-latest}
+    container_name: pm-kokoro-tts
+    profiles: ["kokoro"]
+    restart: unless-stopped
+    environment:
+      KOKORO_SPEED: "1.125"
+      OMP_NUM_THREADS: "4"
+
+  # F5-TTS German, klont Stimmen; startet der Arbiter
+  f5-tts:
+    image: ghcr.io/theingof/pm-f5-tts:${PM_IMAGE_TAG:-latest}
+    container_name: pm-f5-tts
+    profiles: ["f5"]
+    restart: "no"
+    volumes:
+      - tts-hf:/root/.cache/huggingface
+    environment:
+      F5_CKPT: "F5TTS_Base/model_420000.safetensors"
+    <<: *gpu
+
+  # TADA 3B-ML, klont Stimmen; braucht HF_TOKEN mit Llama-Freigabe
+  tada-tts:
+    image: ghcr.io/theingof/pm-tada-tts:${PM_IMAGE_TAG:-latest}
+    container_name: pm-tada-tts
+    profiles: ["tada"]
+    restart: "no"
+    volumes:
+      - tts-hf:/root/.cache/huggingface
+    environment:
+      HF_TOKEN: "${HF_TOKEN:-}"
+      TADA_LANGUAGE: "de"
+    <<: *gpu
+
   # Türsteher: immer nur ein Modell im VRAM
   pm-gpu-arbiter:
     image: ghcr.io/theingof/pm-gpu-arbiter:${PM_IMAGE_TAG:-latest}
@@ -92,8 +128,8 @@ services:
     environment:
       OLLAMA_URL: "http://ollama:11434"
       OLLAMA_CONTAINER: "pm-ollama"
-      TTS_UPSTREAM_URL: "http://qwen-tts:8880"
-      TTS_CONTAINER: "pm-qwen-tts"
+      TTS_ENGINES: "qwen=http://qwen-tts:8880|pm-qwen-tts,kokoro=http://kokoro-tts:8880|pm-kokoro-tts|cpu,f5=http://f5-tts:8880|pm-f5-tts,tada=http://tada-tts:8880|pm-tada-tts"
+      TTS_DEFAULT_ENGINE: "qwen"
       TTS_STARTUP_TIMEOUT: "600"
       TTS_IDLE_LINGER_SECONDS: "60"
       PROXY_REQUEST_TIMEOUT: "1800"
@@ -134,5 +170,6 @@ volumes:
   ollama-models:
   docling-cache:
   qwen-tts-hf:
+  tts-hf:
   infinity-cache:
   meili-data:

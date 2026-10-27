@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import { segmentText } from "../../tts/segment";
-import { synthesizeChunk, interChunkPause } from "../../tts/synth";
+import { synthesizeChunk, interChunkPause, maxChunkFor } from "../../tts/synth";
 import { concatMp3WithGaps, normalizeAndTag } from "../../tts/ffmpeg";
 import type { Voice } from "../../tts/engines/base";
 import { AudiobookCanceled, type Chapter } from "./state";
@@ -42,7 +42,7 @@ export async function synthesizeChapter(params: {
 
   let success = false;
   try {
-    const segments = segmentText(chapter.text);
+    const segments = segmentText(chapter.text, maxChunkFor(voice.engine));
     if (segments.length === 0) {
       // Sollte nach der Prüfung oben nicht vorkommen
       throw new Error("No segments from chapter text.");

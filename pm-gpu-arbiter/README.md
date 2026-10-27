@@ -1,12 +1,18 @@
 # pm-gpu-arbiter
 
-Transparenter Reverse-Proxy vor **Ollama** und einem **TTS-Sidecar**
-(derzeit `pm-qwen-tts`), die sich eine GPU teilen. Serialisiert
-GPU-Zugriffe per `asyncio.Lock` im Queue-Modus — nichts wird verworfen.
+Transparenter Reverse-Proxy vor **Ollama** und mehreren **TTS-Sidecars**
+(Qwen, F5, TADA auf der GPU, Kokoro auf der CPU). Immer nur ein Modell im
+VRAM, Zugriffe per `asyncio.Lock` in einer Schlange, nichts wird verworfen.
 
-- `/api/*`       → Proxy zu Ollama (vorher: TTS-Container stoppen)
-- `/v1/audio/*`  → Proxy zu TTS-Sidecar (vorher: Ollama-Modelle entladen +
-  TTS starten; nachher: TTS sofort wieder stoppen)
+- `/api/*`                    → Ollama (vorher alle GPU-TTS-Container stoppen)
+- `/tts/<engine>/v1/audio/*`  → diese Engine (vorher Ollama entladen, andere
+  Engines stoppen, Engine starten; danach Linger, dann Stopp)
+- `/v1/audio/*`               → wie oben mit `TTS_DEFAULT_ENGINE`
+- CPU-Engines (`|cpu`) laufen dauerhaft und werden nur durchgereicht
+
+Module: `config.py` (Umgebung, Engine-Liste), `containers.py` (Docker),
+`ollama.py`, `gpu.py` (GPU-Besitz), `main.py` (Routen), `proxy.py`.
+Test mit Attrappen: `python tests/test_arbiter.py`.
 - `/status`      → aktueller Owner, Queue-Tiefe, Container-Status
 - `/health`      → simpler Liveness-Check (kein GPU-Switch)
 
@@ -18,8 +24,10 @@ funktioniert transparent.
 | Variable | Default | Zweck |
 |---|---|---|
 | `OLLAMA_URL` | `http://ollama:11434` | Ollama-Upstream |
-| `TTS_UPSTREAM_URL` | `http://qwen-tts:8880` | TTS-Sidecar |
-| `TTS_CONTAINER` | `pm-qwen-tts` | Docker-Container zum Start/Stop |
+| `TTS_ENGINES` | *(leer)* | `name=url\|container[\|cpu]`, durch Komma getrennt |
+| `TTS_DEFAULT_ENGINE` | erste Engine | Ziel für `/v1/audio/*` ohne Präfix |
+| `TTS_UPSTREAM_URL` | `http://qwen-tts:8880` | nur ohne `TTS_ENGINES`: einzelne Engine `qwen` |
+| `TTS_CONTAINER` | `pm-qwen-tts` | nur ohne `TTS_ENGINES` |
 | `TTS_API_KEY` | *(leer)* | wird als `X-API-Key` weitergereicht |
 | `TTS_STARTUP_TIMEOUT` | `180` | Sek. Warten auf `/health` — Qwen braucht beim Cold-Start bis zu 3 min |
 | `TTS_IDLE_LINGER_SECONDS` | `60` | Sek. die der TTS-Container nach einem Call am Leben bleibt. Kommt in der Zeit ein weiterer TTS-Call → kein Restart nötig. LLM-Call killt trotzdem sofort. `0` = altes Verhalten (Stop nach jedem Call). |

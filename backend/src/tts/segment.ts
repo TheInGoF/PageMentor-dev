@@ -40,12 +40,13 @@ export interface Segment {
   paragraphs: string[];
 }
 
-export function segmentText(text: string): Segment[] {
+// maxOverride: feste Chunk-Größe der Engine, sonst die Einstellung
+export function segmentText(text: string, maxOverride?: number): Segment[] {
   // Per-call lookup so user setting changes take effect immediately
   // without a backend restart.
-  const maxChunk = getMaxChunk();
+  const maxChunk = maxOverride ?? getMaxChunk();
   console.log(
-    `[segment] text=${text.length}c maxChunk=${maxChunk} (src=${sourceOfMaxChunk()})`
+    `[segment] text=${text.length}c maxChunk=${maxChunk} (src=${maxOverride ? "engine" : sourceOfMaxChunk()})`
   );
   const paragraphs = splitParagraphs(text);
   const segments: Segment[] = [];

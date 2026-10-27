@@ -8,8 +8,35 @@ import type {
   ChapterStatusResponse,
 } from "./types";
 
+export interface CompareItem {
+  engine: string;
+  voiceId: string;
+  voiceLabel: string;
+  status: "wartet" | "läuft" | "fertig" | "fehler";
+  file?: string;
+  ms?: number;
+  error?: string;
+}
+
+export interface CompareRun {
+  id: string;
+  chapterId: string;
+  text: string;
+  startedAt: number;
+  finishedAt?: number;
+  items: CompareItem[];
+}
+
 export const audioApi = {
   audio: {
+    compare: (docId: string, chapterId: string, voices: string[]) =>
+      request<CompareRun>(`/api/audio/compare/${docId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chapterId, voices }),
+      }),
+    compareStatus: (docId: string) => request<{ run: CompareRun | null }>(`/api/audio/compare/${docId}`),
+    compareFileUrl: (docId: string, engine: string, runId: string) => `/api/audio/compare/${docId}/file/${engine}?r=${runId}`,
     voices: (showHidden: boolean = false) =>
       request<{ voices: Voice[] }>(
         "/api/audio/voices" + (showHidden ? "?showHidden=1" : "")

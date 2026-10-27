@@ -1,5 +1,5 @@
 // Hörbuch-Tab: Stimme, Tempo, Erzeugung, Intro, Kapitel
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSettings } from "../lib/settings";
 import { t } from "../lib/i18n";
 import { Button } from "./ui/Button";
@@ -9,6 +9,7 @@ import { useAudiobookData } from "./audiobook/useAudiobookData";
 import { useAudiobookActions } from "./audiobook/useAudiobookActions";
 import { RATE_OPTIONS, compareVoices, isChapterIncluded, describePhase } from "./audiobook/helpers";
 import { VoiceChip } from "./audiobook/VoiceChip";
+import { ComparePanel } from "./audiobook/ComparePanel";
 import { ChapterWorkbench } from "./audiobook/ChapterWorkbench";
 import { BookProgressPanel } from "./audiobook/BookProgressPanel";
 import { IntroEditor } from "./audiobook/IntroEditor";
@@ -88,19 +89,30 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   );
   const missingCount = Math.max(0, includedCount - doneCount);
 
+  // Engine-Auswahl nur, wenn mehr als eine Engine Stimmen liefert
+  const engines = useMemo(() => [...new Set(voices.map((v) => v.engine))], [voices]);
+  const [engineSel, setEngineSel] = useState<string | null>(null);
+  const engine = engineSel ?? voices.find((v) => v.id === voiceId)?.engine ?? engines[0];
+  const pickEngine = (e: string) => {
+    setEngineSel(e);
+    const first = voices.filter((v) => v.engine === e).sort(compareVoices).find((v) => v.language === documentLanguage);
+    if (first) setVoiceId(first.id);
+  };
+  const engineVoices = useMemo(() => voices.filter((v) => v.engine === engine), [voices, engine]);
+
   const langVoices = useMemo(
     () =>
-      voices
+      engineVoices
         .filter((v) => v.language === documentLanguage)
         .sort(compareVoices),
-    [voices, documentLanguage]
+    [engineVoices, documentLanguage]
   );
   const otherVoices = useMemo(
     () =>
-      voices
+      engineVoices
         .filter((v) => v.language !== documentLanguage)
         .sort(compareVoices),
-    [voices, documentLanguage]
+    [engineVoices, documentLanguage]
   );
 
   // Endzustände halten generating nicht mehr wahr
@@ -229,6 +241,20 @@ export function Audiobook({ docId, documentLanguage }: Props) {
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
           <div>
+            {engines.length > 1 && (
+              <div className="mb-3">
+                <label className="text-xs font-medium text-neutral-400 block mb-2">
+                  {t("audiobook.engine")}
+                </label>
+                <select className="input max-w-xs" value={engine} onChange={(e) => pickEngine(e.target.value)}>
+                  {engines.map((e) => (
+                    <option key={e} value={e}>
+                      {t(`audiobook.engine.${e}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <label className="text-xs font-medium text-neutral-400 block mb-2">
               {t("audiobook.voice")}
             </label>
@@ -320,6 +346,14 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           )}
         </div>
       </section>
+
+      <ComparePanel
+        docId={docId}
+        voices={voices}
+        voiceId={voiceId}
+        chapters={chapterStatus}
+        documentLanguage={documentLanguage}
+      />
 
       <IntroEditor
         intro={intro}

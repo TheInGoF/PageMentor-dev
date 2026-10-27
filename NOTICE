@@ -53,7 +53,19 @@ External services (called over network at runtime, not linked)
   that exposes Qwen3-TTS-Flash with an OpenAI-compatible /v1/audio/speech
   endpoint and deterministic per-voice seeds.
 - pm-gpu-arbiter        (this repo) — thin FastAPI reverse-proxy that
-  serializes GPU access between Ollama and the TTS sidecar.
+  serializes GPU access between Ollama and the TTS sidecars.
+- Kokoro-82M German     (Apache 2.0) https://huggingface.co/Godelaune/Kokoro-82M-ONNX-German-Martin
+  ONNX export of the German voice "Martin" (finetune of hexgrad/Kokoro-82M).
+  Bundled inside the pm-kokoro-tts image, run with kokoro-onnx (MIT).
+- F5-TTS German (HPI)   (CC-BY-NC 4.0) https://huggingface.co/aihpi/F5-TTS-German
+  Weights by the Hasso Plattner Institute, NON-COMMERCIAL use only.
+  Downloaded at runtime by the pm-f5-tts sidecar, NOT bundled. Inference
+  code f5-tts (MIT) https://github.com/SWivid/F5-TTS
+- TADA 3B-ML            (Llama 3.2 Community License) https://huggingface.co/HumeAI/tada-3b-ml
+  Model by Hume AI, built on Meta Llama 3.2. "Built with Llama".
+  Downloaded at runtime by the pm-tada-tts sidecar with the user's own
+  Hugging Face token, NOT bundled. Inference code hume-tada (MIT)
+  https://github.com/HumeAI/tada
 
 ================================================================================
 Data / rule lists

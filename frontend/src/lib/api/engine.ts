@@ -23,11 +23,25 @@ export interface EngineStatus {
   autoStart: "aus" | "läuft" | "fertig" | "braucht-hilfe";
 }
 
+export interface TtsEnginesInfo {
+  engines: Record<string, { service: string; title: string; sizeGb: number; alwaysOn: boolean }>;
+  enabled: string[];
+  hfTokenPresent: boolean;
+  arbiter: Record<string, { container: string; gpu: boolean }>;
+}
+
 export const engineApi = {
   engine: {
     status: () => request<EngineStatus>("/api/engine/status"),
     selftest: () => request<{ results: EngineCheck[] }>("/api/engine/selftest", { method: "POST" }),
     quitApp: () => request<{ ok: boolean }>("/api/app/quit", { method: "POST" }),
     repair: (id: string) => request<{ started: boolean }>(`/api/engine/repair/${id}`, { method: "POST" }),
+    ttsEngines: () => request<TtsEnginesInfo>("/api/engine/tts-engines"),
+    saveTtsEngines: (enabled: string[], hfToken?: string) =>
+      request<{ enabled: string[]; applying: boolean }>("/api/engine/tts-engines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, hfToken }),
+      }),
   },
 };

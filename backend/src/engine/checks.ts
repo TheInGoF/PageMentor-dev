@@ -13,6 +13,8 @@ import {
   SERVICES,
 } from "./config";
 import { failText, inDistro, wsl } from "./exec";
+import { enabledExtras, EXTRA_SERVICES } from "./extraEngines";
+import { extraStatus, refreshExtraStatus } from "../tts/engines/extra/probe";
 
 export type CheckStatus = "ok" | "warn" | "error" | "skipped";
 export type RepairId =
@@ -22,7 +24,8 @@ export type RepairId =
   | "start-docker"
   | "pull-images"
   | "start-services"
-  | "pull-model";
+  | "pull-model"
+  | "apply-tts-engines";
 
 export interface CheckResult {
   id: string;
@@ -168,6 +171,21 @@ async function checkModel(): Promise<CheckResult> {
   }
 }
 
+// Eingeschaltete Stimmen-Engines: Container angelegt?
+async function checkExtraTts(): Promise<CheckResult | null> {
+  const t = "Weitere Stimmen";
+  const on = enabledExtras();
+  if (!on.length) return null;
+  await refreshExtraStatus();
+  const st = extraStatus();
+  if (!Object.keys(st).length) return skip("tts-extra", t, "Wartet auf den GPU-Arbiter");
+  const missing = on.filter((e) => !st[e] || st[e].container === "missing").map((e) => EXTRA_SERVICES[e].title);
+  if (missing.length) {
+    return { id: "tts-extra", title: t, status: "warn", message: `Noch nicht eingerichtet: ${missing.join(", ")}`, repair: "apply-tts-engines" };
+  }
+  return ok("tts-extra", t, on.map((e) => EXTRA_SERVICES[e].title).join(", ") + " bereit");
+}
+
 function checkDisk(): CheckResult {
   const t = "Speicherplatz";
   try {
@@ -206,6 +224,11 @@ export async function runChecks(onResult?: (r: CheckResult) => void): Promise<Ch
   await add(() => checkImages(ctx));
   for (const svc of SERVICES) await add(() => checkService(svc));
   await add(() => checkModel());
+  const extra = await checkExtraTts().catch(() => null);
+  if (extra) {
+    results.push(extra);
+    onResult?.(extra);
+  }
   await add(() => checkDisk());
   return results;
 }

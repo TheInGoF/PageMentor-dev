@@ -4,11 +4,14 @@ import { IS_WINDOWS } from "../paths";
 import type { RepairId } from "../engine/checks";
 import { inDistro } from "../engine/exec";
 import { engineState, runRepair, runSelftest } from "../engine/manager";
+import { enabledExtras, EXTRA_SERVICES, type ExtraEngine } from "../engine/extraEngines";
+import { getLlmConfig, setLlmConfig } from "../services/llmConfig";
+import { extraStatus, refreshExtraStatus } from "../tts/engines/extra/probe";
 
 export const engineRoutes = new Hono();
 
-const REPAIRS = new Set(["enable-wsl", "import-distro", "provision", "start-docker", "pull-images", "start-services", "pull-model"]);
-const SERVICES = new Set(["ollama", "docling", "qwen-tts", "gpu-arbiter", "infinity", "meilisearch"]);
+const REPAIRS = new Set(["enable-wsl", "import-distro", "provision", "start-docker", "pull-images", "start-services", "pull-model", "apply-tts-engines"]);
+const SERVICES = new Set(["ollama", "docling", "qwen-tts", "kokoro-tts", "f5-tts", "tada-tts", "gpu-arbiter", "infinity", "meilisearch"]);
 
 engineRoutes.get("/status", (c) => c.json({ ...engineState(), windows: IS_WINDOWS }));
 
@@ -30,4 +33,19 @@ engineRoutes.get("/logs/:service", async (c) => {
   if (!IS_WINDOWS) return c.json({ lines: [], note: "Nur unter Windows" });
   const r = await inDistro(`docker logs --tail 300 --timestamps pm-${service} 2>&1`, { timeoutMs: 30_000, quiet: true });
   return c.json({ lines: (r.stdout || r.stderr).split("\n").filter(Boolean) });
+});
+
+// Zusätzliche Stimmen-Engines: Auswahl und HF-Token
+engineRoutes.get("/tts-engines", async (c) => {
+  await refreshExtraStatus();
+  return c.json({ engines: EXTRA_SERVICES, enabled: enabledExtras(), hfTokenPresent: !!getLlmConfig().hfToken, arbiter: extraStatus() });
+});
+
+engineRoutes.post("/tts-engines", async (c) => {
+  const body = (await c.req.json()) as { enabled?: string[]; hfToken?: string };
+  const enabled = (body.enabled ?? []).filter((e): e is ExtraEngine => e in EXTRA_SERVICES);
+  setLlmConfig({ ttsEngines: enabled.join(","), ...(body.hfToken?.trim() ? { hfToken: body.hfToken.trim() } : {}) });
+  // Unter Windows gleich übernehmen: Pakete laden, Dienste anlegen
+  if (IS_WINDOWS && !engineState().task) void runRepair("apply-tts-engines").catch(() => {});
+  return c.json({ enabled, applying: IS_WINDOWS });
 });

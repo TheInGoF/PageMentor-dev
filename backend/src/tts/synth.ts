@@ -23,13 +23,25 @@ interface EnginePolicy {
   interChunkDelayMs: number;
   /** Cooldown after an empty-audio error. */
   emptyAudioCooldownMs: number;
+  // Feste Chunk-Größe in Zeichen; fehlt sie, gilt die Einstellung
+  maxChunk?: number;
 }
 
 const POLICIES: Record<EngineId, EnginePolicy> = {
   // Qwen runs on the same GPU as Ollama — the arbiter queues per
   // request, an additional inter-chunk pause buys nothing.
   qwen: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0 },
+  // Kokoro teilt intern nach Phonemen, kurze Chunks halten die Betonung
+  kokoro: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0, maxChunk: 1000 },
+  // F5 teilt selbst nach Länge der Referenz, darüber eine Absatzgröße
+  f5: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0, maxChunk: 600 },
+  // TADA: ein Absatz bis eine Seite
+  tada: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0, maxChunk: 1500 },
 };
+
+export function maxChunkFor(engineId: EngineId): number | undefined {
+  return POLICIES[engineId]?.maxChunk;
+}
 
 export interface ChunkSynthesisParams {
   segment: Segment;

@@ -6,5 +6,6 @@ cd "$(dirname "$0")/.."
 scripts/check-lines.sh
 (cd backend && npx tsc --noEmit -p . && bun test && bun scripts/smoke.ts)
 (cd frontend && npm run build >/dev/null)
-python3 -m pyflakes pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer 2>/dev/null || python3 -m compileall -q pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer
+PY="pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer pm-tts-common pm-kokoro-tts pm-f5-tts pm-tada-tts"
+python3 -m pyflakes $PY 2>/dev/null || python3 -m compileall -q $PY
 echo "Alle Prüfungen bestanden"

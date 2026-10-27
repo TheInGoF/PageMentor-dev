@@ -7,13 +7,14 @@
  */
 
 import { qwenEngine } from "./engines/qwen";
+import { f5Engine, kokoroEngine, tadaEngine } from "./engines/extra/engine";
 import type { EngineId, TtsEngine, Voice } from "./engines/base";
 import { hiddenPresetIds } from "../services/audioVoiceVisibility";
 
 export type { EngineId, Voice } from "./engines/base";
 export type TtsEngineType = EngineId;
 
-const ENGINES: TtsEngine[] = [qwenEngine];
+const ENGINES: TtsEngine[] = [qwenEngine, kokoroEngine, f5Engine, tadaEngine];
 
 export function engineFor(id: EngineId): TtsEngine | undefined {
   return ENGINES.find((e) => e.id === id);
