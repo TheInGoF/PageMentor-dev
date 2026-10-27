@@ -1,10 +1,14 @@
 import { join } from "path";
 import { randomUUID } from "crypto";
-import { mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { db } from "../db";
 import { extractPdfViaDocling, doclingAlive } from "./docling";
 import { assignAfterExtraction } from "../study/assign/store";
 import { emitLog } from "../log/logger";
+import { syncVectors } from "./rag/vec";
+import { extractionFromMarkdown } from "./batch/markdown";
+import type { DoclingExtraction } from "./docling/types";
+import { extractPdf } from "./pdf";
 import { cleanForReading } from "./clean";
 import { emit } from "./events";
 import { indexDocument, indexChapters } from "./search";
@@ -47,7 +51,7 @@ async function processDocumentImpl(docId: string): Promise<void> {
 
   const d = db();
   const doc = d.prepare("SELECT * FROM documents WHERE id = ?").get(docId) as
-    | { stored_path: string; language: string; force_ocr: number; filename: string }
+    | { stored_path: string; language: string; force_ocr: number; filename: string; source_md: string | null }
     | undefined;
 
   if (!doc) {
@@ -65,20 +69,29 @@ async function processDocumentImpl(docId: string): Promise<void> {
   try {
     const fullPath = fromDataPath(doc.stored_path);
 
-    emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
-    if (!(await doclingAlive())) {
-      throw new Error(tLang(lang, "err.doclingUnreachable"));
-    }
+    // Vorhandenes Docling-Markdown (Stapel-Import) übernehmen statt neu umzuwandeln
+    const adopted = doc.source_md && existsSync(doc.source_md) ? readFileSync(doc.source_md, "utf8") : null;
+    let extraction: DoclingExtraction;
+    if (adopted) {
+      const pages = await extractPdf(fullPath).then((p) => p.totalPages).catch(() => 0);
+      extraction = extractionFromMarkdown(adopted, pages);
+      emit({ phase: "pipeline.extraction", docId, message: "Docling-Markdown übernommen" });
+    } else {
+      emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
+      if (!(await doclingAlive())) {
+        throw new Error(tLang(lang, "err.doclingUnreachable"));
+      }
 
-    emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingUploading") });
-    const extraction = await extractPdfViaDocling({
-      pdfPath: fullPath,
-      language: doc.language,
-      forceOcr: doc.force_ocr === 1,
-      signal,
-      onProgress: (message, fraction) =>
-        emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
-    });
+      emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingUploading") });
+      extraction = await extractPdfViaDocling({
+        pdfPath: fullPath,
+        language: doc.language,
+        forceOcr: doc.force_ocr === 1,
+        signal,
+        onProgress: (message, fraction) =>
+          emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
+      });
+    }
 
     // Render cover thumb (first page as JPG) in the background —
     // uses poppler, not docling, because docling doesn't return an image.
@@ -386,6 +399,8 @@ async function buildChunksForDocument(docId: string): Promise<void> {
   console.log(
     `[pipeline] ${docId}: ${okCount}/${withIds.length} Chunks embedded (${embedder.model})`
   );
+  // Neue Vektoren in den Suchindex
+  syncVectors(d);
 }
 
 export function processDocument(...args: Parameters<typeof processDocumentImpl>): ReturnType<typeof processDocumentImpl> {

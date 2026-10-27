@@ -1,5 +1,6 @@
 // Modulkarte lesen und pflegen, Ergebnis der Zuordnung am Dokument speichern
 import { db } from "../../db";
+import { syncVectors } from "../../services/rag/vec";
 import { StudyInputError } from "../assessments";
 import { classify, headOf, type Classification, type ModuleKey } from "./classify";
 import { checkQuality, type Quality } from "./quality";
@@ -85,5 +86,7 @@ export function assignAfterExtraction(docId: string, filename: string, markdown:
 
 // Vorschlag übernehmen oder Modul von Hand setzen
 export function confirmAssignment(docId: string, moduleId: string | null): boolean {
-  return db().prepare("UPDATE documents SET module_id = ?, assign_confidence = 'manuell' WHERE id = ?").run(moduleId, docId).changes > 0;
+  const ok = db().prepare("UPDATE documents SET module_id = ?, assign_confidence = 'manuell' WHERE id = ?").run(moduleId, docId).changes > 0;
+  syncVectors(db());
+  return ok;
 }

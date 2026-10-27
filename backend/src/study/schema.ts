@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
-export const STUDY_SCHEMA_VERSION = 4;
+export const STUDY_SCHEMA_VERSION = 5;
 
 function columns(d: Database, table: string): Set<string> {
   return new Set((d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name));
@@ -157,7 +157,37 @@ function migrateV4(d: Database): void {
   `);
 }
 
-const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3, migrateV4];
+// Wissensdatenbank: Stapel-Import mit Warteschlange, vorhandene Docling-Markdowns, Prüffragen
+function migrateV5(d: Database): void {
+  addColumns(d, "documents", { source_md: "TEXT" });
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS import_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      path TEXT NOT NULL UNIQUE,
+      md_path TEXT,
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      doc_type TEXT NOT NULL DEFAULT 'studienheft',
+      module_id TEXT,
+      -- wartet, läuft, fertig, fehler
+      status TEXT NOT NULL DEFAULT 'wartet',
+      document_id TEXT,
+      error TEXT,
+      seconds REAL,
+      added_at TEXT NOT NULL DEFAULT (datetime('now')),
+      finished_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS rag_eval (
+      id TEXT PRIMARY KEY,
+      question TEXT NOT NULL,
+      module_id TEXT,
+      expected_document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+      expected_page INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}
+
+const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3, migrateV4, migrateV5];
 
 // Sicherung vor der Hochstufung; nur wenn schon Daten da sind
 function backup(d: Database, dbFile: string, from: number): string | null {

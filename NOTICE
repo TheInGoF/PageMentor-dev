@@ -127,6 +127,8 @@ Bundled Windows tools (Windows package only, in bin/)
   process, not linked. Source: https://poppler.freedesktop.org/
 - AtomicParsley — GPL-2.0, https://github.com/wez/atomicparsley. Invoked as
   a separate process, not linked.
+- sqlite-vec (vec0.dll) — MIT or Apache-2.0, https://github.com/asg017/sqlite-vec.
+  Loaded as a SQLite extension for the vector search.
 
-These programs keep their own licenses. PageMentor only calls them as
-external processes.
+These programs keep their own licenses. PageMentor calls them as external
+processes; only sqlite-vec is loaded into the process as a SQLite extension.

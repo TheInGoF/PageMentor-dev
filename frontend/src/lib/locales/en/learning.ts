@@ -249,4 +249,10 @@ export const learning: Record<string, string> = {
   "focus.trainer": "Practise with the task trainer",
   "focus.noTime": "No study time this week yet",
   "focus.minutes7": "Study time for this module in 7 days: {n} min",
+  "module.tab.graph": "Connections",
+  "graph.title": "Connections between chapters",
+  "graph.hint": "Each dot is a chapter, its colour shows the booklet. Lines connect similar chapters from different booklets. Hover highlights neighbours, click opens the booklet.",
+  "graph.empty": "No connections yet: the module's booklets need embedded sections (knowledge base).",
+  "graph.more": "more booklets",
+  "graph.truncated": "Only the first 150 chapters are shown.",
 };

@@ -1,3 +1,4 @@
+import { syncVectors } from "../services/rag/vec";
 import { Hono } from "hono";
 import { db } from "../db";
 import { randomUUID } from "crypto";
@@ -298,6 +299,8 @@ documentRoutes.patch("/:id", async (c) => {
   if (body.module_id !== undefined) {
     // Von Hand gesetzt: die Pipeline überschreibt es nicht mehr
     db().prepare("UPDATE documents SET module_id = ?, assign_confidence = 'manuell' WHERE id = ?").run(body.module_id, id);
+    // Modulfilter der Vektorsuche nachziehen
+    syncVectors(db());
   }
   if (body.thumb_page !== undefined) {
     const max = doc.page_count > 0 ? doc.page_count : Number.MAX_SAFE_INTEGER;

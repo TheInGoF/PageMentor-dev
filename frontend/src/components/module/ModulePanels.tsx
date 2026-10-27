@@ -26,6 +26,7 @@ export function Documents({
       "script",
       "uebung",
       "klausur",
+      "literatur",
       "sonstiges",
     ];
     const map = new Map<DocType, ModuleDocument[]>();

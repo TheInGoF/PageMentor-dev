@@ -10,6 +10,7 @@ import {
 import { t, useLocale } from "../lib/i18n";
 import { DocumentCard } from "./DocumentCard";
 import { UploadModal } from "./UploadModal";
+import { BatchImport } from "./library/BatchImport";
 import { TopBar } from "./TopBar";
 import { useToast } from "./ui/Toast";
 import { DocumentEditModal } from "./DocumentEditModal";
@@ -32,6 +33,7 @@ const TYPE_FILTERS: Array<"all" | DocType> = [
   "script",
   "klausur",
   "uebung",
+  "literatur",
   "sonstiges",
 ];
 
@@ -49,6 +51,7 @@ export function Library({
   const [moduleFilter, setModuleFilter] = useState<ModuleFilter>("all");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
   const [liveEvents, setLiveEvents] = useState<Record<string, ProgressEvent>>({});
   const streams = useRef<Map<string, () => void>>(new Map());
@@ -306,6 +309,9 @@ export function Library({
               {ty === "all" ? t("common.all") : t(`type.${ty}`)}
             </button>
           ))}
+          <button type="button" className="chip ml-auto" onClick={() => setBatchOpen(true)}>
+            ⇣ {t("batch.title")}
+          </button>
         </div>
 
         {modules.length > 0 && (
@@ -465,6 +471,7 @@ export function Library({
           await load();
         }}
       />
+      <BatchImport open={batchOpen} onClose={() => { setBatchOpen(false); void load(); }} modules={modules} />
     </div>
   );
 }

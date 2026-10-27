@@ -1,11 +1,13 @@
 import "./log/boot";
 import { DATA_DIR, LOG_DIR, PUBLIC_DIR } from "./paths";
+import { syncVectors, vecState } from "./services/rag/vec";
 import { APP_VERSION } from "./version";
 import { toolStatus } from "./tools";
 import { startupHeader, startupStep, startupDone, startupNote } from "./log/startup";
 import { requestLogger, onRouteError } from "./log/http";
 import { logRoutes, clientLogRoutes } from "./routes/logs";
 import { studyRoutes } from "./routes/study";
+import { knowledgeRoutes, startQueue } from "./routes/knowledge";
 import { engineRoutes } from "./routes/engine";
 import { autoStart } from "./engine/manager";
 import { alreadyRunning, appWindowHandle, openUi, quitApp } from "./launch";
@@ -30,7 +32,7 @@ import { ragRoutes } from "./routes/rag";
 import { voiceRoutes } from "./routes/voices";
 import { adminRoutes } from "./routes/admin";
 import { ensureReady as ensureSearchReady } from "./services/search";
-import { initDb } from "./db";
+import { db, initDb } from "./db";
 
 // Laufende Pumpen für Sidecar- und Container-Logs
 import {
@@ -88,6 +90,7 @@ app.route("/api/tutor", tutorRoutes);
 app.route("/api/logs", logRoutes);
 app.route("/api/engine", engineRoutes);
 app.route("/api/study", studyRoutes);
+app.route("/api/knowledge", knowledgeRoutes);
 // Für den zweiten Start: Fenster der laufenden Instanz
 app.get("/api/app/window", (c) => c.json({ hwnd: appWindowHandle() }));
 app.post("/api/app/quit", (c) => {
@@ -101,6 +104,18 @@ app.use("/*", serveStatic({ path: join(PUBLIC_DIR, "index.html") }));
 
 await startupStep("Datenbank öffnen", () => initDb());
 await startupStep("Suchindex prüfen", () => ensureSearchReady());
+startupNote(vecState.available ? `Vektorsuche: sqlite-vec (${vecState.path})` : `Vektorsuche: langsamer Weg in JS (${vecState.error})`);
+// Vektorindex einmalig nachziehen, ohne den Start zu blockieren
+setTimeout(() => {
+  try {
+    const r = syncVectors(db());
+    if (r.added || r.removed || r.moved) startupNote(`Vektorindex: ${r.added} neu, ${r.removed} entfernt, ${r.moved} umgehängt`);
+  } catch (err) {
+    startupNote(`Vektorindex nicht aktualisiert: ${err instanceof Error ? err.message : err}`);
+  }
+  // Unterbrochenen Stapel-Import fortsetzen
+  startQueue();
+}, 2000);
 startupNote(`Dienste laut Einstellungen: ${JSON.stringify(serviceUrls())}`);
 
 export default {

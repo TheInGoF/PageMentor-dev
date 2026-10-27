@@ -3,6 +3,8 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DATA_DIR } from "./paths";
 import { migrateStudy } from "./study/schema";
+import { loadVec } from "./services/rag/vec";
+import { ensureFts } from "./services/rag/fts";
 
 let DB_PATH = join(DATA_DIR, "pagementor.db");
 
@@ -21,6 +23,8 @@ export function db(): Database {
     _db = new Database(DB_PATH, { create: true });
     _db.exec("PRAGMA journal_mode = WAL");
     _db.exec("PRAGMA foreign_keys = ON");
+    // Vektorsuche; ohne Erweiterung bleibt der langsamere Weg in JS
+    loadVec(_db);
   }
   return _db;
 }
@@ -421,6 +425,7 @@ export function initDb() {
 
   // Studien-Datenmodell, mit Backup vor jeder Hochstufung
   const study = migrateStudy(d, DB_PATH);
+  ensureFts(d);
   if (study.backup) console.log(`[db] Backup vor Schema-Hochstufung: ${study.backup}`);
 
   console.log("Database ready:", DB_PATH);

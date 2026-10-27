@@ -22,7 +22,7 @@ interface Props {
   onSaved: () => void;
 }
 
-const TYPES: DocType[] = ["studienheft", "script", "klausur", "uebung", "sonstiges"];
+const TYPES: DocType[] = ["studienheft", "script", "klausur", "uebung", "literatur", "sonstiges"];
 
 export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
   const [title, setTitle] = useState("");

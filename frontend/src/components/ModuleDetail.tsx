@@ -13,6 +13,7 @@ import { CardReview } from "./CardReview";
 import { MaterialPanel } from "./module/MaterialPanel";
 import { Documents, AudioPanel, SummariesPanel } from "./module/ModulePanels";
 import { PracticePanel } from "./module/PracticePanel";
+import { GraphPanel } from "./module/GraphPanel";
 import { takeModuleTab, type ModuleTab } from "../lib/moduleTab";
 
 type Tab = ModuleTab;
@@ -22,6 +23,7 @@ const TABS: Array<{ id: Tab; key: string }> = [
   { id: "documents", key: "module.tab.documents" },
   { id: "material", key: "module.tab.material" },
   { id: "practice", key: "module.tab.practice" },
+  { id: "graph", key: "module.tab.graph" },
   { id: "audio", key: "module.tab.audio" },
   { id: "summaries", key: "module.tab.summaries" },
 ];
@@ -153,6 +155,7 @@ export function ModuleDetail({
         {tab === "material" && (
           <MaterialPanel moduleId={moduleId} moduleName={m.name} docs={data.documents} onOpenDocument={onOpenDocument} />
         )}
+        {tab === "graph" && <GraphPanel moduleId={moduleId} onOpenDocument={onOpenDocument} />}
         {tab === "practice" && <PracticePanel data={data} onStartReview={startReview} onOpenDocument={onOpenDocument} />}
         {tab === "audio" && (
           <AudioPanel chapters={data.audioChapters} color={m.color} />

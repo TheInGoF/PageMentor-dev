@@ -18,6 +18,7 @@ import { extractFromDocument, extractProblem, synthesizeRecipes } from "../study
 import type { ExtractKind } from "../study/material/prompts";
 import { allExamSlots, shiftAssessment } from "../study/plan";
 import { examFocus } from "../study/focus";
+import { moduleGraph } from "../services/rag/graph";
 import { buildCatalog } from "../study/material/catalogDoc";
 import { getTrainer, listTrainers, selfTest, trainerSource } from "../study/trainer/store";
 import { getMaterial, listMaterial, materialCounts, setUncertain, uncertainItems, type MaterialKind } from "../study/material";
@@ -38,6 +39,7 @@ const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 studyRoutes.get("/progress", (c) => c.json(studyProgress()));
 studyRoutes.get("/focus", (c) => c.json(examFocus()));
+studyRoutes.get("/graph/:moduleId", (c) => c.json(moduleGraph(c.req.param("moduleId"))));
 
 studyRoutes.get("/assessments", (c) => c.json({ assessments: listAssessments(c.req.query("module") || undefined) }));
 studyRoutes.post("/assessments", (c) => guard(c, async () => createAssessment(await c.req.json())));

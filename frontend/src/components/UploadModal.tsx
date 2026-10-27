@@ -13,7 +13,7 @@ interface Props {
   onUploaded: () => void;
 }
 
-const TYPES: DocType[] = ["studienheft", "script", "klausur", "uebung", "sonstiges"];
+const TYPES: DocType[] = ["studienheft", "script", "klausur", "uebung", "literatur", "sonstiges"];
 const LANGS = [
   { code: "en", label: "English" },
   { code: "de", label: "Deutsch" },

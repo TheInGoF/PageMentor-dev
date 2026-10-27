@@ -249,4 +249,10 @@ export const learning: Record<string, string> = {
   "focus.trainer": "Aufgabentrainer üben",
   "focus.noTime": "Diese Woche noch nicht gelernt",
   "focus.minutes7": "Lernzeit für dieses Modul in 7 Tagen: {n} min",
+  "module.tab.graph": "Zusammenhänge",
+  "graph.title": "Zusammenhänge zwischen Kapiteln",
+  "graph.hint": "Jeder Punkt ist ein Kapitel, die Farbe zeigt das Heft. Linien verbinden inhaltlich ähnliche Kapitel aus verschiedenen Heften. Zeigen hebt die Nachbarn hervor, Klick öffnet das Heft.",
+  "graph.empty": "Noch keine Zusammenhänge: Dafür brauchen die Hefte des Moduls eingebettete Abschnitte (Wissensdatenbank).",
+  "graph.more": "weitere Hefte",
+  "graph.truncated": "Nur die ersten 150 Kapitel werden gezeigt.",
 };

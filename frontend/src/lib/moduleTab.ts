@@ -1,5 +1,5 @@
 // Modul an einem bestimmten Reiter öffnen (z. B. von der Startseite direkt ins Material)
-export type ModuleTab = "overview" | "documents" | "material" | "practice" | "audio" | "summaries";
+export type ModuleTab = "overview" | "documents" | "material" | "practice" | "graph" | "audio" | "summaries";
 
 let pending: ModuleTab | null = null;
 

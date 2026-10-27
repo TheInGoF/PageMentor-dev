@@ -3,7 +3,7 @@
 import type { ChapterKind, DoclingSection, DoclingTextItem, DoclingDocumentJson } from "./types";
 
 // Nummerierte Überschrift erkennen, liefert die Tiefe
-function numberedHeadingDepth(title: string): number | null {
+export function numberedHeadingDepth(title: string): number | null {
   const m = /^\s*(\d+(?:\.\d+)*)\s+\S/.exec(title);
   if (!m) return null;
   return m[1].split(".").length;
@@ -38,7 +38,7 @@ function isInlineMarker(title: string): boolean {
 }
 
 // Abschnitt anhand des Titels einordnen
-function classifyKind(title: string, numberedDepth: number | null): ChapterKind {
+export function classifyKind(title: string, numberedDepth: number | null): ChapterKind {
   const t = title.trim();
   for (const { pattern, kind } of KNOWN_SECTION_TITLES) {
     if (pattern.test(t)) return kind;

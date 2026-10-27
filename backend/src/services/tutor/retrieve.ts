@@ -1,6 +1,6 @@
 // Passende Textstücke für eine Frage finden
 import { db } from "../../db";
-import { resolveEmbedder, embedText, embeddingFromBuffer, cosineSim } from "../embeddings";
+import { hybridSearch } from "../rag/hybrid";
 import { TOP_K, MAX_CHUNK_CHARS, type TutorSource } from "./types";
 
 
@@ -22,21 +22,13 @@ export async function retrieveChunks(
   question: string,
   moduleId: string | null
 ): Promise<TutorSource[]> {
-  const embedder = await resolveEmbedder();
-  if (!embedder) throw new Error("embedder_unreachable");
-  const qVec = await embedText(question, embedder, "query");
-
-  // Alle Chunks im Bereich: ganze Bibliothek oder ein Modul
-  const params: string[] = [];
-  let where = "";
-  if (moduleId) {
-    where = "WHERE d.module_id = ?";
-    params.push(moduleId);
-  }
+  // Volltext und Vektoren gemeinsam; ohne Embedder bleibt die Volltextsuche
+  const { rowids } = await hybridSearch(question, moduleId, TOP_K);
+  if (!rowids.length) return [];
   const rows = db()
     .prepare(
-      `SELECT ch.id, ch.document_id, ch.chapter_id, ch.text,
-              ch.start_page, ch.end_page, ch.embedding,
+      `SELECT ch.rowid AS rid, ch.id, ch.document_id, ch.chapter_id, ch.text,
+              ch.start_page, ch.end_page,
               d.title  AS doc_title,
               d.short_code AS doc_short_code,
               c.number AS chapter_number,
@@ -44,32 +36,25 @@ export async function retrieveChunks(
          FROM chunks ch
          JOIN documents d ON d.id = ch.document_id
          LEFT JOIN chapters c ON c.id = ch.chapter_id
-         ${where}`
+        WHERE ch.rowid IN (${rowids.map(() => "?").join(",")})`
     )
-    .all(...params) as ChunkRow[];
-
-  const scored: Array<{ row: ChunkRow; score: number }> = [];
-  for (const row of rows) {
-    if (!row.embedding) continue;
-    const vec = embeddingFromBuffer(row.embedding);
-    if (vec.length !== qVec.length) continue;
-    scored.push({ row, score: cosineSim(qVec, vec) });
-  }
-  scored.sort((a, b) => b.score - a.score);
-  const top = scored.slice(0, TOP_K);
-
-  return top.map((s, i) => ({
-    n: i + 1,
-    docId: s.row.document_id,
-    docTitle: s.row.doc_title,
-    docShortCode: s.row.doc_short_code,
-    chapterId: s.row.chapter_id,
-    chapterNumber: s.row.chapter_number,
-    chapterTitle: s.row.chapter_title,
-    startPage: s.row.start_page,
-    endPage: s.row.end_page,
-    snippet: truncate(s.row.text, MAX_CHUNK_CHARS),
-  }));
+    .all(...rowids) as Array<Omit<ChunkRow, "embedding"> & { rid: number }>;
+  const byRid = new Map(rows.map((r) => [r.rid, r]));
+  return rowids
+    .map((rid) => byRid.get(rid))
+    .filter((r): r is NonNullable<typeof r> => !!r)
+    .map((row, i) => ({
+      n: i + 1,
+      docId: row.document_id,
+      docTitle: row.doc_title,
+      docShortCode: row.doc_short_code,
+      chapterId: row.chapter_id,
+      chapterNumber: row.chapter_number,
+      chapterTitle: row.chapter_title,
+      startPage: row.start_page,
+      endPage: row.end_page,
+      snippet: truncate(row.text, MAX_CHUNK_CHARS),
+    }));
 }
 
 function truncate(s: string, max: number): string {

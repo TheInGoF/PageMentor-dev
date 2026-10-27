@@ -34,6 +34,12 @@ if [ -z "${SKIP_TOOLS:-}" ]; then
   scripts/fetch-windows-tools.sh "$OUT/bin"
 fi
 cp VERSION LICENSE NOTICE "$OUT/"
+# Vektorsuche: sqlite-vec liegt neben der Exe (bun install holt es nur für das eigene System)
+VEC=backend/node_modules/sqlite-vec-windows-x64/vec0.dll
+if [ ! -f "$VEC" ]; then
+  (cd backend && npm pack sqlite-vec-windows-x64@0.1.6 --silent >/dev/null && tar -xzf sqlite-vec-windows-x64-0.1.6.tgz && mkdir -p node_modules/sqlite-vec-windows-x64 && cp package/vec0.dll node_modules/sqlite-vec-windows-x64/ && rm -rf package sqlite-vec-windows-x64-0.1.6.tgz)
+fi
+cp "$VEC" "$OUT/"
 # Engine-Skripte für die WSL-Umgebung
 mkdir -p "$OUT/engine"
 cp engine/provision.sh engine/compose.yaml "$OUT/engine/"

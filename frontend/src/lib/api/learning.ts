@@ -176,7 +176,7 @@ export const learningApi = {
   rag: {
     // Nur Embedding-Status und Neu-Einbetten, für die Settings
     status: () =>
-      request<{ total: number; embedded: number; documents: number }>(
+      request<{ total: number; embedded: number; documents: number; vector?: { available: boolean; error: string | null } }>(
         "/api/rag/status"
       ),
     reembed: () =>

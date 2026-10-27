@@ -115,6 +115,15 @@ async function run() {
   await call("GET", `/api/documents/${docId}`);
   await call("GET", `/api/documents/${docId}/pdf`);
   await call("GET", "/api/documents/tags/all");
+
+  // Wissensdatenbank: Vektorsuche muss geladen sein, Warteschlange und Prüffragen antworten
+  const rag = (await call("GET", "/api/rag/status")) as { vector?: { available: boolean; error: string | null } };
+  if (!rag?.vector?.available) {
+    failures++;
+    console.log(`FAIL Vektorsuche nicht geladen: ${rag?.vector?.error}`);
+  } else console.log("OK   Vektorsuche: sqlite-vec");
+  await call("GET", "/api/knowledge/batch");
+  await call("GET", "/api/knowledge/eval");
   await call("PATCH", `/api/documents/${docId}`, { title: "Smoke umbenannt" });
   await call("GET", `/api/chapters/${docId}`);
   await call("GET", "/api/modules");

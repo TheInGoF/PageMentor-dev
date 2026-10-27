@@ -1,5 +1,5 @@
 // Datentypen der API, Teil 1
-export type DocType = "studienheft" | "script" | "klausur" | "uebung" | "sonstiges";
+export type DocType = "studienheft" | "script" | "klausur" | "uebung" | "literatur" | "sonstiges";
 
 export interface Document {
   id: string;

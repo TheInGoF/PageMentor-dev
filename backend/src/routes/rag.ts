@@ -14,6 +14,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { resolveEmbedder, embedText } from "../services/embeddings";
+import { syncVectors, vecState } from "../services/rag/vec";
 
 export const ragRoutes = new Hono();
 
@@ -57,7 +58,8 @@ ragRoutes.post("/reembed", async (c) => {
     }
   }
 
-  return c.json({ status: "ok", embedded: ok, failed: fail, total: rows.length });
+  const index = syncVectors(db());
+  return c.json({ status: "ok", embedded: ok, failed: fail, total: rows.length, index });
 });
 
 /** Info endpoint: how many chunks + how many have embeddings? */
@@ -71,5 +73,5 @@ ragRoutes.get("/status", (c) => {
        FROM chunks`
     )
     .get() as { total: number; embedded: number; documents: number };
-  return c.json(totals);
+  return c.json({ ...totals, vector: { available: vecState.available, error: vecState.error } });
 });
