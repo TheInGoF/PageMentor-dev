@@ -1,17 +1,9 @@
-"""PageMentor GPU Arbiter.
+"""PageMentor GPU-Arbiter.
 
-Transparent reverse proxy in front of Ollama and a TTS sidecar
-(currently ``pm-qwen-tts``). Serializes GPU access via
-``asyncio.Lock`` (queue mode, nothing is dropped):
-
-- ``/api/*``       → Ollama mode: stops the TTS container, forwards the request.
-- ``/v1/audio/*``  → TTS mode: unloads Ollama models, starts the TTS
-  container, forwards the request, stops TTS again right after the
-  response.
-
-The arbiter is TTS-engine-agnostic — as long as the sidecar exposes a
-``/health`` endpoint under ``TTS_UPSTREAM_URL`` and accepts requests
-under ``/v1/audio/*`` (OpenAI shape), the setup works.
+Reverse-Proxy vor Ollama und TTS-Sidecar, ein Modell zur Zeit auf der GPU.
+- /api/*      → Ollama: TTS-Container stoppen, weiterleiten
+- /v1/audio/* → TTS: Ollama entladen, TTS starten, weiterleiten
+TTS-Engine egal, solange /health und /v1/audio/* vorhanden sind.
 """
 
 from __future__ import annotations
@@ -32,9 +24,7 @@ from fastapi.responses import JSONResponse
 
 from proxy import proxy_stream
 
-# ---------------------------------------------------------------------------
 # Logging
-# ---------------------------------------------------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,14 +32,11 @@ logging.basicConfig(
 )
 log = logging.getLogger("arbiter")
 
-# ---------------------------------------------------------------------------
-# Environment
-# ---------------------------------------------------------------------------
+# Umgebung
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://ollama:11434").rstrip("/")
 
-# TTS upstream (historically "VIBEVOICE_*" — both names are still
-# read so older compose files keep working without a breaking change).
+# TTS-Upstream, alte VIBEVOICE_*-Namen gelten weiter
 TTS_URL = os.environ.get(
     "TTS_UPSTREAM_URL",
     os.environ.get("VIBEVOICE_URL", "http://qwen-tts:8880"),
@@ -58,10 +45,8 @@ TTS_CONTAINER = os.environ.get(
     "TTS_CONTAINER",
     os.environ.get("VIBEVOICE_CONTAINER", "pm-qwen-tts"),
 )
-# Optional: when set, the GPU-reset button issues a hard
-# stop+start on the Ollama container, not just a model unload via
-# /api/ps. Use this when the Ollama process itself wedges (504 on
-# /api/generate, sticks at 100 % GPU, …). Empty = unload-only.
+# Optional: GPU-Reset startet den Ollama-Container hart neu
+# Leer = nur Modelle entladen
 OLLAMA_CONTAINER = os.environ.get("OLLAMA_CONTAINER", "").strip()
 TTS_API_KEY = os.environ.get(
     "TTS_API_KEY", os.environ.get("VIBEVOICE_API_KEY", "")
@@ -72,19 +57,14 @@ TTS_STARTUP_TIMEOUT = int(
         os.environ.get("VIBEVOICE_STARTUP_TIMEOUT", "180"),
     )
 )
-# After a TTS call the container stays alive for N seconds. If
-# another TTS call arrives in that time, no reboot is needed (saves
-# ~7 s per chunk in audiobook batches). An intervening LLM call still
-# stops the container immediately (in the own_gpu("llm") enter path).
-# Set to 0 = old behavior (immediate stop).
+# TTS-Container bleibt N s nach einem Aufruf an, spart ~7 s pro Chunk
+# LLM-Aufruf stoppt ihn trotzdem sofort; 0 = sofort stoppen
 TTS_IDLE_LINGER_SECONDS = int(os.environ.get("TTS_IDLE_LINGER_SECONDS", "60"))
 PROXY_REQUEST_TIMEOUT = float(os.environ.get("PROXY_REQUEST_TIMEOUT", "1800"))
 
 Owner = Literal["idle", "llm", "tts"]
 
-# ---------------------------------------------------------------------------
-# State
-# ---------------------------------------------------------------------------
+# Zustand
 
 
 @dataclass
@@ -93,12 +73,7 @@ class ArbiterState:
     owner: Owner = "idle"
     since: float = field(default_factory=time.time)
     queue_depth: int = 0
-    # Name of the Ollama model the arbiter believes is currently
-    # resident in VRAM. Updated on every LLM proxy enter when we
-    # peek at the request body. Drives the pre-unload step when a
-    # different model is about to be called — keeps strict
-    # single-model-resident behaviour even when multiple model tags
-    # are alternated (e.g. RAG answer + rerank + classify).
+    # Modell, das gerade im VRAM liegt; Basis für das Entladen vor einem Wechsel
     loaded_model: str | None = None
 
     def snapshot(self) -> dict[str, Any]:
@@ -115,14 +90,12 @@ state = ArbiterState()
 http_client: httpx.AsyncClient | None = None
 docker_client: docker.DockerClient | None = None
 
-# Idle-linger task: set when the stop after a TTS call should be
-# delayed. Cancelled by the next own_gpu entry.
+# Verzögertes Stoppen nach TTS, beim nächsten own_gpu abgebrochen
 _tts_idle_task: asyncio.Task[None] | None = None
 
 
 def _cancel_pending_tts_stop() -> None:
-    """Discards a scheduled idle stop (because a new request is going
-    to use or hard-stop the container momentarily anyway)."""
+    """Geplanten Idle-Stopp verwerfen."""
     global _tts_idle_task
     t = _tts_idle_task
     _tts_idle_task = None
@@ -131,14 +104,12 @@ def _cancel_pending_tts_stop() -> None:
 
 
 async def _idle_stop_tts(linger_seconds: int) -> None:
-    """Waits ``linger_seconds`` then stops pm-qwen-tts if the GPU
-    stayed idle. Cancel with ``task.cancel()`` when a new request
-    arrives."""
+    """Nach ``linger_seconds`` TTS stoppen, wenn die GPU frei blieb."""
     try:
         await asyncio.sleep(linger_seconds)
     except asyncio.CancelledError:
         return
-    # Take the lock so we don't stop into a running request.
+    # Lock nehmen: nicht in eine laufende Anfrage hinein stoppen
     async with state.lock:
         if state.owner != "idle":
             return  # Active request — it handles itself
@@ -151,9 +122,7 @@ async def _idle_stop_tts(linger_seconds: int) -> None:
             log.warning("idle stop failed: %r", e)
 
 
-# ---------------------------------------------------------------------------
-# Docker helpers (docker-py is blocking → asyncio.to_thread)
-# ---------------------------------------------------------------------------
+# Docker-Helfer, blockierend → asyncio.to_thread
 
 
 def _get_container(name: str):
@@ -201,19 +170,12 @@ async def _hard_restart_container(
     wait_url: str | None = None,
     wait_timeout: float = 90.0,
 ) -> dict[str, str]:
-    """stop → settle → start → optional health-poll. Used by the GPU-
-    reset button so the container is actively brought back to a clean
-    READY state, not just to "started".
+    """Stopp → kurz warten → Start → optional auf /health warten.
 
-    Without the wait_url poll, the function returned right after start
-    while the container was still loading its model (~30-60 s for qwen-
-    tts cold-start). The next synth call would then hit a non-ready
-    sidecar → 503 / connection refused → user thinks "reset did
-    nothing"."""
+    Für den GPU-Reset: erst fertig, wenn das Modell wieder geladen ist."""
     before = await asyncio.to_thread(_container_status, name)
     await asyncio.to_thread(_stop_container_sync, name)
-    # Brief settle so docker has a chance to release the GPU before
-    # we ask it to bring the same container up again.
+    # Kurz warten, damit Docker die GPU freigibt
     await asyncio.sleep(2)
     await asyncio.to_thread(_start_container_sync, name)
 
@@ -266,13 +228,11 @@ async def _start_tts_and_wait() -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Ollama helpers
-# ---------------------------------------------------------------------------
+# Ollama-Helfer
 
 
 async def _list_loaded_models() -> list[str]:
-    """Returns the model tags Ollama currently has resident in VRAM."""
+    """Modelle, die Ollama gerade im VRAM hat."""
     assert http_client is not None
     try:
         r = await http_client.get(f"{OLLAMA_URL}/api/ps", timeout=10.0)
@@ -286,9 +246,7 @@ async def _list_loaded_models() -> list[str]:
 
 
 async def _unload_models(models: list[str]) -> None:
-    """Forces Ollama to drop each listed model from VRAM by issuing
-    an empty `keep_alive=0` generate. Errors are logged and swallowed
-    — a single failed unload mustn't block the caller's request."""
+    """Modelle per keep_alive=0 entladen; Fehler nur loggen."""
     assert http_client is not None
     for model in models:
         try:
@@ -302,7 +260,7 @@ async def _unload_models(models: list[str]) -> None:
 
 
 async def _unload_all_ollama_models() -> None:
-    """Drop every resident model. Used before TTS takes the GPU."""
+    """Alle Modelle entladen, bevor TTS die GPU bekommt."""
     models = await _list_loaded_models()
     if not models:
         log.info("no Ollama model loaded, nothing to unload")
@@ -314,15 +272,9 @@ async def _unload_all_ollama_models() -> None:
 
 
 async def _ensure_single_model_resident(desired: str | None) -> None:
-    """Strict-single-model mode: if any model other than `desired`
-    is currently resident, unload it first. Called from the LLM
-    proxy entry path so two consecutive requests with different
-    model tags (e.g. RAG → rerank with different num_ctx, or
-    gemma4:26b → qwen3.5:9b) never fight for VRAM.
+    """Nur ein Modell im VRAM: andere vorher entladen.
 
-    `desired=None` means we don't know the requested model (couldn't
-    parse the body) — in that case keep current state, the user
-    shouldn't pay an unload cost for missing telemetry."""
+    desired=None: Modell unbekannt, Zustand bleibt."""
     if not desired:
         return
     loaded = await _list_loaded_models()
@@ -336,18 +288,14 @@ async def _ensure_single_model_resident(desired: str | None) -> None:
     state.loaded_model = desired
 
 
-# ---------------------------------------------------------------------------
-# Core GPU ownership context manager
-# ---------------------------------------------------------------------------
+# GPU-Besitz
 
 
 @asynccontextmanager
 async def own_gpu(desired: Owner):
     assert desired in ("llm", "tts")
     state.queue_depth += 1
-    # New request takes control — a pending idle stop would only get
-    # in the way now (for TTS: still use the warm container;
-    # for LLM: we stop synchronously ourselves in a moment).
+    # Neue Anfrage: geplanten Idle-Stopp verwerfen
     _cancel_pending_tts_stop()
     try:
         async with state.lock:
@@ -357,9 +305,7 @@ async def own_gpu(desired: Owner):
                 if desired == "llm":
                     await _stop_tts()
                 else:
-                    # When qwen-tts is still running thanks to linger,
-                    # we skip Ollama unload + container start + health
-                    # poll (~7 s).
+                    # TTS läuft noch dank Linger: Entladen und Start sparen
                     container_running = False
                     try:
                         container_running = (
@@ -375,11 +321,7 @@ async def own_gpu(desired: Owner):
                     yield
                 finally:
                     if desired == "tts":
-                        # Instead of stopping immediately: schedule
-                        # the idle linger. If a new TTS call arrives
-                        # within the linger window, the task is
-                        # cancelled in own_gpu() and we skip the
-                        # restart.
+                        # Nicht sofort stoppen: Linger planen
                         if TTS_IDLE_LINGER_SECONDS > 0:
                             global _tts_idle_task
                             _tts_idle_task = asyncio.create_task(
@@ -401,9 +343,7 @@ async def own_gpu(desired: Owner):
         state.queue_depth = max(0, state.queue_depth - 1)
 
 
-# ---------------------------------------------------------------------------
-# FastAPI app
-# ---------------------------------------------------------------------------
+# FastAPI
 
 
 @asynccontextmanager
@@ -457,24 +397,16 @@ async def status():
 
 
 def _tts_headers() -> dict[str, str]:
-    # Qwen/vLLM doesn't need a key by default, but we forward one if
-    # set — that way other TTS sidecars with auth work without a
-    # code change.
+    # Schlüssel nur weiterreichen, wenn gesetzt
     return {"X-API-Key": TTS_API_KEY} if TTS_API_KEY else {}
 
 
 @app.post("/admin/gpu/reset")
 async def gpu_reset():
-    """Hard reset: hard-restarts the TTS container, hard-restarts or
-    unloads Ollama (depending on `OLLAMA_CONTAINER` env), discards a
-    scheduled idle stop. Intended as a UI button when the
-    Ollama/Qwen swap is stuck (504 on either side, GPU pegged at
-    100 %, zombie generation, …).
+    """Harter Reset: TTS neu starten, Ollama neu starten oder entladen.
 
-    We deliberately do NOT take state.lock — if a request is running,
-    let it crash (button press = user intent that something is broken).
-    The `own_gpu()` state machine cleans itself up in its
-    ``finally`` block.
+    Für den UI-Knopf bei hängendem Wechsel. Bewusst ohne state.lock:
+    laufende Anfragen dürfen scheitern, own_gpu räumt im finally auf.
     """
     assert http_client is not None and docker_client is not None
     start = time.time()
@@ -482,15 +414,9 @@ async def gpu_reset():
 
     _cancel_pending_tts_stop()
 
-    # 1. TTS container — hard restart (not just stop).
-    # Stopping alone leaves the user with a dead container that only
-    # comes back on the next TTS call. A user clicking "GPU reset"
-    # almost always wants a clean ready state right away, especially
-    # if they're about to retry the chunk that was stuck.
+    # 1. TTS hart neu starten, nicht nur stoppen
     try:
-        # WAIT bis qwen-tts wieder /health=200 antwortet, sonst hat der
-        # Reset den Sidecar zwar gestoppt+gestartet aber das Modell ist
-        # noch nicht im VRAM und der naechste Synth-Call schlaegt fehl.
+        # Auf /health warten, sonst scheitert der nächste Synth-Aufruf
         result["tts_container"] = await _hard_restart_container(
             TTS_CONTAINER,
             wait_url=f"{TTS_URL}/health",
@@ -500,18 +426,11 @@ async def gpu_reset():
         result["tts_container"] = {"error": repr(e)}
         log.warning("gpu-reset: tts hard-restart failed: %r", e)
 
-    # 2. Ollama — hard-restart container if OLLAMA_CONTAINER is set,
-    # otherwise the historic model-unload-only behaviour. Container
-    # restart is the right hammer for a wedged Ollama process (504
-    # on /api/generate even though the API is reachable). The
-    # unload-only fallback covers setups where the arbiter doesn't
-    # have docker access to the Ollama container (e.g. Ollama running
-    # outside docker, or on a separate host).
+    # 2. Ollama: Container neu starten, wenn OLLAMA_CONTAINER gesetzt
+    # sonst nur Modelle entladen
     if OLLAMA_CONTAINER:
         try:
-            # Ollama's /api/tags ist die leichteste Probe — antwortet
-            # 200 sobald der Server up ist (Modelle muessen nicht
-            # geladen sein).
+            # /api/tags antwortet, sobald der Server läuft
             result["ollama_container"] = await _hard_restart_container(
                 OLLAMA_CONTAINER,
                 wait_url=f"{OLLAMA_URL}/api/tags",
@@ -536,9 +455,7 @@ async def gpu_reset():
             result["ollama_unload"] = {"error": repr(e)}
             log.warning("gpu-reset: ollama unload failed: %r", e)
 
-    # State.snapshot would still report the old `owner` since we don't
-    # take the lock. Reset it to idle so the next request doesn't think
-    # someone else owns the GPU.
+    # Owner zurück auf idle, sonst glaubt die nächste Anfrage an einen Besitzer
     state.owner = "idle"
     state.since = time.time()
     state.queue_depth = 0
@@ -551,11 +468,9 @@ async def gpu_reset():
 
 
 def _peek_requested_model(path: str, body: bytes) -> str | None:
-    """Try to read the model tag a /api/* request is targeting so we
-    can pre-unload any other resident model. Only the JSON endpoints
-    that the doc_storage + PageMentor clients actually use are
-    inspected (chat / generate / embeddings); everything else (tags,
-    pull, …) returns None and skips the pre-unload."""
+    """Modell einer /api/*-Anfrage lesen, für das Entladen vorab.
+
+    Nur chat, generate, embeddings; sonst None."""
     if not body:
         return None
     if not any(
@@ -580,18 +495,12 @@ def _peek_requested_model(path: str, body: bytes) -> str | None:
 )
 async def ollama_proxy(path: str, request: Request):
     assert http_client is not None
-    # Peek the body up-front so the model-aware pre-unload knows
-    # which model the caller wants. Starlette caches the result of
-    # request.body() internally, so the second call inside
-    # proxy_stream returns the same bytes without a fresh receive
-    # round-trip — no need to manually re-inject.
+    # Body vorab lesen; Starlette cached ihn für proxy_stream
     body = await request.body()
     desired = _peek_requested_model(path, body)
     async with own_gpu("llm"):
         if desired:
-            # Strict single-model: evict any other model BEFORE
-            # the proxy hands the new request to Ollama. Inside the
-            # lock so no concurrent caller swaps state under us.
+            # Andere Modelle entladen, bevor Ollama die Anfrage bekommt
             try:
                 await _ensure_single_model_resident(desired)
             except Exception as e:  # noqa: BLE001
@@ -601,11 +510,7 @@ async def ollama_proxy(path: str, request: Request):
 
 @app.get("/diagnostics/{path:path}")
 async def diagnostics_proxy(path: str, request: Request):
-    """Proxiert /diagnostics/* an den qwen-tts Sidecar durch. Damit
-    PageMentor's Logs-Tab via qwenTtsUrl die Sidecar-Diagnostics
-    abrufen kann (insb. /diagnostics/recent-logs fuer den Live-Log-
-    Stream). Ohne diesen Proxy schlug der Backend-Pump auf 404 ein
-    und zeigte keine Sidecar-Logs in der UI an."""
+    """/diagnostics/* an den TTS-Sidecar durchreichen, für den Logs-Tab."""
     assert http_client is not None
     try:
         upstream = f"{TTS_URL}/diagnostics/{path}"

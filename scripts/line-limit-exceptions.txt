@@ -6,5 +6,4 @@ frontend/src/components/ModuleDetail.tsx
 frontend/src/components/SettingsPage.tsx
 frontend/src/lib/api.ts
 frontend/src/lib/i18n.ts
-pm-gpu-arbiter/main.py
 pm-qwen-tts/main.py
