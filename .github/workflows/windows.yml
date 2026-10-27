@@ -44,7 +44,7 @@ jobs:
         shell: pwsh
         run: |
           $env:PM_ENGINE_AUTOSTART = "0"
-          $env:PM_OPEN_BROWSER = "0"
+          $env:PM_UI = "none"
           $p = Start-Process -FilePath "dist/PageMentor/PageMentor.exe" -PassThru
           $ok = $false
           for ($i = 0; $i -lt 30; $i++) {
@@ -62,6 +62,22 @@ jobs:
           foreach ($t in "ffmpeg","ffprobe","pdftoppm","AtomicParsley") {
             if ($log -match ('"' + $t + '":"FEHLT"')) { throw "Werkzeug fehlt: $t" }
           }
+
+      - name: App-Fenster testen
+        shell: pwsh
+        run: |
+          $env:PM_ENGINE_AUTOSTART = "0"
+          $env:PM_UI = "window"
+          $env:PM_WINDOW_TEST = "1"
+          $p = Start-Process -FilePath "dist/PageMentor/PageMentor.exe" -PassThru
+          $p.WaitForExit(60000) | Out-Null
+          if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PageMentor\logs"
+          $log = Get-Content -Raw (Get-ChildItem "$dir\app-*.log" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
+          $log -split "`n" | Select-String "Fenster|Edge" | Out-Host
+          # Worker muss in der Exe stecken; ob der Runner zeichnen kann, ist zweitrangig
+          if ($log -notmatch "App-Fenster geöffnet|nutze Edge") { throw "Fenster-Worker nicht gestartet" }
+          if ($log -notmatch "App-Fenster bereit") { Write-Warning "Fenster hat die Seite nicht gemeldet" }
 
       - name: Installer bauen
         shell: pwsh

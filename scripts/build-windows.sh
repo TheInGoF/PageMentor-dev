@@ -25,7 +25,8 @@ case "$(uname -s)" in
 esac
 
 echo "Exe bauen, Version $VERSION"
-bun build backend/src/index.ts --compile --target=bun-windows-x64 "${FLAGS[@]}" \
+# Fenster läuft als Worker und muss mit in die Exe
+bun build backend/src/index.ts backend/src/desktop/window.ts --compile --target=bun-windows-x64 "${FLAGS[@]}" \
   --define "process.env.PM_BUILD_VERSION=\"$VERSION\"" \
   --outfile "$OUT/PageMentor.exe"
 

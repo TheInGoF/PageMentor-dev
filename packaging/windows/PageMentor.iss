@@ -64,6 +64,10 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{userdocs}\PageMentor"; Flags: uninsneveruninstall
 Name: "{userdocs}\PageMentor\logs"; Flags: uninsneveruninstall
 
+[UninstallDelete]
+; Browser-Daten des App-Fensters
+Type: filesandordirs; Name: "{app}\PageMentor.exe.WebView2"
+
 [Icons]
 Name: "{userprograms}\PageMentor"; Filename: "{app}\PageMentor.exe"; WorkingDir: "{app}"
 Name: "{userdesktop}\PageMentor"; Filename: "{app}\PageMentor.exe"; WorkingDir: "{app}"; Tasks: desktop
