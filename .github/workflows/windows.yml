@@ -70,7 +70,14 @@ jobs:
           $env:PM_UI = "window"
           $env:PM_WINDOW_TEST = "1"
           $p = Start-Process -FilePath "dist/PageMentor/PageMentor.exe" -PassThru
-          Start-Sleep -Seconds 5
+          # Warten, bis das Fenster die Seite meldet; danach kurz zeichnen lassen
+          $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PageMentor\logs"
+          for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Milliseconds 500
+            $f = Get-ChildItem "$dir\app-*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+            if ($f -and (Select-String -Path $f.FullName -Pattern "App-Fenster bereit|nutze Edge" -Quiet)) { break }
+          }
+          Start-Sleep -Milliseconds 1500
           # Bildschirmfoto, solange das Fenster offen ist
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -80,7 +87,6 @@ jobs:
           $bmp.Save("dist/screens/app-window.png")
           $p.WaitForExit(60000) | Out-Null
           if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
-          $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "PageMentor\logs"
           $log = Get-Content -Raw (Get-ChildItem "$dir\app-*.log" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName
           $log -split "`n" | Select-String "Fenster|Edge" | Out-Host
           # Worker muss in der Exe stecken; ob der Runner zeichnen kann, ist zweitrangig
