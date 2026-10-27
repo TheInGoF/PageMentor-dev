@@ -30,6 +30,16 @@ export interface Document {
   audio_done?: number;
   audio_total?: number;
   summary_count?: number;
+  // Zuordnung aus der Pipeline: Vorschlag, Regel, Sicherheit (hoch, niedrig, manuell)
+  assign_module_id?: string | null;
+  assign_code?: string | null;
+  assign_name?: string | null;
+  assign_rule?: string | null;
+  assign_confidence?: "hoch" | "niedrig" | "manuell" | null;
+  heft_code?: string | null;
+  // JSON: { formulaMissing, formulaLatex, reasons, flag }
+  quality_json?: string | null;
+  quality_flag?: number;
 }
 
 export type ChapterKind =

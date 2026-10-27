@@ -51,6 +51,17 @@ function fixture(): void {
   );
   writeFileSync(join(SM, "20_module", "TEST1", "formeln", "f.md"), "# Formeln\n\n### TEST1-F-H1-01 · Erste\nU = R I\n\n### TEST1-F-H1-02 · Zweite\nP = U I, unsicher\n");
   writeFileSync(join(SM, "30_trainer", "test1-aufgaben.js"), "window.T1_GEN = [];\n");
+  mkdirSync(join(SM, "scripts"), { recursive: true });
+  writeFileSync(
+    join(SM, "scripts", "module_map.json"),
+    JSON.stringify({
+      module: {
+        TEST1: { name: "Testmodul Eins", lehrheft_praefixe: ["T1H"], beleg: "Titelseite" },
+        NEU9: { name: "Neues Modul", lehrheft_praefixe: ["NEUH"], beleg: null },
+      },
+      unbestaetigte_praefixe: { eintraege: { TEST2: ["T2X"] } },
+    })
+  );
 }
 
 type Mods = { db: typeof import("../../db"); run: typeof import("./run") };
@@ -70,7 +81,8 @@ const n = (sql: string) => (x.db.db().prepare(sql).get() as { n: number }).n;
 describe("Studium-Maker-Import", () => {
   test("Probelauf berichtet, ändert aber nichts", () => {
     const r = x.run.runImport(SM, { dryRun: true, trainerDir: TRAINER_DIR });
-    expect(r.modules).toEqual({ created: 2, updated: 1, skipped: 0 });
+    expect(r.modules).toEqual({ created: 3, updated: 1, skipped: 0 });
+    expect(r.prefixes).toEqual({ created: 3, updated: 0, skipped: 0 });
     expect(r.assessments.created).toBe(4);
     expect(r.assessments.skipped).toBe(1);
     expect(r.progress.earnedCp).toBe(6);
@@ -81,7 +93,10 @@ describe("Studium-Maker-Import", () => {
 
   test("Import übernimmt alles und meldet Lücken", () => {
     const r = x.run.runImport(SM, { trainerDir: TRAINER_DIR });
-    expect(n("SELECT COUNT(*) AS n FROM modules")).toBe(3);
+    expect(n("SELECT COUNT(*) AS n FROM modules")).toBe(4);
+    expect(n("SELECT confirmed AS n FROM module_prefixes WHERE prefix = 'T1H'")).toBe(1);
+    expect(n("SELECT confirmed AS n FROM module_prefixes WHERE prefix = 'NEUH'")).toBe(0);
+    expect(n("SELECT confirmed AS n FROM module_prefixes WHERE prefix = 'T2X'")).toBe(0);
     expect(n("SELECT COUNT(*) AS n FROM modules WHERE id = 'alt' AND code = 'TEST2' AND cp = 5")).toBe(1);
     expect(n("SELECT in_path AS n FROM modules WHERE code = 'WAHL1'")).toBe(0);
     expect(n("SELECT COUNT(*) AS n FROM exam_dates")).toBe(2);
@@ -107,9 +122,46 @@ describe("Studium-Maker-Import", () => {
     const r = x.run.runImport(SM, { trainerDir: TRAINER_DIR });
     expect(r.assessments).toEqual({ created: 0, updated: 4, skipped: 1 });
     expect(r.modules.created).toBe(0);
+    expect(r.prefixes).toEqual({ created: 0, updated: 3, skipped: 0 });
     expect(r.trainers).toEqual({ created: 0, updated: 1, skipped: 0 });
     expect(n("SELECT COUNT(*) AS n FROM assessments")).toBe(4);
     expect(n("SELECT COUNT(*) AS n FROM material_items")).toBe(2);
+  });
+
+  test("Pipeline ordnet nur mit Beleg zu", async () => {
+    const { assignAfterExtraction, confirmAssignment } = await import("../assign/store");
+    const ins = x.db.db().prepare("INSERT INTO documents (id, title, filename, stored_path) VALUES (?, ?, ?, '')");
+    ins.run("d1", "Heft", "T1H03_Grundlagen.pdf");
+    ins.run("d2", "Scan", "scan.pdf");
+    ins.run("d3", "Vermutung", "T2X01.pdf");
+    const md = "# Kapitel\n" + "Text mit Inhalt. ".repeat(60);
+    expect(assignAfterExtraction("d1", "T1H03_Grundlagen.pdf", md, 2).assigned).toBe(true);
+    expect(assignAfterExtraction("d2", "scan.pdf", md, 2).assigned).toBe(false);
+    expect(assignAfterExtraction("d3", "T2X01.pdf", md + "<!-- formula-not-decoded -->", 2).assigned).toBe(false);
+    const row = (id: string) => x.db.db().prepare("SELECT m.code, d.assign_confidence AS conf, d.quality_flag AS q, d.assign_module_id AS sug FROM documents d LEFT JOIN modules m ON m.id = d.module_id WHERE d.id = ?").get(id) as { code: string | null; conf: string | null; q: number; sug: string | null };
+    expect(row("d1")).toMatchObject({ code: "TEST1", conf: "hoch", q: 0 });
+    expect(row("d2")).toMatchObject({ code: null, conf: null });
+    const d3 = row("d3");
+    expect(d3).toMatchObject({ code: null, conf: "niedrig", q: 1 });
+    confirmAssignment("d3", d3.sug);
+    expect(row("d3")).toMatchObject({ code: "TEST2", conf: "manuell" });
+    // Von Hand gesetzt bleibt beim erneuten Durchlauf
+    assignAfterExtraction("d3", "T2X01.pdf", md, 2);
+    expect(row("d3")).toMatchObject({ code: "TEST2", conf: "manuell" });
+  });
+
+  test("Modulkarte pflegen, gemeinsame Präfixe nur als Vorschlag", async () => {
+    const { setPrefixes } = await import("../assign/store");
+    const id = (x.db.db().prepare("SELECT id FROM modules WHERE code = 'TEST2'").get() as { id: string }).id;
+    expect(setPrefixes(id, [{ prefix: "t2x" }, { prefix: "T2Y", confirmed: false }]).map((p) => p.prefix)).toEqual(["T2X", "T2Y"]);
+    // Gemeinsamer Präfix erlaubt, Zuordnung dann nur als Vorschlag
+    setPrefixes(id, [{ prefix: "T2X" }, { prefix: "T1H" }]);
+    const { assignAfterExtraction } = await import("../assign/store");
+    x.db.db().prepare("INSERT INTO documents (id, title, filename, stored_path) VALUES ('d4', 'x', 'T1H09.pdf', '')").run();
+    const r = assignAfterExtraction("d4", "T1H09.pdf", "Text. ".repeat(200), 2);
+    expect(r.assigned).toBe(false);
+    expect(r.classification.rule).toContain("mehrdeutig");
+    expect(() => setPrefixes(id, [{ prefix: "x y" }])).toThrow("Ungültig");
   });
 
   test("fehlender Ordner ist ein klarer Fehler", () => {

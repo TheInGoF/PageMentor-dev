@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
-export const STUDY_SCHEMA_VERSION = 2;
+export const STUDY_SCHEMA_VERSION = 3;
 
 function columns(d: Database, table: string): Set<string> {
   return new Set((d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name));
@@ -118,7 +118,33 @@ function migrateV2(d: Database): void {
   addColumns(d, "material_items", { source_file: "TEXT" });
 }
 
-const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2];
+// Modulkarte (Heft-Präfixe) und Zuordnung/Qualität je Dokument
+function migrateV3(d: Database): void {
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS module_prefixes (
+      prefix TEXT NOT NULL COLLATE NOCASE,
+      module_id TEXT NOT NULL REFERENCES modules(id) ON DELETE CASCADE,
+      -- 1 = an einem echten Dokument oder in der PO belegt; 0 = Vermutung, nur Vorschlag
+      confirmed INTEGER NOT NULL DEFAULT 1,
+      evidence TEXT,
+      -- Ein Präfix kann zu mehreren Teilmodulen gehören, dann gibt es nur Vorschläge
+      PRIMARY KEY (prefix, module_id)
+    );
+  `);
+  addColumns(d, "documents", {
+    // Vorschlag oder Grund der Zuordnung; confidence: hoch, niedrig, manuell
+    assign_module_id: "TEXT",
+    assign_rule: "TEXT",
+    assign_confidence: "TEXT",
+    heft_code: "TEXT",
+    doc_date: "TEXT",
+    // JSON aus checkQuality; quality_flag = ansehen
+    quality_json: "TEXT",
+    quality_flag: "INTEGER NOT NULL DEFAULT 0",
+  });
+}
+
+const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3];
 
 // Sicherung vor der Hochstufung; nur wenn schon Daten da sind
 function backup(d: Database, dbFile: string, from: number): string | null {

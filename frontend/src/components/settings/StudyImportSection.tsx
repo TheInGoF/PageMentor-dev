@@ -5,7 +5,7 @@ import { api, type ImportCount, type StudyImportReport } from "../../lib/api";
 import { isFrameless } from "../../lib/desktop";
 import { t } from "../../lib/i18n";
 
-const ROWS = ["modules", "assessments", "time", "material", "trainers", "examDates"] as const;
+const ROWS = ["modules", "prefixes", "assessments", "time", "material", "trainers", "examDates"] as const;
 
 function Row({ label, c }: { label: string; c: ImportCount }) {
   return (

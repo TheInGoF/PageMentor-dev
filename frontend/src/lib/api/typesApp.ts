@@ -63,6 +63,13 @@ export interface Module {
   // 0 | 1: abgeschlossene Module zugeklappt und unten
   completed: number;
   created_at: string;
+  // Aus der Prüfungsordnung
+  code?: string | null;
+  cp?: number | null;
+  study_semester?: number | null;
+  exam_form?: string | null;
+  area?: string | null;
+  in_path?: number;
 }
 
 export interface ModuleListItem extends Module {

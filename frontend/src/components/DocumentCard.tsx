@@ -1,3 +1,4 @@
+import { AssignHint } from "./library/AssignHint";
 import { useState } from "react";
 import { Document as PdfDocument, Page as PdfPage, pdfjs } from "react-pdf";
 import { Button } from "./ui/Button";
@@ -205,6 +206,8 @@ export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit, onRetri
           ))}
         </div>
       )}
+
+      <AssignHint doc={doc} onChanged={onRetried} />
 
       <PipelineDots doc={doc} />
 

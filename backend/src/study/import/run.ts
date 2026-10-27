@@ -8,7 +8,7 @@ import { upsertMaterial, type MaterialKind } from "../material";
 import { studyProgress, type StudyProgress } from "../progress";
 import { splitCatalog } from "./catalog";
 import { readPlanner, type CatalogModule, type TrainerRef } from "./planner";
-import { readSources, type SmEntry, type SmHabit, type SmMaterial } from "./sources";
+import { readSources, type SmEntry, type SmHabit, type SmMaterial, type SmModuleMap } from "./sources";
 
 export interface Count {
   created: number;
@@ -20,6 +20,7 @@ export interface ImportReport {
   dryRun: boolean;
   folder: string;
   modules: Count;
+  prefixes: Count;
   assessments: Count;
   time: Count;
   material: Count;
@@ -67,6 +68,32 @@ function importModules(mods: CatalogModule[], used: Set<string>, c: Count): void
       c.created++;
     }
   }
+}
+
+// Modulkarte: Module ohne Katalog-Eintrag anlegen, Heft-Präfixe mit Beleg übernehmen
+function importModuleMap(map: SmModuleMap, mods: Count, c: Count, warnings: string[]): void {
+  const ins = db().prepare("INSERT INTO module_prefixes (prefix, module_id, confirmed, evidence) VALUES (?, ?, ?, ?)");
+  const add = (code: string, prefix: string, confirmed: boolean, evidence: string | null) => {
+    const moduleId = moduleFor(code);
+    if (!moduleId) return;
+    if (db().prepare("SELECT 1 FROM module_prefixes WHERE prefix = ? AND module_id = ?").get(prefix, moduleId)) c.updated++;
+    else {
+      ins.run(prefix.toUpperCase(), moduleId, confirmed ? 1 : 0, evidence);
+      c.created++;
+    }
+  };
+  for (const [rawCode, m] of Object.entries(map.module ?? {})) {
+    const code = rawCode.toUpperCase();
+    if (!moduleFor(code)) {
+      db()
+        .prepare("INSERT INTO modules (id, name, code, in_path, color, sort_order) VALUES (?, ?, ?, 1, '#3b82f6', 99)")
+        .run(randomUUID(), m.name || code, code);
+      mods.created++;
+    }
+    for (const p of m.lehrheft_praefixe ?? []) add(code, p, !!m.beleg, m.beleg ?? null);
+  }
+  // Vermutungen ohne Beleg: nur Vorschläge, nie automatisch
+  for (const [code, list] of Object.entries(map.unbestaetigte_praefixe?.eintraege ?? {})) for (const p of list) add(code.toUpperCase(), p, false, null);
 }
 
 function moduleFor(ref: string | null | undefined): string | null {
@@ -213,6 +240,7 @@ export function runImport(folder: string, opts: { dryRun?: boolean; trainerDir?:
     dryRun,
     folder,
     modules: count(),
+    prefixes: count(),
     assessments: count(),
     time: count(),
     material: count(),
@@ -226,6 +254,7 @@ export function runImport(folder: string, opts: { dryRun?: boolean; trainerDir?:
 
   const tx = db().transaction(() => {
     importModules(planner.modules, used, report.modules);
+    if (src.moduleMap) importModuleMap(src.moduleMap, report.modules, report.prefixes, report.warnings);
     importExamDates(planner.examDates, report.examDates);
     importEntries(src.entries, report.assessments, report.warnings);
     importHabits(src.habits, report.time);

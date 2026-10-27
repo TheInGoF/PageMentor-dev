@@ -233,4 +233,12 @@ export const library: Record<string, string> = {
   "doc.preview.thumbHint": "Navigate to pick which page appears as the library thumbnail.",
   "reader.thumbnails": "Thumbnails",
   "reader.thumbnailsToggle": "Toggle thumbnail sidebar",
+  "library.quality.check": "Check quality",
+  "library.assign.suggest": "Suggestion: {module}",
+  "library.assign.accept": "Assign",
+  "module.modal.code": "Code",
+  "module.modal.cp": "Credits",
+  "module.modal.prefixes": "Booklet prefixes",
+  "module.modal.prefixesHint": "Codes on booklets and exams that provably belong to this module. A trailing ? makes it a suggestion only.",
+  "library.assign.why": "No firm evidence, please check",
 };

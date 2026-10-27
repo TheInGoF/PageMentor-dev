@@ -28,12 +28,18 @@ export interface SmHabit {
 
 export type SmMaterial = Record<string, Record<string, Array<{ datei?: string; titel?: string; pfad?: string }>>>;
 
+export interface SmModuleMap {
+  module?: Record<string, { name?: string; lehrheft_praefixe?: string[]; beleg?: string | null }>;
+  unbestaetigte_praefixe?: { eintraege?: Record<string, string[]> };
+}
+
 export interface SmSources {
   folder: string;
   plannerHtml: string | null;
   entries: SmEntry[];
   habits: SmHabit[];
   material: SmMaterial;
+  moduleMap: SmModuleMap | null;
   warnings: string[];
 }
 
@@ -58,8 +64,10 @@ export function readSources(folder: string): SmSources {
   if (!studium) warnings.push("30_data/studium.json fehlt: keine Leistungen und Lernzeit");
   const material = readJson<SmMaterial>(join(folder, "30_data", "material.json"), warnings) ?? {};
 
+  const moduleMap = readJson<SmModuleMap>(join(folder, "scripts", "module_map.json"), warnings);
   return {
     folder,
+    moduleMap,
     plannerHtml,
     entries: Array.isArray(studium?.entries) ? studium.entries : [],
     habits: Array.isArray(studium?.habits) ? studium.habits : [],

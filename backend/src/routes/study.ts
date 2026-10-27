@@ -12,6 +12,7 @@ import { profileValue, setProfileValue, studyProgress } from "../study/progress"
 import { addTime, deleteTime, listTime, minutesPerDay, minutesPerModule } from "../study/time";
 import { runImport } from "../study/import/run";
 import { pickFolder } from "../study/import/pickFolder";
+import { confirmAssignment, listPrefixes, setPrefixes } from "../study/assign/store";
 import { emitLog } from "../log/logger";
 import { getMaterial, listMaterial, materialCounts, setUncertain, uncertainItems, type MaterialKind } from "../study/material";
 
@@ -84,4 +85,19 @@ studyRoutes.post("/import", async (c) => {
     emitLog("warn", "study", `Studium-Maker-Import fehlgeschlagen: ${message}`);
     return c.json({ error: message }, 400);
   }
+});
+
+// Modulkarte: Heft-Präfixe je Modul
+studyRoutes.get("/prefixes", (c) => c.json({ prefixes: listPrefixes(c.req.query("module") || undefined) }));
+studyRoutes.put("/prefixes/:moduleId", (c) =>
+  guard(c, async () => {
+    const body = (await c.req.json()) as { items?: Array<{ prefix: string; confirmed?: boolean; evidence?: string | null }> };
+    return { prefixes: setPrefixes(c.req.param("moduleId"), body.items ?? []) };
+  })
+);
+
+// Vorschlag übernehmen (moduleId) oder verwerfen (null)
+studyRoutes.post("/assign/:docId", async (c) => {
+  const body = (await c.req.json()) as { moduleId?: string | null };
+  return c.json({ updated: confirmAssignment(c.req.param("docId"), body.moduleId ?? null) });
 });

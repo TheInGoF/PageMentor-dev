@@ -233,4 +233,12 @@ export const library: Record<string, string> = {
   "doc.preview.thumbHint": "Die hier angezeigte Seite wird als Vorschaubild in der Bibliothek verwendet.",
   "reader.thumbnails": "Thumbnails",
   "reader.thumbnailsToggle": "Thumbnail-Leiste umschalten",
+  "library.quality.check": "Qualität prüfen",
+  "library.assign.suggest": "Vorschlag: {module}",
+  "library.assign.accept": "Zuordnen",
+  "module.modal.code": "Kürzel",
+  "module.modal.cp": "CP",
+  "module.modal.prefixes": "Heft-Präfixe",
+  "module.modal.prefixesHint": "Codes auf Heften und Klausuren, die belegt zu diesem Modul gehören. Mit ? am Ende nur Vorschlag.",
+  "library.assign.why": "Ohne sicheren Beleg, bitte prüfen",
 };

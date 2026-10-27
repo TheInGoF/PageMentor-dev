@@ -32,6 +32,8 @@ documentRoutes.get("/", (c) => {
     .prepare(
       `SELECT d.*,
               GROUP_CONCAT(DISTINCT t.label) as tag_labels,
+              (SELECT code FROM modules m WHERE m.id = d.assign_module_id) as assign_code,
+              (SELECT name FROM modules m WHERE m.id = d.assign_module_id) as assign_name,
               (SELECT COUNT(*) FROM chapters ch WHERE ch.document_id = d.id) as chapter_count,
               (SELECT COUNT(*) FROM cards c WHERE c.document_id = d.id) as card_count,
               (SELECT COUNT(*) FROM audio a JOIN chapters ch ON ch.id = a.chapter_id
@@ -294,7 +296,8 @@ documentRoutes.patch("/:id", async (c) => {
     db().prepare("UPDATE documents SET type = ? WHERE id = ?").run(body.type, id);
   }
   if (body.module_id !== undefined) {
-    db().prepare("UPDATE documents SET module_id = ? WHERE id = ?").run(body.module_id, id);
+    // Von Hand gesetzt: die Pipeline überschreibt es nicht mehr
+    db().prepare("UPDATE documents SET module_id = ?, assign_confidence = 'manuell' WHERE id = ?").run(body.module_id, id);
   }
   if (body.thumb_page !== undefined) {
     const max = doc.page_count > 0 ? doc.page_count : Number.MAX_SAFE_INTEGER;

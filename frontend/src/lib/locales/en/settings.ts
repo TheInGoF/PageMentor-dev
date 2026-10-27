@@ -233,4 +233,5 @@ export const settings: Record<string, string> = {
   "study.import.row.material": "Catalog entries",
   "study.import.row.trainers": "Trainers",
   "study.import.row.examDates": "Exam dates",
+  "study.import.row.prefixes": "Booklet prefixes",
 };

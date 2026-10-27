@@ -79,11 +79,14 @@ export async function extractPdfViaDocling(params: {
     // Textebene durch OCR ersetzen, ~2x langsamer, pro Upload wählbar
     form.append("force_ocr", "true");
   }
-  form.append("table_mode", "fast");
+  // Tabellenstruktur genau wie im Studium Maker; Formeln und Code als Text statt Bild
+  form.append("table_mode", "accurate");
+  form.append("do_table_structure", "true");
+  form.append("do_formula_enrichment", "true");
+  form.append("do_code_enrichment", "true");
   form.append("pdf_backend", "dlparse_v2");
   form.append("abort_on_error", "false");
 
-  // Formel + Code: serverseitig aktiv, kein Flag nötig
   // Bildbeschreibung bewusst aus: bringt fürs Hörbuch nichts, 5-10x langsamer
 
   onProgress?.(tLang(lang, "msg.doclingUploading"));

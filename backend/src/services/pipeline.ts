@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import { db } from "../db";
 import { extractPdfViaDocling, doclingAlive } from "./docling";
+import { assignAfterExtraction } from "../study/assign/store";
+import { emitLog } from "../log/logger";
 import { cleanForReading } from "./clean";
 import { emit } from "./events";
 import { indexDocument, indexChapters } from "./search";
@@ -45,7 +47,7 @@ async function processDocumentImpl(docId: string): Promise<void> {
 
   const d = db();
   const doc = d.prepare("SELECT * FROM documents WHERE id = ?").get(docId) as
-    | { stored_path: string; language: string; force_ocr: number }
+    | { stored_path: string; language: string; force_ocr: number; filename: string }
     | undefined;
 
   if (!doc) {
@@ -214,6 +216,16 @@ async function processDocumentImpl(docId: string): Promise<void> {
       }
     } catch (indexErr) {
       console.warn("[pipeline] indexing failed:", indexErr);
+    }
+
+    // Qualität prüfen, Modul nur mit Beleg zuordnen, sonst Vorschlag unter „Ohne Modul“
+    try {
+      const r = assignAfterExtraction(docId, doc.filename, extraction.markdown, extraction.pageCount);
+      const c = r.classification;
+      emitLog("info", "pipeline", `Zuordnung ${c.code ?? "ohne Modul"} (${c.rule}, ${r.assigned ? "automatisch" : "Vorschlag"})`, { ctx: { docId } });
+      if (r.quality.flag) emitLog("warn", "pipeline", `Qualität prüfen: ${r.quality.reasons.join("; ")}`, { ctx: { docId } });
+    } catch (assignErr) {
+      emitLog("warn", "pipeline", "Zuordnung fehlgeschlagen", { ctx: { docId }, err: assignErr });
     }
 
     emit({
