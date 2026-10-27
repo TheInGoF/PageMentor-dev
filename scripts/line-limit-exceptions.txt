@@ -1,5 +1,4 @@
 backend/src/routes/audio.ts
-backend/src/services/audioPreprocess.ts
 backend/src/services/audiobook.ts
 backend/src/services/cardGenerate.ts
 backend/src/services/docling.ts
