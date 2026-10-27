@@ -46,6 +46,23 @@ export interface MaterialItem {
 
 export type MaterialCounts = Record<MaterialKind | "uncertain", number>;
 
+export interface Trainer {
+  id: string;
+  module_id: string | null;
+  file: string;
+  title: string;
+  enabled: number;
+  global_name: string | null;
+  colors_name: string | null;
+}
+
+export interface TrainerCheck {
+  ok: boolean;
+  generators: number;
+  runs: number;
+  problems: string[];
+}
+
 export const studyApi = {
   study: {
     prefixes: (moduleId: string) => request<{ prefixes: ModulePrefix[] }>(`/api/study/prefixes?module=${encodeURIComponent(moduleId)}`),
@@ -59,6 +76,15 @@ export const studyApi = {
     extract: (documentId: string) =>
       request<{ started: boolean }>("/api/study/material/extract", { method: "POST", body: JSON.stringify({ documentId }) }),
     recipes: (moduleId: string) => request<{ started: boolean }>(`/api/study/material/recipes/${moduleId}`, { method: "POST" }),
+    trainers: (moduleId: string) => request<{ trainers: Trainer[] }>(`/api/study/trainers?module=${encodeURIComponent(moduleId)}`),
+    trainerSource: async (id: string) => {
+      const res = await fetch(`/api/study/trainers/${id}/source`);
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
+      return res.text();
+    },
+    trainerCheck: (id: string) => request<TrainerCheck>(`/api/study/trainers/${id}/check`),
+    addTime: (body: { date: string; module_id: string | null; kind: string; minutes: number; origin?: "auto" | "manual"; note?: string }) =>
+      request<unknown>("/api/study/time", { method: "POST", body: JSON.stringify(body) }),
     pickFolder: () => request<{ folder: string | null }>("/api/study/import/pick", { method: "POST" }),
     import: (folder: string, dryRun: boolean) =>
       request<StudyImportReport>("/api/study/import", { method: "POST", body: JSON.stringify({ folder, dryRun }) }),

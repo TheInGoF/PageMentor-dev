@@ -11,16 +11,16 @@ import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { CardReview } from "./CardReview";
 import { MaterialPanel } from "./module/MaterialPanel";
-import { Documents, CardsPanel, ExamsPanel, AudioPanel, SummariesPanel } from "./module/ModulePanels";
+import { Documents, AudioPanel, SummariesPanel } from "./module/ModulePanels";
+import { PracticePanel } from "./module/PracticePanel";
 
-type Tab = "overview" | "documents" | "material" | "cards" | "exams" | "audio" | "summaries";
+type Tab = "overview" | "documents" | "material" | "practice" | "audio" | "summaries";
 
 const TABS: Array<{ id: Tab; key: string }> = [
   { id: "overview", key: "module.tab.overview" },
   { id: "documents", key: "module.tab.documents" },
   { id: "material", key: "module.tab.material" },
-  { id: "cards", key: "module.tab.cards" },
-  { id: "exams", key: "module.tab.exams" },
+  { id: "practice", key: "module.tab.practice" },
   { id: "audio", key: "module.tab.audio" },
   { id: "summaries", key: "module.tab.summaries" },
 ];
@@ -152,10 +152,7 @@ export function ModuleDetail({
         {tab === "material" && (
           <MaterialPanel moduleId={moduleId} moduleName={m.name} docs={data.documents} onOpenDocument={onOpenDocument} />
         )}
-        {tab === "cards" && (
-          <CardsPanel data={data} onStart={startReview} />
-        )}
-        {tab === "exams" && <ExamsPanel exams={data.exams} />}
+        {tab === "practice" && <PracticePanel data={data} onStartReview={startReview} onOpenDocument={onOpenDocument} />}
         {tab === "audio" && (
           <AudioPanel chapters={data.audioChapters} color={m.color} />
         )}
@@ -165,6 +162,7 @@ export function ModuleDetail({
       {reviewing && (
         <CardReview
           cards={reviewing}
+          moduleId={m.id}
           onClose={async () => {
             setReviewing(null);
             await load();

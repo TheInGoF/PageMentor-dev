@@ -93,6 +93,7 @@ export interface ModuleDocument {
   page_count: number;
   ocr_status: string;
   short_code?: string | null;
+  heft_code?: string | null;
   series_sequence?: string | null;
   created_at: string;
   chapter_count: number;

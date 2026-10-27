@@ -5,10 +5,13 @@ import { useToast } from "./ui/Toast";
 import { cn } from "../lib/cn";
 import { t } from "../lib/i18n";
 import { renderMarkdown } from "../lib/markdown";
+import { useStudyTimer } from "../lib/useStudyTimer";
 
 interface Props {
   cards: Card[];
   onClose: () => void;
+  // Für die Lernzeit; ohne Modul wird sie modulübergreifend gebucht
+  moduleId?: string | null;
 }
 
 interface SessionEntry {
@@ -16,7 +19,8 @@ interface SessionEntry {
   quality: ReviewQuality;
 }
 
-export function CardReview({ cards, onClose }: Props) {
+export function CardReview({ cards, onClose, moduleId = null }: Props) {
+  useStudyTimer(moduleId, "karten", true);
   const [idx, setIdx] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [showHint, setShowHint] = useState(false);

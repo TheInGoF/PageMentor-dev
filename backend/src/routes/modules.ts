@@ -75,7 +75,7 @@ moduleRoutes.get("/:id", (c) => {
   const documents = d
     .prepare(
       `SELECT id, title, filename, type, language, page_count, ocr_status,
-              short_code, series_sequence, created_at,
+              short_code, heft_code, series_sequence, created_at,
               (SELECT COUNT(*) FROM chapters ch WHERE ch.document_id = documents.id) as chapter_count,
               (SELECT COUNT(*) FROM audio a JOIN chapters ch ON ch.id = a.chapter_id
                  WHERE ch.document_id = documents.id AND a.status = 'done') as audio_done,

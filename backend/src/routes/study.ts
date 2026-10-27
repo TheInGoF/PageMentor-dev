@@ -16,6 +16,7 @@ import { confirmAssignment, listPrefixes, setPrefixes } from "../study/assign/st
 import { emitLog } from "../log/logger";
 import { extractFromDocument, extractProblem, synthesizeRecipes } from "../study/material/extract";
 import type { ExtractKind } from "../study/material/prompts";
+import { getTrainer, listTrainers, selfTest, trainerSource } from "../study/trainer/store";
 import { getMaterial, listMaterial, materialCounts, setUncertain, uncertainItems, type MaterialKind } from "../study/material";
 
 export const studyRoutes = new Hono();
@@ -128,4 +129,20 @@ studyRoutes.post("/material/recipes/:moduleId", (c) => {
   if (extracting.has(id)) return c.json({ error: "Läuft schon" }, 409);
   background(id, () => synthesizeRecipes(id));
   return c.json({ started: true }, 202);
+});
+
+// Trainer: Liste, Quelltext (läuft im Browser abgeschirmt), Selbsttest
+studyRoutes.get("/trainers", (c) => c.json({ trainers: listTrainers(c.req.query("module") || undefined) }));
+studyRoutes.get("/trainers/:id/source", (c) => {
+  const t = getTrainer(c.req.param("id"));
+  const src = t ? trainerSource(t) : null;
+  if (!src) return c.json({ error: "Trainer-Datei fehlt" }, 404);
+  return c.body(src, 200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-store" });
+});
+studyRoutes.get("/trainers/:id/check", (c) => {
+  const t = getTrainer(c.req.param("id"));
+  if (!t) return c.json({ error: "nicht gefunden" }, 404);
+  const r = selfTest(t);
+  emitLog(r.ok ? "info" : "warn", "trainer", `Selbsttest ${t.title}: ${r.generators} Generatoren, ${r.runs} Läufe, ${r.problems.length} Probleme`);
+  return c.json(r);
 });
