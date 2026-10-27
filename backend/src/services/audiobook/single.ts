@@ -9,11 +9,12 @@ import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
 import { running, type Chapter } from "./state";
 import { chapterFile, deleteAudioForChapter, relPath, upsertAudio } from "./files";
 import { synthesizeChapter } from "./synthChapter";
+import { runJob } from "../../log/jobs";
 
 // Audio für EIN Kapitel
 // Ohne LLM-Aufbereitung, ohne M4B, ohne Fehlerzähler
 // Nutzt audio_text, sonst text
-export async function generateSingleChapterAudio(params: {
+async function generateSingleChapterAudioImpl(params: {
   chapterId: string;
   voiceId: string;
   rate?: string;
@@ -163,7 +164,7 @@ export async function generateSingleChapterAudio(params: {
 
 // Intro-Audio vor dem ersten Kapitel
 // Fester Pfad audio/{docId}/intro.mp3, keine DB-Zeile
-export async function generateIntroAudio(params: {
+async function generateIntroAudioImpl(params: {
   docId: string;
   text: string;
   voiceId: string;
@@ -271,4 +272,12 @@ export async function generateIntroAudio(params: {
     // Sicherheitshalber nochmal
     if (!alreadyRunning) running.delete(params.docId);
   }
+}
+
+export function generateSingleChapterAudio(...args: Parameters<typeof generateSingleChapterAudioImpl>): ReturnType<typeof generateSingleChapterAudioImpl> {
+  return runJob("chapter-audio", "audiobook", { chapterId: args[0].chapterId }, () => generateSingleChapterAudioImpl(...args));
+}
+
+export function generateIntroAudio(...args: Parameters<typeof generateIntroAudioImpl>): ReturnType<typeof generateIntroAudioImpl> {
+  return runJob("intro-audio", "audiobook", { docId: args[0].docId }, () => generateIntroAudioImpl(...args));
 }

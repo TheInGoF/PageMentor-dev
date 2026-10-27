@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import { doclingFetch, numOr, pollUntilDone, subscribeViaWs } from "./client";
 import { buildSections } from "./sections";
+import { httpErrorFrom } from "../../log/errors";
 
 // Titel + Autor aus den Metadaten, null bei fehlenden oder Standard-Werten
 function extractDocMetadata(
@@ -186,7 +187,7 @@ export async function extractPdfViaDocling(params: {
   onProgress?.(tLang(lang, "msg.doclingFetchResult"));
   const resultRes = await doclingFetch(`/v1/result/${task_id}`);
   if (!resultRes.ok) {
-    throw new Error(`docling result fetch failed ${resultRes.status}`);
+    throw await httpErrorFrom(resultRes, "Docling-Ergebnis");
   }
   const result = (await resultRes.json()) as DoclingResponse;
   if (result.status && result.status !== "success" && result.status !== "partial_success") {

@@ -15,6 +15,7 @@ import {
 } from "./embeddings";
 import { pickLang, tLang } from "../lib/i18n";
 import { DATA_DIR } from "../paths";
+import { runJob } from "../log/jobs";
 
 
 const running = new Map<string, AbortController>();
@@ -36,7 +37,7 @@ export function cancelProcessing(docId: string): boolean {
  * /api/documents/:id/reprocess — upload only creates the document
  * with status `awaiting-extraction` without starting the pipeline.
  */
-export async function processDocument(docId: string): Promise<void> {
+async function processDocumentImpl(docId: string): Promise<void> {
   if (running.has(docId)) return;
   const abortController = new AbortController();
   running.set(docId, abortController);
@@ -373,4 +374,8 @@ async function buildChunksForDocument(docId: string): Promise<void> {
   console.log(
     `[pipeline] ${docId}: ${okCount}/${withIds.length} Chunks embedded (${embedder.model})`
   );
+}
+
+export function processDocument(...args: Parameters<typeof processDocumentImpl>): ReturnType<typeof processDocumentImpl> {
+  return runJob("extract", "pipeline", { docId: args[0] }, () => processDocumentImpl(...args));
 }

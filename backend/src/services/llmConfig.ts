@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DATA_DIR } from "../paths";
+import { registerSecret } from "../log/redact";
 
 const CONFIG_PATH = join(DATA_DIR, "llm-config.json");
 
@@ -95,6 +96,7 @@ export function getLlmConfig(): LlmConfig {
     if (existsSync(CONFIG_PATH)) {
       const text = readFileSync(CONFIG_PATH, "utf-8");
       cached = JSON.parse(text) as LlmConfig;
+      registerConfigSecrets(cached);
       return cached;
     }
   } catch (err) {
@@ -117,7 +119,15 @@ export function setLlmConfig(patch: LlmConfig): LlmConfig {
     console.warn("[llm-config] failed to persist config:", err);
   }
   cached = next;
+  registerConfigSecrets(next);
   return next;
+}
+
+// Schlüssel und Tokens für das Schwärzen im Log merken
+function registerConfigSecrets(cfg: LlmConfig): void {
+  for (const [k, v] of Object.entries(cfg)) {
+    if (/(key|token|password|secret)/i.test(k) && typeof v === "string") registerSecret(v);
+  }
 }
 
 /** Effective value: DB override > ENV > undefined */

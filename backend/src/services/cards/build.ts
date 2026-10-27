@@ -10,6 +10,7 @@ import { isAvailable as llmAvailable } from "../llm";
 import { effective } from "../llmConfig";
 import { CHUNK_CHARS, CHUNK_OVERLAP, MIN_CHAPTER_CHARS, type ChapterRow } from "./types";
 import { SKIP_KINDS, dedupKey, chunkText, extractCardsFromChunk } from "./extract";
+import { runJob } from "../../log/jobs";
 
 // Abbruch-Flags: geprüft zwischen LLM-Aufrufen, laufende Aufrufe laufen zu Ende
 const cancelFlags = new Set<string>();
@@ -33,7 +34,7 @@ export interface BuildOptions {
   model?: string;
 }
 
-export async function runCardBuild(
+async function runCardBuildImpl(
   docId: string,
   opts: BuildOptions = {}
 ): Promise<void> {
@@ -276,4 +277,8 @@ export async function runCardBuild(
     activeRuns.delete(docId);
     cancelFlags.delete(docId);
   }
+}
+
+export function runCardBuild(...args: Parameters<typeof runCardBuildImpl>): ReturnType<typeof runCardBuildImpl> {
+  return runJob("cards", "cards", { docId: args[0] }, () => runCardBuildImpl(...args));
 }

@@ -8,9 +8,10 @@ import { ensureCover } from "../covers";
 import { emit } from "../events";
 import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
 import type { Document } from "./state";
+import { runJob } from "../../log/jobs";
 
 // M4B aus allen fertigen Kapitel-MP3s bauen
-export async function rebuildM4B(docId: string): Promise<{
+async function rebuildM4BImpl(docId: string): Promise<{
   path: string;
   chapters: number;
 }> {
@@ -115,4 +116,8 @@ export async function rebuildM4B(docId: string): Promise<{
   });
 
   return { path: bookPath, chapters: m4bChapters.length };
+}
+
+export function rebuildM4B(...args: Parameters<typeof rebuildM4BImpl>): ReturnType<typeof rebuildM4BImpl> {
+  return runJob("m4b", "audiobook", { docId: args[0] }, () => rebuildM4BImpl(...args));
 }

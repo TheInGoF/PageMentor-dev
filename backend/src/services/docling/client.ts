@@ -6,6 +6,7 @@ import {
   POLL_INTERVAL_MS,
   type PollResponse,
 } from "./types";
+import { httpErrorFrom } from "../../log/errors";
 
 // Polling als Fallback, wenn WebSocket nicht geht
 export async function pollUntilDone(
@@ -21,7 +22,7 @@ export async function pollUntilDone(
       throw new Error("canceled");
     }
     const res = await doclingFetch(`/v1/status/poll/${taskId}`);
-    if (!res.ok) throw new Error(`docling poll failed ${res.status}`);
+    if (!res.ok) throw await httpErrorFrom(res, "Docling-Status");
     const status = (await res.json()) as PollResponse;
     const state = report(status);
     if (state === "success") return;

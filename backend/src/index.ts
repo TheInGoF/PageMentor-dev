@@ -1,4 +1,11 @@
-import { DATA_DIR } from "./paths";
+import "./log/boot";
+import { DATA_DIR, LOG_DIR } from "./paths";
+import { APP_VERSION } from "./version";
+import { startupHeader, startupStep, startupDone, startupNote } from "./log/startup";
+import { requestLogger, onRouteError } from "./log/http";
+import { logRoutes, clientLogRoutes } from "./routes/logs";
+import { registerDiagnostic } from "./log/diagnostics";
+import { publicConfig } from "./services/llmConfig";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
@@ -19,88 +26,41 @@ import { voiceRoutes } from "./routes/voices";
 import { adminRoutes } from "./routes/admin";
 import { ensureReady as ensureSearchReady } from "./services/search";
 import { initDb } from "./db";
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 
-// Version resolver: primarily from the VERSION file (repo root, single
-// source of truth), fallback to package.json. VERSION lands in the
-// Docker image at /app/VERSION (see Dockerfile). In local dev the
-// file is two levels above src/index.ts.
-const PKG_VERSION = ((): string => {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    join(here, "..", "..", "VERSION"), // dev: backend/src → repo/VERSION
-    join(here, "..", "VERSION"),       // docker: /app/src → /app/VERSION
-  ];
-  for (const path of candidates) {
-    try {
-      const v = readFileSync(path, "utf-8").trim();
-      if (v.length > 0) return v;
-    } catch {
-      // try next
-    }
-  }
-  try {
-    const pkg = JSON.parse(
-      readFileSync(join(here, "..", "package.json"), "utf-8")
-    ) as { version?: string };
-    return pkg.version ?? "0.0.0";
-  } catch {
-    return "0.0.0";
-  }
-})();
-
-// Timestamp prefix for all console.* output. The Docker log driver
-// already prefixes lines in Portainer, but anyone pulling logs via
-// `docker logs` without -t or parsing them from a text file gets
-// bare lines without time context — and comparing multiple container
-// logs becomes painful. An additional ISO timestamp at the line
-// start also helps a frontend log view (if we ever build one).
-(() => {
-  const origLog = console.log.bind(console);
-  const origWarn = console.warn.bind(console);
-  const origError = console.error.bind(console);
-  const origInfo = console.info.bind(console);
-  const ts = (): string => new Date().toISOString();
-  console.log = (...args: unknown[]) => origLog(`[${ts()}]`, ...args);
-  console.info = (...args: unknown[]) => origInfo(`[${ts()}]`, ...args);
-  console.warn = (...args: unknown[]) => origWarn(`[${ts()}] WARN`, ...args);
-  console.error = (...args: unknown[]) => origError(`[${ts()}] ERROR`, ...args);
-})();
-
-// Wire console.* into the in-memory log bus BEFORE the banner so
-// even the first lines after boot show up in the Logs page.
+// Laufende Pumpen für Sidecar- und Container-Logs
 import {
-  installLogTap,
   startSidecarLogPump,
   startDockerLogPumps,
 } from "./services/logTap";
-installLogTap();
 startSidecarLogPump();
-// Mirror docling's container logs into the Logs page via the
-// pm-docker-log-bridge sidecar. No-op when PM_DOCKER_LOG_BRIDGE_URL
-// isn't configured, so existing installs without the bridge keep
-// working unchanged.
+// Docling-Logs über pm-docker-log-bridge, ohne URL ohne Wirkung
 startDockerLogPumps();
 
-// Loud startup banner — makes it immediately visible in the
-// Portainer log that the new build is actually running (Portainer
-// often shows container recreates without a clear signal, even
-// when they went through silently).
-console.log("================================================================");
-console.log(`  PageMentor backend v${PKG_VERSION}`);
-console.log(`  started at ${new Date().toISOString()}`);
-console.log(`  node_env=${process.env.NODE_ENV ?? "development"} data_dir=${DATA_DIR}`);
-console.log("================================================================");
+startupHeader(APP_VERSION, {
+  Daten: DATA_DIR,
+  Logs: LOG_DIR,
+  Arbeitsordner: process.cwd(),
+  Werkzeuge: Object.fromEntries(
+    ["ffmpeg", "ffprobe", "pdftoppm", "tesseract", "AtomicParsley"].map((t) => [t, Bun.which(t) ?? "FEHLT"])
+  ),
+});
+
+// Zusätzliche Inhalte fürs Diagnosepaket
+registerDiagnostic("einstellungen", () => publicConfig());
+registerDiagnostic("werkzeuge", () =>
+  Object.fromEntries(["ffmpeg", "ffprobe", "pdftoppm", "tesseract", "AtomicParsley"].map((t) => [t, Bun.which(t)]))
+);
 
 const app = new Hono();
 
 app.use("/*", cors());
+app.use("/*", requestLogger);
+app.onError(onRouteError);
 
 // Public
-app.get("/api/health", (c) => c.json({ status: "ok", version: PKG_VERSION }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: APP_VERSION }));
 app.route("/api/auth", authRoutes);
+app.route("/api/logs/client", clientLogRoutes);
 
 // Protected
 app.use("/api/*", authMiddleware);
@@ -118,13 +78,15 @@ app.route("/api/rag", ragRoutes);
 app.route("/api/voices", voiceRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/tutor", tutorRoutes);
+app.route("/api/logs", logRoutes);
 
 // Static frontend (production)
 app.use("/*", serveStatic({ root: "./public" }));
 app.use("/*", serveStatic({ path: "./public/index.html" }));
 
-initDb();
-ensureSearchReady();
+await startupStep("Datenbank öffnen", () => initDb());
+await startupStep("Suchindex prüfen", () => ensureSearchReady());
+startupNote(`Dienste laut Einstellungen: ${JSON.stringify(serviceUrls())}`);
 
 export default {
   port: 3000,
@@ -140,4 +102,11 @@ export default {
   idleTimeout: 0,
 };
 
-console.log(`PageMentor API v${PKG_VERSION} running on :3000`);
+startupNote(`API läuft auf Port 3000, Version ${APP_VERSION}`);
+startupDone();
+
+// Konfigurierte Dienst-Adressen, ohne Schlüssel
+function serviceUrls(): Record<string, unknown> {
+  const cfg = publicConfig() as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(cfg).filter(([k, v]) => /url/i.test(k) && v));
+}

@@ -16,6 +16,7 @@ import {
 } from "./textCleanup";
 import { stripProblematicCharsForTts } from "./ttsChars";
 import { fixGermanNumeralBleed } from "./numerals";
+import { runJob } from "../../log/jobs";
 
 interface ChapterRow {
   id: string;
@@ -39,7 +40,7 @@ export interface PreprocessResult {
 
 // Cache-Treffer sofort, sonst LLM-Lauf + Speichern
 // Ohne LLM entscheidet der Aufrufer über den Fallback
-export async function preprocessChapterForAudio(params: {
+async function preprocessChapterForAudioImpl(params: {
   chapterId: string;
   language: string;
   model?: string;
@@ -274,4 +275,8 @@ export function clearAudioTextCacheForDocument(documentId: string): void {
       "UPDATE chapters SET audio_text = NULL, audio_text_model = NULL WHERE document_id = ?"
     )
     .run(documentId);
+}
+
+export function preprocessChapterForAudio(...args: Parameters<typeof preprocessChapterForAudioImpl>): ReturnType<typeof preprocessChapterForAudioImpl> {
+  return runJob("preprocess", "audiobook", { chapterId: args[0].chapterId }, () => preprocessChapterForAudioImpl(...args));
 }

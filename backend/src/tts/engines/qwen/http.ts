@@ -2,12 +2,14 @@
 import * as http from "node:http";
 import * as https from "node:https";
 import { URL } from "node:url";
+import { emitLog } from "../../../log/logger";
+import { HttpError } from "../../../log/errors";
 
 // Lange TTS-Anfrage über node:http
 // Bun-fetch und undici brechen still nach ~5 min ab, egal welcher Timeout
 // Zusätzlich TCP-Keepalive alle 30 s gegen NAT- und Docker-Abbrüche
 let _ttsFetchLogged = false;
-export async function ttsFetch(
+async function ttsFetchRaw(
   url: string,
   init: {
     method: string;
@@ -116,4 +118,32 @@ export async function ttsFetch(
     req.write(bodyBuf);
     req.end();
   });
+}
+
+// Wie ttsFetchRaw, plus Log: Ziel, Dauer, Status, Antworttext bei Fehler
+export async function ttsFetch(
+  url: string,
+  init: Parameters<typeof ttsFetchRaw>[1]
+): ReturnType<typeof ttsFetchRaw> {
+  const target = url.split("?")[0];
+  const t0 = performance.now();
+  try {
+    const res = await ttsFetchRaw(url, init);
+    const durationMs = Math.round(performance.now() - t0);
+    if (res.ok) {
+      emitLog("info", "tts", `${init.method} ${target} → ${res.status} (${durationMs} ms)`, { ctx: { status: res.status, durationMs } });
+    } else {
+      const body = await res.text().catch(() => "");
+      emitLog("warn", "tts", `${init.method} ${target} → ${res.status} (${durationMs} ms)`, {
+        err: new HttpError(`TTS-Sidecar HTTP ${res.status}`, res.status, target, body.slice(0, 2000)),
+        ctx: { status: res.status, durationMs },
+      });
+      return { ...res, text: async () => body };
+    }
+    return res;
+  } catch (err) {
+    const durationMs = Math.round(performance.now() - t0);
+    emitLog(init.signal?.aborted ? "info" : "warn", "tts", `${init.method} ${target} ${init.signal?.aborted ? "abgebrochen" : "fehlgeschlagen"} nach ${durationMs} ms`, { err, ctx: { durationMs } });
+    throw err;
+  }
 }

@@ -26,7 +26,8 @@ let failures = 0;
 
 function cleanup() {
   server.kill();
-  rmSync(dataDir, { recursive: true, force: true });
+  if (!process.env.SMOKE_KEEP) rmSync(dataDir, { recursive: true, force: true });
+  else console.log("Daten behalten in", dataDir);
 }
 
 async function waitForHealth() {
@@ -133,6 +134,20 @@ async function run() {
   await call("GET", `/api/audio/document/${docId}`);
   await call("GET", "/api/audio/voices");
 
+  await call("POST", "/api/logs/client", { kind: "smoke", message: "Testfehler aus dem Smoke-Test", stack: "at smoke" });
+  await call("GET", "/api/logs/days");
+  const logs = await call("GET", "/api/logs?level=warn");
+  if (!logs.lines?.some((l: { msg: string }) => l.msg.includes("Testfehler"))) {
+    failures++;
+    console.log("FAIL Frontend-Fehler fehlt im Log");
+  }
+  const diag = await call("POST", "/api/logs/diagnostics");
+  const zip = await fetch(BASE + diag.url, { headers: { cookie } });
+  const bytes = new Uint8Array(await zip.arrayBuffer());
+  if (zip.status !== 200 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    failures++;
+    console.log("FAIL Diagnosepaket ist kein ZIP");
+  } else console.log(`OK   Diagnosepaket ${diag.name} (${bytes.length} Bytes)`);
   await call("DELETE", `/api/cards/${card.id}`);
   await call("DELETE", `/api/documents/${docId}`);
   await call("DELETE", `/api/modules/${moduleId}`);

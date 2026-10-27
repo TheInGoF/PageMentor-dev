@@ -6,6 +6,7 @@ import { db } from "../../db";
 import { generate } from "../llm";
 import { withGemmaLock } from "../gemmaLock";
 import { INTRO_SYSTEM_DE, INTRO_SYSTEM_EN } from "./prompts";
+import { runJob } from "../../log/jobs";
 
 export interface IntroPreprocessResult {
   text: string;
@@ -14,7 +15,7 @@ export interface IntroPreprocessResult {
 }
 
 // Wie preprocessChapterForAudio, aber ohne Teilstücke und Zahlwort-Prüfung
-export async function preprocessIntroForAudio(params: {
+async function preprocessIntroForAudioImpl(params: {
   docId: string;
   model?: string;
   force?: boolean;
@@ -104,4 +105,8 @@ export function clearAudioIntroTtsCache(docId: string): void {
       "UPDATE documents SET audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?"
     )
     .run(docId);
+}
+
+export function preprocessIntroForAudio(...args: Parameters<typeof preprocessIntroForAudioImpl>): ReturnType<typeof preprocessIntroForAudioImpl> {
+  return runJob("intro-preprocess", "audiobook", { docId: args[0].docId }, () => preprocessIntroForAudioImpl(...args));
 }

@@ -1,6 +1,7 @@
 // Laufzustand, Abbruch, gemeinsame Typen
 import { emit } from "../events";
 import { effective } from "../llmConfig";
+import { httpErrorFrom } from "../../log/errors";
 
 export interface Chapter {
   id: string;
@@ -130,6 +131,6 @@ async function resetGpuViaArbiter(reason: string = "cancel"): Promise<void> {
     signal: AbortSignal.timeout(60_000),
   });
   if (!res.ok) {
-    throw new Error(`arbiter reset ${res.status}`);
+    throw await httpErrorFrom(res, "Arbiter-Reset");
   }
 }

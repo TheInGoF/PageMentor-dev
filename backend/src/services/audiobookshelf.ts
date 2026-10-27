@@ -18,6 +18,7 @@ import { effective } from "./llmConfig";
 import { ensureCover } from "./covers";
 import { pickLang, tLang } from "../lib/i18n";
 import { DATA_DIR } from "../paths";
+import { httpErrorFrom } from "../log/errors";
 
 
 function absBaseUrl(): string | null {
@@ -96,7 +97,7 @@ export async function listLibraries(): Promise<AbsLibrary[]> {
     signal: AbortSignal.timeout(8_000),
   });
   if (!res.ok) {
-    throw new Error(`ABS libraries ${res.status} ${res.statusText}`);
+    throw await httpErrorFrom(res, "ABS Bibliotheken");
   }
   const data = (await res.json()) as {
     libraries?: Array<{ id: string; name: string; mediaType: string }>;

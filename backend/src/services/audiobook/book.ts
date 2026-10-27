@@ -19,8 +19,9 @@ import {
 } from "./state";
 import { chapterFile, deleteAudioForChapter, relPath, upsertAudio } from "./files";
 import { synthesizeChapter } from "./synthChapter";
+import { runJob } from "../../log/jobs";
 
-export async function generateAudiobook(params: {
+async function generateAudiobookImpl(params: {
   docId: string;
   voiceId?: string;
   rate?: string;
@@ -399,4 +400,8 @@ export async function generateAudiobook(params: {
   } finally {
     running.delete(params.docId);
   }
+}
+
+export function generateAudiobook(...args: Parameters<typeof generateAudiobookImpl>): ReturnType<typeof generateAudiobookImpl> {
+  return runJob("audiobook", "audiobook", { docId: args[0].docId }, () => generateAudiobookImpl(...args));
 }

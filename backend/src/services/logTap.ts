@@ -1,66 +1,8 @@
-/**
- * Wires backend `console.*` and sidecar log polling into the logBus.
- *
- * Goals:
- *   - Every `console.log/info/warn/error` written by backend code lands
- *     in the LogsPage SSE stream automatically (no callsite changes).
- *   - The sidecar's recent log lines are pulled every 5 s and merged
- *     into the same stream so the user sees backend + sidecar
- *     interleaved by timestamp.
- *
- * Both are best-effort: if the sidecar is unreachable we just keep
- * trying; the original `console.*` call still goes to stderr/stdout
- * regardless, so we never lose log data.
- */
+// Sidecar- und Container-Logs in den Log-Bus pumpen
+// console.* fängt log/consoleTap.ts ab
 
 import { publish, type LogLevel, type LogSource } from "./logBus";
 import { effective } from "./llmConfig";
-
-let installed = false;
-
-/** Replace `console.*` so each call goes to both stderr (as before)
- *  and the in-memory log bus. Call once at process start. */
-export function installLogTap(): void {
-  if (installed) return;
-  installed = true;
-  const originals = {
-    log: console.log,
-    info: console.info,
-    warn: console.warn,
-    error: console.error,
-    debug: console.debug,
-  };
-  const wrap = (level: LogLevel, original: (...a: unknown[]) => void) => {
-    return (...args: unknown[]) => {
-      original(...args);
-      try {
-        publish({
-          ts: Date.now(),
-          source: "pm-app",
-          level,
-          message: args
-            .map((a) => (typeof a === "string" ? a : safeStringify(a)))
-            .join(" "),
-        });
-      } catch {
-        // swallow — never let logging break the caller
-      }
-    };
-  };
-  console.log = wrap("info", originals.log);
-  console.info = wrap("info", originals.info);
-  console.warn = wrap("warn", originals.warn);
-  console.error = wrap("error", originals.error);
-  console.debug = wrap("debug", originals.debug);
-}
-
-function safeStringify(v: unknown): string {
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
-}
 
 interface SidecarLine {
   ts: number;

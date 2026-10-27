@@ -17,13 +17,18 @@ export type LogSource =
   | "ollama"
   | "docling"
   | "system";
-export type LogLevel = "info" | "warn" | "error" | "debug";
+export type { LogLevel } from "../log/types";
+import type { ErrorInfo, LogContext, LogLevel } from "../log/types";
 
 export interface LogLine {
   ts: number;
   source: LogSource;
   level: LogLevel;
   message: string;
+  // Bereich, z. B. pipeline, tts, http
+  area?: string;
+  ctx?: LogContext;
+  err?: ErrorInfo;
 }
 
 type Handler = (l: LogLine) => void;

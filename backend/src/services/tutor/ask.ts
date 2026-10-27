@@ -10,6 +10,7 @@ import promptEn from "../../prompts/tutor.en.md" with { type: "text" };
 import { MAX_HISTORY_TURNS, type ChatMessageRow, type TutorAnswer, type TutorSource } from "./types";
 import { getChatSession, listChatMessages } from "./sessions";
 import { retrieveChunks, formatSourcesForPrompt } from "./retrieve";
+import { runJob } from "../../log/jobs";
 
 const SYSTEM_PROMPT_DE = promptDe;
 const SYSTEM_PROMPT_EN = promptEn;
@@ -145,7 +146,7 @@ function detectQuestionLanguage(question: string): "de" | "en" {
   return enHits > deHits ? "en" : "de";
 }
 
-export async function ask(params: {
+async function askImpl(params: {
   sessionId: string;
   question: string;
 }): Promise<TutorAnswer> {
@@ -215,4 +216,8 @@ export async function ask(params: {
   }
 
   return answer;
+}
+
+export function ask(...args: Parameters<typeof askImpl>): ReturnType<typeof askImpl> {
+  return runJob("tutor", "tutor", {}, () => askImpl(...args));
 }
