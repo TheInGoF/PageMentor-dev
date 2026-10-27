@@ -1,0 +1,39 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zeilenlimit
+        run: scripts/check-lines.sh
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Backend installieren
+        working-directory: backend
+        run: bun install
+
+      - name: Backend Typecheck
+        working-directory: backend
+        run: npx tsc --noEmit -p .
+
+      - name: Backend Smoke-Test
+        working-directory: backend
+        run: bun scripts/smoke.ts
+
+      - name: Frontend Build
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund && npm run build
+
+      - name: Python Syntax
+        run: python3 -m compileall -q pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer
