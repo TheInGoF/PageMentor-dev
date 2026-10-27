@@ -41,3 +41,12 @@ backup/
 *.pem
 *.key
 *.crt
+
+# Private Studiendaten nie ins Repo
+*.zip
+studium*.json
+material.json
+studienplaner.html
+20_module/
+30_data/
+99_archive/
