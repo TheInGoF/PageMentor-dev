@@ -2,7 +2,7 @@
 // Versioniert über PRAGMA user_version, vor jeder Hochstufung ein Backup der DB
 import type { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 
 export const STUDY_SCHEMA_VERSION = 1;
 
@@ -114,12 +114,11 @@ function migrateV1(d: Database): void {
 const MIGRATIONS: Array<(d: Database) => void> = [migrateV1];
 
 // Sicherung vor der Hochstufung; nur wenn schon Daten da sind
-function backup(d: Database, dataDir: string, from: number): string | null {
-  const dbFile = join(dataDir, "pagementor.db");
+function backup(d: Database, dbFile: string, from: number): string | null {
   if (!existsSync(dbFile)) return null;
   const hasData = (d.prepare("SELECT COUNT(*) AS n FROM documents").get() as { n: number }).n > 0;
   if (!hasData) return null;
-  const dir = join(dataDir, "backups");
+  const dir = join(dirname(dbFile), "backups");
   mkdirSync(dir, { recursive: true });
   d.exec("PRAGMA wal_checkpoint(TRUNCATE)");
   const target = join(dir, `pagementor-v${from}-${new Date().toISOString().slice(0, 10)}.db`);
@@ -128,10 +127,10 @@ function backup(d: Database, dataDir: string, from: number): string | null {
 }
 
 // Gibt die erreichte Version und ggf. den Backup-Pfad zurück
-export function migrateStudy(d: Database, dataDir: string): { version: number; backup: string | null } {
+export function migrateStudy(d: Database, dbFile: string): { version: number; backup: string | null } {
   const current = (d.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
   if (current >= STUDY_SCHEMA_VERSION) return { version: current, backup: null };
-  const saved = backup(d, dataDir, current);
+  const saved = backup(d, dbFile, current);
   const run = d.transaction(() => {
     for (let v = current; v < STUDY_SCHEMA_VERSION; v++) MIGRATIONS[v](d);
     d.exec(`PRAGMA user_version = ${STUDY_SCHEMA_VERSION}`);

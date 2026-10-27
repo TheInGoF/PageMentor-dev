@@ -1,16 +1,23 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { DATA_DIR } from "./paths";
 import { migrateStudy } from "./study/schema";
 
-const DB_PATH = join(DATA_DIR, "pagementor.db");
+let DB_PATH = join(DATA_DIR, "pagementor.db");
 
 let _db: Database;
 
+// Für Tests: eigene Datei statt des Datenordners, unabhängig von der Ladereihenfolge
+export function useDatabaseFile(file: string): void {
+  if (_db) _db.close();
+  _db = undefined as unknown as Database;
+  DB_PATH = file;
+}
+
 export function db(): Database {
   if (!_db) {
-    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+    if (!existsSync(dirname(DB_PATH))) mkdirSync(dirname(DB_PATH), { recursive: true });
     _db = new Database(DB_PATH, { create: true });
     _db.exec("PRAGMA journal_mode = WAL");
     _db.exec("PRAGMA foreign_keys = ON");
@@ -413,7 +420,7 @@ export function initDb() {
   }
 
   // Studien-Datenmodell, mit Backup vor jeder Hochstufung
-  const study = migrateStudy(d, DATA_DIR);
+  const study = migrateStudy(d, DB_PATH);
   if (study.backup) console.log(`[db] Backup vor Schema-Hochstufung: ${study.backup}`);
 
   console.log("Database ready:", DB_PATH);

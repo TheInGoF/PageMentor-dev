@@ -4,7 +4,7 @@ import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-process.env.PM_DATA_DIR = mkdtempSync(join(tmpdir(), "pm-study-"));
+const TMP = mkdtempSync(join(tmpdir(), "pm-study-"));
 
 type Mods = {
   db: typeof import("../db");
@@ -23,6 +23,8 @@ beforeAll(async () => {
     t: await import("./time"),
     m: await import("./material"),
   };
+  // Nie die echte Datenbank: eigene Datei im Temp-Ordner
+  x.db.useDatabaseFile(join(TMP, "test.db"));
   x.db.initDb();
   const ins = x.db.db().prepare("INSERT INTO modules (id, name, code, cp) VALUES (?, ?, ?, ?)");
   ins.run("m1", "Testmodul Eins", "TEST1", 6);
@@ -32,9 +34,18 @@ beforeAll(async () => {
 describe("Schema", () => {
   test("Version gesetzt, zweiter Lauf ändert nichts", async () => {
     const { migrateStudy, STUDY_SCHEMA_VERSION } = await import("./schema");
-    const r = migrateStudy(x.db.db(), process.env.PM_DATA_DIR!);
+    const r = migrateStudy(x.db.db(), join(TMP, "test.db"));
     expect(r.version).toBe(STUDY_SCHEMA_VERSION);
     expect(r.backup).toBeNull();
+  });
+  test("Backup vor Hochstufung, wenn Daten da sind", async () => {
+    const { migrateStudy } = await import("./schema");
+    const d = x.db.db();
+    d.prepare("INSERT INTO documents (id, title, filename, stored_path) VALUES ('d1', 'Doc', 'a.pdf', 'x')").run();
+    d.exec("PRAGMA user_version = 0");
+    const r = migrateStudy(d, join(TMP, "test.db"));
+    expect(r.backup).toContain("backups");
+    d.prepare("DELETE FROM documents WHERE id = 'd1'").run();
   });
   test("Kürzel eindeutig", () => {
     expect(() => x.db.db().prepare("INSERT INTO modules (id, name, code) VALUES ('m3', 'Doppelt', 'TEST1')").run()).toThrow();
