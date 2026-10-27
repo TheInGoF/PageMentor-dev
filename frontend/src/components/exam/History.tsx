@@ -48,7 +48,7 @@ export function History({
             >
               <div className="min-w-0">
                 <div className="text-sm truncate">{h.title}</div>
-                <div className="text-[11px] text-neutral-500">
+                <div className="text-xs text-neutral-500">
                   {new Date(h.created_at).toLocaleString(localeCode)} ·{" "}
                   {h.status === "closed"
                     ? t("exam.history.closed")
@@ -97,7 +97,7 @@ function SparkLine({ values }: { values: number[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-14">
       <polyline
         fill="none"
-        stroke="#ef4444"
+        stroke="rgb(var(--accent))"
         strokeWidth="2"
         points={points}
         vectorEffect="non-scaling-stroke"
@@ -108,7 +108,7 @@ function SparkLine({ values }: { values: number[] }) {
           cx={i * step}
           cy={h - (v / max) * h}
           r="3"
-          fill="#ef4444"
+          fill="rgb(var(--accent))"
           vectorEffect="non-scaling-stroke"
         />
       ))}

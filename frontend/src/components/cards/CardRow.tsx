@@ -52,7 +52,7 @@ export function CardRow({
           <div className="text-sm text-neutral-100 line-clamp-2">
             {renderMarkdown(card.question)}
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-1">
+          <div className="flex items-center gap-2 text-xs text-neutral-500 mt-1">
             {card.chapter_number && (
               <span>
                 {t("library.chaptersShort")} {String(card.chapter_number).padStart(2, "0")}

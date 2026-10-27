@@ -98,7 +98,7 @@ export function CardReview({ cards, onClose }: Props) {
         <div className="w-full max-w-2xl flex flex-col gap-6">
           <section className="card p-6 md:p-8">
             {card.chapter_number && (
-              <div className="text-[11px] uppercase tracking-wide text-accent mb-3">
+              <div className="text-xs uppercase tracking-wide text-accent mb-3">
                 {t("review.chapterTag", {
                   num: String(card.chapter_number).padStart(2, "0"),
                   sep: card.chapter_title ? " · " : "",
@@ -113,7 +113,7 @@ export function CardReview({ cards, onClose }: Props) {
 
           {showHint && card.hint && !showAnswer && (
             <section className="card p-4 md:p-5 border-amber-500/40 bg-amber-500/5">
-              <div className="text-[11px] uppercase tracking-wide text-amber-400 mb-2">
+              <div className="text-xs uppercase tracking-wide text-amber-400 mb-2">
                 {t("cards.hintChip")}
               </div>
               <div className="text-sm md:text-base leading-relaxed text-neutral-200">
@@ -124,7 +124,7 @@ export function CardReview({ cards, onClose }: Props) {
 
           {showAnswer ? (
             <section className="card p-6 md:p-8 border-accent-subtle bg-accent/5">
-              <div className="text-[11px] uppercase tracking-wide text-accent mb-3">
+              <div className="text-xs uppercase tracking-wide text-accent mb-3">
                 {t("review.solution")}
               </div>
               {card.answer ? (
@@ -212,7 +212,7 @@ function RateButton({
       )}
     >
       <div className={cn("text-sm font-medium", accent)}>{label}</div>
-      <div className="text-[10px] text-neutral-500 mt-1 font-mono">
+      <div className="text-xs text-neutral-500 mt-1 font-mono">
         {t("review.key", { k: hint })}
       </div>
     </button>

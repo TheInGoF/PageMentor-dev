@@ -69,7 +69,7 @@ export function BookProgressPanel({
             })}
           </span>
           {chunkTotal > 0 && (
-            <span className="text-[11px] text-neutral-500">
+            <span className="text-xs text-neutral-500">
               · {t("audiobook.progress.chunk", {
                 current: chunkCurrent,
                 total: chunkTotal,
@@ -77,13 +77,13 @@ export function BookProgressPanel({
             </span>
           )}
           {totalChars > 0 && (
-            <span className="text-[11px] text-neutral-500 font-mono">
+            <span className="text-xs text-neutral-500 font-mono">
               · {Math.round(charsDone).toLocaleString()}/
               {totalChars.toLocaleString()} chars
             </span>
           )}
         </div>
-        <div className="text-[11px] text-neutral-500 font-mono flex items-baseline gap-3">
+        <div className="text-xs text-neutral-500 font-mono flex items-baseline gap-3">
           {elapsedMs !== null && (
             <span>
               {t("audiobook.progress.elapsed", {

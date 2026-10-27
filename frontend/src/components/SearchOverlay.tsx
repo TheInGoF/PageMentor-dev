@@ -95,7 +95,7 @@ export function SearchOverlay({ onOpenDocument }: Props) {
                     className="text-sm font-medium"
                     dangerouslySetInnerHTML={{ __html: renderHighlight(hit.title) }}
                   />
-                  <div className="text-[11px] text-neutral-500 mt-0.5">
+                  <div className="text-xs text-neutral-500 mt-0.5">
                     {t(`type.${hit.type}`)} · {hit.page_count} {t("library.pagesShort")} ·{" "}
                     {hit.tags.map((tg) => `#${tg}`).join(" ") || t("common.none")}
                   </div>
@@ -122,7 +122,7 @@ export function SearchOverlay({ onOpenDocument }: Props) {
                   className="w-full text-left px-4 py-3 hover:bg-bg-hover border-b border-border last:border-b-0"
                 >
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] text-accent font-mono">
+                    <span className="text-xs text-accent font-mono">
                       {String(hit.number).padStart(2, "0")}
                     </span>
                     <div
@@ -130,7 +130,7 @@ export function SearchOverlay({ onOpenDocument }: Props) {
                       dangerouslySetInnerHTML={{ __html: renderHighlight(hit.title) }}
                     />
                   </div>
-                  <div className="text-[11px] text-neutral-500 mt-0.5">
+                  <div className="text-xs text-neutral-500 mt-0.5">
                     {hit.document_title}
                   </div>
                   {hit.snippet && (
@@ -157,7 +157,7 @@ export function SearchOverlay({ onOpenDocument }: Props) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="sticky top-0 bg-bg-card px-4 py-2 text-[10px] uppercase tracking-wide text-neutral-500 border-b border-border">
+      <div className="sticky top-0 bg-bg-card px-4 py-2 text-xs uppercase tracking-wide text-neutral-500 border-b border-border">
         {title}
       </div>
       {children}

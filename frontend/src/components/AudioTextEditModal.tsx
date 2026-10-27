@@ -112,18 +112,18 @@ export function AudioTextEditModal({ chapterId, onClose, onSaved }: Props) {
           <p className="text-xs text-neutral-500">{t("audiobook.edit.subtitle")}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1 min-h-0">
-              <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wide">
+              <label className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
                 {t("audiobook.edit.original")}
               </label>
-              <div className="bg-bg-elevated border border-border rounded-lg p-3 overflow-y-auto h-[60vh] font-mono text-[12px] leading-relaxed text-neutral-300 whitespace-pre-wrap">
+              <div className="bg-bg-elevated border border-border rounded-lg p-3 overflow-y-auto h-[60vh] font-mono text-xs leading-relaxed text-neutral-300 whitespace-pre-wrap">
                 {data.originalText}
               </div>
-              <div className="text-[10px] text-neutral-600 text-right">
+              <div className="text-xs text-neutral-600 text-right">
                 {data.originalText.length} {t("audiobook.edit.chars")}
               </div>
             </div>
             <div className="flex flex-col gap-1 min-h-0">
-              <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wide">
+              <label className="text-xs font-medium text-neutral-400 uppercase tracking-wide">
                 {hasCleaned
                   ? data.model === "manual-edit"
                     ? t("audiobook.edit.audioManual")
@@ -133,10 +133,10 @@ export function AudioTextEditModal({ chapterId, onClose, onSaved }: Props) {
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                className="w-full bg-bg-card border border-border-strong rounded-lg p-3 h-[60vh] font-mono text-[12px] leading-relaxed text-neutral-100 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+                className="w-full bg-bg-card border border-border-strong rounded-lg p-3 h-[60vh] font-mono text-xs leading-relaxed text-neutral-100 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
                 spellCheck={false}
               />
-              <div className="text-[10px] text-neutral-600 text-right">
+              <div className="text-xs text-neutral-600 text-right">
                 {draft.length} {t("audiobook.edit.chars")}
               </div>
             </div>

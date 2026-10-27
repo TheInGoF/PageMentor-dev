@@ -1,3 +1,0 @@
-frontend/src/components/Library.tsx
-frontend/src/components/ModuleDetail.tsx
-frontend/src/components/SettingsPage.tsx

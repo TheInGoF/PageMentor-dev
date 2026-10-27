@@ -167,7 +167,7 @@ export function BuildProgressPanel({ state }: { state: BuildState }) {
       )}
 
       {state.error && (
-        <p className="text-accent text-[11px] mt-1 break-words">{state.error}</p>
+        <p className="text-accent text-xs mt-1 break-words">{state.error}</p>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { TopBar } from "./TopBar";
+import { ServicesCard } from "./dashboard/ServicesCard";
 
 interface Props {
   onOpenLibrary: () => void;
@@ -11,6 +12,8 @@ interface Props {
   onOpenTutor?: () => void;
   onOpenDocument: (docId: string) => void;
   onOpenSettings: () => void;
+  // Engine-Einstellungen direkt öffnen
+  onOpenEngine?: () => void;
 }
 
 export function Dashboard({
@@ -19,6 +22,7 @@ export function Dashboard({
   onOpenTutor,
   onOpenDocument,
   onOpenSettings,
+  onOpenEngine,
 }: Props) {
   useLocale();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -91,6 +95,8 @@ export function Dashboard({
               />
               <RecentCard data={data} onOpen={onOpenDocument} />
             </section>
+
+            <ServicesCard onOpen={onOpenEngine ?? onOpenSettings} />
           </>
         )}
       </main>
@@ -127,12 +133,12 @@ function StatCard({
     <div
       className={cn(
         "card p-4",
-        accent && typeof value === "number" && value > 0 && "border-accent-subtle bg-accent/5"
+        accent && typeof value === "number" && value > 0 && "border-accent/30 bg-accent/5"
       )}
     >
       <div
         className={cn(
-          "text-2xl font-semibold",
+          "text-3xl font-semibold tabular-nums",
           accent && typeof value === "number" && value > 0 && "text-accent"
         )}
       >
@@ -203,7 +209,7 @@ function ActivityCard({ activity }: { activity: DashboardData["activity"] }) {
               />
             ))}
           </div>
-          <div className="flex justify-between text-[10px] text-neutral-500 mt-1 font-mono">
+          <div className="flex justify-between text-xs text-neutral-500 mt-1 font-mono">
             <span>{activity[0]?.date.slice(5)}</span>
             <span>{activity[activity.length - 1]?.date.slice(5)}</span>
           </div>
@@ -243,7 +249,7 @@ function WeakTopicsCard({
                   {w.chapter_title || `Kap. ${w.chapter_number}`}
                 </span>
               </div>
-              <div className="text-[11px] text-neutral-500 mt-0.5">
+              <div className="text-xs text-neutral-500 mt-0.5">
                 {w.document_title} ·{" "}
                 {t("dash.weak.subtitle", {
                   count: w.low_quality_count,
@@ -280,11 +286,11 @@ function RecentCard({
               className="px-3 py-2 rounded border border-border hover:border-accent cursor-pointer flex items-center gap-3"
               onClick={() => onOpen(r.id)}
             >
-              <span className="tag-accent text-[10px] uppercase">
+              <span className="tag-accent text-xs uppercase">
                 {t(`type.${r.type}`)}
               </span>
               <span className="text-sm font-medium truncate flex-1">{r.title}</span>
-              <span className="text-[11px] text-neutral-500 font-mono">
+              <span className="text-xs text-neutral-500 font-mono">
                 {r.page_count > 0 ? `${r.page_count}${t("library.pagesShort")}` : "—"}
               </span>
             </li>

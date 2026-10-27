@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="text-2xl mb-2">💥</div>
           <h1 className="text-lg font-semibold">{t("err.title")}</h1>
           <p className="text-sm text-neutral-400 mt-2 mb-4">{t("err.description")}</p>
-          <pre className="text-[11px] text-accent bg-bg-elevated p-3 rounded border border-border overflow-auto max-h-40">
+          <pre className="text-xs text-accent bg-bg-elevated p-3 rounded border border-border overflow-auto max-h-40">
             {this.state.error.message}
           </pre>
           <button

@@ -117,7 +117,7 @@ export function LogsContent() {
           <>
             <span
               className={
-                "text-[11px] font-mono px-2 py-0.5 rounded " +
+                "text-xs font-mono px-2 py-0.5 rounded " +
                 (connected === "open"
                   ? "text-emerald-400 bg-emerald-500/10"
                   : connected === "connecting"
@@ -142,12 +142,12 @@ export function LogsContent() {
 
       <LogToolbar filter={filter} areas={areas} onChange={setFilter} />
 
-      <div className="text-[11px] text-neutral-500 text-right">
+      <div className="text-xs text-neutral-500 text-right">
         {visible.length} / {source.length} {t("logs.lines")}
       </div>
 
       <div ref={scrollerRef} onScroll={onScroll} className="card bg-black/60 overflow-auto h-[60vh]">
-        <div className="px-1 py-2 font-mono text-[11px] leading-relaxed">
+        <div className="px-1 py-2 font-mono text-xs leading-relaxed">
           {visible.length === 0 ? (
             <div className="text-neutral-500 text-center py-8">
               {loadingDay ? t("common.loading") : connected === "open" || mode !== LIVE ? t("logs.empty") : t("logs.connecting")}

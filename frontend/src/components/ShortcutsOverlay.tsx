@@ -57,7 +57,7 @@ function Section({
 }) {
   return (
     <section>
-      <h3 className="text-[11px] uppercase tracking-wide text-neutral-500 mb-2">
+      <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-2">
         {title}
       </h3>
       <ul className="flex flex-col gap-1.5">
@@ -68,7 +68,7 @@ function Section({
               {s.keys.map((k) => (
                 <kbd
                   key={k}
-                  className="px-2 py-0.5 rounded border border-border bg-bg-elevated text-[11px] text-neutral-300 font-mono"
+                  className="px-2 py-0.5 rounded border border-border bg-bg-elevated text-xs text-neutral-300 font-mono"
                 >
                   {k}
                 </kbd>

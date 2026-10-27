@@ -279,6 +279,7 @@ export function App() {
         onOpenTutor={() => setView("tutor")}
         onOpenDocument={(id) => setOpenDocId(id)}
         onOpenSettings={() => openSettings()}
+        onOpenEngine={() => openSettings("engine")}
       />
     );
   }

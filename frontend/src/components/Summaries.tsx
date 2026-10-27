@@ -270,7 +270,7 @@ function ChapterSummary({
               <button
                 onClick={() => onGenerate(lvl.id)}
                 disabled={isBusy}
-                className="text-[11px] text-neutral-500 hover:text-accent disabled:opacity-50 px-1"
+                className="text-xs text-neutral-500 hover:text-accent disabled:opacity-50 px-1"
                 title={has ? t("summary.generate.regen") : t("summary.generate.new")}
               >
                 {isBusy ? "…" : has ? "↻" : t("summary.generate.new")}
@@ -302,11 +302,11 @@ function LiveSummary({ text, elapsedMs }: { text: string; elapsedMs: number }) {
     <article className="card p-4 bg-bg-elevated border-accent">
       <div className="flex items-center gap-2 mb-3">
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-        <span className="text-[11px] uppercase tracking-wide text-accent">
+        <span className="text-xs uppercase tracking-wide text-accent">
           {t("summary.generatingLive")}
         </span>
         {elapsedMs > 0 && (
-          <span className="text-[11px] text-neutral-500 font-mono ml-auto">
+          <span className="text-xs text-neutral-500 font-mono ml-auto">
             {formatDuration(elapsedMs)}
           </span>
         )}
@@ -332,13 +332,13 @@ function SummaryBody({ summary, onDelete }: { summary: Summary; onDelete: (id: s
   return (
     <article className="card p-4 bg-bg-elevated border-accent-subtle">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <span className="text-[11px] uppercase tracking-wide text-accent">
+        <span className="text-xs uppercase tracking-wide text-accent">
           {t(`summary.level.${summary.level}`)} · {summary.model}
         </span>
         <div className="flex items-center gap-3">
           {summary.generation_ms != null && summary.generation_ms > 0 && (
             <span
-              className="text-[11px] text-neutral-500 font-mono"
+              className="text-xs text-neutral-500 font-mono"
               title={t("summary.generationTimeTitle")}
             >
               ⏱ {formatDuration(summary.generation_ms)}

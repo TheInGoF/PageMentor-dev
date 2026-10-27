@@ -84,7 +84,7 @@ export function EnginePanel() {
         ))}
       </div>
       {status?.checkedAt ? (
-        <p className="text-[11px] text-neutral-500">
+        <p className="text-xs text-neutral-500">
           {t("engine.checkedAt", { time: new Date(status.checkedAt).toLocaleTimeString() })}
         </p>
       ) : null}

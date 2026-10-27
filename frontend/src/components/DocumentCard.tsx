@@ -117,7 +117,7 @@ function PipelineDots({ doc }: { doc: Document }) {
   ];
 
   return (
-    <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap text-[10px] text-neutral-500 min-w-0">
+    <div className="flex items-center gap-x-1.5 gap-y-1 flex-wrap text-xs text-neutral-500 min-w-0">
       {steps.map((s, i) => (
         <div key={s.key} className="flex items-center gap-1 whitespace-nowrap">
           {i > 0 && <span className="text-neutral-700">›</span>}
@@ -209,7 +209,7 @@ export function DocumentCard({ doc, liveEvent, onOpen, onDelete, onEdit, onRetri
       <PipelineDots doc={doc} />
 
       {liveEvent && (
-        <div className="text-[11px] text-amber-400/80 truncate flex items-center gap-1.5">
+        <div className="text-xs text-amber-400/80 truncate flex items-center gap-1.5">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
           {describeLive(liveEvent)}
         </div>

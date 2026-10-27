@@ -167,7 +167,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
               onChange={setTags}
               placeholder={t("upload.tagsPlaceholder")}
             />
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-xs text-neutral-500">
               <span className="font-mono">{doc.filename}</span>
               {doc.page_count > 0 && ` · ${doc.page_count} ${t("library.pagesShort")}`}
             </p>
@@ -182,7 +182,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
               page={thumbPage}
               onPageChange={setThumbPage}
             />
-            <p className="text-[11px] text-neutral-500 mt-1">
+            <p className="text-xs text-neutral-500 mt-1">
               {t("doc.preview.thumbHint")}
             </p>
           </div>

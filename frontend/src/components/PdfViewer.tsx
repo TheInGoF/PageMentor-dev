@@ -203,7 +203,7 @@ export function PdfViewer({ docId, initialPage }: Props) {
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
                   />
-                  <div className="text-[10px] text-neutral-500 text-center mt-1 font-mono">
+                  <div className="text-xs text-neutral-500 text-center mt-1 font-mono">
                     {i + 1}
                   </div>
                 </button>
@@ -353,7 +353,7 @@ function CardFromSelectionModal({
     >
       {selection && (
         <div className="flex flex-col gap-4">
-          <div className="text-[11px] text-neutral-500">
+          <div className="text-xs text-neutral-500">
             {chapter
               ? t("reader.selectionChapter", {
                   page: selection.page,

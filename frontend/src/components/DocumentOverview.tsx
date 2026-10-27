@@ -73,17 +73,17 @@ export function DocumentOverview({
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="tag-accent uppercase text-[10px]">{t(`type.${doc.type}`)}</span>
+              <span className="tag-accent uppercase text-xs">{t(`type.${doc.type}`)}</span>
               {module && (
                 <span
-                  className="tag text-[10px]"
+                  className="tag text-xs"
                   style={{ borderColor: module.color, color: module.color }}
                 >
                   {module.icon} {module.name}
                 </span>
               )}
               {(doc.tags ?? []).map((tg) => (
-                <span key={tg} className="tag text-[10px]">
+                <span key={tg} className="tag text-xs">
                   #{tg}
                 </span>
               ))}
@@ -168,7 +168,7 @@ export function DocumentOverview({
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
       <div className="text-sm font-medium text-neutral-100 mt-0.5">{value}</div>
     </div>
   );
@@ -200,13 +200,13 @@ function StatusCard({
         <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
           {title}
         </h3>
-        {disabled && <span className="text-[10px]">🔒</span>}
+        {disabled && <span className="text-xs">🔒</span>}
       </div>
       <div>
         <div className="text-3xl font-semibold text-accent">{primary}</div>
         <div className="text-xs text-neutral-500 mt-1">{primaryLabel}</div>
         {secondary && (
-          <div className="text-[11px] text-neutral-500 mt-1">{secondary}</div>
+          <div className="text-xs text-neutral-500 mt-1">{secondary}</div>
         )}
       </div>
       <div className="pt-2 border-t border-border">
@@ -283,10 +283,10 @@ function ExtractionCard({
       {running && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-[11px] text-accent font-mono truncate">
+            <span className="text-xs text-accent font-mono truncate">
               {phase?.message ?? t("extract.gate.running")}
             </span>
-            <span className="text-[11px] text-neutral-500 font-mono shrink-0">
+            <span className="text-xs text-neutral-500 font-mono shrink-0">
               {pct != null && `${pct}% · `}
               {t("overview.extraction.elapsed", {
                 time: formatElapsed(elapsed),
@@ -320,7 +320,7 @@ function ExtractionCard({
                   onStart({ forceOcr: false });
               }}
               disabled={busy}
-              className="text-[11px] text-neutral-500 hover:text-neutral-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="text-xs text-neutral-500 hover:text-neutral-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {t("overview.extraction.rerun")}
             </button>
@@ -332,7 +332,7 @@ function ExtractionCard({
               }}
               disabled={busy}
               title={t("overview.extraction.rerunForceOcrHint")}
-              className="text-[11px] text-amber-400/80 hover:text-amber-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="text-xs text-amber-400/80 hover:text-amber-300 underline decoration-dotted underline-offset-4 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {t("overview.extraction.rerunForceOcr")}
             </button>

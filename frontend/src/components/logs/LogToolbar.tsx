@@ -21,7 +21,7 @@ export function LogToolbar({ filter, areas, onChange }: Props) {
     set({ hiddenSources: next });
   }
   return (
-    <div className="flex flex-col gap-2 text-[11px]">
+    <div className="flex flex-col gap-2 text-xs">
       <div className="flex items-center gap-2 flex-wrap">
         <select
           className="input !py-1 !text-xs w-auto"

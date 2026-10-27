@@ -186,7 +186,7 @@ export function LearningMenu({
                 )}
               >
                 {t(tb.labelKey)}
-                {locked && <span className="ml-1 text-[10px]">🔒</span>}
+                {locked && <span className="ml-1 text-xs">🔒</span>}
               </button>
             );
           })}

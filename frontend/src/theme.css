@@ -1,0 +1,112 @@
+/* Design-Tokens: Farben als RGB-Kanäle, Tailwind liest sie über rgb(var(--x) / alpha)
+   Hell ist Standard, Dunkel per data-theme="dark" oder Systemeinstellung */
+
+:root {
+  color-scheme: light;
+  --bg: 242 242 247;
+  --card: 255 255 255;
+  --elevated: 248 248 251;
+  --hover: 234 234 240;
+  --border: 226 226 232;
+  --border-strong: 204 204 212;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.06);
+
+  /* Textstufen: 100 = Haupttext, 400 = Nebentext, 500 = leise */
+  --n-50: 0 0 0;
+  --n-100: 28 28 30;
+  --n-200: 44 44 46;
+  --n-300: 58 58 60;
+  --n-400: 84 84 88;
+  --n-500: 108 108 112;
+  --n-600: 142 142 147;
+  --n-700: 174 174 178;
+  --n-800: 199 199 204;
+  --n-900: 229 229 234;
+  --n-950: 242 242 247;
+
+  /* Status, Textstufen für hellen Grund */
+  --ok-300: 30 125 80;
+  --ok-400: 24 112 70;
+  --warn-300: 150 92 0;
+  --warn-400: 138 82 0;
+  --err-300: 196 40 40;
+  --err-400: 184 32 32;
+  --info-300: 10 104 180;
+  --info-400: 8 94 166;
+  --pink-300: 160 40 150;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: 24 26 31;
+  --card: 34 37 43;
+  --elevated: 40 44 51;
+  --hover: 48 52 61;
+  --border: 54 58 67;
+  --border-strong: 74 79 90;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 16px rgb(0 0 0 / 0.25);
+
+  --n-50: 255 255 255;
+  --n-100: 242 242 247;
+  --n-200: 229 229 234;
+  --n-300: 209 209 214;
+  --n-400: 174 174 178;
+  --n-500: 152 152 159;
+  --n-600: 124 124 130;
+  --n-700: 90 90 96;
+  --n-800: 58 58 63;
+  --n-900: 42 42 46;
+  --n-950: 28 28 30;
+
+  --ok-300: 110 231 183;
+  --ok-400: 52 211 153;
+  --warn-300: 252 211 77;
+  --warn-400: 251 191 36;
+  --err-300: 252 165 165;
+  --err-400: 248 113 113;
+  --info-300: 125 211 252;
+  --info-400: 56 189 248;
+  --pink-300: 240 171 252;
+}
+
+/* Schrift auf Akzentflächen: hell weiß, dunkel fast schwarz, beides ab 4,7:1 */
+:root {
+  --on-accent: 255 255 255;
+}
+:root[data-theme="dark"] {
+  --on-accent: 12 16 24;
+}
+
+/* Akzent-Paletten, Auswahl in den Einstellungen */
+:root,
+:root[data-palette="sky"] {
+  --accent: 0 102 224;
+  --accent-hover: 0 84 190;
+  --accent-subtle: 214 232 255;
+}
+:root[data-palette="sage"] {
+  --accent: 28 122 90;
+  --accent-hover: 20 100 74;
+  --accent-subtle: 212 238 228;
+}
+:root[data-palette="amber"] {
+  --accent: 168 86 0;
+  --accent-hover: 140 70 0;
+  --accent-subtle: 255 233 204;
+}
+:root[data-theme="dark"],
+:root[data-theme="dark"][data-palette="sky"] {
+  --accent: 64 156 255;
+  --accent-hover: 100 176 255;
+  --accent-subtle: 22 52 92;
+}
+:root[data-theme="dark"][data-palette="sage"] {
+  --accent: 80 190 150;
+  --accent-hover: 110 206 170;
+  --accent-subtle: 22 66 52;
+}
+:root[data-theme="dark"][data-palette="amber"] {
+  --accent: 245 160 60;
+  --accent-hover: 250 184 100;
+  --accent-subtle: 84 52 14;
+}

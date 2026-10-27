@@ -164,7 +164,7 @@ function ModuleCard({
         <p className="text-xs text-neutral-400 line-clamp-2">{m.description}</p>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap text-[11px]">
+      <div className="flex items-center gap-2 flex-wrap text-xs">
         <span className="tag">{t("modules.card.docs", { n: m.doc_count })}</span>
         {m.script_count > 0 && (
           <span className="tag">{t("modules.card.scripts", { n: m.script_count })}</span>
@@ -228,7 +228,7 @@ function MiniStat({
       >
         {value}
       </div>
-      <div className="text-[10px] text-neutral-500 uppercase tracking-wide">
+      <div className="text-xs text-neutral-500 uppercase tracking-wide">
         {label}
       </div>
     </div>
@@ -260,7 +260,7 @@ function ModuleEditModal({
   const [name, setName] = useState("");
   const [semester, setSemester] = useState("");
   const [description, setDescription] = useState("");
-  const [color, setColor] = useState("#ef4444");
+  const [color, setColor] = useState("#3b82f6");
   const [icon, setIcon] = useState("📘");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
@@ -270,7 +270,7 @@ function ModuleEditModal({
     setName(editing?.name ?? "");
     setSemester(editing?.semester ?? "");
     setDescription(editing?.description ?? "");
-    setColor(editing?.color ?? "#ef4444");
+    setColor(editing?.color ?? "#3b82f6");
     setIcon(editing?.icon ?? "📘");
     setBusy(false);
   }, [open, editing]);

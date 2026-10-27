@@ -52,7 +52,7 @@ export function KindFilterBar({
         <h3 className="text-sm font-semibold">
           {t("audiobook.kindFilter.title")}
         </h3>
-        <span className="text-[11px] text-neutral-500">
+        <span className="text-xs text-neutral-500">
           {t("audiobook.kindFilter.hint")}
         </span>
       </div>
@@ -78,7 +78,7 @@ export function KindFilterBar({
                 onClick={() => onToggle(kind, true)}
                 disabled={busy != null || allOn}
                 className={cn(
-                  "text-[10px] px-1.5 py-0.5 rounded ml-1",
+                  "text-xs px-1.5 py-0.5 rounded ml-1",
                   allOn
                     ? "bg-emerald-700/40 text-emerald-200 cursor-default"
                     : "bg-neutral-700 text-neutral-200 hover:bg-emerald-700/30"
@@ -92,7 +92,7 @@ export function KindFilterBar({
                 onClick={() => onToggle(kind, false)}
                 disabled={busy != null || allOff}
                 className={cn(
-                  "text-[10px] px-1.5 py-0.5 rounded",
+                  "text-xs px-1.5 py-0.5 rounded",
                   allOff
                     ? "bg-red-700/40 text-red-200 cursor-default"
                     : "bg-neutral-700 text-neutral-200 hover:bg-red-700/30"

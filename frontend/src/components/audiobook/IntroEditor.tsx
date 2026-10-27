@@ -112,7 +112,7 @@ export function IntroEditor({
           <h2 className="text-base font-semibold flex items-center gap-2">
             {t("audiobook.intro.title")}
             {hasIntro && (
-              <span className="tag-accent text-[10px]">
+              <span className="tag-accent text-xs">
                 {t("audiobook.intro.active")}
               </span>
             )}
@@ -135,7 +135,7 @@ export function IntroEditor({
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            className="w-full bg-bg-elevated border border-border rounded-lg p-3 min-h-[140px] font-mono text-[12px] leading-relaxed text-neutral-100 resize-y focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
+            className="w-full bg-bg-elevated border border-border rounded-lg p-3 min-h-[140px] font-mono text-xs leading-relaxed text-neutral-100 resize-y focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40"
             placeholder={defaultText || t("audiobook.intro.placeholder")}
             spellCheck
           />

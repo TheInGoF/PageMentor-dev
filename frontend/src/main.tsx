@@ -5,8 +5,10 @@ import "./index.css";
 import "katex/dist/katex.min.css";
 import { App } from "./App";
 import { installGlobalErrorHandlers } from "./lib/reportError";
+import { initTheme } from "./lib/theme";
 
 installGlobalErrorHandlers();
+initTheme();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

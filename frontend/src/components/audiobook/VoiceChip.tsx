@@ -27,13 +27,13 @@ export function VoiceChip({
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium text-neutral-100">{voice.label}</span>
         {voice.flagship && (
-          <span className="tag-accent text-[10px]">{t("audiobook.voice.top")}</span>
+          <span className="tag-accent text-xs">{t("audiobook.voice.top")}</span>
         )}
-        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300">
+        <span className="text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-fuchsia-500/15 text-fuchsia-300">
           {t(`audiobook.engine.${voice.engine}`)}
         </span>
       </div>
-      <span className="text-[11px] text-neutral-500">
+      <span className="text-xs text-neutral-500">
         {voice.gender === "female" ? "♀" : "♂"} · {voice.locale}
       </span>
     </button>

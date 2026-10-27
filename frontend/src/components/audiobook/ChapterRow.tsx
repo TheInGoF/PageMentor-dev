@@ -85,10 +85,10 @@ export function ChapterRow({
           <h3 className="font-medium text-neutral-100 truncate">
             {chapter.title || `${t("audiobook.chapters.fallback")} ${chapter.number}`}
           </h3>
-          <div className="flex items-center gap-2 text-[11px] text-neutral-500 mt-1 flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-neutral-500 mt-1 flex-wrap">
             <span
               className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide",
+                "px-1.5 py-0.5 rounded text-xs uppercase tracking-wide",
                 chapter.kind === "content"
                   ? "bg-neutral-700 text-neutral-300"
                   : chapter.kind === "summary"
@@ -113,7 +113,7 @@ export function ChapterRow({
             {cleaned && (
               <span
                 className={cn(
-                  "px-1.5 py-0.5 rounded text-[10px]",
+                  "px-1.5 py-0.5 rounded text-xs",
                   manualEdit
                     ? "bg-amber-500/15 text-amber-300"
                     : "bg-emerald-500/15 text-emerald-300"
@@ -132,17 +132,17 @@ export function ChapterRow({
               </span>
             )}
             {audioDone && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent/15 text-accent">
+              <span className="px-1.5 py-0.5 rounded text-xs bg-accent/15 text-accent">
                 {formatDuration(chapter.duration_ms ?? 0)} · {chapter.voice}
               </span>
             )}
             {ttsFailed && !ttsRunning && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-500/20 text-red-300">
+              <span className="px-1.5 py-0.5 rounded text-xs bg-red-500/20 text-red-300">
                 {t("audiobook.chapterFailed")}
               </span>
             )}
             {ttsRunning && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent/15 text-accent animate-pulse">
+              <span className="px-1.5 py-0.5 rounded text-xs bg-accent/15 text-accent animate-pulse">
                 {t("audiobook.chapterPartsRunning", {
                   current: progress?.current ?? 1,
                   total: progress?.total ?? "?",

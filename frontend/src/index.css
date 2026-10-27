@@ -1,3 +1,5 @@
+@import "./theme.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,28 +12,11 @@
   }
 
   body {
-    @apply bg-black text-neutral-100 antialiased;
-    font-feature-settings: "ss01", "cv01";
-  }
-
-  /* Nudge all "muted text" a notch brighter so labels/subtitles stay
-     readable on the near-black background. Tailwind's neutral-500 is
-     #737373 by default; we lift it to ~#909090. */
-  .text-neutral-500 {
-    color: #909090;
-  }
-  .text-neutral-600 {
-    color: #707070;
-  }
-  .placeholder\:text-neutral-500::placeholder {
-    color: #909090;
-  }
-  .placeholder\:text-neutral-400::placeholder {
-    color: #a8a8a8;
+    @apply bg-bg text-neutral-100 antialiased;
   }
 
   *::selection {
-    @apply bg-accent/60 text-white;
+    @apply bg-accent/30;
   }
 
   ::-webkit-scrollbar {
@@ -59,11 +44,11 @@
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2
            text-sm font-medium transition-colors
-           focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-black
+           focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-bg
            disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
-    @apply btn bg-accent text-white hover:bg-accent-hover;
+    @apply btn bg-accent text-on-accent hover:bg-accent-hover;
   }
   .btn-ghost {
     @apply btn bg-transparent text-neutral-200 hover:bg-bg-hover;

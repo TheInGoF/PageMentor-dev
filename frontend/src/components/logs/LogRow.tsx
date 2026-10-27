@@ -22,7 +22,7 @@ export function LogRow({ line, onFilter }: Props) {
         <span className={"shrink-0 w-16 truncate " + sourceColor(line.source)}>{line.source}</span>
         <button
           type="button"
-          className="shrink-0 w-20 truncate text-left font-mono text-[11px] leading-relaxed text-neutral-400 hover:text-accent"
+          className="shrink-0 w-20 truncate text-left font-mono text-xs leading-relaxed text-neutral-400 hover:text-accent"
           onClick={(e) => {
             e.stopPropagation();
             onFilter("area", line.area);

@@ -128,7 +128,7 @@ export function ExamSessionRunner({
         <div className="max-w-3xl mx-auto flex flex-col gap-5">
           <section className="card p-6 flex flex-col gap-3">
             {card.chapter_number != null && (
-              <div className="text-[11px] uppercase tracking-wide text-accent">
+              <div className="text-xs uppercase tracking-wide text-accent">
                 {t("review.chapterTag", {
                   num: String(card.chapter_number).padStart(2, "0"),
                   sep: card.chapter_title ? " · " : "",
