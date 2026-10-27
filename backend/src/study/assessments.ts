@@ -2,8 +2,9 @@
 import { randomUUID } from "crypto";
 import { db } from "../db";
 
-export const ASSESSMENT_KINDS = ["K", "B", "L", "S", "P", "A", "M", "X"] as const;
-export const ASSESSMENT_STATUS = ["geplant", "angemeldet", "bestanden", "nicht_bestanden", "abgemeldet"] as const;
+// H: Studienheft durcharbeiten, zählt nicht als Prüfung
+export const ASSESSMENT_KINDS = ["K", "B", "L", "S", "P", "A", "M", "X", "H"] as const;
+export const ASSESSMENT_STATUS = ["geplant", "in_arbeit", "angemeldet", "bestanden", "nicht_bestanden", "abgemeldet"] as const;
 
 export type AssessmentKind = (typeof ASSESSMENT_KINDS)[number];
 export type AssessmentStatus = (typeof ASSESSMENT_STATUS)[number];

@@ -10,6 +10,9 @@ import {
 } from "../study/assessments";
 import { profileValue, setProfileValue, studyProgress } from "../study/progress";
 import { addTime, deleteTime, listTime, minutesPerDay, minutesPerModule } from "../study/time";
+import { runImport } from "../study/import/run";
+import { pickFolder } from "../study/import/pickFolder";
+import { emitLog } from "../log/logger";
 import { getMaterial, listMaterial, materialCounts, setUncertain, uncertainItems, type MaterialKind } from "../study/material";
 
 export const studyRoutes = new Hono();
@@ -63,4 +66,22 @@ studyRoutes.patch("/profile", async (c) => {
   const body = (await c.req.json()) as Record<string, string | null>;
   for (const k of PROFILE_KEYS) if (k in body) setProfileValue(k, body[k] === "" ? null : body[k]);
   return c.json(Object.fromEntries(PROFILE_KEYS.map((k) => [k, profileValue(k)])));
+});
+
+// Übernahme aus dem Studium Maker: erst Probelauf, dann echt; Daten bleiben im Datenordner
+studyRoutes.post("/import/pick", (c) => c.json({ folder: pickFolder() }));
+studyRoutes.post("/import", async (c) => {
+  const body = (await c.req.json()) as { folder?: string; dryRun?: boolean };
+  const folder = body.folder?.trim();
+  if (!folder) return c.json({ error: "Ordner fehlt" }, 400);
+  try {
+    const report = runImport(folder, { dryRun: body.dryRun !== false });
+    const sum = (k: "created" | "updated") => report.modules[k] + report.assessments[k] + report.time[k] + report.material[k] + report.trainers[k];
+    emitLog("info", "study", `Studium-Maker-Import ${report.dryRun ? "Probelauf" : "ausgeführt"}: ${sum("created")} neu, ${sum("updated")} aktualisiert, ${report.warnings.length} Hinweise`);
+    return c.json(report);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    emitLog("warn", "study", `Studium-Maker-Import fehlgeschlagen: ${message}`);
+    return c.json({ error: message }, 400);
+  }
 });

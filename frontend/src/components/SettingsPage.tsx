@@ -11,6 +11,7 @@ import { usePresetTester } from "./settings/usePresetTester";
 import type { SettingsTab } from "./settings/types";
 import { AppearanceSection } from "./settings/AppearanceSection";
 import { GeneralSection } from "./settings/GeneralSection";
+import { StudyImportSection } from "./settings/StudyImportSection";
 import { AudiobookSection } from "./settings/AudiobookSection";
 import { AiSection } from "./settings/AiSection";
 import { TtsSection } from "./settings/TtsSection";
@@ -122,6 +123,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
             <>
               <AppearanceSection />
               <GeneralSection st={st} />
+              <StudyImportSection />
             </>
           )}
           {tab === "diagnose" && <LogsContent />}

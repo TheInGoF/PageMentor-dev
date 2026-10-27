@@ -31,7 +31,8 @@ export function setProfileValue(key: string, value: string | null): void {
 
 export function studyProgress(): StudyProgress {
   const modules = db().prepare("SELECT id, code, cp, in_path FROM modules").all() as ModuleRow[];
-  const passed = db().prepare("SELECT * FROM assessments WHERE status = 'bestanden'").all() as Assessment[];
+  // Studienhefte (H) zählen nicht für CP und Schnitt
+  const passed = db().prepare("SELECT * FROM assessments WHERE status = 'bestanden' AND kind != 'H'").all() as Assessment[];
 
   // Je Modul zählen die CP einmal; Leistung ohne CP übernimmt die CP des Moduls
   const byModule = new Map<string, number>();
@@ -53,7 +54,7 @@ export function studyProgress(): StudyProgress {
   const next = db()
     .prepare(
       `SELECT a.*, m.code AS module_code FROM assessments a LEFT JOIN modules m ON m.id = a.module_id
-       WHERE a.status IN ('geplant', 'angemeldet') AND length(a.date) = 10 AND a.date >= ?
+       WHERE a.status IN ('geplant', 'angemeldet') AND a.kind != 'H' AND length(a.date) = 10 AND a.date >= ?
        ORDER BY a.date LIMIT 1`
     )
     .get(today()) as (Assessment & { module_code: string | null }) | undefined;

@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
-export const STUDY_SCHEMA_VERSION = 1;
+export const STUDY_SCHEMA_VERSION = 2;
 
 function columns(d: Database, table: string): Set<string> {
   return new Set((d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name));
@@ -111,7 +111,14 @@ function migrateV1(d: Database): void {
   `);
 }
 
-const MIGRATIONS: Array<(d: Database) => void> = [migrateV1];
+// Trainer: Name der globalen Variable mit den Generatoren und der Themenfarben
+function migrateV2(d: Database): void {
+  addColumns(d, "trainers", { global_name: "TEXT", colors_name: "TEXT", source_id: "TEXT" });
+  d.exec("CREATE UNIQUE INDEX IF NOT EXISTS trainers_source ON trainers(source_id) WHERE source_id IS NOT NULL");
+  addColumns(d, "material_items", { source_file: "TEXT" });
+}
+
+const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2];
 
 // Sicherung vor der Hochstufung; nur wenn schon Daten da sind
 function backup(d: Database, dbFile: string, from: number): string | null {
