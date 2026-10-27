@@ -3,6 +3,9 @@ import { api, type MaterialItem } from "../../lib/api";
 import { renderMarkdown } from "../../lib/markdown";
 import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
+import { useState } from "react";
+import { useCloudReady } from "../../lib/useCloud";
+import { CloudDialog } from "../cloud/CloudDialog";
 
 // Farben nach Kategorie wie im Studium Maker; Formeln, Aufgaben und Rezepte in Akzentfarbe
 const BAR: Record<string, string> = {
@@ -22,6 +25,9 @@ export function MaterialItemCard({
   onChanged: () => void;
   onOpenDocument?: (docId: string) => void;
 }) {
+  const cloud = useCloudReady();
+  const [review, setReview] = useState(false);
+
   async function toggle() {
     await api.study.setChecked(item.id, !!item.uncertain);
     onChanged();
@@ -51,7 +57,13 @@ export function MaterialItemCard({
             ✓ {t("material.checked")}
           </button>
         ) : null}
+        {cloud && (
+          <button type="button" className="text-xs text-neutral-500 hover:text-accent shrink-0 print:hidden" title={t("cloud.lektoratHint")} onClick={() => setReview(true)}>
+            ☁
+          </button>
+        )}
       </header>
+      <CloudDialog task={review ? "lektorat" : null} params={{ itemId: item.id }} onClose={() => setReview(false)} onApplied={onChanged} />
       <div className="text-sm leading-relaxed flex flex-col gap-2">{renderMarkdown(item.body_md)}</div>
       {(item.source_ref || item.source_document_id) && (
         <footer className="text-xs text-neutral-500 flex items-center gap-2 print:hidden">

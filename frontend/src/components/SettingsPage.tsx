@@ -15,6 +15,7 @@ import { StudyImportSection } from "./settings/StudyImportSection";
 import { AudiobookSection } from "./settings/AudiobookSection";
 import { AiSection } from "./settings/AiSection";
 import { KnowledgeSection } from "./settings/KnowledgeSection";
+import { CloudSection } from "./settings/CloudSection";
 import { TtsSection } from "./settings/TtsSection";
 import { VoiceSamplesSection } from "./settings/VoiceSamplesSection";
 import { VoiceDesignsSection } from "./settings/VoiceDesignsSection";
@@ -113,6 +114,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
             <>
               <AiSection st={st} />
               <KnowledgeSection />
+              <CloudSection />
             </>
           )}
           {tab === "voices" && (

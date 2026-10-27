@@ -4,6 +4,8 @@ import { api, subscribeProgress, type ModuleDocument } from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
+import { useCloudReady } from "../../lib/useCloud";
+import { CloudDialog } from "../cloud/CloudDialog";
 
 function DocRow({ doc, onDone }: { doc: ModuleDocument; onDone: () => void }) {
   const [state, setState] = useState<{ cur: number; total: number } | null>(null);
@@ -54,6 +56,8 @@ function DocRow({ doc, onDone }: { doc: ModuleDocument; onDone: () => void }) {
 
 export function MaterialExtract({ moduleId, docs, tasks, onDone }: { moduleId: string; docs: ModuleDocument[]; tasks: number; onDone: () => void }) {
   const toast = useToast();
+  const cloud = useCloudReady();
+  const [cloudOpen, setCloudOpen] = useState(false);
   async function recipes() {
     try {
       await api.study.recipes(moduleId);
@@ -78,8 +82,14 @@ export function MaterialExtract({ moduleId, docs, tasks, onDone }: { moduleId: s
           <Button variant="outline" className="!px-2 !py-1 text-xs" onClick={recipes}>
             {t("material.recipes")}
           </Button>
+          {cloud && (
+            <Button variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => setCloudOpen(true)} title={t("cloud.recipesHint")}>
+              ☁ {t("cloud.withCloud")}
+            </Button>
+          )}
         </div>
       )}
+      <CloudDialog task={cloudOpen ? "rezepte" : null} params={{ moduleId }} onClose={() => setCloudOpen(false)} onDone={onDone} />
     </details>
   );
 }

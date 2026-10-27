@@ -8,6 +8,7 @@ import { generate } from "../../services/llm";
 import { pickProvider } from "../../services/llm/providers";
 import { runJob } from "../../log/jobs";
 import { emitLog } from "../../log/logger";
+import { recordFailure } from "../../services/cloud/failures";
 import { PROMPTS, PROMPT_VERSION, type ExtractKind } from "./prompts";
 import { SCHEMA_AUFGABEN, SCHEMA_FORMELN, SCHEMA_MERKSAETZE, SCHEMA_REZEPTE } from "./schemas";
 import { dedupe, renderFormel, renderMerksatz, renderRezept, renderTeilaufgabe, type RenderedItem } from "./render";
@@ -84,6 +85,7 @@ export const askModel: Ask = async (kind, text) => {
       return data;
     }
     emitLog("warn", "material", `Kein gültiges JSON (${kind}, Versuch ${attempt})`);
+    if (attempt === 2) recordFailure(`material:${kind}`, res.model, text, res.response, "Kein gültiges JSON nach zwei Versuchen");
   }
   return null;
 };
@@ -106,7 +108,7 @@ function documentText(docId: string): string {
     .join("\n\n");
 }
 
-function store(kind: ExtractKind, items: Array<RenderedItem & { id: string }>, moduleId: string, docId: string | null): void {
+export function storeItems(kind: ExtractKind, items: Array<RenderedItem & { id: string }>, moduleId: string, docId: string | null): void {
   db().transaction(() => {
     // Nur eigene, früher erzeugte Einträge ersetzen; Importe aus dem Studium Maker bleiben
     if (docId) db().prepare("DELETE FROM material_items WHERE source_document_id = ? AND kind = ?").run(docId, kind);
@@ -166,7 +168,7 @@ export async function extractFromDocument(docId: string, kinds?: ExtractKind[], 
           emit({ phase: "material.progress", docId, current: ++step, total: chunks.length * todo.length, message: kind });
         }
         const items = buildItems(kind, results, `${doc.code}-${LETTER[kind]}-${sourceCode(doc)}`);
-        store(kind, items, doc.module_id!, docId);
+        storeItems(kind, items, doc.module_id!, docId);
         out.push({ kind, items: items.length, uncertain: items.filter((i) => i.uncertain).length, chunks: chunks.length, failedChunks: failed });
         emitLog("info", "material", `${doc.title}: ${items.length} ${kind} (${failed} Abschnitte ohne Ergebnis)`, { ctx: { docId } });
       }
@@ -195,7 +197,7 @@ export async function synthesizeRecipes(moduleId: string, ask: Ask = askModel): 
       else failed++;
     }
     const items = buildItems("rezept", results, `${mod.code}-R`);
-    store("rezept", items, moduleId, null);
+    storeItems("rezept", items, moduleId, null);
     return { kind: "rezept" as const, items: items.length, uncertain: items.filter((i) => i.uncertain).length, chunks: chunks.length, failedChunks: failed };
   });
 }

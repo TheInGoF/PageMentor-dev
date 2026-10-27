@@ -23,6 +23,8 @@ import {
 } from "../lib/api";
 import { t } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { useCloudReady } from "../lib/useCloud";
+import { CloudDialog } from "./cloud/CloudDialog";
 import { renderMarkdown } from "../lib/markdown";
 
 interface Props {
@@ -289,10 +291,11 @@ export function TutorPage(props: Props) {
                 {t("tutor.emptyHint")}
               </div>
             )}
-            {messages.map((m) => (
+            {messages.map((m, i) => (
               <MessageBubble
                 key={m.id}
                 msg={m}
+                question={messages[i - 1]?.role === "user" ? messages[i - 1].content : ""}
                 onOpenSource={props.onOpenDocumentSource}
               />
             ))}
@@ -334,11 +337,15 @@ export function TutorPage(props: Props) {
 
 function MessageBubble({
   msg,
+  question,
   onOpenSource,
 }: {
   msg: TutorMessage;
+  question: string;
   onOpenSource: (docId: string, page: number) => void;
 }) {
+  const cloud = useCloudReady();
+  const [second, setSecond] = useState(false);
   if (msg.role === "user") {
     return (
       <div className="self-end max-w-[85%] bg-neutral-800 border border-border-strong rounded-lg px-3 py-2 text-sm whitespace-pre-wrap">
@@ -387,6 +394,22 @@ function MessageBubble({
           </div>
         </section>
       )}
+      {cloud && (
+        <div className="flex justify-end">
+          <button type="button" className="text-xs text-neutral-500 hover:text-accent" onClick={() => setSecond(true)} title={t("cloud.secondHint")}>
+            ☁ {t("cloud.second")}
+          </button>
+        </div>
+      )}
+      <CloudDialog
+        task={second ? "zweite_meinung" : null}
+        params={{
+          question,
+          answer: `${answer.shortAnswer}\n\n${answer.reasoning}`,
+          sources: answer.sources.map((s) => ({ n: s.n, label: s.grepId ? `Katalog ${s.grepId}` : `${s.docTitle}, S. ${s.startPage}`, snippet: s.snippet })),
+        }}
+        onClose={() => setSecond(false)}
+      />
     </div>
   );
 }

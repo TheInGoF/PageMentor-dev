@@ -8,6 +8,7 @@ import { requestLogger, onRouteError } from "./log/http";
 import { logRoutes, clientLogRoutes } from "./routes/logs";
 import { studyRoutes } from "./routes/study";
 import { knowledgeRoutes, startQueue } from "./routes/knowledge";
+import { cloudRoutes } from "./routes/cloud";
 import { engineRoutes } from "./routes/engine";
 import { autoStart } from "./engine/manager";
 import { alreadyRunning, appWindowHandle, openUi, quitApp } from "./launch";
@@ -91,6 +92,7 @@ app.route("/api/logs", logRoutes);
 app.route("/api/engine", engineRoutes);
 app.route("/api/study", studyRoutes);
 app.route("/api/knowledge", knowledgeRoutes);
+app.route("/api/cloud", cloudRoutes);
 // Für den zweiten Start: Fenster der laufenden Instanz
 app.get("/api/app/window", (c) => c.json({ hwnd: appWindowHandle() }));
 app.post("/api/app/quit", (c) => {

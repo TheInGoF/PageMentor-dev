@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
-export const STUDY_SCHEMA_VERSION = 5;
+export const STUDY_SCHEMA_VERSION = 6;
 
 function columns(d: Database, table: string): Set<string> {
   return new Set((d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name));
@@ -187,7 +187,31 @@ function migrateV5(d: Database): void {
   `);
 }
 
-const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3, migrateV4, migrateV5];
+// Cloud-Hilfe: Protokoll jedes Versands, Fehlversuche der lokalen KI für die Diagnose
+function migrateV6(d: Database): void {
+  d.exec(`
+    CREATE TABLE IF NOT EXISTS cloud_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model TEXT NOT NULL,
+      chars INTEGER NOT NULL,
+      ok INTEGER NOT NULL DEFAULT 1,
+      sent_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS llm_failures (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      model TEXT,
+      input TEXT NOT NULL,
+      output TEXT NOT NULL,
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}
+
+const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6];
 
 // Sicherung vor der Hochstufung; nur wenn schon Daten da sind
 function backup(d: Database, dbFile: string, from: number): string | null {
