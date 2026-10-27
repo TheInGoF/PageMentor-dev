@@ -1,10 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-// KaTeX stylesheet — loaded once globally so the math fragments
-// rendered inside Cards / Tutor / CardReview display correctly.
+// KaTeX-Styles global für Formeln
 import "katex/dist/katex.min.css";
 import { App } from "./App";
+import { installGlobalErrorHandlers } from "./lib/reportError";
+
+installGlobalErrorHandlers();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

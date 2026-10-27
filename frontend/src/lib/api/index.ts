@@ -1,11 +1,13 @@
 export * from "./types";
 export { ApiError } from "./request";
 export { subscribeProgress } from "./progress";
+export type { StoredLogLine, LogErrorInfo, LogLevel } from "./logs";
 import { libraryApi } from "./library";
 import { learningApi } from "./learning";
 import { settingsApi } from "./settings";
 import { voicesApi } from "./voices";
 import { audioApi } from "./audio";
+import { logsApi } from "./logs";
 
 export const api = {
   ...libraryApi,
@@ -13,4 +15,5 @@ export const api = {
   ...settingsApi,
   ...voicesApi,
   ...audioApi,
+  ...logsApi,
 };

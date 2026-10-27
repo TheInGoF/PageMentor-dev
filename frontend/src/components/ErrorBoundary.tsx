@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import { t } from "../lib/i18n";
+import { reportClientError } from "../lib/reportError";
 
 interface Props {
   children: ReactNode;
@@ -16,9 +17,13 @@ export class ErrorBoundary extends Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: unknown) {
-    // eslint-disable-next-line no-console
-    console.error("[pagementor] render crash:", error, info);
+  componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+    reportClientError({
+      kind: "render",
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack ?? undefined,
+    });
   }
 
   render() {

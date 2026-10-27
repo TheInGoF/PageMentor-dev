@@ -15,7 +15,8 @@ export const requestLogger: MiddlewareHandler = async (c, next) => {
     const status = c.res.status;
     if (status < 400 && QUIET.some((re) => re.test(path))) return;
     const durationMs = Math.round(performance.now() - t0);
-    const level = status >= 500 ? "error" : status >= 400 ? "warn" : "debug";
+    // 401 = nicht angemeldet, erwartet
+    const level = status >= 500 ? "error" : status >= 400 && status !== 401 ? "warn" : "debug";
     emitLog(level, "http", `${c.req.method} ${path} → ${status} (${durationMs} ms)`, {
       ctx: { status, durationMs },
     });
