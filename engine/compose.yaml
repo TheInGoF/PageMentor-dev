@@ -55,7 +55,7 @@ services:
 
   # Qwen3-TTS, startet und stoppt der Arbiter
   qwen-tts:
-    image: ghcr.io/theingof/pm-qwen-tts:${PM_IMAGE_TAG:-latest}
+    image: ghcr.io/theingof/pm-qwen-tts-dev:${PM_IMAGE_TAG:-latest}
     container_name: pm-qwen-tts
     restart: "no"
     volumes:
@@ -120,7 +120,7 @@ services:
 
   # Türsteher: immer nur ein Modell im VRAM
   pm-gpu-arbiter:
-    image: ghcr.io/theingof/pm-gpu-arbiter:${PM_IMAGE_TAG:-latest}
+    image: ghcr.io/theingof/pm-gpu-arbiter-dev:${PM_IMAGE_TAG:-latest}
     container_name: pm-gpu-arbiter
     restart: unless-stopped
     ports:
