@@ -11,6 +11,7 @@ import { describeDuplicate, findTextDuplicate, markdownPlainText, textMinhash } 
 import { writeKnowledgeFolder } from "./batch/knowledgeFolder";
 import type { DoclingExtraction } from "./docling/types";
 import { extractPdf } from "./pdf";
+import { withDocling } from "./docling/release";
 import { cleanForReading } from "./clean";
 import { emit } from "./events";
 import { indexDocument, indexChapters } from "./search";
@@ -80,18 +81,21 @@ async function processDocumentImpl(docId: string): Promise<void> {
       emit({ phase: "pipeline.extraction", docId, message: "Docling-Markdown übernommen" });
     } else {
       emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
-      if (!(await doclingAlive())) {
-        throw new Error(tLang(lang, "err.doclingUnreachable"));
-      }
+      // Wartet einen laufenden Docling-Neustart (Grafikspeicher freigeben) ab
+      extraction = await withDocling(async () => {
+        if (!(await doclingAlive())) {
+          throw new Error(tLang(lang, "err.doclingUnreachable"));
+        }
 
-      emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingUploading") });
-      extraction = await extractPdfViaDocling({
-        pdfPath: fullPath,
-        language: doc.language,
-        forceOcr: doc.force_ocr === 1,
-        signal,
-        onProgress: (message, fraction) =>
-          emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
+        emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingUploading") });
+        return extractPdfViaDocling({
+          pdfPath: fullPath,
+          language: doc.language,
+          forceOcr: doc.force_ocr === 1,
+          signal,
+          onProgress: (message, fraction) =>
+            emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
+        });
       });
     }
 
