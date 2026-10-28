@@ -133,11 +133,14 @@ async function startServices(progress: Progress): Promise<void> {
   progress("Starte Dienste …");
   const compose = `docker compose -f ${COMPOSE_IN_DISTRO}`;
   const extra = extraServices();
-  const r = await inDistro(`${compose} up -d --remove-orphans ${[...ALWAYS_ON, ...extra.up].join(" ")} && ${compose} up --no-start ${["qwen-tts", ...extra.create].join(" ")} && docker rm -f ${extra.off.join(" ")} >/dev/null 2>&1; true`, {
+  // Fehler beim Start nicht verschlucken: die Meldung von Docker gehört in die Kachel
+  const r = await inDistro(`${compose} up -d --remove-orphans ${[...ALWAYS_ON, ...extra.up].join(" ")} && ${compose} up --no-start ${["qwen-tts", ...extra.create].join(" ")}`, {
     timeoutMs: 15 * 60_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
   });
   if (r.code !== 0) throw new RepairError(`Dienste starten fehlgeschlagen: ${failText(r)}`);
+  // Abgeschaltete Zusatzstimmen entfernen; hier darf es scheitern, wenn es sie nicht gibt
+  if (extra.off.length) await inDistro(`docker rm -f ${extra.off.join(" ")} >/dev/null 2>&1 || true`, { timeoutMs: 120_000, quiet: true });
 }
 
 async function pullModel(progress: Progress): Promise<void> {
