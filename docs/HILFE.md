@@ -44,6 +44,21 @@ Einstellungen (Zahnrad) und Diagnose bleiben oben rechts.
 6. **Üben**: Aufgabentrainer (wenn vorhanden), Lernkarten, Probeklausuren. Übungszeit
    wird automatisch als Lernzeit gebucht.
 
+## Stimmen
+
+**Kokoro** ist immer dabei und Standard: Martin und Kerstin, schnell, auf dem Prozessor.
+Weitere Engines wählst du unter **Einstellungen → Engine → Stimmen-Engines**:
+
+| Engine | Kann | Braucht |
+|---|---|---|
+| Qwen3-TTS | Vorgabe-Stimmen, Stimmen aus Beschreibung, Klonen | Grafikkarte, ca. 12 GB Download |
+| F5-TTS | Klonen deutscher Aufnahmen | Grafikkarte, ca. 9 GB |
+| TADA | Klonen deutscher Aufnahmen | Grafikkarte, ca. 10 GB, Hugging-Face-Token mit Llama-3.2-Freigabe |
+
+**Eigene Stimmen** unter **Einstellungen → Stimmen & Hörbuch → Eigene Stimmen**: eine
+Aufnahme von 3–10 s mit Transkript hochladen, Sprache Deutsch. Qwen, F5 und TADA klonen
+daraus. Im Hörbuch-Tab wählst du dann Engine und Stimme.
+
 ## Wissensdatenbank
 
 Im Datenordner `Dokumente\PageMentor` liegen zwei Ordner dafür:
@@ -98,5 +113,6 @@ Einmal komplett durchspielen, Auffälligkeiten mit Screenshot und Diagnose-Paket
 - [ ] Stapel-Import mit wenigen Heften, Restzeit plausibel
 - [ ] PDF in `Import` legen: wird eingelesen, landet in `Erledigt`, Ordner in `Wissensdatenbank` mit Bildern
 - [ ] Dieselbe PDF noch einmal in `Import`: landet in `Dubletten`, ohne Umwandlung
+- [ ] Hörbuch-Tab: Kokoro ist vorausgewählt, Martin und Kerstin klingen sauber
 - [ ] Prüffragen anlegen und Trefferquote messen
 - [ ] Optional: Cloud-Hilfe einschalten, Vorschau ansehen, einmal senden

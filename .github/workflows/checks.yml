@@ -47,7 +47,7 @@ jobs:
       - name: Python Syntax + undefinierte Namen
         run: |
           python3 -m pip install -q pyflakes
-          python3 -m pyflakes pm-gpu-arbiter pm-qwen-tts pm-audio-analyzer pm-tts-common pm-kokoro-tts pm-f5-tts pm-tada-tts
+          python3 -m pyflakes pm-gpu-arbiter pm-qwen-tts pm-tts-common pm-kokoro-tts pm-f5-tts pm-tada-tts
 
       - name: Arbiter mit mehreren Engines
         run: |

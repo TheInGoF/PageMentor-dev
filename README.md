@@ -24,12 +24,19 @@ subscription.*
 1. Download `PageMentor-Setup-<version>.exe` and run it. No admin rights needed,
    except once for switching on WSL (Windows asks).
 2. PageMentor opens in its own window. On the first start it sets up its AI
-   engine in the background (WSL, Docker, models, about 30 GB) and shows the
-   progress under **Settings → Engine**.
-3. **Drop a PDF in**, hit *Extract*, and watch the pipeline dots fill up.
+   engine in the background (WSL, Docker, models, about 30 GB with the default
+   Kokoro voices) and shows the progress under **Settings → Engine**.
+3. **Drop PDFs into `Documents\PageMentor\Import`** (or upload them in the
+   library) and watch the pipeline dots fill up.
 
-Your documents, cards and audiobooks live in `Documents\PageMentor`. Finished
-audiobooks are copied to `Documents\PageMentor\Hörbücher`.
+Everything lives in `Documents\PageMentor`:
+
+| Folder | Contents |
+| --- | --- |
+| `Import` | Drop PDFs here; read every two minutes. Processed files move to `Import\Erledigt`, duplicates to `Import\Dubletten` |
+| `Wissensdatenbank` | One folder per document: Markdown with formulas as LaTeX and the images as files, readable by other tools |
+| `Hörbücher` | Finished audiobooks (M4B) |
+| `logs` | App, startup and engine logs, diagnostic bundles |
 
 ## What is it for?
 
@@ -51,7 +58,7 @@ Windows PC, with cloud LLMs as optional fallback.
 
 PageMentor is a fresh build and does not fork any existing project.
 
-![PageMentor library](docs/screenshots/library.png)
+![Start page](docs/screenshots/start.png)
 
 ## What it does
 
@@ -64,7 +71,7 @@ Four things around one library:
 Drop in a PDF, get back an **M4B audiobook with chapter markers**, narrated
 locally. Before synthesis, a local LLM rewrites each chapter for narration:
 formulas are described by meaning instead of read symbol-by-symbol, number series
-are paraphrased, citations and figure references are dropped. Pick the voice
+are paraphrased, citations and figure references are dropped. Kokoro is installed by default; the other engines are optional. Pick the
 engine per book and compare them side by side:
 
 | Engine | Voices | Runs on |
@@ -87,15 +94,13 @@ review loop tracks your progress with keyboard shortcuts.
 
 ### 📝 Practice
 
-![Exam trainer](docs/screenshots/exam.png)
-
 **Timed exam trainer with score history.** Picks questions from your card deck,
 times you, gives you a side-by-side review of your answers versus the reference —
 and plots the trend as a sparkline.
 
 ### 🎓 Study
 
-![Start page](docs/screenshots/start.png)
+![Module](docs/screenshots/module.png)
 
 **One app for the whole degree.** Five areas: *Start · Plan · Modules · Library · Tutor*.
 
@@ -109,12 +114,14 @@ and plots the trend as a sparkline.
 - **Task trainer** — your own task generators run sandboxed in the app; solutions
   are revealed step by step with KaTeX and jump into the booklet chapter.
 - **Knowledge base** — hybrid search (full text + vectors in SQLite via
-  sqlite-vec) over all booklets and literature, batch import with a resumable
-  night queue, test questions that measure the hit rate, and a map of related
-  chapters across booklets.
+  sqlite-vec) over all booklets and literature, an import folder, batch import
+  with a resumable night queue, duplicate detection before any conversion, test
+  questions that measure the hit rate, and a map of related chapters across
+  booklets.
 
 ![Plan](docs/screenshots/plan.png)
 ![Material](docs/screenshots/material.png)
+![Library](docs/screenshots/library.png)
 
 ## Why local
 
@@ -141,11 +148,14 @@ Every heavy component is swappable from the **Settings** page:
 
 - **Language model** — `gemma4:e4b` by default; swap for a bigger or smaller
   Ollama model as your VRAM allows.
-- **Voice engines** — Kokoro is always installed; switch Qwen3-TTS, F5-TTS and
-  TADA on under *Settings → Engine → Voice engines*. TADA needs a Hugging Face
-  token with Llama 3.2 access.
-- **TTS chunk size** and **advanced TTS dials** (temperature, top-p, top-k,
-  repetition penalty) live under *Qwen3-TTS for experts* in *Settings → Voices & audiobook*.
+- **Voice engines** — Kokoro (CPU) is always installed; switch Qwen3-TTS
+  (~12 GB), F5-TTS (~9 GB) and TADA (~10 GB) on under *Settings → Engine →
+  Voice engines*. TADA needs a Hugging Face token with Llama 3.2 access.
+- **Own voices** — upload a short recording with its transcript under
+  *Settings → Voices & audiobook*; Qwen, F5-TTS and TADA clone it. TTS chunk
+  size and the Qwen dials live under *Qwen3-TTS for experts* on the same page.
+
+![Voices & audiobook](docs/screenshots/voices.png)
 
 ## How it works
 
@@ -184,9 +194,25 @@ flowchart LR
 <details>
 <summary>Document processing pipeline</summary>
 
-![Pipeline diagram](docs/screenshots/pipeline.png)
+```mermaid
+flowchart TD
+  IN["PDF: upload, import folder or batch import"] --> D1{"Same file already<br/>in the library?"}
+  D1 -- yes --> DUP["Import/Dubletten"]
+  D1 -- no --> D2{"Same text<br/>(text layer, MinHash)?"}
+  D2 -- yes --> DUP
+  D2 -- no --> DOC["Docling: text, formulas as LaTeX, tables,<br/>pictures classified and described, charts as data"]
+  DOC --> D3{"Scan: same text<br/>after OCR?"}
+  D3 -- yes --> DUP
+  D3 -- no --> CH["Chapters, quality check,<br/>module assignment with evidence"]
+  CH --> IDX["Search index:<br/>Meilisearch + embeddings (bge-m3, sqlite-vec)"]
+  CH --> KB["Wissensdatenbank folder:<br/>Markdown + images"]
+  CH --> ON["On demand: cards, summaries,<br/>material catalogs, tutor"]
+  CH --> AUD["Audiobook: LLM cleanup → TTS<br/>→ EBU R128 → MP3 + M4B"]
+  AUD --> ABS["Optional: Audiobookshelf"]
+```
 
-Source: [`docs/diagrams/pipeline.puml`](docs/diagrams/pipeline.puml).
+Docling, Ollama and the TTS engines share the GPU through the arbiter; Docling
+is restarted after a few idle minutes to give its memory back.
 
 </details>
 
@@ -199,15 +225,25 @@ Source: [`docs/diagrams/pipeline.puml`](docs/diagrams/pipeline.puml).
   folder tree.
 - **PDF viewer** — continuous scroll, zoom, page jump, text-selection → flashcard.
 - **Text extraction** — [Docling](https://github.com/docling-project/docling-serve)
-  with German OCR for scanned pages; force-OCR rescue mode for PDFs whose text
-  layer is glyph soup.
+  at its highest level: German OCR for scanned pages, formulas as LaTeX (also
+  when embedded as images), accurate tables, code as text, pictures classified
+  and described, charts converted to data points; force-OCR rescue mode for PDFs
+  whose text layer is glyph soup.
+- **Import folder & duplicates** — drop PDFs into `Documents\PageMentor\Import`.
+  Before any expensive step the app compares the file fingerprint and the text
+  (MinHash, from the text layer or after OCR for scans); duplicates are set aside
+  without conversion.
+- **Readable knowledge base** — every document is also written to
+  `Documents\PageMentor\Wissensdatenbank` as Markdown with front matter and its
+  images as files.
 - **Chapter detection** — heading heuristic + page-slice fallback, long chapters
   auto-split, inline editor (rename, merge, delete).
 - **Audio cleanup** — a deterministic pre-pass strips watermarks, running heads,
   captions and inline references and expands abbreviations. Then a local LLM
   rewrites for narration. Cached per chapter — regeneration is free.
-- **Audiobook** — four local engines (table above), engine picker per book and an
-  *all in sequence* comparison that reads the same excerpt with every engine.
+- **Audiobook** — four local engines (table above; Kokoro with Martin and
+  Kerstin as default), engine picker per book and an *all in sequence*
+  comparison that reads the same excerpt with every engine.
 - **Voice cloning** — upload a short reference clip with its transcript; Qwen,
   F5-TTS and TADA clone it. Qwen voice designs get a cached reference so the other
   engines can clone them too.
@@ -303,6 +339,9 @@ All optional; the installed app needs none.
 | `PM_ALLOW_REMOTE` | *(off)* | `1` allows requests from other hosts |
 | `PM_ENGINE_HOST` | `localhost` | Host of the AI services |
 | `PM_ENGINE_AUTOSTART` | `1` | `0` disables automatic engine setup and repair |
+| `PM_IMPORT_DIR` | `<data>\Import` | Folder that is read automatically |
+| `PM_KNOWLEDGE_DIR` | `<data>\Wissensdatenbank` | Readable copy of every document |
+| `PM_DOCLING_URL` | `http://<engine host>:5001` | Docling server |
 | `PM_UI` | `window` | `window`, `browser` or `none` |
 | `PM_SQLITE_VEC` | *(next to the exe)* | Path to the sqlite-vec extension |
 | `PM_CLOUD_CLAUDE_MODEL` | `claude-opus-5-5` | Model for the optional cloud help |
@@ -344,7 +383,8 @@ frontend/src/
 engine/         # compose.yaml + provision.sh for the WSL environment
 packaging/      # Windows installer
 pm-*/           # sidecars: GPU arbiter, TTS engines, Docling with German OCR
-docs/legacy/    # former NAS deployment, kept for reference
+docs/           # German help (HILFE.md), screenshots
+archive/        # no longer used: NAS deployment, audio analyzer, old plans and screenshots
 ```
 
 ## Acknowledgements
