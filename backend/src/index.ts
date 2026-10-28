@@ -34,6 +34,7 @@ import { voiceRoutes } from "./routes/voices";
 import { adminRoutes } from "./routes/admin";
 import { ensureReady as ensureSearchReady } from "./services/search";
 import { db, initDb } from "./db";
+import { migrateTtsEngines } from "./engine/extraEngines";
 
 // Laufende Pumpen für Sidecar- und Container-Logs
 import {
@@ -105,6 +106,7 @@ app.use("/*", serveStatic({ root: PUBLIC_DIR }));
 app.use("/*", serveStatic({ path: join(PUBLIC_DIR, "index.html") }));
 
 await startupStep("Datenbank öffnen", () => initDb());
+migrateTtsEngines();
 await startupStep("Suchindex prüfen", () => ensureSearchReady());
 startupNote(vecState.available ? `Vektorsuche: sqlite-vec (${vecState.path})` : `Vektorsuche: langsamer Weg in JS (${vecState.error})`);
 // Vektorindex einmalig nachziehen, ohne den Start zu blockieren

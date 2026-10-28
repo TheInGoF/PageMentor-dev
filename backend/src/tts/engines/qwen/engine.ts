@@ -22,6 +22,7 @@ import {
   type AdvancedDials,
 } from "./config";
 import { probe, maybeRefresh } from "./probe";
+import { qwenInstalled } from "../extra/probe";
 import { designToVoice, sampleToVoice, resolveDesign, resolveSample } from "./voices";
 import { callSpeechClone, callSpeechCloneFromDesign, callSpeechPreset } from "./calls";
 import { ensureDesignReference } from "./designRef";
@@ -31,8 +32,8 @@ export const qwenEngine: TtsEngine = {
 
   isAvailable: () => {
     maybeRefresh();
-    // Verfügbar auch ohne Samples, dann ist die Liste leer
-    return probe.alive;
+    // Verfügbar auch ohne Samples, dann ist die Liste leer; nur wenn in den Engines gewählt
+    return probe.alive && qwenInstalled();
   },
 
   listVoices: () => {

@@ -88,8 +88,10 @@ export interface LlmConfig {
   /** Target library ID in Audiobookshelf (UUID). Listed via
    *  /api/libraries and picked by the user. Uploads always go there. */
   absLibraryId?: string;
-  // Weitere TTS-Engines in der Engine-Umgebung, z. B. "kokoro,f5"
+  // Zusätzliche TTS-Engines in der Engine-Umgebung, z. B. "qwen,f5"; Kokoro ist immer dabei
   ttsEngines?: string;
+  // "1" = ttsEngines auf v1.21 umgestellt (Kokoro Standard, Qwen optional)
+  ttsEnginesV2?: string;
   // Hugging-Face-Token, für TADA (Llama-Freigabe)
   hfToken?: string;
 }

@@ -1,5 +1,6 @@
 // Einstellungen: Übersicht aus Kacheln, darunter höchstens eine Ebene
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../lib/api";
 import { Button } from "./ui/Button";
 import { LogsContent } from "./LogsPage";
 import { EnginePanel } from "./engine/EnginePanel";
@@ -18,8 +19,6 @@ import { KnowledgeSection } from "./settings/KnowledgeSection";
 import { CloudSection } from "./settings/CloudSection";
 import { TtsSection } from "./settings/TtsSection";
 import { VoiceSamplesSection } from "./settings/VoiceSamplesSection";
-import { VoiceDesignsSection } from "./settings/VoiceDesignsSection";
-import { PresetsSection } from "./settings/PresetsSection";
 import { VoiceEditModals } from "./settings/VoiceEditModals";
 
 export type { SettingsTab } from "./settings/types";
@@ -46,6 +45,14 @@ export function SettingsPage({ onBack, initialTab }: Props) {
   const tester = usePresetTester(core);
   const st = { ...core, ...voices, ...tester };
   const { s, tab, setTab, llmConfig, savedLlmConfigRef, saveLlmConfig } = core;
+  // Gewählte Zusatz-Engines: Qwen-Teile nur mit Qwen, eigene Stimmen nur mit einer klonenden Engine
+  const [ttsEngines, setTtsEngines] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (tab !== "voices") return;
+    api.engine.ttsEngines().then((i) => setTtsEngines(i.enabled)).catch(() => setTtsEngines(null));
+  }, [tab]);
+  const qwenOn = !!ttsEngines?.includes("qwen");
+  const cloneOn = !ttsEngines || ttsEngines.some((e) => e === "qwen" || e === "f5" || e === "tada");
 
   // Lokale Werte sofort speichern
   const first = useRef(true);
@@ -120,10 +127,8 @@ export function SettingsPage({ onBack, initialTab }: Props) {
           {tab === "voices" && (
             <>
               <AudiobookSection st={st} />
-              <TtsSection st={st} />
-              <VoiceSamplesSection st={st} />
-              <VoiceDesignsSection st={st} />
-              <PresetsSection st={st} />
+              <VoiceSamplesSection st={st} qwenOn={qwenOn} cloneOn={cloneOn} onEngines={() => setTab("engine")} />
+              {qwenOn && <TtsSection st={st} />}
             </>
           )}
           {tab === "engine" && <EnginePanel />}

@@ -69,8 +69,8 @@ engine per book and compare them side by side:
 
 | Engine | Voices | Runs on |
 | --- | --- | --- |
-| **Qwen3-TTS** (default) | presets, your own voice samples, text-described designs | GPU |
-| **Kokoro** (German) | Martin, Kerstin, very fast | CPU |
+| **Kokoro** (German, default) | Martin, Kerstin, very fast | CPU |
+| **Qwen3-TTS** | presets, your own voice samples, text-described designs | GPU |
 | **F5-TTS German** | clones your voice samples | GPU |
 | **TADA 3B** | clones your voice samples | GPU |
 
@@ -141,11 +141,11 @@ Every heavy component is swappable from the **Settings** page:
 
 - **Language model** — `gemma4:e4b` by default; swap for a bigger or smaller
   Ollama model as your VRAM allows.
-- **Voice engines** — switch Kokoro, F5-TTS and TADA on under
-  *Settings → Engine → More voices*. TADA needs a Hugging Face token with
-  Llama 3.2 access.
+- **Voice engines** — Kokoro is always installed; switch Qwen3-TTS, F5-TTS and
+  TADA on under *Settings → Engine → Voice engines*. TADA needs a Hugging Face
+  token with Llama 3.2 access.
 - **TTS chunk size** and **advanced TTS dials** (temperature, top-p, top-k,
-  repetition penalty) live under *Advanced* in *Settings → Voices & audiobook*.
+  repetition penalty) live under *Qwen3-TTS for experts* in *Settings → Voices & audiobook*.
 
 ## How it works
 

@@ -29,10 +29,16 @@ export function refreshExtraStatus(): Promise<void> {
 }
 
 // Verfügbar = Arbiter kennt sie und der Container existiert (Profil an)
-export function extraAvailable(id: ExtraId): boolean {
+export function extraAvailable(id: ExtraId | "qwen"): boolean {
   if (Date.now() - checkedAt > TTL_MS) void refreshExtraStatus();
   const s = engines[id];
   return !!s && s.container !== "missing" && !s.container.startsWith("error");
+}
+
+// Qwen ist seit v1.21 optional; ein alter Arbiter ohne Engine-Liste kennt nur Qwen, dann gilt es als da
+export function qwenInstalled(): boolean {
+  if (Date.now() - checkedAt > TTL_MS) void refreshExtraStatus();
+  return !Object.keys(engines).length || extraAvailable("qwen");
 }
 
 export function extraStatus(): Record<string, EngineStatus> {

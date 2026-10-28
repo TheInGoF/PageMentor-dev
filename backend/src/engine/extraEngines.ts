@@ -1,9 +1,11 @@
 // Zusätzliche TTS-Engines: welche an sind, .env für Compose-Profile
-import { getLlmConfig } from "../services/llmConfig";
+import { db } from "../db";
+import { getLlmConfig, setLlmConfig } from "../services/llmConfig";
 import { failText, inDistro } from "./exec";
 
+// Kokoro gehört fest dazu (Standardstimme), diese hier wählt man in den Engines
 export const EXTRA_SERVICES = {
-  kokoro: { service: "kokoro-tts", alwaysOn: true, title: "Kokoro", sizeGb: 1 },
+  qwen: { service: "qwen-tts", alwaysOn: false, title: "Qwen3-TTS", sizeGb: 12 },
   f5: { service: "f5-tts", alwaysOn: false, title: "F5-TTS", sizeGb: 9 },
   tada: { service: "tada-tts", alwaysOn: false, title: "TADA", sizeGb: 10 },
 } as const;
@@ -40,4 +42,27 @@ export async function writeEngineEnv(): Promise<void> {
     quiet: true,
   });
   if (r.code !== 0) throw new Error(`.env schreiben fehlgeschlagen: ${failText(r)}`);
+}
+
+// Seit v1.21 ist Kokoro Standard und Qwen eine Zusatz-Engine. Bestehende Installationen
+// behalten Qwen, sonst verschwänden ihre Stimmen und Designs; neue starten nur mit Kokoro
+export function migrateTtsEngines(): void {
+  const cfg = getLlmConfig();
+  if (cfg.ttsEnginesV2 === "1") return;
+  const count = (table: string) => {
+    try {
+      return (db().prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+    } catch {
+      return 0;
+    }
+  };
+  const existing = cfg.ttsEngines !== undefined || count("documents") + count("voice_samples") + count("voice_designs") > 0;
+  setLlmConfig({ ttsEngines: migratedEngines(cfg.ttsEngines, existing), ttsEnginesV2: "1" });
+}
+
+// Kokoro fällt aus der Liste (immer dabei), bestehende Installationen bekommen Qwen dazu
+export function migratedEngines(before: string | undefined, existing: boolean): string {
+  const next = (before ?? "").split(",").map((s) => s.trim()).filter((e) => e in EXTRA_SERVICES && e !== "qwen");
+  if (existing) next.unshift("qwen");
+  return next.join(",");
 }

@@ -1,9 +1,10 @@
-// Weitere Stimmen-Engines ein- und ausschalten, HF-Token für TADA
+// Stimmen-Engines: Kokoro fest, Qwen, F5 und TADA wählbar; HF-Token für TADA
 import { useEffect, useState } from "react";
 import { api, type TtsEnginesInfo } from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
+import { Card } from "../settings/parts";
 
 export function TtsEnginesPanel() {
   const toast = useToast();
@@ -43,24 +44,26 @@ export function TtsEnginesPanel() {
   }
 
   return (
-    <div className="card p-4 flex flex-col gap-3">
-      <div>
-        <div className="text-sm font-medium">{t("ttsEngines.title")}</div>
-        <p className="text-xs text-neutral-400 mt-1">{t("ttsEngines.hint")}</p>
+    <Card title={t("ttsEngines.title")}>
+      <p className="text-xs text-neutral-500">{t("ttsEngines.hint")}</p>
+      <div className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked disabled />
+        <span className="flex-1">{t("ttsEngines.kokoroFixed")}</span>
+        <span className="text-xs text-neutral-500">{t("ttsEngines.always")}</span>
       </div>
       {Object.entries(info.engines).map(([id, e]) => (
-        <label key={id} className="flex items-start gap-3 cursor-pointer">
+        <label key={id} className="flex items-start gap-2 cursor-pointer">
           <input type="checkbox" className="mt-1" checked={enabled.includes(id)} onChange={() => toggle(id)} />
           <span className="flex flex-col">
             <span className="text-sm">
               {e.title} <span className="text-xs text-neutral-500">· ~{e.sizeGb} GB</span>
             </span>
-            <span className="text-xs text-neutral-400">{t(`ttsEngines.${id}`)}</span>
+            <span className="text-xs text-neutral-500">{t(`ttsEngines.${id}`)}</span>
           </span>
         </label>
       ))}
       {enabled.includes("tada") && (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-2">
           <label className="text-xs text-neutral-400">
             {t("ttsEngines.hfToken")} {info.hfTokenPresent && <span className="text-neutral-500">· {t("ttsEngines.hfTokenSet")}</span>}
           </label>
@@ -73,6 +76,6 @@ export function TtsEnginesPanel() {
           {t("ttsEngines.save")}
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }

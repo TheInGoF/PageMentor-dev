@@ -1,9 +1,8 @@
 /**
- * Voice-Katalog — Qwen3-TTS als einzige TTS-Engine.
+ * Voice-Katalog über alle Engines hinter dem pm-gpu-arbiter.
  *
- * Self-hosted auf dem GPU-Host hinter dem pm-gpu-arbiter. Voices sind
- * User-Uploads aus SQLite (voice_samples-Tabelle) — kein Cloud-Fallback
- * mehr.
+ * Kokoro ist Standard (Martin, Kerstin), Qwen3-TTS, F5 und TADA sind
+ * optional. Eigene Stimmen sind User-Uploads aus SQLite.
  */
 
 import { qwenEngine } from "./engines/qwen";
@@ -14,7 +13,8 @@ import { hiddenPresetIds } from "../services/audioVoiceVisibility";
 export type { EngineId, Voice } from "./engines/base";
 export type TtsEngineType = EngineId;
 
-const ENGINES: TtsEngine[] = [qwenEngine, kokoroEngine, f5Engine, tadaEngine];
+// Reihenfolge = Reihenfolge in der Auswahl; Kokoro ist Standard
+const ENGINES: TtsEngine[] = [kokoroEngine, qwenEngine, f5Engine, tadaEngine];
 
 export function engineFor(id: EngineId): TtsEngine | undefined {
   return ENGINES.find((e) => e.id === id);
@@ -44,6 +44,11 @@ export function allVoices(showHidden: boolean = false): Voice[] {
 }
 
 export function defaultVoiceFor(language: string): string {
+  // Kokoro spricht nur Deutsch
+  if (kokoroEngine.isAvailable()) {
+    const k = kokoroEngine.listVoices().find((v) => v.language === language && v.flagship);
+    if (k) return k.id;
+  }
   if (qwenEngine.isAvailable()) {
     const qwenVoices = qwenEngine.listVoices();
     const flagship = qwenVoices.find(

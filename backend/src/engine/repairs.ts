@@ -28,8 +28,8 @@ export type Progress = (message: string, fraction?: number) => void;
 
 // Skripte: in der Exe neben dem Programm, im Repo unter engine/
 const SCRIPTS_DIR = IS_COMPILED ? join(APP_DIR, "engine") : join(APP_DIR, "..", "engine");
-// Laufende Dienste; qwen-tts startet der Arbiter bei Bedarf
-const ALWAYS_ON = ["ollama", "docling", "pm-gpu-arbiter", "infinity", "meilisearch"];
+// Laufende Dienste; Kokoro ist die Standardstimme, die übrigen Stimmen startet der Arbiter bei Bedarf
+const ALWAYS_ON = ["ollama", "docling", "pm-gpu-arbiter", "infinity", "meilisearch", "kokoro-tts"];
 
 export class RepairError extends Error {}
 
@@ -150,7 +150,7 @@ async function startServices(progress: Progress): Promise<void> {
   const compose = `docker compose -f ${COMPOSE_IN_DISTRO}`;
   const extra = extraServices();
   // Kerndienste zuerst und für sich: eine fehlende Zusatzstimme darf sie nicht blockieren
-  const core = await inDistro(`${compose} up -d --remove-orphans ${ALWAYS_ON.join(" ")} && ${compose} up --no-start qwen-tts`, {
+  const core = await inDistro(`${compose} up -d --remove-orphans ${ALWAYS_ON.join(" ")}`, {
     timeoutMs: 15 * 60_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
   });
@@ -164,7 +164,7 @@ async function startServices(progress: Progress): Promise<void> {
     const denied = /unauthorized|denied/i.test(`${voices.stdout}\n${voices.stderr}`);
     throw new RepairError(
       denied
-        ? "Kerndienste laufen. Zusätzliche Stimmen fehlen: Ihre Pakete auf ghcr.io sind nicht öffentlich (pm-kokoro-tts, pm-f5-tts, pm-tada-tts auf „Public“ stellen)."
+        ? "Kerndienste laufen. Zusätzliche Stimmen fehlen: Ihre Pakete auf ghcr.io sind nicht öffentlich (pm-qwen-tts-dev, pm-f5-tts, pm-tada-tts auf „Public“ stellen)."
         : `Kerndienste laufen. Zusätzliche Stimmen nicht gestartet: ${failText(voices)}`
     );
   }

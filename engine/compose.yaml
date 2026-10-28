@@ -53,10 +53,11 @@ services:
       - docling-cache:/opt/app-root/src/.cache
     <<: *gpu
 
-  # Qwen3-TTS, startet und stoppt der Arbiter
+  # Qwen3-TTS, optional (Profil qwen), startet und stoppt der Arbiter
   qwen-tts:
     image: ghcr.io/theingof/pm-qwen-tts-dev:${PM_IMAGE_TAG:-latest}
     container_name: pm-qwen-tts
+    profiles: ["qwen"]
     restart: "no"
     volumes:
       - qwen-tts-hf:/root/.cache/huggingface
@@ -82,17 +83,16 @@ services:
       QWEN_TTS_LOOP_MIN_TOKENS: "1500"
     <<: *gpu
 
-  # Weitere Stimmen, optional über COMPOSE_PROFILES in /opt/pagementor/.env
-  # Kokoro: feste Stimme Martin, CPU, läuft dauerhaft
+  # Kokoro: Standardstimmen Martin und Kerstin, CPU, läuft dauerhaft
   kokoro-tts:
     image: ghcr.io/theingof/pm-kokoro-tts:${PM_IMAGE_TAG:-latest}
     container_name: pm-kokoro-tts
-    profiles: ["kokoro"]
     restart: unless-stopped
     environment:
       KOKORO_SPEED: "1.125"
       OMP_NUM_THREADS: "4"
 
+  # Weitere Stimmen, optional über COMPOSE_PROFILES in /opt/pagementor/.env
   # F5-TTS German, klont Stimmen; startet der Arbiter
   f5-tts:
     image: ghcr.io/theingof/pm-f5-tts:${PM_IMAGE_TAG:-latest}
