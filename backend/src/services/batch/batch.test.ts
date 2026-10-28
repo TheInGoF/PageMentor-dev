@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { markdownSections } from "./markdown";
@@ -41,9 +41,12 @@ describe("markdownSections", () => {
 });
 
 describe("Warteschlange", () => {
-  test("Ordner rekursiv, Markdown per Dateiname, keine Dubletten", () => {
-    expect(x.q.enqueueFolder(join(TMP, "in"), { mdFolder: join(TMP, "md"), docType: "literatur" })).toEqual({ added: 2, skipped: 0, withMarkdown: 1 });
-    expect(x.q.enqueueFolder(join(TMP, "in")).added).toBe(0);
+  test("Ordner rekursiv, Markdown per Dateiname, gleiche Datei nur einmal", async () => {
+    writeFileSync(join(TMP, "in", "unter", "heft1-kopie.pdf"), "%PDF-1 eins");
+    const r = await x.q.enqueueFolder(join(TMP, "in"), { mdFolder: join(TMP, "md"), docType: "literatur" });
+    expect(r).toMatchObject({ added: 2, skipped: 0, withMarkdown: 1 });
+    expect(r.duplicates.map((d) => d.name)).toEqual(["heft1-kopie.pdf"]);
+    expect((await x.q.enqueueFolder(join(TMP, "in"))).added).toBe(0);
     expect(x.q.queueStatus()).toMatchObject({ waiting: 2, done: 0 });
   });
   test("Verarbeitung nacheinander, Fehler werden gemeldet, Restzeit aus Mittelwert", async () => {
@@ -61,7 +64,35 @@ describe("Warteschlange", () => {
     expect(doc.source_md).toContain("HEFT1.md");
     expect(x.q.retryFailed()).toBe(1);
   });
+  test("Import-Ordner: Erledigtes und Dubletten werden weggeräumt, nicht erneut eingelesen", async () => {
+    const daten = join(TMP, "daten");
+    const imp = join(daten, "Import");
+    mkdirSync(join(imp, "Semester"), { recursive: true });
+    writeFileSync(join(imp, "Semester", "neu.pdf"), "%PDF-1 neu");
+    // gleicher Inhalt wie heft1.pdf, das schon in der Bibliothek ist
+    writeFileSync(join(imp, "doppelt.pdf"), "%PDF-1 eins");
+    const r = await x.q.scanImportFolder({}, daten);
+    expect(r!.added).toBe(1);
+    expect(r!.duplicates[0].reason).toContain("heft1");
+    expect(existsSync(join(imp, "Dubletten", "doppelt.pdf"))).toBe(true);
+    await x.q.runQueue(async (id) => void x.db.db().prepare("UPDATE documents SET ocr_status = 'done' WHERE id = ?").run(id), 10, daten);
+    expect(existsSync(join(imp, "Erledigt", "Semester", "neu.pdf"))).toBe(true);
+    expect(existsSync(join(imp, "Semester", "neu.pdf"))).toBe(false);
+    expect(await x.q.scanImportFolder({}, daten)).toBeNull();
+  });
+  test("Dublette erst nach der Texterkennung: Dokument wird wieder entfernt", async () => {
+    const daten = join(TMP, "daten");
+    writeFileSync(join(daten, "Import", "scan.pdf"), "%PDF-1 scan");
+    await x.q.scanImportFolder({}, daten);
+    const before = (x.db.db().prepare("SELECT COUNT(*) AS n FROM documents").get() as any).n;
+    await x.q.runQueue(async (id) => void x.db.db().prepare("UPDATE documents SET ocr_status = 'duplicate', duplicate_of = (SELECT id FROM documents WHERE filename = 'heft1.pdf') WHERE id = ?").run(id), 10, daten);
+    expect((x.db.db().prepare("SELECT COUNT(*) AS n FROM documents").get() as any).n).toBe(before);
+    expect(x.q.queueStatus().duplicates).toBe(1);
+    expect(existsSync(join(daten, "Import", "Dubletten", "scan.pdf"))).toBe(true);
+  });
   test("Pause hält an, Nachtzeit", async () => {
+    writeFileSync(join(TMP, "in", "heft3.pdf"), "%PDF-1 drei");
+    await x.q.enqueueFolder(join(TMP, "in"));
     x.q.setQueueFlags({ paused: true });
     expect(await Promise.race([x.q.runQueue(async () => {}, 10_000, join(TMP, "daten")).then(() => "fertig"), new Promise((r) => setTimeout(() => r("wartet"), 50))])).toBe("wartet");
     x.q.setQueueFlags({ paused: false });
@@ -69,3 +100,32 @@ describe("Warteschlange", () => {
     expect(x.q.isNight(new Date(2030, 0, 1, 12))).toBe(false);
   });
 });
+
+describe("Wissensdatenbank-Ordner", () => {
+  test("Markdown mit Kopfdaten, Bilder als Dateien, übernommene Bilder mitkopiert, Löschen räumt auf", async () => {
+    const kf = await import("./knowledgeFolder");
+    const root = join(TMP, "wissen");
+    const id = (x.db.db().prepare("SELECT id FROM documents WHERE filename = 'heft1.pdf'").get() as any).id;
+    // Studium-Maker-Ablage: md/<stem>.md und assets/<stem>/bild.png
+    mkdirSync(join(TMP, "sm", "md"), { recursive: true });
+    mkdirSync(join(TMP, "sm", "assets", "HEFT1"), { recursive: true });
+    writeFileSync(join(TMP, "sm", "assets", "HEFT1", "alt.png"), "png");
+    writeFileSync(join(TMP, "sm", "md", "HEFT1.md"), "x");
+    const md = "# 1 Grundlagen\n$$U = R \\cdot I$$\n![Schaltung](bilder/bild_001_abc.png)\n![Alt](C:/temp/irgendwo/alt.png)\n![weg](fehlt.png)";
+    const dir = kf.writeKnowledgeFolder(id, md, [{ name: "bild_001_abc.png", data: Buffer.from("neu") }], join(TMP, "sm", "md", "HEFT1.md"), root);
+    expect(dir.endsWith(`heft1__${id.slice(0, 8)}`)).toBe(true);
+    const text = require("fs").readFileSync(join(dir, "heft1.md"), "utf8");
+    expect(text).toStartWith("---\ntitel: \"heft1\"");
+    expect(text).toContain("$$U = R \\cdot I$$");
+    expect(text).toContain("![Alt](bilder/alt.png)");
+    expect(text).not.toContain("fehlt.png");
+    expect(existsSync(join(dir, "bilder", "bild_001_abc.png"))).toBe(true);
+    expect(existsSync(join(dir, "bilder", "alt.png"))).toBe(true);
+    // Neu schreiben ersetzt, kein zweiter Ordner
+    kf.writeKnowledgeFolder(id, "neu", [], null, root);
+    expect(require("fs").readdirSync(root).length).toBe(1);
+    kf.removeKnowledgeFolder(id, root);
+    expect(kf.findKnowledgeFolder(id, root)).toBeNull();
+  });
+});
+

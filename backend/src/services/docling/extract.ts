@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import { doclingFetch, numOr, pollUntilDone, subscribeViaWs } from "./client";
 import { buildSections } from "./sections";
+import { splitEmbeddedImages, stripImageData } from "./images";
 import { httpErrorFrom } from "../../log/errors";
 
 // Titel + Autor aus den Metadaten, null bei fehlenden oder Standard-Werten
@@ -79,15 +80,22 @@ export async function extractPdfViaDocling(params: {
     // Textebene durch OCR ersetzen, ~2x langsamer, pro Upload wählbar
     form.append("force_ocr", "true");
   }
-  // Tabellenstruktur genau wie im Studium Maker; Formeln und Code als Text statt Bild
+  // Höchste Stufe wie im Studium Maker: Formeln als LaTeX (auch als Bild eingebettete), Tabellen genau, Code als Text
   form.append("table_mode", "accurate");
   form.append("do_table_structure", "true");
   form.append("do_formula_enrichment", "true");
   form.append("do_code_enrichment", "true");
+  // Bilder: einordnen (Schaltbild, Diagramm, Logo …), Diagramme in Datenpunkte, kurz beschreiben
+  form.append("do_picture_classification", "true");
+  form.append("do_chart_extraction", "true");
+  form.append("do_picture_description", "true");
+  form.append("picture_description_area_threshold", "0.02");
+  // Bilder mitliefern; die App legt sie als Dateien in der Wissensdatenbank ab
+  form.append("include_images", "true");
+  form.append("images_scale", "2");
+  form.append("image_export_mode", "embedded");
   form.append("pdf_backend", "dlparse_v2");
   form.append("abort_on_error", "false");
-
-  // Bildbeschreibung bewusst aus: bringt fürs Hörbuch nichts, 5-10x langsamer
 
   onProgress?.(tLang(lang, "msg.doclingUploading"));
   const uploadRes = await doclingFetch("/v1/convert/file/async", {
@@ -199,8 +207,8 @@ export async function extractPdfViaDocling(params: {
     );
   }
 
-  const markdown = result.document?.md_content ?? "";
-  const json = result.document?.json_content ?? {};
+  const { markdown, images } = splitEmbeddedImages(result.document?.md_content ?? "");
+  const json = (stripImageData(result.document?.json_content ?? {}) ?? {}) as DoclingDocumentJson;
   const pageCount = Object.keys(json.pages ?? {}).length || 0;
   const sections = buildSections(json, pageCount, markdown);
   const metadata = extractDocMetadata(json);
@@ -210,6 +218,7 @@ export async function extractPdfViaDocling(params: {
     pageCount,
     sections,
     metadata,
-    docJson: result.document?.json_content ?? null,
+    docJson: result.document?.json_content ? json : null,
+    images,
   };
 }

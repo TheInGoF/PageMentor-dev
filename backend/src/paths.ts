@@ -37,6 +37,11 @@ function defaultDataDir(): string {
 export const DATA_DIR = process.env.PM_DATA_DIR || defaultDataDir();
 export const LOG_DIR = process.env.PM_LOG_DIR || join(DATA_DIR, "logs");
 export const AUDIOBOOK_EXPORT_DIR = process.env.PM_AUDIOBOOK_DIR || join(DATA_DIR, "Hörbücher");
+// Einwurf für neue PDFs: wird automatisch eingelesen, Erledigtes wandert nach Import/Erledigt
+export const IMPORT_DIR = process.env.PM_IMPORT_DIR || join(DATA_DIR, "Import");
+export const IMPORT_DONE_DIR = join(IMPORT_DIR, "Erledigt");
+// Lesbare Wissensdatenbank: je Dokument Markdown mit Formeln und die Bilder als Dateien
+export const KNOWLEDGE_DIR = process.env.PM_KNOWLEDGE_DIR || join(DATA_DIR, "Wissensdatenbank");
 export const PUBLIC_DIR = process.env.PM_PUBLIC_DIR || join(APP_DIR, "public");
 export const BIN_DIR = process.env.PM_BIN_DIR || join(APP_DIR, "bin");
 

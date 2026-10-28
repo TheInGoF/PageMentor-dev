@@ -7,6 +7,8 @@ import { assignAfterExtraction } from "../study/assign/store";
 import { emitLog } from "../log/logger";
 import { syncVectors } from "./rag/vec";
 import { extractionFromMarkdown } from "./batch/markdown";
+import { describeDuplicate, findTextDuplicate, textMinhash } from "./batch/dedupe";
+import { writeKnowledgeFolder } from "./batch/knowledgeFolder";
 import type { DoclingExtraction } from "./docling/types";
 import { extractPdf } from "./pdf";
 import { cleanForReading } from "./clean";
@@ -91,6 +93,23 @@ async function processDocumentImpl(docId: string): Promise<void> {
         onProgress: (message, fraction) =>
           emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
       });
+    }
+
+    // Dubletten vor Kapiteln, Embeddings und KI: bei Scans gibt es erst jetzt Text zum Vergleichen
+    const known = d.prepare("SELECT text_minhash FROM documents WHERE id = ?").get(docId) as { text_minhash: string | null } | null;
+    if (!known?.text_minhash) {
+      const hash = textMinhash(extraction.markdown);
+      if (hash) {
+        d.prepare("UPDATE documents SET text_minhash = ? WHERE id = ?").run(JSON.stringify(hash), docId);
+        const dup = findTextDuplicate(hash, docId);
+        const fromQueue = d.prepare("SELECT 1 FROM import_queue WHERE document_id = ?").get(docId);
+        if (dup && fromQueue) {
+          d.prepare("UPDATE documents SET ocr_status = 'duplicate', duplicate_of = ?, extraction_started_at = NULL WHERE id = ?").run(dup.documentId, docId);
+          emit({ phase: "pipeline.done", docId, message: describeDuplicate(dup) });
+          return;
+        }
+        if (dup) emitLog("warn", "pipeline", describeDuplicate(dup), { ctx: { docId } });
+      }
     }
 
     // Render cover thumb (first page as JPG) in the background —
@@ -239,6 +258,13 @@ async function processDocumentImpl(docId: string): Promise<void> {
       if (r.quality.flag) emitLog("warn", "pipeline", `Qualität prüfen: ${r.quality.reasons.join("; ")}`, { ctx: { docId } });
     } catch (assignErr) {
       emitLog("warn", "pipeline", "Zuordnung fehlgeschlagen", { ctx: { docId }, err: assignErr });
+    }
+
+    // Lesbare Ablage in der Wissensdatenbank, nach der Zuordnung, damit das Modul drinsteht
+    try {
+      writeKnowledgeFolder(docId, extraction.markdown, extraction.images, adopted ? doc.source_md : null);
+    } catch (err) {
+      emitLog("warn", "pipeline", "Ablage in der Wissensdatenbank fehlgeschlagen", { ctx: { docId }, err });
     }
 
     emit({

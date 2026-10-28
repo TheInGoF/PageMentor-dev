@@ -7,7 +7,7 @@ import { startupHeader, startupStep, startupDone, startupNote } from "./log/star
 import { requestLogger, onRouteError } from "./log/http";
 import { logRoutes, clientLogRoutes } from "./routes/logs";
 import { studyRoutes } from "./routes/study";
-import { knowledgeRoutes, startQueue } from "./routes/knowledge";
+import { knowledgeRoutes, startQueue, watchImportFolder } from "./routes/knowledge";
 import { cloudRoutes } from "./routes/cloud";
 import { engineRoutes } from "./routes/engine";
 import { autoStart } from "./engine/manager";
@@ -117,6 +117,7 @@ setTimeout(() => {
   }
   // Unterbrochenen Stapel-Import fortsetzen
   startQueue();
+  watchImportFolder();
 }, 2000);
 startupNote(`Dienste laut Einstellungen: ${JSON.stringify(serviceUrls())}`);
 

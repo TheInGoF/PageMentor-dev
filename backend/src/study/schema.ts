@@ -4,7 +4,7 @@ import type { Database } from "bun:sqlite";
 import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 
-export const STUDY_SCHEMA_VERSION = 6;
+export const STUDY_SCHEMA_VERSION = 7;
 
 function columns(d: Database, table: string): Set<string> {
   return new Set((d.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name));
@@ -211,7 +211,14 @@ function migrateV6(d: Database): void {
   `);
 }
 
-const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6];
+// Dubletten vor der teuren Verarbeitung erkennen: Fingerabdruck der Datei und des Textes
+function migrateV7(d: Database): void {
+  addColumns(d, "documents", { file_sha1: "TEXT", text_minhash: "TEXT", duplicate_of: "TEXT" });
+  addColumns(d, "import_queue", { sha1: "TEXT" });
+  d.exec("CREATE INDEX IF NOT EXISTS idx_documents_sha1 ON documents(file_sha1)");
+}
+
+const MIGRATIONS: Array<(d: Database) => void> = [migrateV1, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6, migrateV7];
 
 // Sicherung vor der Hochstufung; nur wenn schon Daten da sind
 function backup(d: Database, dbFile: string, from: number): string | null {

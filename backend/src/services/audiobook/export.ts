@@ -66,3 +66,15 @@ export function revealInFolder(path: string): boolean {
     return false;
   }
 }
+
+// Ordner im Explorer öffnen
+export function openFolder(dir: string): boolean {
+  if (!IS_WINDOWS) return false;
+  try {
+    spawn("explorer.exe", [dir], { detached: true, windowsHide: false, stdio: "ignore" }).unref();
+    return true;
+  } catch (err) {
+    log.warn("Explorer konnte nicht geöffnet werden", err);
+    return false;
+  }
+}

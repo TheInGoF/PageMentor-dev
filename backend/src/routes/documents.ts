@@ -1,7 +1,9 @@
 import { syncVectors } from "../services/rag/vec";
 import { Hono } from "hono";
 import { db } from "../db";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
+import { describeDuplicate, documentBySha1 } from "../services/batch/dedupe";
+import { removeKnowledgeFolder } from "../services/batch/knowledgeFolder";
 import { basename, join } from "path";
 import { mkdirSync, writeFileSync, unlinkSync, existsSync, rmSync } from "fs";
 import { processDocument, cancelProcessing } from "../services/pipeline";
@@ -180,11 +182,16 @@ documentRoutes.post("/upload", async (c) => {
   const safeName =
     basename(file.name).replace(/[\x00-\x1f"\\]/g, "").trim() || "upload.pdf";
 
+  // Gleiche Datei schon in der Bibliothek: nicht noch einmal anlegen und umwandeln
+  const buf = Buffer.from(await file.arrayBuffer());
+  const sha1 = createHash("sha1").update(buf).digest("hex");
+  const same = documentBySha1(sha1);
+  if (same) return c.json({ error: describeDuplicate(same), duplicateOf: same.documentId }, 409);
+
   const id = randomUUID();
   const dir = join(UPLOAD_DIR, id);
   mkdirSync(dir, { recursive: true });
 
-  const buf = Buffer.from(await file.arrayBuffer());
   const stored = join(dir, safeName);
   writeFileSync(stored, buf);
 
@@ -193,8 +200,8 @@ documentRoutes.post("/upload", async (c) => {
 
   db()
     .prepare(
-      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type, module_id, force_ocr, ocr_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting-extraction')`
+      `INSERT INTO documents (id, title, filename, stored_path, mime_type, size_bytes, language, type, module_id, force_ocr, ocr_status, file_sha1)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting-extraction', ?)`
     )
     .run(
       id,
@@ -206,7 +213,8 @@ documentRoutes.post("/upload", async (c) => {
       language,
       type,
       moduleId,
-      forceOcr
+      forceOcr,
+      sha1
     );
 
   // Tags
@@ -266,6 +274,7 @@ documentRoutes.delete("/:id", (c) => {
   const audioDir = join(DATA_DIR, "audio", id);
   if (existsSync(audioDir)) rmSync(audioDir, { recursive: true, force: true });
 
+  removeKnowledgeFolder(id);
   db().prepare("DELETE FROM documents WHERE id = ?").run(id);
   removeFromIndex(id).catch(() => {});
   return c.json({ status: "ok" });

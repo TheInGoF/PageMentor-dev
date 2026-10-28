@@ -6,7 +6,7 @@ export type { EngineStatus, EngineCheck, CheckStatus, TtsEnginesInfo } from "./e
 export type { CompareRun, CompareItem } from "./audio";
 export type { Assessment, AssessmentKind, AssessmentStatus, StudyProgress, ExamSlot, ShiftPlan, StudyTimeInfo, ExamFocus } from "./plan";
 export type { CloudTask, CloudStatus, CloudPreview, CloudResult } from "./cloud";
-export type { BatchStatus, EvalQuestion, EvalReport } from "./knowledge";
+export type { BatchStatus, EnqueueResult, EvalQuestion, EvalReport } from "./knowledge";
 export type { StudyImportReport, ImportCount, ModulePrefix, MaterialItem, MaterialKind, MaterialCounts, Trainer, TrainerCheck } from "./study";
 import { libraryApi } from "./library";
 import { learningApi } from "./learning";

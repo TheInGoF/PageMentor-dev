@@ -1,9 +1,11 @@
 // Stapel-Import: Ordner einlesen, PDFs nacheinander verarbeiten, fortsetzbar, auf Wunsch nur nachts
 import { randomUUID } from "crypto";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "fs";
-import { basename, extname, join } from "path";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync } from "fs";
+import { basename, extname, join, relative } from "path";
 import { db } from "../../db";
-import { DATA_DIR } from "../../paths";
+import { DATA_DIR, IMPORT_DIR } from "../../paths";
+import { extractPdf } from "../pdf";
+import { backfillSha1, describeDuplicate, documentBySha1, fileSha1, findTextDuplicate, textMinhash } from "./dedupe";
 import { emitLog } from "../../log/logger";
 import { profileValue, setProfileValue } from "../../study/progress";
 
@@ -14,11 +16,17 @@ export interface EnqueueOptions {
   mdFolder?: string | null;
 }
 
-function walk(dir: string, ext: string, out: string[] = []): string[] {
+// Ablageordner im Import-Ordner werden nicht wieder eingelesen
+export const IMPORT_DONE = "Erledigt";
+export const IMPORT_DUPLICATES = "Dubletten";
+
+function walk(dir: string, ext: string, out: string[] = [], skip: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith(".")) continue;
     const p = join(dir, e.name);
-    if (e.isDirectory()) walk(p, ext, out);
+    if (e.isDirectory()) {
+      if (!skip.includes(e.name)) walk(p, ext, out, skip);
+    }
     else if (extname(e.name).toLowerCase() === ext) out.push(p);
   }
   return out;
@@ -26,30 +34,82 @@ function walk(dir: string, ext: string, out: string[] = []): string[] {
 
 const stem = (p: string) => basename(p, extname(p)).toLowerCase();
 
-export function enqueueFolder(folder: string, opts: EnqueueOptions = {}): { added: number; skipped: number; withMarkdown: number } {
+export interface EnqueueResult {
+  added: number;
+  skipped: number;
+  withMarkdown: number;
+  // Gleiche Datei schon in der Bibliothek, in der Warteschlange oder doppelt im Ordner
+  duplicates: Array<{ name: string; reason: string }>;
+}
+
+// Stufe 1 der Dublettenprüfung schon beim Einreihen: Fingerabdruck der Datei, kostet nur Lesen
+export async function enqueueFolder(folder: string, opts: EnqueueOptions = {}, dataDir = DATA_DIR): Promise<EnqueueResult> {
   if (!existsSync(folder)) throw new Error(`Ordner nicht gefunden: ${folder}`);
-  const pdfs = walk(folder, ".pdf");
+  const inImport = isInside(folder, importDir(dataDir));
+  const pdfs = walk(folder, ".pdf", [], inImport ? [IMPORT_DONE, IMPORT_DUPLICATES] : []);
   const mdIndex = new Map<string, string>();
   for (const dir of [folder, opts.mdFolder].filter((x): x is string => !!x && existsSync(x))) for (const md of walk(dir, ".md")) mdIndex.set(stem(md), md);
-  // Schon in der Bibliothek: gleicher Dateiname und gleiche Größe
-  const known = new Set((db().prepare("SELECT filename, size_bytes FROM documents").all() as Array<{ filename: string; size_bytes: number }>).map((r) => `${r.filename.toLowerCase()}|${r.size_bytes}`));
-  const ins = db().prepare("INSERT OR IGNORE INTO import_queue (path, md_path, size_bytes, doc_type, module_id) VALUES (?, ?, ?, ?, ?)");
-  let added = 0;
-  let skipped = 0;
-  let withMarkdown = 0;
-  db().transaction(() => {
-    for (const p of pdfs) {
-      const size = statSync(p).size;
-      const md = mdIndex.get(stem(p)) ?? null;
-      if (known.has(`${basename(p).toLowerCase()}|${size}`) || !ins.run(p, md, size, opts.docType ?? "studienheft", opts.moduleId ?? null).changes) {
-        skipped++;
-        continue;
-      }
-      added++;
-      if (md) withMarkdown++;
+  await backfillSha1();
+  const queued = new Map((db().prepare("SELECT sha1, path FROM import_queue WHERE sha1 IS NOT NULL AND status != 'dublette'").all() as Array<{ sha1: string; path: string }>).map((r) => [r.sha1, r.path]));
+  const ins = db().prepare("INSERT OR IGNORE INTO import_queue (path, md_path, size_bytes, doc_type, module_id, sha1) VALUES (?, ?, ?, ?, ?, ?)");
+  const res: EnqueueResult = { added: 0, skipped: 0, withMarkdown: 0, duplicates: [] };
+  for (const p of pdfs) {
+    const sha1 = await fileSha1(p);
+    const inLibrary = documentBySha1(sha1);
+    const queuedAs = queued.get(sha1);
+    if (queuedAs === p) {
+      res.skipped++;
+      continue;
     }
-  })();
-  return { added, skipped, withMarkdown };
+    if (inLibrary || queuedAs) {
+      const reason = inLibrary ? describeDuplicate(inLibrary) : `Dublette: gleiche Datei wie ${basename(queuedAs!)} (schon eingereiht)`;
+      res.duplicates.push({ name: basename(p), reason });
+      if (inImport) moveFromImport(p, IMPORT_DUPLICATES, dataDir);
+      continue;
+    }
+    const md = mdIndex.get(stem(p)) ?? null;
+    if (!ins.run(p, md, statSync(p).size, opts.docType ?? "studienheft", opts.moduleId ?? null, sha1).changes) {
+      res.skipped++;
+      continue;
+    }
+    queued.set(sha1, p);
+    res.added++;
+    if (md) res.withMarkdown++;
+  }
+  if (res.duplicates.length) emitLog("info", "batch", `Stapel-Import: ${res.duplicates.length} Dubletten übersprungen`, { ctx: { dateien: res.duplicates.map((d) => d.name).join(", ") } });
+  return res;
+}
+
+const importDir = (dataDir: string) => (dataDir === DATA_DIR ? IMPORT_DIR : join(dataDir, "Import"));
+
+function isInside(path: string, dir: string): boolean {
+  const rel = relative(dir, path);
+  return rel === "" || (!rel.startsWith("..") && !/^[a-zA-Z]:/.test(rel) && !rel.startsWith("/"));
+}
+
+// Verarbeitete Datei aus dem Import-Ordner wegräumen; Unterordner bleiben erhalten
+export function moveFromImport(path: string, sub: string, dataDir = DATA_DIR): string | null {
+  const root = importDir(dataDir);
+  if (!existsSync(path) || !isInside(path, root)) return null;
+  const rel = relative(root, path);
+  let target = join(root, sub, rel);
+  mkdirSync(join(target, ".."), { recursive: true });
+  for (let i = 2; existsSync(target); i++) target = join(root, sub, rel.replace(/(\.pdf)?$/i, ` (${i})$1`));
+  try {
+    renameSync(path, target);
+  } catch {
+    copyFileSync(path, target);
+    unlinkSync(path);
+  }
+  return target;
+}
+
+// Import-Ordner anlegen und neue PDFs einreihen; läuft beim Start und regelmäßig
+export async function scanImportFolder(opts: EnqueueOptions = {}, dataDir = DATA_DIR): Promise<EnqueueResult | null> {
+  const dir = importDir(dataDir);
+  mkdirSync(dir, { recursive: true });
+  if (!walk(dir, ".pdf", [], [IMPORT_DONE, IMPORT_DUPLICATES]).length) return null;
+  return enqueueFolder(dir, opts, dataDir);
 }
 
 export interface QueueStatus {
@@ -57,12 +117,14 @@ export interface QueueStatus {
   running: number;
   done: number;
   failed: number;
+  duplicates: number;
   current: string | null;
   avgSeconds: number | null;
   etaSeconds: number | null;
   paused: boolean;
   nightOnly: boolean;
   failures: Array<{ id: number; path: string; error: string | null }>;
+  duplicateItems: Array<{ id: number; path: string; error: string | null }>;
 }
 
 export function queueStatus(): QueueStatus {
@@ -71,6 +133,7 @@ export function queueStatus(): QueueStatus {
   const current = (db().prepare("SELECT path FROM import_queue WHERE status = 'läuft' LIMIT 1").get() as { path: string } | null)?.path ?? null;
   const waiting = c("wartet");
   return {
+    duplicates: c("dublette"),
     waiting,
     running: c("läuft"),
     done: c("fertig"),
@@ -81,6 +144,7 @@ export function queueStatus(): QueueStatus {
     paused: profileValue("batch_paused") === "1",
     nightOnly: profileValue("batch_night") === "1",
     failures: db().prepare("SELECT id, path, error FROM import_queue WHERE status = 'fehler' ORDER BY id LIMIT 50").all() as QueueStatus["failures"],
+    duplicateItems: db().prepare("SELECT id, path, error FROM import_queue WHERE status = 'dublette' ORDER BY id DESC LIMIT 50").all() as QueueStatus["duplicateItems"],
   };
 }
 
@@ -94,7 +158,7 @@ export function retryFailed(): number {
 }
 
 export function clearFinished(): number {
-  return db().prepare("DELETE FROM import_queue WHERE status = 'fertig'").run().changes;
+  return db().prepare("DELETE FROM import_queue WHERE status IN ('fertig', 'dublette')").run().changes;
 }
 
 // Nachtbetrieb: 22 bis 6 Uhr, dann gehört die GPU dem Import
@@ -120,28 +184,79 @@ export function createDocumentFromFile(path: string, docType: string, moduleId: 
 
 export type Processor = (docId: string) => Promise<void>;
 
+// Stufe 2 der Dublettenprüfung vor Docling: Textebene lesen (wenige Sekunden) und mit der Bibliothek vergleichen
+async function textLayerHash(path: string): Promise<number[] | null> {
+  try {
+    return textMinhash((await extractPdf(path)).pages.join("\n"));
+  } catch {
+    return null;
+  }
+}
+
 // Ein Eintrag; Rückgabe false, wenn nichts zu tun war
 export async function processNext(process: Processor, dataDir = DATA_DIR): Promise<boolean> {
   const item = db().prepare("SELECT * FROM import_queue WHERE status = 'wartet' ORDER BY id LIMIT 1").get() as
-    | { id: number; path: string; md_path: string | null; doc_type: string; module_id: string | null }
+    | { id: number; path: string; md_path: string | null; doc_type: string; module_id: string | null; sha1: string | null; document_id: string | null }
     | null;
   if (!item) return false;
   db().prepare("UPDATE import_queue SET status = 'läuft' WHERE id = ?").run(item.id);
   const t0 = Date.now();
+  const markDuplicate = (reason: string) => {
+    db().prepare("UPDATE import_queue SET status = 'dublette', error = ?, finished_at = datetime('now') WHERE id = ?").run(reason, item.id);
+    moveFromImport(item.path, IMPORT_DUPLICATES, dataDir);
+    emitLog("info", "batch", `Stapel-Import: ${basename(item.path)} übersprungen. ${reason}`);
+  };
   try {
     if (!existsSync(item.path)) throw new Error("Datei nicht mehr vorhanden");
-    const docId = createDocumentFromFile(item.path, item.doc_type, item.module_id, item.md_path, dataDir);
-    db().prepare("UPDATE import_queue SET document_id = ? WHERE id = ?").run(docId, item.id);
+    // Neuer Versuch nach Fehler: das Dokument aus dem ersten Lauf weiterverwenden, es ist keine Dublette
+    const retry = item.document_id && db().prepare("SELECT 1 FROM documents WHERE id = ?").get(item.document_id) ? item.document_id : null;
+    let docId: string;
+    if (retry) {
+      docId = retry;
+    } else {
+      const sha1 = item.sha1 ?? (await fileSha1(item.path));
+      const sameFile = documentBySha1(sha1);
+      if (sameFile) {
+        markDuplicate(describeDuplicate(sameFile));
+        return true;
+      }
+      const hash = await textLayerHash(item.path);
+      const sameText = hash ? findTextDuplicate(hash) : null;
+      if (sameText) {
+        markDuplicate(describeDuplicate(sameText));
+        return true;
+      }
+      docId = createDocumentFromFile(item.path, item.doc_type, item.module_id, item.md_path, dataDir);
+      db().prepare("UPDATE documents SET file_sha1 = ?, text_minhash = ? WHERE id = ?").run(sha1, hash ? JSON.stringify(hash) : null, docId);
+      db().prepare("UPDATE import_queue SET document_id = ? WHERE id = ?").run(docId, item.id);
+    }
     await process(docId);
-    const status = (db().prepare("SELECT ocr_status FROM documents WHERE id = ?").get(docId) as { ocr_status: string } | null)?.ocr_status;
-    if (status !== "done") throw new Error(`Verarbeitung endete mit Status ${status ?? "?"}`);
+    // Scan ohne Textebene: die Pipeline vergleicht nach Docling und verwirft die Dublette vor Kapiteln und KI
+    const doc = db().prepare("SELECT ocr_status, duplicate_of FROM documents WHERE id = ?").get(docId) as { ocr_status: string; duplicate_of: string | null } | null;
+    if (doc?.ocr_status === "duplicate") {
+      const orig = db().prepare("SELECT id, title FROM documents WHERE id = ?").get(doc.duplicate_of) as { id: string; title: string } | null;
+      removeDocumentFiles(docId, dataDir);
+      db().prepare("DELETE FROM documents WHERE id = ?").run(docId);
+      db().prepare("UPDATE import_queue SET document_id = NULL WHERE id = ?").run(item.id);
+      markDuplicate(orig ? `Dublette: Inhalt gleich wie „${orig.title}“ (nach Texterkennung)` : "Dublette (nach Texterkennung)");
+      return true;
+    }
+    if (doc?.ocr_status !== "done") throw new Error(`Verarbeitung endete mit Status ${doc?.ocr_status ?? "?"}`);
     db().prepare("UPDATE import_queue SET status = 'fertig', seconds = ?, finished_at = datetime('now') WHERE id = ?").run((Date.now() - t0) / 1000, item.id);
+    moveFromImport(item.path, IMPORT_DONE, dataDir);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     db().prepare("UPDATE import_queue SET status = 'fehler', error = ?, finished_at = datetime('now') WHERE id = ?").run(msg, item.id);
     emitLog("warn", "batch", `Stapel-Import: ${basename(item.path)} fehlgeschlagen: ${msg}`);
   }
   return true;
+}
+
+function removeDocumentFiles(docId: string, dataDir: string): void {
+  for (const sub of ["uploads", "audio", "covers"]) {
+    const p = join(dataDir, sub, docId);
+    if (existsSync(p)) rmSync(p, { recursive: true, force: true });
+  }
 }
 
 let running = false;

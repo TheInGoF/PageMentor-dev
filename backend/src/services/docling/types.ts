@@ -40,6 +40,8 @@ export interface DoclingExtraction {
   };
   // Docling-JSON roh, für Ablage und spätere Auswertung
   docJson: unknown | null;
+  // Aus dem Markdown gelöste Bilder (Verweise bilder/<name>)
+  images?: ExtractedImage[];
 }
 
 export interface DoclingTextItem {
@@ -82,4 +84,9 @@ export interface PollResponse {
   task_meta?: Record<string, unknown>;
   // Weitere Felder je nach Version, z. B. processed_pages
   [key: string]: unknown;
+}
+
+export interface ExtractedImage {
+  name: string;
+  data: Buffer;
 }

@@ -12,6 +12,15 @@ export interface BatchStatus {
   paused: boolean;
   nightOnly: boolean;
   failures: Array<{ id: number; path: string; error: string | null }>;
+  duplicates: number;
+  duplicateItems: Array<{ id: number; path: string; error: string | null }>;
+}
+
+export interface EnqueueResult {
+  added: number;
+  skipped: number;
+  withMarkdown: number;
+  duplicates: Array<{ name: string; reason: string }>;
 }
 
 export interface EvalQuestion {
@@ -38,7 +47,10 @@ export const knowledgeApi = {
   knowledge: {
     batch: () => request<BatchStatus>("/api/knowledge/batch"),
     enqueue: (b: { folder: string; docType: string; moduleId: string | null; mdFolder: string | null }) =>
-      post("/api/knowledge/batch", b) as Promise<{ added: number; skipped: number; withMarkdown: number }>,
+      post("/api/knowledge/batch", b) as Promise<EnqueueResult>,
+    folders: () => request<{ importDir: string; knowledgeDir: string }>("/api/knowledge/folders"),
+    openFolder: (which: "import" | "knowledge") => post("/api/knowledge/folders/open", { which }) as Promise<{ opened: boolean; path: string }>,
+    scanImport: () => post("/api/knowledge/import/scan") as Promise<EnqueueResult>,
     flags: (f: { paused?: boolean; nightOnly?: boolean }) => post("/api/knowledge/batch/flags", f) as Promise<BatchStatus>,
     retry: () => post("/api/knowledge/batch/retry") as Promise<{ retried: number }>,
     clear: () => post("/api/knowledge/batch/clear") as Promise<{ removed: number }>,

@@ -46,6 +46,22 @@ Einstellungen (Zahnrad) und Diagnose bleiben oben rechts.
 
 ## Wissensdatenbank
 
+Im Datenordner `Dokumente\PageMentor` liegen zwei Ordner dafür:
+
+| Ordner | Wofür |
+|---|---|
+| `Import` | PDFs einfach hineinlegen (Unterordner erlaubt). Die App liest den Ordner beim Start und alle zwei Minuten ein. Fertiges wandert nach `Import\Erledigt`, Doppeltes nach `Import\Dubletten`. |
+| `Wissensdatenbank` | Je Dokument ein Ordner mit Markdown (Formeln als LaTeX, Kopfdaten mit Modul) und den Bildern unter `bilder\`. Lesbar für andere Programme. |
+
+**Dubletten kosten keine Rechenzeit.** Vor Docling und KI wird geprüft, ob die gleiche Datei
+(Fingerabdruck) oder der gleiche Inhalt (Textvergleich, ab 90 % gleich) schon in der Bibliothek
+ist. Bei Scans ohne Textebene geht der Textvergleich erst nach der Texterkennung, aber noch vor
+Kapiteln, Embeddings und Material.
+
+**Docling arbeitet in der höchsten Stufe:** Formeln als LaTeX (auch als Bild eingebettete),
+Tabellen genau, Code als Text, Bilder werden eingeordnet und kurz beschrieben, Diagramme in
+Datenpunkte übersetzt. Beim ersten Mal lädt Docling dafür zusätzliche Modelle, das dauert einmalig.
+
 - **Stapel-Import** in der Bibliothek: ganzen Ordner einreihen, auf Wunsch nur nachts
   (22–6 Uhr). Pausieren und Fortsetzen jederzeit, ein Absturz kostet nichts.
 - **Literatur** als eigener Typ, auch ohne Modul.
@@ -79,5 +95,7 @@ Einmal komplett durchspielen, Auffälligkeiten mit Screenshot und Diagnose-Paket
 - [ ] Aufgabentrainer öffnen, Schritte aufdecken, Heft-Verweis springt ins Heft, Selbsttest grün
 - [ ] Tutor: Frage zu einer Formel, Antwort nennt Quelle und Grep-ID
 - [ ] Stapel-Import mit wenigen Heften, Restzeit plausibel
+- [ ] PDF in `Import` legen: wird eingelesen, landet in `Erledigt`, Ordner in `Wissensdatenbank` mit Bildern
+- [ ] Dieselbe PDF noch einmal in `Import`: landet in `Dubletten`, ohne Umwandlung
 - [ ] Prüffragen anlegen und Trefferquote messen
 - [ ] Optional: Cloud-Hilfe einschalten, Vorschau ansehen, einmal senden

@@ -1,6 +1,6 @@
 // Stapel-Import: ganzen Ordner (z. B. alle Studienhefte oder Literatur) in die Warteschlange
-import { useEffect, useState } from "react";
-import { api, type BatchStatus, type ModuleListItem } from "../../lib/api";
+import { useEffect, useState, type ReactNode } from "react";
+import { api, type BatchStatus, type EnqueueResult, type ModuleListItem } from "../../lib/api";
 import { isFrameless } from "../../lib/desktop";
 import { t } from "../../lib/i18n";
 import { Modal } from "../ui/Modal";
@@ -15,10 +15,12 @@ export function BatchImport({ open, onClose, modules }: { open: boolean; onClose
   const [docType, setDocType] = useState("studienheft");
   const [moduleId, setModuleId] = useState("");
   const [status, setStatus] = useState<BatchStatus | null>(null);
+  const [folders, setFolders] = useState<{ importDir: string; knowledgeDir: string } | null>(null);
   const toast = useToast();
 
   useEffect(() => {
     if (!open) return;
+    void api.knowledge.folders().then(setFolders).catch(() => undefined);
     const load = () => void api.knowledge.batch().then(setStatus).catch(() => undefined);
     load();
     const id = setInterval(load, 5000);
@@ -34,12 +36,29 @@ export function BatchImport({ open, onClose, modules }: { open: boolean; onClose
     }
   };
 
+  const report = (r: EnqueueResult) => toast.show(t("batch.queued", { added: r.added, skipped: r.skipped, dup: r.duplicates.length, md: r.withMarkdown }), "success");
+
   async function start() {
-    await act(async () => {
-      const r = await api.knowledge.enqueue({ folder, docType, moduleId: moduleId || null, mdFolder: mdFolder || null });
-      toast.show(t("batch.queued", { added: r.added, skipped: r.skipped, md: r.withMarkdown }), "success");
-    });
+    await act(async () => report(await api.knowledge.enqueue({ folder, docType, moduleId: moduleId || null, mdFolder: mdFolder || null })));
   }
+
+  const folderRow = (label: string, hint: string, path: string | undefined, which: "import" | "knowledge", extra?: ReactNode) => (
+    <div className="card p-3 flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        <div className="ml-auto flex gap-1.5">
+          {extra}
+          {isFrameless() && (
+            <Button variant="outline" className="!py-1 text-xs" onClick={() => act(() => api.knowledge.openFolder(which))}>
+              {t("batch.open")}
+            </Button>
+          )}
+        </div>
+      </div>
+      <code className="text-xs text-neutral-500 break-all">{path ?? "…"}</code>
+      <p className="text-xs text-neutral-500">{hint}</p>
+    </div>
+  );
 
   const total = status ? status.waiting + status.running + status.done + status.failed : 0;
   const pct = total ? Math.round(((status!.done + status!.failed) / total) * 100) : 0;
@@ -47,6 +66,19 @@ export function BatchImport({ open, onClose, modules }: { open: boolean; onClose
   return (
     <Modal open={open} onClose={onClose} title={t("batch.title")} footer={<Button variant="ghost" onClick={onClose}>{t("common.close")}</Button>}>
       <div className="flex flex-col gap-4">
+        {folderRow(
+          t("batch.importFolder"),
+          t("batch.importHint"),
+          folders?.importDir,
+          "import",
+          <Button variant="outline" className="!py-1 text-xs" onClick={() => act(async () => report(await api.knowledge.scanImport()))}>
+            {t("batch.scanNow")}
+          </Button>
+        )}
+        {folderRow(t("batch.knowledgeFolder"), t("batch.knowledgeHint"), folders?.knowledgeDir, "knowledge")}
+        <p className="text-xs text-neutral-500">{t("batch.dupHint")}</p>
+
+        <h3 className="text-sm font-medium mt-2">{t("batch.otherFolder")}</h3>
         <p className="text-sm text-neutral-500">{t("batch.hint")}</p>
         <div className="flex gap-2">
           <input className="input flex-1" placeholder={t("batch.folder")} value={folder} onChange={(e) => setFolder(e.target.value)} />
@@ -79,7 +111,7 @@ export function BatchImport({ open, onClose, modules }: { open: boolean; onClose
           {t("batch.start")}
         </Button>
 
-        {status && total > 0 && (
+        {status && (total > 0 || status.duplicates > 0) && (
           <div className="card p-4 flex flex-col gap-2">
             <div className="flex justify-between text-sm">
               <span>{t("batch.progress", { done: status.done, total, failed: status.failed })}</span>
@@ -109,6 +141,18 @@ export function BatchImport({ open, onClose, modules }: { open: boolean; onClose
                 </Button>
               )}
             </div>
+            {status.duplicateItems.length > 0 && (
+              <details className="text-xs">
+                <summary className="cursor-pointer text-neutral-500">{t("batch.duplicates", { n: status.duplicates })}</summary>
+                <ul className="mt-1 text-neutral-500 max-h-40 overflow-y-auto">
+                  {status.duplicateItems.map((f) => (
+                    <li key={f.id} className="truncate" title={f.error ?? ""}>
+                      {f.path.split(/[\\/]/).pop()}: {f.error}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
             {status.failures.length > 0 && (
               <details className="text-xs">
                 <summary className="cursor-pointer text-red-600">{t("batch.failures", { n: status.failures.length })}</summary>
