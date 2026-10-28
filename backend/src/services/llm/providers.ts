@@ -86,6 +86,8 @@ export function reloadCandidates(): void {
 }
 
 const CACHE_MS = 30_000;
+// Kein Anbieter erreichbar: nur kurz merken, sonst scheitern alle folgenden Kapitel wegen eines Aussetzers
+const MISS_CACHE_MS = 3_000;
 
 let cached: { provider: Provider | null; checkedAt: number } = {
   provider: null,
@@ -94,7 +96,7 @@ let cached: { provider: Provider | null; checkedAt: number } = {
 
 
 export async function pickProvider(force = false): Promise<Provider | null> {
-  if (!force && Date.now() - cached.checkedAt < CACHE_MS) {
+  if (!force && Date.now() - cached.checkedAt < (cached.provider ? CACHE_MS : MISS_CACHE_MS)) {
     return cached.provider;
   }
   for (const c of buildCandidates()) {

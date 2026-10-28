@@ -2,8 +2,9 @@
 
 export async function pingOllama(url: string): Promise<boolean> {
   try {
+    // Über den Arbiter kann die Antwort dauern, während er Stimmen wechselt
     const res = await fetch(`${url}/api/tags`, {
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(10_000),
     });
     return res.ok;
   } catch {

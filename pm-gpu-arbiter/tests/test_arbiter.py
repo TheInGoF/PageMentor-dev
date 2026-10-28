@@ -51,6 +51,11 @@ with TestClient(main.app) as c:
     events.clear(); running["pm-qwen-tts"] = True
     r = c.post("/api/chat", json={"model": "gemma4:e4b", "messages": []}); assert r.status_code == 200
     assert "stop pm-qwen-tts" in events and "stop pm-kokoro-tts" not in events, events
+    # Modellliste stoppt keine Stimme
+    events.clear(); running["pm-qwen-tts"] = True
+    r = c.get("/api/tags"); assert r.status_code == 200
+    assert "stop pm-qwen-tts" not in events and running["pm-qwen-tts"], events
+    running["pm-qwen-tts"] = False
     r = c.post("/tts/nope/v1/audio/speech", json={}); assert r.status_code == 404
     st = c.get("/status").json(); assert set(st["engines"]) == {"qwen", "f5", "kokoro"}, st
     running["pm-f5-tts"] = False

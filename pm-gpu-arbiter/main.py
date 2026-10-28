@@ -144,8 +144,15 @@ async def gpu_reset():
     return result
 
 
+# Nur lesende Abfragen ohne Modell im VRAM: nicht auf die GPU warten, sonst blockiert
+# die Modellliste, solange eine Stimme spricht, und das Backend hält Ollama für weg
+_READ_ONLY = {"tags", "ps", "version", "show"}
+
+
 @app.api_route("/api/{path:path}", methods=ALL_METHODS)
 async def ollama_proxy(path: str, request: Request):
+    if path in _READ_ONLY:
+        return await proxy_stream(http(), OLLAMA_URL, request, f"api/{path}")
     # Body vorab lesen; Starlette cached ihn für proxy_stream
     body = await request.body()
     desired = ollama.peek_model(path, body)
