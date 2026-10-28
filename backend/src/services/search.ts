@@ -13,7 +13,8 @@
 import { Meilisearch } from "meilisearch";
 
 const MEILI_URL = process.env.MEILI_URL || `http://${process.env.PM_ENGINE_HOST || "localhost"}:7700`;
-const MEILI_KEY = process.env.MEILI_MASTER_KEY || "pm-dev-key";
+// Gleicher Standard wie in engine/compose.yaml (Meilisearch verlangt mindestens 16 Zeichen)
+const MEILI_KEY = process.env.MEILI_MASTER_KEY || "pagementor-local-search";
 
 const DOC_INDEX = "pm_documents";
 const CHAPTER_INDEX = "pm_chapters";

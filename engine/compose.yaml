@@ -160,7 +160,8 @@ services:
     ports:
       - "127.0.0.1:7700:7700"
     environment:
-      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:-pm-dev-key}"
+      # Im Produktionsmodus mindestens 16 Zeichen; nur lokal erreichbar (127.0.0.1)
+      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:-pagementor-local-search}"
       MEILI_ENV: production
       MEILI_NO_ANALYTICS: "true"
     volumes:

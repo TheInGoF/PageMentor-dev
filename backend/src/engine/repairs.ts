@@ -129,18 +129,38 @@ async function pullImages(progress: Progress): Promise<void> {
   await startServices(progress);
 }
 
+// compose.yaml der installierten App in die Umgebung übernehmen, damit Korrekturen auch ohne Neueinrichtung ankommen
+async function syncCompose(): Promise<void> {
+  const src = `${await linuxPath(SCRIPTS_DIR)}/compose.yaml`;
+  const r = await inDistro(`mkdir -p /opt/pagementor && (cmp -s '${src}' ${COMPOSE_IN_DISTRO} || install -m 644 '${src}' ${COMPOSE_IN_DISTRO})`, { timeoutMs: 60_000, quiet: true });
+  if (r.code !== 0) throw new RepairError(`compose.yaml nicht übernommen: ${failText(r)}`);
+}
+
 async function startServices(progress: Progress): Promise<void> {
   progress("Starte Dienste …");
+  await syncCompose();
+  await writeEngineEnv();
   const compose = `docker compose -f ${COMPOSE_IN_DISTRO}`;
   const extra = extraServices();
-  // Fehler beim Start nicht verschlucken: die Meldung von Docker gehört in die Kachel
-  const r = await inDistro(`${compose} up -d --remove-orphans ${[...ALWAYS_ON, ...extra.up].join(" ")} && ${compose} up --no-start ${["qwen-tts", ...extra.create].join(" ")}`, {
+  // Kerndienste zuerst und für sich: eine fehlende Zusatzstimme darf sie nicht blockieren
+  const core = await inDistro(`${compose} up -d --remove-orphans ${ALWAYS_ON.join(" ")} && ${compose} up --no-start qwen-tts`, {
     timeoutMs: 15 * 60_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
   });
-  if (r.code !== 0) throw new RepairError(`Dienste starten fehlgeschlagen: ${failText(r)}`);
-  // Abgeschaltete Zusatzstimmen entfernen; hier darf es scheitern, wenn es sie nicht gibt
+  if (core.code !== 0) throw new RepairError(`Dienste starten fehlgeschlagen: ${failText(core)}`);
+  // Abgeschaltete Zusatzstimmen entfernen; scheitert ohne Folgen, wenn es sie nicht gibt
   if (extra.off.length) await inDistro(`docker rm -f ${extra.off.join(" ")} >/dev/null 2>&1 || true`, { timeoutMs: 120_000, quiet: true });
+  const cmds = [extra.up.length ? `${compose} up -d ${extra.up.join(" ")}` : "", extra.create.length ? `${compose} up --no-start ${extra.create.join(" ")}` : ""].filter(Boolean);
+  if (!cmds.length) return;
+  const voices = await inDistro(cmds.join(" && "), { timeoutMs: 15 * 60_000, onLine: (l) => progress(l.trim().slice(0, 160)) });
+  if (voices.code !== 0) {
+    const denied = /unauthorized|denied/i.test(`${voices.stdout}\n${voices.stderr}`);
+    throw new RepairError(
+      denied
+        ? "Kerndienste laufen. Zusätzliche Stimmen fehlen: Ihre Pakete auf ghcr.io sind nicht öffentlich (pm-kokoro-tts, pm-f5-tts, pm-tada-tts auf „Public“ stellen)."
+        : `Kerndienste laufen. Zusätzliche Stimmen nicht gestartet: ${failText(voices)}`
+    );
+  }
 }
 
 async function pullModel(progress: Progress): Promise<void> {
