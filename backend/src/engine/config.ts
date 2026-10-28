@@ -16,6 +16,8 @@ export const ROOTFS_URL =
 export const ROOTFS_SUMS_URL = "https://cloud-images.ubuntu.com/wsl/releases/24.04/current/SHA256SUMS";
 
 export const COMPOSE_IN_DISTRO = "/opt/pagementor/compose.yaml";
+// App-Version, mit der die Pakete zuletzt geladen wurden; weicht sie ab, holt die Engine neue Stände
+export const IMAGES_MARK_IN_DISTRO = "/opt/pagementor/.images-version";
 export const DEFAULT_LLM_MODEL = process.env.PM_DEFAULT_LLM_MODEL || "gemma4:e4b";
 
 // Dienste mit Health-Adresse, von Windows aus gesehen

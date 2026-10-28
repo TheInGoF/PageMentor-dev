@@ -3,11 +3,13 @@ import { createHash } from "crypto";
 import { createWriteStream, existsSync, mkdirSync, rmSync } from "fs";
 import { dirname, join } from "path";
 import { APP_DIR, IS_COMPILED } from "../paths";
+import { APP_VERSION } from "../version";
 import { effective } from "../services/llmConfig";
 import type { RepairId } from "./checks";
 import {
   COMPOSE_IN_DISTRO,
   DEFAULT_LLM_MODEL,
+  IMAGES_MARK_IN_DISTRO,
   DISK_DIR,
   DISTRO,
   DOCLING_ARTIFACTS,
@@ -131,6 +133,7 @@ async function pullImages(progress: Progress): Promise<void> {
     throw new RepairError(`Download der Pakete fehlgeschlagen: ${failText(r)}`);
   }
   await startServices(progress);
+  await inDistro(`echo '${APP_VERSION}' > ${IMAGES_MARK_IN_DISTRO}`, { timeoutMs: 30_000, quiet: true });
 }
 
 // compose.yaml der installierten App in die Umgebung übernehmen, damit Korrekturen auch ohne Neueinrichtung ankommen
