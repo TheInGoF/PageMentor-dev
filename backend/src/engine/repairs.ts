@@ -120,7 +120,12 @@ async function pullImages(progress: Progress): Promise<void> {
     timeoutMs: 6 * 3600_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
   });
-  if (r.code !== 0) throw new RepairError(`Download der Pakete fehlgeschlagen: ${failText(r)}`);
+  if (r.code !== 0) {
+    // Private Pakete auf ghcr.io: Docker darf sie ohne Anmeldung nicht laden
+    if (/unauthorized|denied/i.test(`${r.stdout}\n${r.stderr}`))
+      throw new RepairError("Download der Pakete verweigert: Die PageMentor-Pakete auf ghcr.io sind nicht öffentlich. Bitte auf GitHub unter Packages auf „Public“ stellen und erneut versuchen.");
+    throw new RepairError(`Download der Pakete fehlgeschlagen: ${failText(r)}`);
+  }
   await startServices(progress);
 }
 

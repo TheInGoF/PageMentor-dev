@@ -93,8 +93,9 @@ export function wsl(args: string[], opts: ExecOptions = {}): Promise<ExecResult>
 }
 
 // Befehl in der Engine-Umgebung als root
+// --exec statt --: sonst wertet WSL das Skript vorab in einer Shell aus und ersetzt $(…) und $var zu früh
 export function inDistro(script: string, opts: ExecOptions = {}): Promise<ExecResult> {
-  return wsl(["-d", DISTRO, "-u", "root", "--", "bash", "-lc", script], opts);
+  return wsl(["-d", DISTRO, "-u", "root", "--exec", "bash", "-lc", script], opts);
 }
 
 // Kurzbeschreibung eines Fehlschlags für Meldungen
