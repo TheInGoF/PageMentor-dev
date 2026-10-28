@@ -70,7 +70,7 @@ engine per book and compare them side by side:
 | Engine | Voices | Runs on |
 | --- | --- | --- |
 | **Qwen3-TTS** (default) | presets, your own voice samples, text-described designs | GPU |
-| **Kokoro** (German) | Martin, very fast | CPU |
+| **Kokoro** (German) | Martin, Kerstin, very fast | CPU |
 | **F5-TTS German** | clones your voice samples | GPU |
 | **TADA 3B** | clones your voice samples | GPU |
 

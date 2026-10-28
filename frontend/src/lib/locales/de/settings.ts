@@ -171,7 +171,7 @@ export const settings: Record<string, string> = {
   "settings.tab.engine": "Engine",
   "ttsEngines.title": "Weitere Stimmen",
   "ttsEngines.hint": "Zusätzlich zu Qwen3-TTS. Ausgewählte Engines werden in der Engine-Umgebung geladen und erscheinen im Hörbuch-Tab.",
-  "ttsEngines.kokoro": "Feste Stimme Martin, sehr schnell, läuft auf dem Prozessor.",
+  "ttsEngines.kokoro": "Feste Stimmen Martin und Kerstin, sehr schnell, laufen auf dem Prozessor.",
   "ttsEngines.f5": "F5-TTS German vom HPI, klont deine Stimmproben. Gewichte nur für nicht-kommerzielle Nutzung (CC-BY-NC).",
   "ttsEngines.tada": "TADA 3B von Hume AI, klont deine Stimmproben. Braucht einen Hugging-Face-Token mit Freigabe für Llama 3.2.",
   "ttsEngines.hfToken": "Hugging-Face-Token",

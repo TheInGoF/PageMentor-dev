@@ -1,5 +1,5 @@
 // Engines Kokoro, F5 und TADA: gleicher HTTP-Vertrag, Weg über den Arbiter
-// F5 und TADA klonen aus Stimmproben und Qwen-Designs, Kokoro hat Martin
+// F5 und TADA klonen aus Stimmproben und Qwen-Designs, Kokoro hat Martin und Kerstin
 import { readFileSync } from "fs";
 import { unlink, writeFile } from "fs/promises";
 import { getVoiceSample, listVoiceSamples, readVoiceRefBytes } from "../../../services/voiceSamples";
@@ -9,7 +9,7 @@ import type { PreviewParams, SynthesizeParams, SynthesizeResult, TtsEngine, Voic
 import { authHeaders, parseRate, PREVIEW_TIMEOUT_MS, qwenLanguageFor, SYNTH_TIMEOUT_MS } from "../qwen/config";
 import { ensureDesignReference } from "../qwen/designRef";
 import { ttsFetch } from "../qwen/http";
-import { EXTRA, KOKORO_VOICE, speechUrl, type ExtraId } from "./config";
+import { EXTRA, KOKORO_VOICES, speechUrl, type ExtraId } from "./config";
 import { extraAvailable } from "./probe";
 
 interface CloneRef {
@@ -23,7 +23,7 @@ const locale = (lang: string) => (lang === "de" ? "de-DE" : lang === "en" ? "en-
 function listFor(id: ExtraId): Voice[] {
   const meta = EXTRA[id];
   if (!meta.clones) {
-    return [{ id: `${id}:${KOKORO_VOICE}`, label: "Martin", language: "de", locale: "de-DE", gender: "male", engine: id, flagship: true, note: meta.note }];
+    return KOKORO_VOICES.map((v, i): Voice => ({ id: `${id}:${v.id}`, label: v.label, language: "de", locale: "de-DE", gender: v.gender, engine: id, flagship: i === 0, note: meta.note }));
   }
   // Beide Modelle sind auf Deutsch trainiert
   const samples = listVoiceSamples()

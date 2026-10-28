@@ -24,5 +24,8 @@ export const EXTRA_IDS = Object.keys(EXTRA) as ExtraId[];
 
 export const speechUrl = (id: ExtraId) => `${baseUrl()}/tts/${id}/v1/audio/speech`;
 
-// Kokoro hat nur Martin
-export const KOKORO_VOICE = "martin";
+// Kokoro: je Stimme ein eigenes Modell im Image pm-kokoro-tts
+export const KOKORO_VOICES = [
+  { id: "martin", label: "Martin", gender: "male" },
+  { id: "kerstin", label: "Kerstin", gender: "female" },
+] as const;
