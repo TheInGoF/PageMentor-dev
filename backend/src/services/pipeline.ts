@@ -7,7 +7,7 @@ import { assignAfterExtraction } from "../study/assign/store";
 import { emitLog } from "../log/logger";
 import { syncVectors } from "./rag/vec";
 import { extractionFromMarkdown } from "./batch/markdown";
-import { describeDuplicate, findTextDuplicate, textMinhash } from "./batch/dedupe";
+import { describeDuplicate, findTextDuplicate, markdownPlainText, textMinhash } from "./batch/dedupe";
 import { writeKnowledgeFolder } from "./batch/knowledgeFolder";
 import type { DoclingExtraction } from "./docling/types";
 import { extractPdf } from "./pdf";
@@ -98,7 +98,7 @@ async function processDocumentImpl(docId: string): Promise<void> {
     // Dubletten vor Kapiteln, Embeddings und KI: bei Scans gibt es erst jetzt Text zum Vergleichen
     const known = d.prepare("SELECT text_minhash FROM documents WHERE id = ?").get(docId) as { text_minhash: string | null } | null;
     if (!known?.text_minhash) {
-      const hash = textMinhash(extraction.markdown);
+      const hash = textMinhash(markdownPlainText(extraction.markdown));
       if (hash) {
         d.prepare("UPDATE documents SET text_minhash = ? WHERE id = ?").run(JSON.stringify(hash), docId);
         const dup = findTextDuplicate(hash, docId);

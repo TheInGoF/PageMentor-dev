@@ -71,19 +71,30 @@ describe("Warteschlange", () => {
     writeFileSync(join(imp, "Semester", "neu.pdf"), "%PDF-1 neu");
     // gleicher Inhalt wie heft1.pdf, das schon in der Bibliothek ist
     writeFileSync(join(imp, "doppelt.pdf"), "%PDF-1 eins");
-    const r = await x.q.scanImportFolder({}, daten);
+    const r = await x.q.scanImportFolder({}, daten, 0);
     expect(r!.added).toBe(1);
     expect(r!.duplicates[0].reason).toContain("heft1");
     expect(existsSync(join(imp, "Dubletten", "doppelt.pdf"))).toBe(true);
     await x.q.runQueue(async (id) => void x.db.db().prepare("UPDATE documents SET ocr_status = 'done' WHERE id = ?").run(id), 10, daten);
     expect(existsSync(join(imp, "Erledigt", "Semester", "neu.pdf"))).toBe(true);
     expect(existsSync(join(imp, "Semester", "neu.pdf"))).toBe(false);
-    expect(await x.q.scanImportFolder({}, daten)).toBeNull();
+    expect(await x.q.scanImportFolder({}, daten, 0)).toBeNull();
+  });
+  test("Import-Ordner: frisch kopierte Datei wartet, gleichzeitige Durchläufe werden geteilt", async () => {
+    const daten = join(TMP, "daten");
+    writeFileSync(join(daten, "Import", "frisch.pdf"), "%PDF-1 frisch");
+    const a = x.q.scanImportFolder({}, daten);
+    expect(x.q.scanImportFolder({}, daten)).toBe(a);
+    expect((await a)!.added).toBe(0);
+    expect((await x.q.scanImportFolder({}, daten, 0))!.added).toBe(1);
+    expect((await x.q.scanImportFolder({}, daten, 0))!.skipped).toBe(1);
+    x.db.db().prepare("DELETE FROM import_queue WHERE path LIKE '%frisch.pdf'").run();
+    require("fs").unlinkSync(join(daten, "Import", "frisch.pdf"));
   });
   test("Dublette erst nach der Texterkennung: Dokument wird wieder entfernt", async () => {
     const daten = join(TMP, "daten");
     writeFileSync(join(daten, "Import", "scan.pdf"), "%PDF-1 scan");
-    await x.q.scanImportFolder({}, daten);
+    await x.q.scanImportFolder({}, daten, 0);
     const before = (x.db.db().prepare("SELECT COUNT(*) AS n FROM documents").get() as any).n;
     await x.q.runQueue(async (id) => void x.db.db().prepare("UPDATE documents SET ocr_status = 'duplicate', duplicate_of = (SELECT id FROM documents WHERE filename = 'heft1.pdf') WHERE id = ?").run(id), 10, daten);
     expect((x.db.db().prepare("SELECT COUNT(*) AS n FROM documents").get() as any).n).toBe(before);

@@ -48,7 +48,7 @@ export const settings: Record<string, string> = {
   "settings.llm.ollamaUrlMac": "Mac (Apple Silicon) Ollama URL",
   "settings.llm.ollamaUrl": "Additional Ollama URL (fallback)",
   "settings.llm.ollamaModel": "Default Ollama model (leave empty for auto-detect)",
-  "settings.llm.teiUrl": "TEI embedding server URL (for jina-v3; leave empty to use Ollama)",
+  "settings.llm.teiUrl": "Embedding server URL (infinity with bge-m3)",
   "settings.llm.anthropicApiKey": "Claude API key",
   "settings.llm.anthropicKeyStored": "A key is stored. Leave blank to keep it.",
   "settings.llm.anthropicKeyPlaceholder": "sk-ant-…",

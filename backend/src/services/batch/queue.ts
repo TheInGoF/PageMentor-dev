@@ -43,7 +43,8 @@ export interface EnqueueResult {
 }
 
 // Stufe 1 der Dublettenprüfung schon beim Einreihen: Fingerabdruck der Datei, kostet nur Lesen
-export async function enqueueFolder(folder: string, opts: EnqueueOptions = {}, dataDir = DATA_DIR): Promise<EnqueueResult> {
+// minAgeMs: jüngere Dateien auslassen, sie werden womöglich noch kopiert (Import-Ordner)
+export async function enqueueFolder(folder: string, opts: EnqueueOptions = {}, dataDir = DATA_DIR, minAgeMs = 0): Promise<EnqueueResult> {
   if (!existsSync(folder)) throw new Error(`Ordner nicht gefunden: ${folder}`);
   const inImport = isInside(folder, importDir(dataDir));
   const pdfs = walk(folder, ".pdf", [], inImport ? [IMPORT_DONE, IMPORT_DUPLICATES] : []);
@@ -51,10 +52,25 @@ export async function enqueueFolder(folder: string, opts: EnqueueOptions = {}, d
   for (const dir of [folder, opts.mdFolder].filter((x): x is string => !!x && existsSync(x))) for (const md of walk(dir, ".md")) mdIndex.set(stem(md), md);
   await backfillSha1();
   const queued = new Map((db().prepare("SELECT sha1, path FROM import_queue WHERE sha1 IS NOT NULL AND status != 'dublette'").all() as Array<{ sha1: string; path: string }>).map((r) => [r.sha1, r.path]));
+  // Schon eingereiht mit gleicher Größe: nicht bei jedem Durchlauf neu durchrechnen
+  const sizeByPath = new Map((db().prepare("SELECT path, size_bytes FROM import_queue WHERE status != 'dublette'").all() as Array<{ path: string; size_bytes: number }>).map((r) => [r.path, r.size_bytes]));
   const ins = db().prepare("INSERT OR IGNORE INTO import_queue (path, md_path, size_bytes, doc_type, module_id, sha1) VALUES (?, ?, ?, ?, ?, ?)");
   const res: EnqueueResult = { added: 0, skipped: 0, withMarkdown: 0, duplicates: [] };
   for (const p of pdfs) {
-    const sha1 = await fileSha1(p);
+    const st = statSync(p);
+    if (sizeByPath.get(p) === st.size) {
+      res.skipped++;
+      continue;
+    }
+    // Windows behält beim Kopieren die Änderungszeit, darum auch Erstellzeit und ctime ansehen
+    if (minAgeMs && Date.now() - Math.max(st.mtimeMs, st.ctimeMs, st.birthtimeMs) < minAgeMs) continue;
+    let sha1: string;
+    try {
+      sha1 = await fileSha1(p);
+    } catch {
+      // Gesperrt, weil noch kopiert wird: beim nächsten Durchlauf
+      continue;
+    }
     const inLibrary = documentBySha1(sha1);
     const queuedAs = queued.get(sha1);
     if (queuedAs === p) {
@@ -68,7 +84,7 @@ export async function enqueueFolder(folder: string, opts: EnqueueOptions = {}, d
       continue;
     }
     const md = mdIndex.get(stem(p)) ?? null;
-    if (!ins.run(p, md, statSync(p).size, opts.docType ?? "studienheft", opts.moduleId ?? null, sha1).changes) {
+    if (!ins.run(p, md, st.size, opts.docType ?? "studienheft", opts.moduleId ?? null, sha1).changes) {
       res.skipped++;
       continue;
     }
@@ -104,12 +120,23 @@ export function moveFromImport(path: string, sub: string, dataDir = DATA_DIR): s
   return target;
 }
 
-// Import-Ordner anlegen und neue PDFs einreihen; läuft beim Start und regelmäßig
-export async function scanImportFolder(opts: EnqueueOptions = {}, dataDir = DATA_DIR): Promise<EnqueueResult | null> {
-  const dir = importDir(dataDir);
-  mkdirSync(dir, { recursive: true });
-  if (!walk(dir, ".pdf", [], [IMPORT_DONE, IMPORT_DUPLICATES]).length) return null;
-  return enqueueFolder(dir, opts, dataDir);
+// Dateien im Import-Ordner erst einreihen, wenn sie eine Minute in Ruhe liegen
+export const IMPORT_MIN_AGE_MS = 60_000;
+
+let scanning: Promise<EnqueueResult | null> | null = null;
+
+// Import-Ordner anlegen und neue PDFs einreihen; läuft beim Start und regelmäßig.
+// Ein laufender Durchlauf wird geteilt, damit Zeitgeber und „Jetzt einlesen“ nicht doppelt einreihen
+export function scanImportFolder(opts: EnqueueOptions = {}, dataDir = DATA_DIR, minAgeMs = IMPORT_MIN_AGE_MS): Promise<EnqueueResult | null> {
+  scanning ??= (async () => {
+    const dir = importDir(dataDir);
+    mkdirSync(dir, { recursive: true });
+    if (!walk(dir, ".pdf", [], [IMPORT_DONE, IMPORT_DUPLICATES]).length) return null;
+    return enqueueFolder(dir, opts, dataDir, minAgeMs);
+  })().finally(() => {
+    scanning = null;
+  });
+  return scanning;
 }
 
 export interface QueueStatus {

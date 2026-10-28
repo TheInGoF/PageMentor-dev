@@ -20,11 +20,11 @@
  * different vector spaces. Better to fail loud and force the operator
  * to fix the embed server than to dilute the corpus.
  *
- * jina-v3 has task-specific LoRA adapters: pass `"passage"` when
- * indexing chunks, `"query"` when embedding a search query — that's
- * what makes v3 meaningfully better than v2 on German MTEB retrieval.
+ * Deployed model is BAAI/bge-m3 (since v1.19.5; jina-v3 needed Triton
+ * builds that fail under WSL). The `task` field below was for jina-v3's
+ * LoRA adapters; bge-m3 ignores it, sending it stays harmless.
  *
- * Storage in SQLite as Float32 BLOB. jina-v3 = 1024 dim × 4 bytes =
+ * Storage in SQLite as Float32 BLOB. bge-m3 = 1024 dim × 4 bytes =
  * 4 KB / chunk. Brute-force cosine over 10 k chunks is ~100 ms in JS,
  * fine until we move to Qdrant for 100k+ corpora.
  *

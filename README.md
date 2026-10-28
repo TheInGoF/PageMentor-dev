@@ -314,7 +314,7 @@ Everything AI-related is configured from the Settings page and stored in
 
 - **App:** Bun + Hono + SQLite (FTS5 + sqlite-vec for the knowledge base), compiled to one Windows executable; UI in React 19
   + Vite + Tailwind, shown via WebView2
-- **Engine:** WSL 2 + Docker: Ollama, Docling-Serve, infinity (jina-embeddings-v3),
+- **Engine:** WSL 2 + Docker: Ollama, Docling-Serve, infinity (bge-m3),
   Meilisearch, the TTS sidecars and [pm-gpu-arbiter](pm-gpu-arbiter/)
 - **TTS sidecars:** [pm-qwen-tts](pm-qwen-tts/), [pm-kokoro-tts](pm-kokoro-tts/),
   [pm-f5-tts](pm-f5-tts/), [pm-tada-tts](pm-tada-tts/) on a shared base

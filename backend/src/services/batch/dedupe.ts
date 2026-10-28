@@ -76,6 +76,17 @@ export function textMinhash(text: string): number[] | null {
   return mins;
 }
 
+// Docling-Markdown auf den Lesetext bringen, damit es mit dem Fingerabdruck aus der Textebene vergleichbar ist:
+// Bildverweise, HTML-Kommentare (<!-- image -->) und LaTeX fallen weg, in der Textebene stehen sie so nicht
+export function markdownPlainText(md: string): string {
+  return md
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/\$\$[\s\S]*?\$\$/g, " ")
+    .replace(/\$[^$\n]+\$/g, " ")
+    .replace(/\\[a-zA-Z]+/g, " ");
+}
+
 export function similarity(a: number[], b: number[]): number {
   let same = 0;
   for (let k = 0; k < HASHES; k++) if (a[k] === b[k]) same++;

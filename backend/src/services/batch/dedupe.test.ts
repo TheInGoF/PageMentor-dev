@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { similarity, textMinhash } from "./dedupe";
+import { markdownPlainText, similarity, textMinhash } from "./dedupe";
 import { splitEmbeddedImages, stripImageData } from "../docling/images";
 
 // Erfundener Lehrtext, keine echten Unterlagen
@@ -17,6 +17,10 @@ describe("Text-Fingerabdruck", () => {
     const fast = textMinhash(TEXT.replace("Widerstand", "Leitwert") + " Nachtrag Seite")!;
     expect(similarity(a, fast)).toBeGreaterThan(0.9);
     expect(similarity(a, textMinhash(words(400, "anderes"))!)).toBeLessThan(0.2);
+  });
+  test("Docling-Markdown mit Bildern und Formeln gleicht der Textebene", () => {
+    const md = `# Kapitel\n${TEXT}\n![Abbildung](bilder/bild_001_0123456789.png)\n<!-- image -->\n$$U = R \\cdot I$$ und $\\frac{a}{b}$`;
+    expect(similarity(textMinhash(TEXT)!, textMinhash(markdownPlainText(md))!)).toBeGreaterThan(0.95);
   });
   test("zu wenig Text gibt keinen Fingerabdruck", () => {
     expect(textMinhash("nur ein paar Wörter")).toBeNull();
