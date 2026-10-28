@@ -131,7 +131,7 @@ export const settings: Record<string, string> = {
   "settings.design.previewFailed": "Stimm-Vorschau fehlgeschlagen.",
   "settings.design.missingFields": "Name und Beschreibung (mindestens 10 Zeichen) sind Pflicht.",
   "settings.voices.title": "Eigene Lesestimmen",
-  "settings.voices.subtitle": "Lade eine 3–10 s Referenz-Aufnahme einer beliebigen Stimme hoch (deine, die einer Freundin, ein Public-Domain-Hörbuch-Schnipsel). Qwen3-TTS klont daraus eine Lesestimme. Pro Voice wird ein fester Seed gewürfelt — sie klingt immer gleich.",
+  "settings.voices.subtitle": "Lade eine 3–10 s Referenz-Aufnahme einer beliebigen Stimme hoch (deine, die einer Freundin, ein Public-Domain-Hörbuch-Schnipsel). Qwen3-TTS klont daraus eine Lesestimme; deutsche Proben nutzen auch F5-TTS und TADA (dort mit Transkript am besten). Pro Voice wird ein fester Seed gewürfelt — sie klingt immer gleich.",
   "settings.voices.empty": "Noch keine eigenen Stimmen. Lade unten ein Referenz-Sample hoch.",
   "settings.voices.uploadTitle": "Neue Stimme anlegen",
   "settings.voices.label": "Stimmen-Name",

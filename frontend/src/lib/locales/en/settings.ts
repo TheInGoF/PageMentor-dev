@@ -131,7 +131,7 @@ export const settings: Record<string, string> = {
   "settings.design.previewFailed": "Voice preview failed.",
   "settings.design.missingFields": "Label and a description of at least 10 characters are required.",
   "settings.voices.title": "Own reading voices",
-  "settings.voices.subtitle": "Upload a 3–10 s sample of any voice (yours, a friend's, a public-domain audiobook snippet). Qwen3-TTS clones a reading voice from it. Each voice gets a fixed seed — it will always sound the same.",
+  "settings.voices.subtitle": "Upload a 3–10 s sample of any voice (yours, a friend's, a public-domain audiobook snippet). Qwen3-TTS clones a reading voice from it; German samples are also used by F5-TTS and TADA (best with a transcript). Each voice gets a fixed seed — it will always sound the same.",
   "settings.voices.empty": "No custom voices yet. Upload a reference sample below.",
   "settings.voices.uploadTitle": "Add a new voice",
   "settings.voices.label": "Voice name",
