@@ -130,6 +130,11 @@ export function startSidecarLogPump(intervalMs: number = 5000): () => void {
           schedule(intervalMs * 6);
           return;
         }
+        // 503 vom Arbiter: Qwen-Container ist gestoppt, das ist gewollt (startet erst bei Bedarf)
+        if (res.status === 503) {
+          schedule(intervalMs * 6);
+          return;
+        }
         throw new Error(`HTTP ${res.status}`);
       }
       const data = (await res.json()) as {
