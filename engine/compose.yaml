@@ -145,9 +145,18 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:7997"
-    command: ["v2", "--model-id", "jinaai/jina-embeddings-v3", "--engine", "torch", "--port", "7997", "--batch-size", "32"]
+    # WSL: Triton baut beim Laden von jina-v3 mit -lcuda; libcuda liegt dort nur versioniert unter /usr/lib/wsl.
+    # Darum vor dem Start einen Verweis libcuda.so anlegen und Triton dorthin zeigen.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mkdir -p /tmp/libcuda &&
+        lib=$$(ls /usr/lib/wsl/lib/libcuda.so* /usr/lib/x86_64-linux-gnu/libcuda.so* 2>/dev/null | head -n 1) &&
+        if [ -n "$$lib" ]; then ln -sf "$$lib" /tmp/libcuda/libcuda.so; fi &&
+        exec "$$(command -v infinity_emb || echo /app/.venv/bin/infinity_emb)" v2 --model-id jinaai/jina-embeddings-v3 --engine torch --port 7997 --batch-size 32
     environment:
       HF_HOME: /app/.cache
+      TRITON_LIBCUDA_PATH: /tmp/libcuda
     volumes:
       - infinity-cache:/app/.cache
     <<: *gpu
