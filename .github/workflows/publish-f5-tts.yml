@@ -44,7 +44,7 @@ jobs:
           tags: |
             type=sha,prefix=,format=short
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: pm-f5-tts/Dockerfile
