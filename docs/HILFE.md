@@ -60,7 +60,8 @@ Kapiteln, Embeddings und Material.
 
 **Docling arbeitet in der höchsten Stufe:** Formeln als LaTeX (auch als Bild eingebettete),
 Tabellen genau, Code als Text, Bilder werden eingeordnet und kurz beschrieben, Diagramme in
-Datenpunkte übersetzt. Beim ersten Mal lädt Docling dafür zusätzliche Modelle, das dauert einmalig.
+Datenpunkte übersetzt. Die nötigen Zusatzmodelle (ca. 5 GB) lädt die App einmalig beim Start der
+Engine; der Selbsttest zeigt sie als „Docling-Modelle“.
 
 - **Stapel-Import** in der Bibliothek: ganzen Ordner einreihen, auf Wunsch nur nachts
   (22–6 Uhr). Pausieren und Fortsetzen jederzeit, ein Absturz kostet nichts.

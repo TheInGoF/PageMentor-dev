@@ -81,7 +81,7 @@ export async function runRepair(id: RepairId): Promise<void> {
 }
 
 // Reparaturen, die ohne Rückfrage laufen dürfen; WSL braucht Admin und den Nutzer
-const AUTO_REPAIRS: RepairId[] = ["import-distro", "provision", "start-docker", "pull-images", "start-services", "pull-model", "apply-tts-engines"];
+const AUTO_REPAIRS: RepairId[] = ["import-distro", "provision", "start-docker", "pull-images", "start-services", "docling-models", "pull-model", "apply-tts-engines"];
 
 // Beim Start: prüfen und so weit wie möglich selbst reparieren
 export async function autoStart(): Promise<void> {

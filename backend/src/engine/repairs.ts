@@ -10,6 +10,10 @@ import {
   DEFAULT_LLM_MODEL,
   DISK_DIR,
   DISTRO,
+  DOCLING_ARTIFACTS,
+  DOCLING_CONTAINER,
+  DOCLING_EXTRA_MODELS,
+  doclingModelMark,
   ENGINE_HOST,
   ROOTFS_FILE,
   ROOTFS_SUMS_URL,
@@ -163,6 +167,21 @@ async function startServices(progress: Progress): Promise<void> {
   }
 }
 
+// Zusatzmodelle in den Docling-Cache (Docker-Volume, übersteht Updates); schon vorhandene Dateien werden übersprungen
+async function doclingModels(progress: Progress): Promise<void> {
+  progress("Lade Docling-Modelle (einmalig ca. 5 GB) …");
+  const ids = DOCLING_EXTRA_MODELS.map((m) => m.id).join(" ");
+  const marks = DOCLING_EXTRA_MODELS.map((m) => doclingModelMark(m.id)).join(" ");
+  const r = await inDistro(
+    `docker exec -u 0 ${DOCLING_CONTAINER} sh -c 'docling-tools models download -o ${DOCLING_ARTIFACTS} ${ids} && touch ${marks} && chown -R 1001:0 ${DOCLING_ARTIFACTS}'`,
+    { timeoutMs: 3 * 3600_000, onLine: (l) => progress(l.trim().slice(0, 160)) }
+  );
+  if (r.code !== 0) throw new RepairError(`Docling-Modelle nicht geladen: ${failText(r)}`);
+  progress("Starte Docling neu …");
+  const restart = await inDistro(`docker restart ${DOCLING_CONTAINER}`, { timeoutMs: 180_000, quiet: true });
+  if (restart.code !== 0) throw new RepairError(`Docling startet nicht neu: ${failText(restart)}`);
+}
+
 async function pullModel(progress: Progress): Promise<void> {
   const name = effective("ollamaModel", "PM_OLLAMA_MODEL") || DEFAULT_LLM_MODEL;
   progress(`Lade Sprachmodell ${name} …`);
@@ -194,6 +213,7 @@ const REPAIRS: Record<RepairId, { title: string; fn: (p: Progress) => Promise<vo
   "pull-images": { title: "Programmpakete laden", fn: pullImages },
   "start-services": { title: "Dienste starten", fn: startServices },
   "pull-model": { title: "Sprachmodell laden", fn: pullModel },
+  "docling-models": { title: "Docling-Modelle laden", fn: doclingModels },
   "apply-tts-engines": { title: "Stimmen-Engines übernehmen", fn: pullImages },
 };
 

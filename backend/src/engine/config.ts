@@ -26,5 +26,17 @@ export const SERVICES = [
   { id: "search", title: "Suche", url: `http://${ENGINE_HOST}:7700/health` },
 ] as const;
 
+// Zusatzmodelle für Docling in höchster Stufe (Bildbeschreibung, Diagramme, Formeln).
+// Das Image sucht Modelle nur im Modellordner und lädt nicht selbst nach; die App lädt sie einmalig in den Cache
+export const DOCLING_CONTAINER = "pm-docling";
+export const DOCLING_ARTIFACTS = "/opt/app-root/src/.cache/docling/models";
+export const DOCLING_EXTRA_MODELS = [
+  { id: "smolvlm", title: "Bildbeschreibung" },
+  { id: "granite_chart_extraction", title: "Diagramme" },
+  { id: "code_formula", title: "Formeln und Code" },
+] as const;
+// Merker je Modell, erst nach vollständigem Download gesetzt
+export const doclingModelMark = (id: string) => `${DOCLING_ARTIFACTS}/.pm-${id}`;
+
 export const MIN_FREE_GB_WARN = 30;
 export const MIN_FREE_GB_ERROR = 10;

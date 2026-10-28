@@ -6,6 +6,9 @@ import {
   COMPOSE_IN_DISTRO,
   DEFAULT_LLM_MODEL,
   DISTRO,
+  DOCLING_CONTAINER,
+  DOCLING_EXTRA_MODELS,
+  doclingModelMark,
   ENGINE_DIR,
   ENGINE_HOST,
   MIN_FREE_GB_ERROR,
@@ -25,6 +28,7 @@ export type RepairId =
   | "pull-images"
   | "start-services"
   | "pull-model"
+  | "docling-models"
   | "apply-tts-engines";
 
 export interface CheckResult {
@@ -156,6 +160,18 @@ async function checkService(svc: (typeof SERVICES)[number]): Promise<CheckResult
   }
 }
 
+async function checkDoclingModels(ctx: Ctx): Promise<CheckResult> {
+  const t = "Docling-Modelle";
+  if (!ctx.dockerOk) return skip("docling-models", t, "Wartet auf Docker");
+  const tests = DOCLING_EXTRA_MODELS.map((m) => `test -f ${doclingModelMark(m.id)} || echo ${m.id}`).join("; ");
+  const r = await inDistro(`docker exec ${DOCLING_CONTAINER} sh -c '${tests}'`, { timeoutMs: 30_000, quiet: true });
+  if (r.code !== 0) return skip("docling-models", t, "Wartet auf Docling");
+  const missing = r.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!missing.length) return ok("docling-models", t, DOCLING_EXTRA_MODELS.map((m) => m.title).join(", ") + " vorhanden");
+  const names = DOCLING_EXTRA_MODELS.filter((m) => missing.includes(m.id)).map((m) => m.title);
+  return { id: "docling-models", title: t, status: "error", message: `Fehlen: ${names.join(", ")}. Ohne sie scheitert jede Umwandlung. Download ca. 5 GB.`, repair: "docling-models" };
+}
+
 async function checkModel(): Promise<CheckResult> {
   const t = "Sprachmodell";
   const wanted = effective("ollamaModel", "PM_OLLAMA_MODEL") || DEFAULT_LLM_MODEL;
@@ -223,6 +239,7 @@ export async function runChecks(onResult?: (r: CheckResult) => void): Promise<Ch
   await add(() => checkGpu(ctx));
   await add(() => checkImages(ctx));
   for (const svc of SERVICES) await add(() => checkService(svc));
+  if (IS_WINDOWS) await add(() => checkDoclingModels(ctx));
   await add(() => checkModel());
   const extra = await checkExtraTts().catch(() => null);
   if (extra) {
