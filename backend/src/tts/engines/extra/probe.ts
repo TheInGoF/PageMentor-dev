@@ -18,7 +18,8 @@ async function refresh(): Promise<void> {
     const data = (await res.json()) as { engines?: Record<string, EngineStatus> };
     engines = data.engines ?? {};
   } catch {
-    engines = {};
+    // Aussetzer (Arbiter wechselt gerade die Stimme): letzten bekannten Stand behalten,
+    // sonst verschwinden Kokoro und Co. für eine Minute aus der Auswahl
   }
   checkedAt = Date.now();
 }
@@ -27,6 +28,9 @@ export function refreshExtraStatus(): Promise<void> {
   running ??= refresh().finally(() => (running = null));
   return running;
 }
+
+// Gleich beim Start abfragen, damit die erste Stimmenliste schon alle Engines kennt
+void refreshExtraStatus();
 
 // Verfügbar = Arbiter kennt sie und der Container existiert (Profil an)
 export function extraAvailable(id: ExtraId | "qwen"): boolean {
