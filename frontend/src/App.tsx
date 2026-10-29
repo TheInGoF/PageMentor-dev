@@ -225,7 +225,7 @@ export function App() {
           }
           onBack={() => setOpenDocId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onOpenSettings={() => openSettings()}
+          onOpenSettings={openSettings}
         />
       );
     if (openModuleId)
@@ -234,7 +234,7 @@ export function App() {
           moduleId={openModuleId}
           onBack={() => setOpenModuleId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onOpenSettings={() => openSettings()}
+          onOpenSettings={openSettings}
         />
       );
     if (view === "modules")
@@ -242,7 +242,7 @@ export function App() {
         <Modules
           onOpenModule={(id) => setOpenModuleId(id)}
           onOpenDocument={(id) => setOpenDocId(id)}
-          onOpenSettings={() => openSettings()}
+          onOpenSettings={openSettings}
         />
       );
     if (view === "library")
@@ -250,17 +250,17 @@ export function App() {
         <Library
           onOpen={(id) => setOpenDocId(id)}
           onOpenModule={(id) => setOpenModuleId(id)}
-          onOpenSettings={() => openSettings()}
+          onOpenSettings={openSettings}
         />
       );
     if (view === "plan")
       return (
-        <PlanPage onOpenModule={(id) => setOpenModuleId(id)} onOpenDocument={(id) => setOpenDocId(id)} onOpenSettings={() => openSettings()} />
+        <PlanPage onOpenModule={(id) => setOpenModuleId(id)} onOpenDocument={(id) => setOpenDocId(id)} onOpenSettings={openSettings} />
       );
     if (view === "tutor")
       return (
         <TutorPage
-          onOpenSettings={() => openSettings()}
+          onOpenSettings={openSettings}
           onOpenDocument={(id) => setOpenDocId(id)}
           onOpenDocumentSource={(docId, page) => {
             // Open the document's PDF reader in a new tab at the
@@ -275,7 +275,7 @@ export function App() {
     return (
       <Dashboard
         onOpenDocument={(id) => setOpenDocId(id)}
-        onOpenSettings={() => openSettings()}
+        onOpenSettings={openSettings}
         onOpenEngine={() => openSettings("engine")}
         onOpenModule={(id) => setOpenModuleId(id)}
       />

@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.22.0 – 2026-10-29
+### New
+- Hinweis „Update x.y.z“ in der Kopfzeile, sobald ein neueres Release da ist.
+- Update aus der App: Einstellungen → Allgemein → Jetzt aktualisieren, lädt, installiert still und startet neu.
+### Change
+- Setup erkennt Updates und überspringt Aufgabenseite, Bereit-Seite und NVIDIA-Frage.
+
 ## 1.21.4 – 2026-10-29
 ### New
 - Alte Paketstände werden nach dem Laden automatisch entfernt.

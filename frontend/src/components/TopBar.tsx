@@ -5,6 +5,8 @@ import { Logo } from "./Logo";
 import { isFrameless } from "../lib/desktop";
 import { cn } from "../lib/cn";
 import { MAIN_VIEWS, useNav } from "../lib/nav";
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
 
 interface Props {
   onUpload?: () => void;
@@ -12,7 +14,7 @@ interface Props {
   /** Navigate to the Settings page. Required so the cog icon works on
    *  every view that mounts the TopBar. The Logs UI lives as a tab
    *  inside Settings since v1.18.098. */
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: "general") => void;
 }
 
 /**
@@ -30,6 +32,7 @@ interface Props {
 export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
   // Mit Kontext: immer alle Bereiche; ohne (z. B. in Tests): die übergebenen Ziele
   const nav = useNav();
+  const update = useUpdateHint();
   return (
     <>
       <header className="sticky top-0 z-30 bg-black/90 backdrop-blur border-b border-border">
@@ -58,9 +61,14 @@ export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
                   </span>
                 </Button>
               )}
+              {update && (
+                <Button variant="outline" className="!py-1 text-xs" onClick={() => onOpenSettings("general")}>
+                  {t("update.pill", { v: update })}
+                </Button>
+              )}
               <Button
                 variant="ghost"
-                onClick={onOpenSettings}
+                onClick={() => onOpenSettings()}
                 className="!px-2"
                 title={t("settings.title")}
                 aria-label={t("settings.title")}
@@ -122,4 +130,13 @@ function NavButton({
       {label}
     </button>
   );
+}
+
+// Neuere Version auf GitHub? Das Backend fragt höchstens einmal pro Stunde nach
+function useUpdateHint(): string | null {
+  const [latest, setLatest] = useState<string | null>(null);
+  useEffect(() => {
+    void api.update.check().then((u) => setLatest(u.newer ? u.latest : null)).catch(() => undefined);
+  }, []);
+  return latest;
 }

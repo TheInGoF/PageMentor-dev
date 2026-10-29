@@ -75,6 +75,8 @@ Name: "{userstartup}\PageMentor"; Filename: "{app}\PageMentor.exe"; WorkingDir: 
 
 [Run]
 Filename: "{app}\PageMentor.exe"; Description: "{cm:Launch}"; Flags: postinstall nowait skipifsilent
+; Update aus der App (still mit /RESTART=1): danach wieder starten
+Filename: "{app}\PageMentor.exe"; Flags: nowait; Check: RestartAfterUpdate
 
 [Code]
 var
@@ -94,10 +96,31 @@ begin
   Result := RunHidden(ExpandConstant('{sys}\wsl.exe'), '--status', Code) and (Code = 0);
 end;
 
+// Schon installiert: Update, dann ohne Rückfragen und Aufgabenseite
+function IsUpdate(): Boolean;
+begin
+  Result := RegKeyExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6D8E1F0A-6E2B-4C55-9A5E-3F1B2C4D5E6F}_is1');
+end;
+
+function RestartAfterUpdate(): Boolean;
+begin
+  Result := ExpandConstant('{param:RESTART|0}') = '1';
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := IsUpdate() and ((PageID = wpSelectTasks) or (PageID = wpReady));
+end;
+
 function InitializeSetup(): Boolean;
 begin
   Result := True;
   Log('Windows-Version: ' + GetWindowsVersionString());
+  if IsUpdate() then
+  begin
+    Log('Update einer vorhandenen Installation');
+    exit;
+  end;
   if not FileExists(ExpandConstant('{sys}\nvidia-smi.exe')) then
   begin
     Log('Kein nvidia-smi.exe gefunden');

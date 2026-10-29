@@ -6,6 +6,7 @@ export type { EngineStatus, EngineCheck, CheckStatus, TtsEnginesInfo } from "./e
 export type { CompareRun, CompareItem } from "./audio";
 export type { Assessment, AssessmentKind, AssessmentStatus, StudyProgress, ExamSlot, ShiftPlan, StudyTimeInfo, ExamFocus } from "./plan";
 export type { CloudTask, CloudStatus, CloudPreview, CloudResult } from "./cloud";
+export type { UpdateInfo } from "./update";
 export type { BatchStatus, EnqueueResult, EvalQuestion, EvalReport } from "./knowledge";
 export type { StudyImportReport, ImportCount, ModulePrefix, MaterialItem, MaterialKind, MaterialCounts, Trainer, TrainerCheck } from "./study";
 import { libraryApi } from "./library";
@@ -19,6 +20,7 @@ import { studyApi } from "./study";
 import { planApi } from "./plan";
 import { knowledgeApi } from "./knowledge";
 import { cloudApi } from "./cloud";
+import { updateApi } from "./update";
 
 export const api = {
   ...libraryApi,
@@ -32,4 +34,5 @@ export const api = {
   ...planApi,
   ...knowledgeApi,
   ...cloudApi,
+  ...updateApi,
 };

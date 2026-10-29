@@ -13,6 +13,7 @@ import type { SettingsTab } from "./settings/types";
 import { AppearanceSection } from "./settings/AppearanceSection";
 import { GeneralSection } from "./settings/GeneralSection";
 import { StudyImportSection } from "./settings/StudyImportSection";
+import { UpdateSection } from "./settings/UpdateSection";
 import { AudiobookSection } from "./settings/AudiobookSection";
 import { AiSection } from "./settings/AiSection";
 import { KnowledgeSection } from "./settings/KnowledgeSection";
@@ -136,6 +137,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
           {tab === "engine" && <EnginePanel />}
           {tab === "general" && (
             <>
+              <UpdateSection />
               <AppearanceSection />
               <GeneralSection st={st} />
               <StudyImportSection />
