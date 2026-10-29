@@ -18,6 +18,9 @@ jobs:
       - name: Zeilenlimit
         run: scripts/check-lines.sh
 
+      - name: Changelog zur Version
+        run: scripts/check-changelog.sh
+
       - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v5

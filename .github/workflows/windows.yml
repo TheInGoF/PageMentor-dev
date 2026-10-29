@@ -149,7 +149,7 @@ jobs:
           retention-days: 14
 
       # Auf main: Release v<VERSION> mit dem Setup, die neueste steht oben unter Releases.
-      # Gleiche Version noch einmal gebaut: Setup im bestehenden Release ersetzen
+      # Text aus CHANGELOG.md (New, Change, Fix). Gleiche Version noch einmal gebaut: Setup ersetzen
       - name: Release auf main
         if: github.ref == 'refs/heads/main'
         env:
@@ -157,8 +157,16 @@ jobs:
         run: |
           v="${{ steps.ver.outputs.v }}"
           setup=$(ls dist/PageMentor-Setup-*.exe | head -n 1)
+          scripts/release-notes.sh "$v" > "$RUNNER_TEMP/notes.md"
           if gh release view "v$v" > /dev/null 2>&1; then
             gh release upload "v$v" "$setup" --clobber
+            gh release edit "v$v" --notes-file "$RUNNER_TEMP/notes.md"
           else
-            gh release create "v$v" "$setup" --target "$GITHUB_SHA" --title "PageMentor $v" --generate-notes --latest
+            gh release create "v$v" "$setup" --target "$GITHUB_SHA" --title "PageMentor $v" --notes-file "$RUNNER_TEMP/notes.md" --latest
           fi
+          # Ältere Releases mit dem aktuellen Changelog-Text abgleichen
+          for tag in $(gh release list --limit 30 --json tagName --jq '.[].tagName'); do
+            [ "$tag" = "v$v" ] && continue
+            notes=$(scripts/release-notes.sh "${tag#v}")
+            [ -n "$notes" ] && gh release edit "$tag" --notes "$notes"
+          done

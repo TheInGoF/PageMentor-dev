@@ -55,6 +55,20 @@ for PKG in package.json backend/package.json frontend/package.json; do
   fi
 done
 
+# Gerüst in CHANGELOG.md für die neue Version, falls noch keins da ist
+if [[ -f CHANGELOG.md ]] && ! grep -q "^## $NEW " CHANGELOG.md; then
+  python3 - "$NEW" "$(date +%F)" <<'PY'
+import sys
+v, d = sys.argv[1], sys.argv[2]
+s = open("CHANGELOG.md").read()
+i = s.find("\n## ")
+block = f"\n## {v} – {d}\n### New\n- \n### Change\n- \n### Fix\n- \n"
+s = s[:i] + block + s[i:] if i >= 0 else s + block
+open("CHANGELOG.md", "w").write(s)
+PY
+  echo "CHANGELOG.md: Abschnitt $NEW angelegt, bitte ausfüllen (leere Gruppen löschen)"
+fi
+
 echo ""
 echo "Changed files:"
 git diff --name-only VERSION package.json backend/package.json frontend/package.json 2>/dev/null || true
