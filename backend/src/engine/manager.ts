@@ -6,7 +6,7 @@ import { registerDiagnostic } from "../log/diagnostics";
 import { runChecks, type CheckResult, type RepairId } from "./checks";
 import { DISTRO } from "./config";
 import { logEngine } from "./exec";
-import { repairTitle, runRepairAction } from "./repairs";
+import { ensureSparse, repairTitle, runRepairAction } from "./repairs";
 
 export interface RunningTask {
   repair: RepairId;
@@ -90,6 +90,8 @@ export async function autoStart(): Promise<void> {
     return;
   }
   state.autoStart = "läuft";
+  // Einmalig für bestehende Installationen, bevor die Engine hochfährt
+  await ensureSparse().catch(() => {});
   for (let round = 0; round < AUTO_REPAIRS.length + 1; round++) {
     const results = await runSelftest();
     if (results.find((r) => r.id === "distro" && r.status === "ok")) startKeepAlive();

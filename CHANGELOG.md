@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.22.3 – 2026-10-29
+### New
+- Engine-Festplatte gibt frei gewordenen Platz automatisch an Windows zurück (sparse, fstrim).
+- Große Downloads starten nur mit mindestens 15 GB freiem Speicher.
+### Fix
+- Volle Platte beschädigt die Engine nicht mehr mitten im Download.
+
 ## 1.22.2 – 2026-10-29
 ### Fix
 - Zahnrad in Modul- und Dokumentansicht öffnet die Einstellungen wieder richtig statt „settings.tile.[object Object]“.

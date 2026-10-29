@@ -1,8 +1,8 @@
 // Reparaturen: WSL, Umgebung, Einrichtung, Docker, Pakete, Dienste, Modell
 import { createHash } from "crypto";
-import { createWriteStream, existsSync, mkdirSync, rmSync } from "fs";
+import { createWriteStream, existsSync, mkdirSync, rmSync, statfsSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
-import { APP_DIR, IS_COMPILED } from "../paths";
+import { APP_DIR, IS_COMPILED, IS_WINDOWS } from "../paths";
 import { effective } from "../services/llmConfig";
 import type { RepairId } from "./checks";
 import {
@@ -13,6 +13,7 @@ import {
   SCRIPTS_DIR,
   DISK_DIR,
   DISTRO,
+  ENGINE_DIR,
   DOCLING_ARTIFACTS,
   DOCLING_CONTAINER,
   DOCLING_EXTRA_MODELS,
@@ -81,12 +82,43 @@ async function downloadRootfs(progress: Progress): Promise<void> {
   }
 }
 
+// Große Downloads nur mit genug Platz: eine volle Platte beschädigte die Engine-Festplatte (WSL-Fehler 5)
+const MIN_FREE_GB_DOWNLOAD = 15;
+function requireSpace(what: string): void {
+  try {
+    const s = statfsSync(IS_WINDOWS ? ENGINE_DIR.slice(0, 3) : "/");
+    const free = (s.bavail * s.bsize) / 1024 ** 3;
+    if (free < MIN_FREE_GB_DOWNLOAD)
+      throw new RepairError(`Zu wenig Speicher für ${what}: ${free.toFixed(0)} GB frei, mindestens ${MIN_FREE_GB_DOWNLOAD} GB nötig. Bitte Platz schaffen und erneut versuchen.`);
+  } catch (err) {
+    if (err instanceof RepairError) throw err;
+  }
+}
+
+// Engine-Festplatte „sparse“: frei gewordener Platz geht an Windows zurück, statt dass die Datei nur wächst.
+// Geht nur bei gestoppter Umgebung; gemerkt in engine\sparse.done
+const SPARSE_MARK = join(ENGINE_DIR, "sparse.done");
+export async function ensureSparse(): Promise<void> {
+  if (!IS_WINDOWS || existsSync(SPARSE_MARK) || !existsSync(join(DISK_DIR, "ext4.vhdx"))) return;
+  await wsl(["--terminate", DISTRO], { timeoutMs: 60_000, quiet: true });
+  const r = await wsl(["--manage", DISTRO, "--set-sparse", "true"], { timeoutMs: 120_000, quiet: true });
+  if (r.code === 0) {
+    mkdirSync(ENGINE_DIR, { recursive: true });
+    writeFileSync(SPARSE_MARK, new Date().toISOString());
+    logEngine("info", "Engine-Festplatte gibt freien Platz jetzt an Windows zurück (sparse)");
+  } else {
+    logEngine("warn", `Sparse nicht gesetzt (älteres WSL?): ${failText(r)}`);
+  }
+}
+
 async function importDistro(progress: Progress): Promise<void> {
+  requireSpace("die Engine");
   await downloadRootfs(progress);
   progress("Richte die Engine-Umgebung ein …");
   mkdirSync(DISK_DIR, { recursive: true });
   const r = await wsl(["--import", DISTRO, DISK_DIR, ROOTFS_FILE, "--version", "2"], { timeoutMs: 15 * 60_000 });
   if (r.code !== 0) throw new RepairError(`Import fehlgeschlagen: ${failText(r)}`);
+  await ensureSparse();
   await provision(progress);
 }
 
@@ -139,6 +171,7 @@ async function pullImages(progress: Progress): Promise<void> {
   );
   if (list.code !== 0) throw new RepairError(`Paketliste nicht lesbar: ${failText(list)}`);
   const images = [...new Set(list.stdout.split("\n").map((s) => s.trim()).filter(Boolean))];
+  if (images.length) requireSpace("die Programmpakete");
   for (const [i, img] of images.entries()) {
     progress(`Paket ${i + 1} von ${images.length}: ${imageName(img)}`, i / images.length);
     const r = await inDistro(`docker pull -q ${img}`, { timeoutMs: 6 * 3600_000, quiet: true });
@@ -161,6 +194,8 @@ async function pruneImages(progress: Progress): Promise<void> {
   progress("Räume alte Paketstände auf …");
   const r = await inDistro("docker image prune -a -f 2>&1 | tail -n 1", { timeoutMs: 15 * 60_000, quiet: true });
   if (r.code === 0 && r.stdout.trim()) logEngine("info", `Alte Pakete entfernt: ${r.stdout.trim()}`);
+  // Freie Blöcke melden, damit die sparse Festplatte unter Windows schrumpft
+  await inDistro("fstrim -a 2>/dev/null || true", { timeoutMs: 10 * 60_000, quiet: true });
 }
 
 // compose.yaml der installierten App in die Umgebung übernehmen, damit Korrekturen auch ohne Neueinrichtung ankommen
@@ -199,6 +234,7 @@ async function startServices(progress: Progress): Promise<void> {
 
 // Zusatzmodelle in den Docling-Cache (Docker-Volume, übersteht Updates); schon vorhandene Dateien werden übersprungen
 async function doclingModels(progress: Progress): Promise<void> {
+  requireSpace("die Docling-Modelle");
   progress("Lade Docling-Modelle (einmalig ca. 5 GB) …");
   const ids = DOCLING_EXTRA_MODELS.map((m) => m.id).join(" ");
   const marks = DOCLING_EXTRA_MODELS.map((m) => doclingModelMark(m.id)).join(" ");
@@ -213,6 +249,7 @@ async function doclingModels(progress: Progress): Promise<void> {
 }
 
 async function pullModel(progress: Progress): Promise<void> {
+  requireSpace("das Sprachmodell");
   const name = effective("ollamaModel", "PM_OLLAMA_MODEL") || DEFAULT_LLM_MODEL;
   progress(`Lade Sprachmodell ${name} …`);
   const res = await fetch(`http://${ENGINE_HOST}:8790/api/pull`, {
