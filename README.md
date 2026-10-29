@@ -29,7 +29,10 @@ subscription.*
 3. **Drop PDFs into `Documents\PageMentor\Import`** (or upload them in the
    library) and watch the pipeline dots fill up.
 
-Everything lives in `Documents\PageMentor`:
+Everything lives in the data folder, `Documents\PageMentor` unless you pick
+another one in the setup (the setup offers to move existing data). The program
+folder is selectable too; the engine disk lives inside it, so both can go to a
+second drive:
 
 | Folder | Contents |
 | --- | --- |

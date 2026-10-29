@@ -36,5 +36,8 @@ cp -r "$(dirname "$(find "$TMP/poppler" -name pdftoppm.exe | head -1)")"/. "$DES
 fetch "$ATOMIC_URL" atomic.zip
 cp "$(find "$TMP/atomic" -iname AtomicParsley.exe | head -1)" "$DEST/AtomicParsley.exe"
 
+# Kennung der Werkzeugstände: das Setup entpackt bin\ nur, wenn sie sich ändert
+printf '%s\n' "$FFMPEG_URL" "$POPPLER_URL" "$ATOMIC_URL" | sha1sum | cut -c1-12 > "$DEST/tools.version"
+
 echo "Werkzeuge in $DEST:"
 ls -la "$DEST" "$DEST/poppler" | head -40

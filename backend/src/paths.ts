@@ -1,7 +1,7 @@
 // Zentrale Pfade
 // Windows: Dokumente\PageMentor, sonst ./data; PM_DATA_DIR überschreibt
 import { spawnSync } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, isAbsolute, join } from "path";
 
@@ -34,7 +34,17 @@ function defaultDataDir(): string {
   return "./data";
 }
 
-export const DATA_DIR = process.env.PM_DATA_DIR || defaultDataDir();
+// Im Setup gewählter Datenordner: datadir.txt neben der Exe
+function chosenDataDir(): string | null {
+  try {
+    const dir = readFileSync(join(APP_DIR, "datadir.txt"), "utf8").replace(/^\uFEFF/, "").trim();
+    return dir && isAbsolute(dir) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+
+export const DATA_DIR = process.env.PM_DATA_DIR || chosenDataDir() || defaultDataDir();
 export const LOG_DIR = process.env.PM_LOG_DIR || join(DATA_DIR, "logs");
 export const AUDIOBOOK_EXPORT_DIR = process.env.PM_AUDIOBOOK_DIR || join(DATA_DIR, "Hörbücher");
 // Einwurf für neue PDFs: wird automatisch eingelesen, Erledigtes wandert nach Import/Erledigt

@@ -1,7 +1,9 @@
 # PageMentor: Hilfe zum Studium in einer App
 
 Kurzanleitung für den Alltag mit PageMentor als Studien-App. Alles läuft auf deinem
-PC, die Daten liegen in `Dokumente\PageMentor`.
+PC, die Daten liegen im Datenordner, standardmäßig `Dokumente\PageMentor`. Programm- und
+Datenordner wählst du im Setup; die Engine liegt im Programmordner. Ist Laufwerk C voll,
+beides z. B. auf D: legen.
 
 ## Die fünf Bereiche
 

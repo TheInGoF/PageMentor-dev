@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.22.1 – 2026-10-29
+### New
+- Datenordner im Setup wählbar; vorhandene Daten werden auf Wunsch verschoben.
+- Installationsort im Setup wählbar; die Engine-Festplatte zieht mit, z. B. auf D:.
+### Change
+- Beim Update ist der Installationsort vorbelegt, aber änderbar.
+- FFmpeg, Poppler und AtomicParsley werden nur entpackt, wenn sie sich geändert haben.
+
 ## 1.22.0 – 2026-10-29
 ### New
 - Hinweis „Update x.y.z“ in der Kopfzeile, sobald ein neueres Release da ist.

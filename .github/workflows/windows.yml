@@ -128,6 +128,10 @@ jobs:
             if (-not (Test-Path "$app\$f")) { throw "fehlt nach Installation: $f" }
           }
           if (-not (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\PageMentor.lnk")) { throw "Startmenü-Eintrag fehlt" }
+          $dataDir = (Get-Content -Raw "$app\datadir.txt").Trim([char]0xFEFF, " ", "`r", "`n")
+          Write-Host "Datenordner: $dataDir"
+          if ($dataDir -ne ([Environment]::GetFolderPath('MyDocuments') + "\PageMentor")) { throw "datadir.txt falsch: $dataDir" }
+          if (-not (Test-Path "$app\bin\tools.version")) { throw "tools.version fehlt" }
           Get-ChildItem ([Environment]::GetFolderPath('MyDocuments') + "\PageMentor\logs") | Out-Host
           Stop-Process -Name PageMentor -Force -ErrorAction SilentlyContinue
           $u = Start-Process "$app\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES" -Wait -PassThru
