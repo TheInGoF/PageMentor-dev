@@ -8,7 +8,7 @@ import {
   type ProgressEvent,
 } from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
-import { DocumentCard } from "./DocumentCard";
+import { DocumentRow } from "./library/DocumentRow";
 import { UploadModal } from "./UploadModal";
 import { BatchImport } from "./library/BatchImport";
 import { TopBar } from "./TopBar";
@@ -281,32 +281,18 @@ export function Library({
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6">
-        <div className="flex items-center gap-2 flex-wrap mb-3">
-          <span className="text-xs uppercase tracking-wide text-neutral-500 mr-2">
-            {t("library.filter.type")}
-          </span>
-          {TYPE_FILTERS.map((ty) => (
-            <button
-              key={ty}
-              onClick={() => setTypeFilter(ty)}
-              className={typeFilter === ty ? "chip chip-active" : "chip"}
-            >
-              {ty === "all" ? t("common.all") : t(`type.${ty}`)}
-            </button>
-          ))}
-          <button type="button" className="chip ml-auto" onClick={() => setBatchOpen(true)}>
-            ⇣ {t("batch.title")}
-          </button>
-        </div>
-
-        {modules.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap mb-4">
-            <span className="text-xs uppercase tracking-wide text-neutral-500 mr-2">
-              {t("library.filter.module")}
-            </span>
-            {/* Auswahlliste statt Pillen: bei vielen Modulen sonst eine ganze Seite */}
-            <select className="input !w-auto min-w-[16rem]" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
-              <option value="all">{t("common.all")}</option>
+        {/* Eine Werkzeugleiste: Typ, Modul, Ordner-Import */}
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          <select className="input !w-auto" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as "all" | DocType)} aria-label={t("library.filter.type")}>
+            {TYPE_FILTERS.map((ty) => (
+              <option key={ty} value={ty}>
+                {ty === "all" ? t("library.filter.allTypes") : t(`type.${ty}`)}
+              </option>
+            ))}
+          </select>
+          {modules.length > 0 && (
+            <select className="input !w-auto min-w-[16rem]" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} aria-label={t("library.filter.module")}>
+              <option value="all">{t("library.filter.allModules")}</option>
               <option value="unassigned">{t("library.filter.module.unassigned")}</option>
               {groupBySemester(modules).map((g) => (
                 <optgroup key={g.semester ?? "none"} label={g.semester != null ? t("modules.semester", { n: g.semester }) : t("modules.noSemester")}>
@@ -318,8 +304,11 @@ export function Library({
                 </optgroup>
               ))}
             </select>
-          </div>
-        )}
+          )}
+          <button type="button" className="chip ml-auto" onClick={() => setBatchOpen(true)}>
+            ⇣ {t("batch.title")}
+          </button>
+        </div>
 
         {allTags.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap mb-6">
@@ -367,9 +356,9 @@ export function Library({
                       : undefined
                   }
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <ul className="card p-2 flex flex-col">
                   {section.docs.map((d) => (
-                    <DocumentCard
+                    <DocumentRow
                       key={d.id}
                       doc={d}
                       liveEvent={liveEvents[d.id]}
@@ -379,7 +368,7 @@ export function Library({
                       onRetried={() => void load()}
                     />
                   ))}
-                </div>
+                </ul>
               </section>
             ))}
 
@@ -410,9 +399,9 @@ export function Library({
                         onToggleCollapse={() => toggleExpanded(section.key)}
                       />
                       {expanded && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        <ul className="card p-2 flex flex-col">
                           {section.docs.map((d) => (
-                            <DocumentCard
+                            <DocumentRow
                               key={d.id}
                               doc={d}
                               liveEvent={liveEvents[d.id]}
@@ -422,7 +411,7 @@ export function Library({
                               onRetried={() => void load()}
                             />
                           ))}
-                        </div>
+                        </ul>
                       )}
                     </section>
                   );

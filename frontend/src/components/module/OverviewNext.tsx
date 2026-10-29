@@ -16,7 +16,7 @@ export function OverviewNext({ moduleId, due, docs, onTab }: { moduleId: string;
   const material = counts ? counts.merksatz + counts.formel + counts.rezept + counts.aufgabe : 0;
   const rows: Array<{ text: string; tab: ModuleTab; hot?: boolean }> = [];
   if (counts?.uncertain) rows.push({ text: t("focus.uncertain", { n: counts.uncertain }), tab: "material", hot: true });
-  if (due) rows.push({ text: t("focus.dueCards", { n: due }), tab: "practice", hot: true });
+  if (due) rows.push({ text: t("focus.dueCards", { n: due }), tab: "cards", hot: true });
   if (!material && docs) rows.push({ text: t("overview.noMaterial"), tab: "material" });
   if (material) rows.push({ text: t("overview.material", { n: material }), tab: "material" });
   rows.push({ text: t("overview.listen"), tab: "audio" });

@@ -29,7 +29,7 @@ export function ShortcutsOverlay() {
   const global: Array<{ keys: string[]; labelKey: string }> = [
     { keys: ["?"], labelKey: "shortcuts.global.help" },
     { keys: [t("shortcuts.key.esc")], labelKey: "shortcuts.global.close" },
-    { keys: ["/"], labelKey: "shortcuts.global.search" },
+    { keys: ["/", "Strg+K"], labelKey: "shortcuts.global.search" },
   ];
   const review: Array<{ keys: string[]; labelKey: string }> = [
     { keys: [t("shortcuts.key.space")], labelKey: "shortcuts.review.reveal" },

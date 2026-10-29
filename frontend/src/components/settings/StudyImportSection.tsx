@@ -4,6 +4,7 @@ import { Button } from "../ui/Button";
 import { api, type ImportCount, type StudyImportReport } from "../../lib/api";
 import { isFrameless } from "../../lib/desktop";
 import { t } from "../../lib/i18n";
+import { Expert } from "./parts";
 
 const ROWS = ["modules", "prefixes", "assessments", "time", "material", "trainers", "examDates"] as const;
 
@@ -45,10 +46,10 @@ export function StudyImportSection() {
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <h3 className="text-xs uppercase tracking-wide text-neutral-500">{t("study.import.title")}</h3>
-      <div className="card p-5 flex flex-col gap-4">
-        <p className="text-sm text-neutral-500">{t("study.import.hint")}</p>
+    // Einmalige Übernahme: eingeklappt am Ende der Seite
+    <Expert title={t("study.import.title")}>
+      <div className="flex flex-col gap-4">
+        <p className="text-xs text-neutral-500">{t("study.import.hint")}</p>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             className="input flex-1"
@@ -113,6 +114,6 @@ export function StudyImportSection() {
           </div>
         )}
       </div>
-    </section>
+    </Expert>
   );
 }

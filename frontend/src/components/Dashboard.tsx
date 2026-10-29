@@ -6,7 +6,6 @@ import { cn } from "../lib/cn";
 import { TopBar } from "./TopBar";
 import { FocusCard } from "./dashboard/FocusCard";
 import { useNav } from "../lib/nav";
-import { ServicesCard } from "./dashboard/ServicesCard";
 
 interface Props {
   onOpenDocument: (docId: string) => void;
@@ -19,7 +18,6 @@ interface Props {
 export function Dashboard({
   onOpenDocument,
   onOpenSettings,
-  onOpenEngine,
   onOpenModule,
 }: Props) {
   useLocale();
@@ -76,17 +74,8 @@ export function Dashboard({
               <StatCard label={t("plan.cp")} value={cp ?? "–"} onClick={() => nav?.go("plan")} />
             </section>
 
-            <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <WeakTopicsCard
-                data={data}
-                onOpen={(docId) => {
-                  onOpenDocument(docId);
-                }}
-              />
-              <RecentCard data={data} onOpen={onOpenDocument} />
-            </section>
-
-            <ServicesCard onOpen={onOpenEngine ?? onOpenSettings} />
+            {/* Nur was heute zählt: Dienste-Status meldet das Engine-Banner, Neues steht in der Bibliothek */}
+            <WeakTopicsCard data={data} onOpen={onOpenDocument} />
           </>
         )}
       </main>
@@ -172,43 +161,6 @@ function WeakTopicsCard({
                   ease: w.avg_ease.toFixed(1),
                 })}
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function RecentCard({
-  data,
-  onOpen,
-}: {
-  data: DashboardData;
-  onOpen: (docId: string) => void;
-}) {
-  return (
-    <div className="card p-5">
-      <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-4">
-        {t("dash.recent.title")}
-      </h3>
-      {data.recent.length === 0 ? (
-        <p className="text-xs text-neutral-500">{t("dash.recent.empty")}</p>
-      ) : (
-        <ul className="flex flex-col gap-1.5">
-          {data.recent.map((r) => (
-            <li
-              key={r.id}
-              className="px-3 py-2 rounded border border-border hover:border-accent cursor-pointer flex items-center gap-3"
-              onClick={() => onOpen(r.id)}
-            >
-              <span className="tag-accent text-xs uppercase">
-                {t(`type.${r.type}`)}
-              </span>
-              <span className="text-sm font-medium truncate flex-1">{r.title}</span>
-              <span className="text-xs text-neutral-500 font-mono">
-                {r.page_count > 0 ? `${r.page_count}${t("library.pagesShort")}` : "—"}
-              </span>
             </li>
           ))}
         </ul>

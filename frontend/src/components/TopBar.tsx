@@ -17,18 +17,7 @@ interface Props {
   onOpenSettings: (tab?: "general") => void;
 }
 
-/**
- * Sticky Header mit zwei Layout-Zeilen (auch auf Desktop, damit mobile
- * und desktop konsistent aussehen):
- *
- *   Zeile 1: Logo · Nav · Spacer · Upload · ⚙ · Logout
- *   Zeile 2: (nur) SearchOverlay — full width
- *
- * Vorher gab es zwei Suchleisten (globaler Full-Text-Overlay + lokaler
- * Library-Grid-Filter) und beides lag auf einer Zeile. Auf Portrait-
- * Mobil brach das horizontal aus dem Viewport, Header scrollte mit der
- * Seite mit. Jetzt: eine Suche, wrappt nie horizontal.
- */
+// Kopfzeile in einer Zeile: Logo · Hauptbereiche · Suche (Strg+K) · Hochladen · Update · ⚙
 export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
   // Mit Kontext: immer alle Bereiche; ohne (z. B. in Tests): die übergebenen Ziele
   const nav = useNav();
@@ -52,7 +41,10 @@ export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
                 ))}
               </nav>
             ) : null}
-            <div className="ml-auto flex items-center gap-1 sm:gap-2 shrink-0">
+            <div className="ml-auto w-40 sm:w-64 min-w-0">
+              <SearchOverlay onOpenDocument={onOpenDocument} />
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               {onUpload && (
                 <Button variant="primary" onClick={onUpload}>
                   +{" "}
@@ -76,9 +68,6 @@ export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
                 ⚙
               </Button>
             </div>
-          </div>
-          <div className="w-full">
-            <SearchOverlay onOpenDocument={onOpenDocument} />
           </div>
         </div>
       </header>

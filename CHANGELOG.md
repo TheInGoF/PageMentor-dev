@@ -3,6 +3,21 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.25.0 – 2026-10-29
+### New
+- Modul mit vier Reitern: Überblick, Lernen, Üben, Hören.
+- Suche in der Kopfzeile, erreichbar mit Strg+K.
+- Üben sammelt Lernkarten, Aufgabentrainer und Probeklausuren je Modul, mit Auswahl des Hefts.
+### Change
+- Bibliothek als kompakte Liste mit einer Werkzeugleiste für Typ und Modul.
+- Dokument zeigt nur noch Lesen, Hörbuch und Details; Karten, Zusammenfassungen und Probeklausuren liegen im Modul.
+- Einstellungen KI, Allgemein und Engine nach dem Styleguide: Einstellungszeilen, Expertenoptionen eingeklappt am Ende.
+- Engine-Seite zeigt Probleme zuerst, laufende Dienste eingeklappt.
+- Heute statt Startseite, ohne Dienste-Leiste und „Zuletzt hinzugefügt“; Hauptmenü Heute, Module, Plan, Bibliothek, Tutor.
+- KI-Seite hat nur noch eine Modellauswahl; Cloud-Anbieter und Adressen unter „Anbieter und Verbindungen“.
+### Fix
+- Wissensdatenbank zeigt bei leerer Bibliothek 0 statt „{embedded}“.
+
 ## 1.24.0 – 2026-10-29
 ### New
 - Zusatzstimmen, die 14 Tage abgeschaltet sind, werden samt Paket und Modellen gelöscht und geben Platz frei.

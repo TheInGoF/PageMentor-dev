@@ -10,24 +10,20 @@ import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { CardReview } from "./CardReview";
-import { MaterialPanel } from "./module/MaterialPanel";
-import { Documents, AudioPanel, SummariesPanel } from "./module/ModulePanels";
+import { AudioPanel } from "./module/ModulePanels";
 import { PracticePanel } from "./module/PracticePanel";
-import { GraphPanel } from "./module/GraphPanel";
-import { takeModuleTab, type ModuleTab } from "../lib/moduleTab";
+import { LearnPanel } from "./module/LearnPanel";
+import { resolveModuleTab, takeModuleTab, type ModuleTab, type ModuleTarget, type ModuleView } from "../lib/moduleTab";
 import { ModuleEditModal } from "./module/ModuleEditModal";
 import { OverviewNext } from "./module/OverviewNext";
 import { formatDate } from "./plan/AssessmentRow";
 
-type Tab = ModuleTab;
-
-const TABS: Array<{ id: Tab; key: string }> = [
+// Vier Reiter nach dem Styleguide: höchstens zwei Ebenen, Unterbereiche als Chips
+const TABS: Array<{ id: ModuleView; key: string }> = [
   { id: "overview", key: "module.tab.overview" },
-  { id: "documents", key: "module.tab.documents" },
-  { id: "material", key: "module.tab.material" },
+  { id: "learn", key: "module.tab.learn" },
   { id: "practice", key: "module.tab.practice" },
   { id: "audio", key: "module.tab.listen" },
-  { id: "graph", key: "module.tab.graph" },
 ];
 
 interface Props {
@@ -45,7 +41,9 @@ export function ModuleDetail({
 }: Props) {
   useLocale();
   const [data, setData] = useState<ModuleDetailData | null>(null);
-  const [tab, setTab] = useState<Tab>(() => takeModuleTab() ?? "overview");
+  const [target, setTarget] = useState<ModuleTarget>(() => takeModuleTab() ?? { view: "overview" });
+  const tab = target.view;
+  const setTab = (next: ModuleView) => setTarget({ view: next });
   const [reviewing, setReviewing] = useState<Card[] | null>(null);
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -170,24 +168,21 @@ export function ModuleDetail({
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-6 flex flex-col gap-5">
         {tab === "overview" && (
-          <Overview data={data} onStartReview={startReview} onTab={setTab} />
+          <Overview data={data} onStartReview={startReview} onTab={(next) => setTarget(resolveModuleTab(next))} />
         )}
-        {tab === "documents" && (
-          <>
-            <Documents data={data} onOpen={onOpenDocument} />
-            {data.summaries.length > 0 && (
-              <section className="flex flex-col gap-2">
-                <h3 className="text-xs uppercase tracking-wide text-neutral-500">{t("module.tab.summaries")}</h3>
-                <SummariesPanel summaries={data.summaries} />
-              </section>
-            )}
-          </>
+        {tab === "learn" && (
+          <LearnPanel key={JSON.stringify(target)} data={data} initial={target.learn} initialDoc={target.docId} onOpenDocument={onOpenDocument} />
         )}
-        {tab === "material" && (
-          <MaterialPanel moduleId={moduleId} moduleName={m.name} docs={data.documents} onOpenDocument={onOpenDocument} />
+        {tab === "practice" && (
+          <PracticePanel
+            key={JSON.stringify(target)}
+            data={data}
+            initial={target.practice}
+            initialDoc={target.docId}
+            onStartReview={startReview}
+            onOpenDocument={onOpenDocument}
+          />
         )}
-        {tab === "graph" && <GraphPanel moduleId={moduleId} onOpenDocument={onOpenDocument} />}
-        {tab === "practice" && <PracticePanel data={data} onStartReview={startReview} onOpenDocument={onOpenDocument} />}
         {tab === "audio" && (
           <AudioPanel chapters={data.audioChapters} color={m.color} />
         )}
@@ -225,7 +220,7 @@ function Overview({
 }: {
   data: ModuleDetailData;
   onStartReview: () => void;
-  onTab: (tab: Tab) => void;
+  onTab: (tab: ModuleTab) => void;
 }) {
   const { module: m, documents, cardStats, exams, audioChapters } = data;
   const closedExams = exams.filter((e) => e.status === "closed");

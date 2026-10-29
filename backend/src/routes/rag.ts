@@ -68,7 +68,7 @@ ragRoutes.get("/status", (c) => {
     .prepare(
       `SELECT
          COUNT(*) as total,
-         SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) as embedded,
+         COALESCE(SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END), 0) as embedded,
          COUNT(DISTINCT document_id) as documents
        FROM chunks`
     )

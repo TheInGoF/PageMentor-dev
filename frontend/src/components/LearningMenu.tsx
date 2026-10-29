@@ -11,27 +11,17 @@ import { useToast } from "./ui/Toast";
 import { Audiobook } from "./Audiobook";
 import { PdfViewer } from "./PdfViewer";
 import { PdfModal } from "./PdfModal";
-import { Cards } from "./Cards";
-import { ExamTrainer } from "./ExamTrainer";
-import { Summaries } from "./Summaries";
 import { DocumentOverview } from "./DocumentOverview";
 import { cn } from "../lib/cn";
+import type { ModuleTab } from "../lib/moduleTab";
 
-export type Tab =
-  | "overview"
-  | "reader"
-  | "audiobook"
-  | "exercises"
-  | "exam"
-  | "summary";
+// Lesen, Hörbuch, Details; Karten, Zusammenfassungen und Probeklausuren liegen im Modul unter Lernen und Üben
+export type Tab = "reader" | "audiobook" | "overview";
 
 const TABS: Array<{ id: Tab; labelKey: string; requiresExtraction: boolean }> = [
-  { id: "overview", labelKey: "learn.tab.overview", requiresExtraction: false },
   { id: "reader", labelKey: "learn.tab.reader", requiresExtraction: false },
   { id: "audiobook", labelKey: "learn.tab.audiobook", requiresExtraction: true },
-  { id: "exercises", labelKey: "learn.tab.exercises", requiresExtraction: true },
-  { id: "exam", labelKey: "learn.tab.exam", requiresExtraction: true },
-  { id: "summary", labelKey: "learn.tab.summary", requiresExtraction: true },
+  { id: "overview", labelKey: "learn.tab.details", requiresExtraction: false },
 ];
 
 interface Props {
@@ -41,6 +31,7 @@ interface Props {
   initialPage?: number;
   onBack: () => void;
   onOpenDocument: (docId: string) => void;
+  onOpenModule: (moduleId: string, tab: ModuleTab) => void;
   onOpenSettings: () => void;
 }
 
@@ -49,10 +40,12 @@ export function LearningMenu({
   initialPage,
   onBack,
   onOpenDocument: _onOpenDocument,
+  onOpenModule,
   onOpenSettings,
 }: Props) {
   const [doc, setDoc] = useState<Document | null>(null);
-  const [tab, setTab] = useState<Tab>(initialPage ? "reader" : "overview");
+  // Ohne Seitenziel: erst die Details, bis der Text da ist; danach direkt lesen (nicht bei Lernkatalogen)
+  const [tab, setTab] = useState<Tab | null>(initialPage ? "reader" : null);
   const [extractionPhase, setExtractionPhase] = useState<ProgressEvent | null>(null);
   const [extractionStartedAt, setExtractionStartedAt] = useState<number | null>(null);
   const [busyExtract, setBusyExtract] = useState(false);
@@ -114,6 +107,9 @@ export function LearningMenu({
   }, [doc?.ocr_status, extractionStartedAt]);
 
   const extractionDone = doc?.ocr_status === "done";
+  useEffect(() => {
+    if (doc && tab === null) setTab(extractionDone && doc.mime_type !== "text/markdown" ? "reader" : "overview");
+  }, [doc, tab, extractionDone]);
   const extractionRunning = doc?.ocr_status === "running" || doc?.ocr_status === "pending";
 
   async function startExtraction(opts?: { forceOcr?: boolean }) {
@@ -216,6 +212,7 @@ export function LearningMenu({
             onStartExtraction={startExtraction}
             onCancelExtraction={cancelExtraction}
             onGoTo={setTab}
+            onOpenModule={(t) => doc.module_id && onOpenModule(doc.module_id, t)}
           />
         )}
         {tab === "reader" && <PdfViewer docId={docId} initialPage={initialPage} />}
@@ -225,9 +222,6 @@ export function LearningMenu({
           ) : (
             <div className="card p-6 text-sm text-neutral-500">{t("common.loading")}</div>
           ))}
-        {tab === "exercises" && extractionDone && <Cards docId={docId} />}
-        {tab === "exam" && extractionDone && <ExamTrainer docId={docId} />}
-        {tab === "summary" && extractionDone && <Summaries docId={docId} />}
       </main>
       <PdfModal source={pdfSource} onClose={() => setPdfSource(null)} />
     </div>

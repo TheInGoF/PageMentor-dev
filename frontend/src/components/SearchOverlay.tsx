@@ -14,6 +14,20 @@ export function SearchOverlay({ onOpenDocument }: Props) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const timer = useRef<number | null>(null);
   const container = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  // Strg+K (Mac: ⌘K) springt von überall in die Suche
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        input.current?.focus();
+        input.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     api.search
@@ -70,6 +84,7 @@ export function SearchOverlay({ onOpenDocument }: Props) {
   return (
     <div ref={container} className="relative flex-1">
       <input
+        ref={input}
         type="search"
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -78,7 +93,7 @@ export function SearchOverlay({ onOpenDocument }: Props) {
         className="input"
       />
       {open && result && (result.documents.length + result.chapters.length > 0) && (
-        <div className="absolute top-full mt-1 left-0 right-0 card max-h-[70vh] overflow-y-auto z-50">
+        <div className="absolute top-full mt-1 right-0 w-[min(36rem,90vw)] card max-h-[70vh] overflow-y-auto z-50">
           {result.documents.length > 0 && (
             <Section title={t("search.group.documents", { n: result.documents.length })}>
               {result.documents.map((hit) => (

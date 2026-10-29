@@ -7,8 +7,8 @@ import { openModuleAt, type ModuleTab } from "../../lib/moduleTab";
 const TARGET: Record<ExamFocus["todo"][number]["key"], ModuleTab> = {
   uncertain: "material",
   noMaterial: "material",
-  dueCards: "practice",
-  trainer: "practice",
+  dueCards: "cards",
+  trainer: "trainer",
   noTime: "practice",
 };
 

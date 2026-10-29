@@ -4,7 +4,7 @@ import { api, type TtsEnginesInfo } from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
-import { Card } from "../settings/parts";
+import { Card, SettingRow } from "../settings/parts";
 
 export function TtsEnginesPanel() {
   const toast = useToast();
@@ -46,21 +46,16 @@ export function TtsEnginesPanel() {
   return (
     <Card title={t("ttsEngines.title")}>
       <p className="text-xs text-neutral-500">{t("ttsEngines.hint")}</p>
-      <div className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked disabled />
-        <span className="flex-1">{t("ttsEngines.kokoroFixed")}</span>
+      <SettingRow label={t("ttsEngines.kokoroFixed")}>
         <span className="text-xs text-neutral-500">{t("ttsEngines.always")}</span>
-      </div>
+      </SettingRow>
       {Object.entries(info.engines).map(([id, e]) => (
-        <label key={id} className="flex items-start gap-2 cursor-pointer">
-          <input type="checkbox" className="mt-1" checked={enabled.includes(id)} onChange={() => toggle(id)} />
-          <span className="flex flex-col">
-            <span className="text-sm">
-              {e.title} <span className="text-xs text-neutral-500">· ~{e.sizeGb} GB</span>
-            </span>
-            <span className="text-xs text-neutral-500">{t(`ttsEngines.${id}`)}</span>
-          </span>
-        </label>
+        <SettingRow key={id} label={`${e.title} · ~${e.sizeGb} GB`} hint={t(`ttsEngines.${id}`)}>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={enabled.includes(id)} onChange={() => toggle(id)} />
+            {t("settings.abs.enableShort")}
+          </label>
+        </SettingRow>
       ))}
       {enabled.includes("tada") && (
         <div className="flex flex-col gap-2">

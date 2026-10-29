@@ -100,10 +100,7 @@ export function CardsPanel({
           {data.cardStats.due > 0 ? t("module.learn") : t("module.learnNone")}
         </Button>
       </section>
-      <p className="text-xs text-neutral-500">
-        Karten werden aus allen Dokumenten des Moduls gemischt und nach SM-2
-        fälligem Review-Datum gezogen.
-      </p>
+      <p className="text-xs text-neutral-500">{t("module.cards.mixHint")}</p>
     </div>
   );
 }

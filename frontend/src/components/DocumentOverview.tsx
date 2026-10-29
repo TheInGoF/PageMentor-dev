@@ -10,6 +10,7 @@ import { t, currentLocale } from "../lib/i18n";
 import { Button } from "./ui/Button";
 import { cn } from "../lib/cn";
 import type { Tab } from "./LearningMenu";
+import type { ModuleTab } from "../lib/moduleTab";
 
 interface Props {
   doc: Document;
@@ -20,6 +21,8 @@ interface Props {
   onStartExtraction: (opts?: { forceOcr?: boolean }) => void;
   onCancelExtraction: () => void;
   onGoTo: (tab: Tab) => void;
+  // Karten, Zusammenfassungen und Probeklausuren liegen im Modul, mit diesem Heft vorgewählt
+  onOpenModule: (tab: ModuleTab) => void;
 }
 
 export function DocumentOverview({
@@ -31,6 +34,7 @@ export function DocumentOverview({
   onStartExtraction,
   onCancelExtraction,
   onGoTo,
+  onOpenModule,
 }: Props) {
   const [exams, setExams] = useState<ExamSessionSummary[]>([]);
   const [module, setModule] = useState<ModuleListItem | null>(null);
@@ -57,6 +61,9 @@ export function DocumentOverview({
   }, [exams]);
 
   const extractionReady = doc.ocr_status === "done";
+  // Üben geht nur im Modul: ohne Zuordnung gesperrt, mit Hinweis
+  const inModule = !!doc.module_id;
+  const practiceHint = inModule ? undefined : t("overview.needsModule");
 
   const sizeMb = (doc.size_bytes / 1024 / 1024).toFixed(1);
   const locale = currentLocale() === "de" ? "de-DE" : "en-US";
@@ -102,64 +109,29 @@ export function DocumentOverview({
         </div>
       </section>
 
-      {/* Status cards grid */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ExtractionCard
-          doc={doc}
-          phase={extractionPhase}
-          running={extractionRunning}
-          busy={extractionBusy}
-          startedAt={extractionStartedAt}
-          onStart={onStartExtraction}
-          onCancel={onCancelExtraction}
-        />
+      <ExtractionCard
+        doc={doc}
+        phase={extractionPhase}
+        running={extractionRunning}
+        busy={extractionBusy}
+        startedAt={extractionStartedAt}
+        onStart={onStartExtraction}
+        onCancel={onCancelExtraction}
+      />
 
-        <StatusCard
-          title={t("overview.chapters.title")}
-          disabled={!extractionReady}
-          primary={doc.chapter_count ?? 0}
-          primaryLabel={t("overview.chapters.count")}
-          // Kapitel-Tab gibt's nicht mehr — die Kapitel-Sidebar ist im
-          // Reader (PdfViewer) eingebaut, also da hin springen.
-          onOpen={() => onGoTo("reader")}
+      {/* Eine Liste statt Kacheln: Wert rechts, Klick führt hin; Üben liegt im Modul */}
+      <section className="card p-4 flex flex-col divide-y divide-border">
+        <StatusRow label={t("overview.chapters.title")} value={doc.chapter_count ?? 0} disabled={!extractionReady} onOpen={() => onGoTo("reader")} />
+        <StatusRow label={t("learn.tab.audiobook")} value={`${doc.audio_done ?? 0} / ${doc.audio_total ?? 0}`} disabled={!extractionReady} onOpen={() => onGoTo("audiobook")} />
+        <StatusRow label={t("learn.tab.exercises")} value={doc.card_count ?? 0} disabled={!extractionReady || !inModule} onOpen={() => onOpenModule("cards")} />
+        <StatusRow label={t("learn.tab.summary")} value={doc.summary_count ?? 0} disabled={!extractionReady || !inModule} onOpen={() => onOpenModule("summaries")} />
+        <StatusRow
+          label={t("learn.tab.exam")}
+          value={examStats.total > 0 ? `${examStats.total} · ${t("overview.exam.best", { score: examStats.best })}` : 0}
+          disabled={!extractionReady || !inModule}
+          onOpen={() => onOpenModule("exams")}
         />
-
-        <StatusCard
-          title={t("learn.tab.audiobook")}
-          disabled={!extractionReady}
-          primary={`${doc.audio_done ?? 0} / ${doc.audio_total ?? 0}`}
-          primaryLabel={t("overview.audio.doneLabel")}
-          onOpen={() => onGoTo("audiobook")}
-        />
-
-        <StatusCard
-          title={t("learn.tab.exercises")}
-          disabled={!extractionReady}
-          primary={doc.card_count ?? 0}
-          primaryLabel={t("overview.cards.count")}
-          onOpen={() => onGoTo("exercises")}
-        />
-
-        <StatusCard
-          title={t("learn.tab.summary")}
-          disabled={!extractionReady}
-          primary={doc.summary_count ?? 0}
-          primaryLabel={t("overview.summaries.count")}
-          onOpen={() => onGoTo("summary")}
-        />
-
-        <StatusCard
-          title={t("learn.tab.exam")}
-          disabled={!extractionReady}
-          primary={examStats.total}
-          primaryLabel={t("overview.exam.sessions")}
-          secondary={
-            examStats.total > 0
-              ? t("overview.exam.best", { score: examStats.best })
-              : undefined
-          }
-          onOpen={() => onGoTo("exam")}
-        />
+        {practiceHint && <p className="text-xs text-neutral-500 pt-2">{practiceHint}</p>}
       </section>
     </div>
   );
@@ -174,52 +146,18 @@ function Metric({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function StatusCard({
-  title,
-  primary,
-  primaryLabel,
-  secondary,
-  disabled,
-  onOpen,
-}: {
-  title: string;
-  primary: number | string;
-  primaryLabel: string;
-  secondary?: string;
-  disabled?: boolean;
-  onOpen: () => void;
-}) {
+function StatusRow({ label, value, disabled, onOpen }: { label: string; value: number | string; disabled?: boolean; onOpen: () => void }) {
   return (
-    <div
-      className={cn(
-        "card p-5 flex flex-col gap-3",
-        disabled && "opacity-60"
-      )}
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={disabled}
+      className="flex items-center gap-4 py-2 text-left text-sm hover:text-accent disabled:opacity-50 disabled:hover:text-inherit"
     >
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
-          {title}
-        </h3>
-        {disabled && <span className="text-xs">🔒</span>}
-      </div>
-      <div>
-        <div className="text-3xl font-semibold text-accent">{primary}</div>
-        <div className="text-xs text-neutral-500 mt-1">{primaryLabel}</div>
-        {secondary && (
-          <div className="text-xs text-neutral-500 mt-1">{secondary}</div>
-        )}
-      </div>
-      <div className="pt-2 border-t border-border">
-        <Button
-          variant="ghost"
-          className="!px-2 !py-1 text-xs"
-          onClick={onOpen}
-          disabled={disabled}
-        >
-          {t("overview.open")} →
-        </Button>
-      </div>
-    </div>
+      <span className="flex-1">{label}</span>
+      <span className="text-neutral-500 tabular-nums">{value}</span>
+      <span aria-hidden className="text-accent">→</span>
+    </button>
   );
 }
 

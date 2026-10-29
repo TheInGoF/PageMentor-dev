@@ -1,4 +1,4 @@
-// Block für einen Cloud-Anbieter: Modell und Schlüssel
+// Ein Cloud-Anbieter in einer Zeile: Schlüssel und Modell nebeneinander, gespeicherter Schlüssel mit Entfernen
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { t } from "../../lib/i18n";
@@ -16,35 +16,22 @@ export function ApiProviderBlock(props: {
   onModelChange: (v: string) => void;
 }) {
   return (
-    <div className="pt-3 border-t border-border flex flex-col gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-[1fr_16rem_auto] gap-2 items-end">
       <Input
         label={props.label}
         type="password"
         value={props.keyInput}
         onChange={(e) => props.onKeyChange(e.target.value)}
-        placeholder={props.placeholder}
+        placeholder={props.keyPresent ? `🔒 ${t("ai.expert.keyStored")}` : props.placeholder}
       />
-      {props.keyPresent && (
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-neutral-500">
-            🔒 {t("settings.llm.anthropicKeyStored")}
-          </span>
-          <Button
-            variant="danger"
-            onClick={props.onRemove}
-            className="!px-2 !py-1 text-xs"
-          >
-            {t("settings.llm.anthropicRemove")}
-          </Button>
-        </div>
+      <Input label={props.modelLabel} value={props.modelValue} onChange={(e) => props.onModelChange(e.target.value)} placeholder={props.modelPlaceholder} />
+      {props.keyPresent ? (
+        <Button variant="ghost" onClick={props.onRemove}>
+          {t("settings.llm.removeKey")}
+        </Button>
+      ) : (
+        <span />
       )}
-      <Input
-        label={props.modelLabel}
-        value={props.modelValue}
-        onChange={(e) => props.onModelChange(e.target.value)}
-        placeholder={props.modelPlaceholder}
-      />
     </div>
   );
 }
-

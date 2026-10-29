@@ -24,7 +24,7 @@ export const common: Record<string, string> = {
   "common.none": "—",
   "common.yes": "Yes",
   "common.no": "No",
-  "nav.home": "Home",
+  "nav.home": "Today",
   "nav.plan": "Plan",
   "nav.library": "Library",
   "nav.modules": "Modules",

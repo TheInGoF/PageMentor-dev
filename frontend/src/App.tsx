@@ -6,6 +6,7 @@ import { LearningMenu } from "./components/LearningMenu";
 import { Dashboard } from "./components/Dashboard";
 import { Modules } from "./components/Modules";
 import { ModuleDetail } from "./components/ModuleDetail";
+import { openModuleAt } from "./lib/moduleTab";
 import { TutorPage } from "./components/TutorPage";
 import { SettingsPage, type SettingsTab } from "./components/SettingsPage";
 import { EngineBanner } from "./components/engine/EngineBanner";
@@ -226,6 +227,12 @@ export function App() {
           }
           onBack={() => setOpenDocId(null)}
           onOpenDocument={(id) => setOpenDocId(id)}
+          onOpenModule={(moduleId, tab) =>
+            openModuleAt(moduleId, tab, (id) => {
+              setOpenDocId(null);
+              setOpenModuleId(id);
+            }, openDocId)
+          }
           onOpenSettings={openSettings}
         />
       );
