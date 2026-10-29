@@ -35,6 +35,7 @@ import { adminRoutes } from "./routes/admin";
 import { ensureReady as ensureSearchReady } from "./services/search";
 import { db, initDb } from "./db";
 import { migrateTtsEngines } from "./engine/extraEngines";
+import { seedBuiltinVoices } from "./services/builtinVoices";
 
 // Laufende Pumpen für Sidecar- und Container-Logs
 import {
@@ -120,6 +121,8 @@ setTimeout(() => {
   // Unterbrochenen Stapel-Import fortsetzen
   startQueue();
   watchImportFolder();
+  // Vorlage-Stimmen für F5-TTS und TADA, einmalig
+  void seedBuiltinVoices();
 }, 2000);
 startupNote(`Dienste laut Einstellungen: ${JSON.stringify(serviceUrls())}`);
 

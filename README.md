@@ -246,7 +246,10 @@ is restarted after a few idle minutes to give its memory back.
   Kerstin as default), engine picker per book and an *all in sequence*
   comparison that reads the same excerpt with every engine.
 - **Voice cloning** — upload a short reference clip with its transcript; Qwen,
-  F5-TTS and TADA clone it. Qwen voice designs get a cached reference so the other
+  F5-TTS and TADA clone it. Two freely licensed German templates ship with the
+  app so the cloning engines have voices from the start: *Thorsten*
+  ([Thorsten-Voice](https://www.thorsten-voice.de), CC0) and *Hokuspokus*
+  (CSS10/LibriVox, public domain). Qwen voice designs get a cached reference so the other
   engines can clone them too.
 - **Audio output** — EBU R128 loudness normalisation, MP3 per chapter and a
   complete M4B with chapter markers, cover and tags.

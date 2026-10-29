@@ -59,6 +59,10 @@ Weitere Engines wählst du unter **Einstellungen → Engine → Stimmen-Engines*
 Aufnahme von 3–10 s mit Transkript hochladen, Sprache Deutsch. Qwen, F5 und TADA klonen
 daraus. Im Hörbuch-Tab wählst du dann Engine und Stimme.
 
+Damit F5 und TADA sofort etwas können, liegen zwei frei lizenzierte Vorlagen bei:
+**Thorsten** (Thorsten-Voice, gemeinfrei) und **Hokuspokus** (LibriVox, gemeinfrei). Sie
+stehen wie eigene Stimmen in der Liste und lassen sich löschen.
+
 ## Wissensdatenbank
 
 Im Datenordner `Dokumente\PageMentor` liegen zwei Ordner dafür:

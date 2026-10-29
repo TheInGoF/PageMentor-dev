@@ -132,3 +132,13 @@ Bundled Windows tools (Windows package only, in bin/)
 
 These programs keep their own licenses. PageMentor calls them as external
 processes; only sqlite-vec is loaded into the process as a SQLite extension.
+
+================================================================================
+Bundled voice samples (frontend/public/voices)
+================================================================================
+
+- thorsten.wav — Thorsten Müller, Thorsten-Voice dataset TV-2022.10-Neutral,
+  https://www.thorsten-voice.de — CC0 1.0 (public domain dedication).
+- hokuspokus.wav — CSS10 German (https://github.com/Kyubyong/css10), speaker
+  "Hokuspokus", Max Dauthendey "Die acht Gesichter am Biwasee", LibriVox
+  recording (public domain); repackaged by ayousanz/css10-ljspeech (Apache-2.0).
