@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.23.3 – 2026-10-29
+### Fix
+- Hörbuch-Intro nennt die gewählte Engine (F5-TTS, Kokoro, TADA) statt immer Qwen3-TTS.
+
 ## 1.23.2 – 2026-10-29
 ### New
 - Logs zeigen auch Kokoro, F5-TTS und TADA, mit eigenem Quellen-Filter.

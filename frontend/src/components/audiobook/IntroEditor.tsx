@@ -5,6 +5,9 @@ import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
 
 
+// Ausgeschriebener Name der Engine für den gesprochenen Text
+const ENGINE_NAMES: Record<string, string> = { qwen: "Qwen3-TTS", kokoro: "Kokoro", f5: "F5-TTS", tada: "TADA" };
+
 // Standard-Intro als lesbarer Text, Namen in normaler Schreibweise
 // Die phonetische Umschrift macht Gemma direkt vor der Synthese
 function buildIntroDefault(
@@ -23,6 +26,7 @@ function buildIntroDefault(
         .replace(/\s*\([^)]*\)\s*/g, " ")
         .trim()
     : "";
+  const engineName = voice ? ENGINE_NAMES[voice.engine] ?? voice.engine : "";
 
   if (isDe) {
     lines.push(`Hörbuch: ${meta.title}.`);
@@ -35,7 +39,7 @@ function buildIntroDefault(
     }
     if (voice) {
       lines.push(
-        `Gesprochen durch Qwen3-TTS, mit der Stimme ${spokenVoiceLabel}.`
+        `Gesprochen durch ${engineName}, mit der Stimme ${spokenVoiceLabel}.`
       );
     }
     lines.push(`Erstellt mit PageMentor.`);
@@ -50,7 +54,7 @@ function buildIntroDefault(
     }
     if (voice) {
       lines.push(
-        `Narrated by Qwen3-TTS, with the voice ${spokenVoiceLabel}.`
+        `Narrated by ${engineName}, with the voice ${spokenVoiceLabel}.`
       );
     }
     lines.push(`Created with PageMentor.`);
