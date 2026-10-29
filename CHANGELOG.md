@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.23.0 – 2026-10-29
+### New
+- Module: Suche, Filter nach Semester, Schwerpunkt und Status, Sortierung, Gruppen je Semester.
+- Module haben Fachsemester, Schwerpunkt und Prüfungsform im Bearbeiten-Dialog.
+### Change
+- Bibliothek: Modul-Filter als Auswahlliste, nach Semester gruppiert.
+- Modulkarte zeigt Kürzel, CP, Semester und Schwerpunkt und öffnet per Klick.
+
 ## 1.22.4 – 2026-10-29
 ### New
 - Setup warnt bei wenig Platz: unter 60 GB beim Programmordner, 15 GB beim Update, 10 GB beim Datenordner.

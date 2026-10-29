@@ -14,7 +14,8 @@ import { BatchImport } from "./library/BatchImport";
 import { TopBar } from "./TopBar";
 import { useToast } from "./ui/Toast";
 import { DocumentEditModal } from "./DocumentEditModal";
-import { ModuleChip, ModuleSectionHeader, EmptyState } from "./library/LibraryParts";
+import { ModuleSectionHeader, EmptyState } from "./library/LibraryParts";
+import { groupBySemester } from "../lib/modules";
 
 type ModuleFilter = "all" | "unassigned" | string;
 
@@ -299,29 +300,24 @@ export function Library({
         </div>
 
         {modules.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap mb-5">
+          <div className="flex items-center gap-2 flex-wrap mb-4">
             <span className="text-xs uppercase tracking-wide text-neutral-500 mr-2">
               {t("library.filter.module")}
             </span>
-            <ModuleChip
-              label={t("common.all")}
-              active={moduleFilter === "all"}
-              onClick={() => setModuleFilter("all")}
-            />
-            <ModuleChip
-              label={t("library.filter.module.unassigned")}
-              active={moduleFilter === "unassigned"}
-              onClick={() => setModuleFilter("unassigned")}
-            />
-            {modules.map((m) => (
-              <ModuleChip
-                key={m.id}
-                label={`${m.icon} ${m.name}`}
-                color={m.color}
-                active={moduleFilter === m.id}
-                onClick={() => setModuleFilter(m.id)}
-              />
-            ))}
+            {/* Auswahlliste statt Pillen: bei vielen Modulen sonst eine ganze Seite */}
+            <select className="input !w-auto min-w-[16rem]" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
+              <option value="all">{t("common.all")}</option>
+              <option value="unassigned">{t("library.filter.module.unassigned")}</option>
+              {groupBySemester(modules).map((g) => (
+                <optgroup key={g.semester ?? "none"} label={g.semester != null ? t("modules.semester", { n: g.semester }) : t("modules.noSemester")}>
+                  {g.modules.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.code ? `${m.code} · ` : ""}{m.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
           </div>
         )}
 

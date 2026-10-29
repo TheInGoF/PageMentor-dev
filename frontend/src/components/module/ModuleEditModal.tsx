@@ -1,4 +1,4 @@
-// Modul anlegen und bearbeiten: Name, Kürzel, CP, Heft-Präfixe für die Zuordnung, Farbe
+// Modul anlegen und bearbeiten: Name, Kürzel, CP, Fachsemester, Schwerpunkt, Prüfungsform, Heft-Präfixe, Farbe
 import { useEffect, useState } from "react";
 import { api, type Module, type ModulePrefix } from "../../lib/api";
 import { Button } from "../ui/Button";
@@ -7,6 +7,10 @@ import { Input } from "../ui/Input";
 import { useToast } from "../ui/Toast";
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
+import { semesterOf } from "../../lib/modules";
+
+// Prüfungsformen wie im Plan (Kürzel der Leistungen)
+const EXAM_FORMS = ["K", "B", "L", "S", "P", "M", "A", "X"] as const;
 
 // Präfixe als Liste „ABC, ABX?“; ein Fragezeichen heißt: ohne Beleg, nur Vorschlag
 function formatPrefixes(rows: ModulePrefix[]): string {
@@ -35,16 +39,21 @@ const COLORS = [
 export function ModuleEditModal({
   open,
   module: editing,
+  areas = [],
   onClose,
   onSaved,
 }: {
   open: boolean;
   module: Module | null;
+  // Vorhandene Schwerpunkte als Vorschläge
+  areas?: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [name, setName] = useState("");
-  const [semester, setSemester] = useState("");
+  const [studySemester, setStudySemester] = useState("");
+  const [area, setArea] = useState("");
+  const [examForm, setExamForm] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState("#3b82f6");
   const [icon, setIcon] = useState("📘");
@@ -57,7 +66,9 @@ export function ModuleEditModal({
   useEffect(() => {
     if (!open) return;
     setName(editing?.name ?? "");
-    setSemester(editing?.semester ?? "");
+    setStudySemester(editing && semesterOf(editing) != null ? String(semesterOf(editing)) : "");
+    setArea(editing?.area ?? "");
+    setExamForm(editing?.exam_form ?? "");
     setDescription(editing?.description ?? "");
     setColor(editing?.color ?? "#3b82f6");
     setIcon(editing?.icon ?? "📘");
@@ -76,7 +87,11 @@ export function ModuleEditModal({
     try {
       const body = {
         name: name.trim(),
-        semester: semester.trim() || null,
+        // Altes Textfeld bleibt lesbar für ältere Ansichten
+        semester: studySemester.trim() ? `Semester ${Number(studySemester)}` : editing?.semester ?? null,
+        study_semester: studySemester.trim() ? Number(studySemester) : null,
+        area: area.trim() || null,
+        exam_form: examForm || null,
         description: description.trim() || null,
         color,
         icon: icon.trim() || "📘",
@@ -150,12 +165,26 @@ export function ModuleEditModal({
           <Input label={t("module.modal.prefixes")} value={prefixes} onChange={(e) => setPrefixes(e.target.value)} placeholder="ABC, ABX?" className="font-mono" />
           <span className="text-xs text-neutral-500">{t("module.modal.prefixesHint")}</span>
         </div>
-        <Input
-          label={t("module.modal.semester")}
-          value={semester}
-          onChange={(e) => setSemester(e.target.value)}
-          placeholder={t("module.modal.semesterPlaceholder")}
-        />
+        <div className="grid grid-cols-[6rem_1fr_10rem] gap-3">
+          <Input label={t("module.modal.studySemester")} type="number" min={1} max={20} value={studySemester} onChange={(e) => setStudySemester(e.target.value)} placeholder="1" />
+          <div className="flex flex-col gap-1">
+            <Input label={t("module.modal.area")} value={area} onChange={(e) => setArea(e.target.value)} placeholder={t("module.modal.areaPlaceholder")} list="pm-module-areas" />
+            <datalist id="pm-module-areas">
+              {areas.map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-neutral-400">{t("module.modal.examForm")}</label>
+            <select className="input" value={examForm} onChange={(e) => setExamForm(e.target.value)}>
+              <option value="">–</option>
+              {EXAM_FORMS.map((k) => (
+                <option key={k} value={k}>{t(`plan.kind.${k}`)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-neutral-400">
             {t("module.modal.description")}
