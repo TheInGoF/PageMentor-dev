@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
+import { Button } from "../ui/Button";
 
 interface Node { id: string; title: string; documentId: string; documentTitle: string; page: number }
 interface Edge { a: string; b: string; weight: number }
@@ -52,11 +53,39 @@ function layout(nodes: Node[], edges: Edge[]): Map<string, { x: number; y: numbe
   return pos;
 }
 
-export function GraphPanel({ moduleId, onOpenDocument }: { moduleId: string; onOpenDocument: (id: string) => void }) {
-  const [data, setData] = useState<{ nodes: Node[]; edges: Edge[]; truncated: boolean } | null>(null);
+type GraphData = { nodes: Node[]; edges: Edge[]; truncated: boolean };
+
+// Lesbarer Export zum Prüfen: Verbindungen mit Kapitel- und Heftnamen, dazu Kennzahlen
+export function graphExport(moduleName: string, data: GraphData) {
+  const byId = new Map(data.nodes.map((n) => [n.id, n]));
+  const label = (id: string) => {
+    const n = byId.get(id);
+    return n ? `${n.documentTitle} · ${n.title} (S. ${n.page})` : id;
+  };
+  const weights = data.edges.map((e) => e.weight).sort((a, b) => a - b);
+  return {
+    module: moduleName,
+    exportedAt: new Date().toISOString(),
+    stats: {
+      chapters: data.nodes.length,
+      documents: new Set(data.nodes.map((n) => n.documentId)).size,
+      edges: data.edges.length,
+      weightMin: weights[0] ?? null,
+      weightMedian: weights.length ? weights[Math.floor(weights.length / 2)] : null,
+      weightMax: weights[weights.length - 1] ?? null,
+      truncated: data.truncated,
+    },
+    edges: [...data.edges].sort((a, b) => b.weight - a.weight).map((e) => ({ weight: e.weight, a: label(e.a), b: label(e.b) })),
+    nodes: data.nodes,
+  };
+}
+
+export function GraphPanel({ moduleId, moduleName, onOpenDocument }: { moduleId: string; moduleName: string; onOpenDocument: (id: string) => void }) {
+  const [data, setData] = useState<GraphData | null>(null);
+  const [copied, setCopied] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
   useEffect(() => {
-    void request<{ nodes: Node[]; edges: Edge[]; truncated: boolean }>(`/api/study/graph/${moduleId}`).then(setData);
+    void request<GraphData>(`/api/study/graph/${moduleId}`).then(setData);
   }, [moduleId]);
   const pos = useMemo(() => (data ? layout(data.nodes, data.edges) : null), [data]);
 
@@ -68,6 +97,20 @@ export function GraphPanel({ moduleId, onOpenDocument }: { moduleId: string; onO
   const color = (docId: string) => {
     const i = docs.findIndex(([id]) => id === docId);
     return i < 8 ? (dark ? DARK : LIGHT)[i] : "rgb(var(--neutral-400, 160 160 160))";
+  };
+  const json = () => JSON.stringify(graphExport(moduleName, data), null, 2);
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([json()], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `zusammenhaenge-${moduleName.replace(/[^\w-]+/g, "_")}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const copy = async () => {
+    await navigator.clipboard.writeText(json());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
   const near = new Set(data.edges.filter((e) => e.a === hover || e.b === hover).flatMap((e) => [e.a, e.b]));
 
@@ -108,6 +151,14 @@ export function GraphPanel({ moduleId, onOpenDocument }: { moduleId: string; onO
         ))}
       </div>
       {data.truncated && <p className="text-xs text-amber-600">{t("graph.truncated")}</p>}
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={download}>
+          {t("graph.exportJson")}
+        </Button>
+        <Button variant="ghost" onClick={() => void copy()}>
+          {copied ? t("graph.copied") : t("graph.copyJson")}
+        </Button>
+      </div>
     </div>
   );
 }

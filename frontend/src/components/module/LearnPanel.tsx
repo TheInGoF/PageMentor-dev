@@ -44,7 +44,7 @@ export function LearnPanel({
       {part === "docs" && <Documents data={data} onOpen={onOpenDocument} />}
       {part === "summaries" && (docId ? <Summaries key={docId} docId={docId} /> : <SummariesPanel summaries={data.summaries} />)}
       {part === "material" && <MaterialPanel moduleId={data.module.id} moduleName={data.module.name} docs={data.documents} onOpenDocument={onOpenDocument} />}
-      {part === "graph" && <GraphPanel moduleId={data.module.id} onOpenDocument={onOpenDocument} />}
+      {part === "graph" && <GraphPanel moduleId={data.module.id} moduleName={data.module.name} onOpenDocument={onOpenDocument} />}
     </div>
   );
 }
