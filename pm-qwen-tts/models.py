@@ -41,10 +41,18 @@ def _prepare_model_path() -> str:
     """
     from huggingface_hub import snapshot_download  # noqa: WPS433
 
+    def resolve(repo: str) -> str:
+        # Erst die Kopie im Volume, nur ohne sie beim Hub nachfragen
+        try:
+            return snapshot_download(repo_id=repo, local_files_only=True)
+        except Exception:  # noqa: BLE001
+            log.info("downloading %s", repo)
+            return snapshot_download(repo_id=repo)
+
     log.info("resolving %s (base model)", MODEL_ID)
-    base_dir = snapshot_download(repo_id=MODEL_ID)
+    base_dir = resolve(MODEL_ID)
     log.info("resolving %s (audio tokenizer)", TOKENIZER_ID)
-    tokenizer_dir = snapshot_download(repo_id=TOKENIZER_ID)
+    tokenizer_dir = resolve(TOKENIZER_ID)
 
     target = os.path.join(base_dir, "speech_tokenizer")
 

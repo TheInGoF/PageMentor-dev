@@ -23,7 +23,7 @@ import {
 } from "./config";
 import { probe, maybeRefresh } from "./probe";
 import { qwenInstalled } from "../extra/probe";
-import { designToVoice, sampleToVoice, resolveDesign, resolveSample } from "./voices";
+import { designToVoice, germanFirst, sampleToVoice, resolveDesign, resolveSample } from "./voices";
 import { callSpeechClone, callSpeechCloneFromDesign, callSpeechPreset } from "./calls";
 import { ensureDesignReference } from "./designRef";
 
@@ -48,7 +48,7 @@ export const qwenEngine: TtsEngine = {
     }
     try {
       const customs = listVoiceSamples().map(sampleToVoice);
-      return [...presets, ...designs, ...customs];
+      return germanFirst(presets, designs, customs);
     } catch (err) {
       console.warn(`[qwen-tts] listVoiceSamples failed:`, err);
       return [...presets, ...designs];
@@ -272,3 +272,4 @@ export const qwenEngine: TtsEngine = {
     return buf;
   },
 };
+

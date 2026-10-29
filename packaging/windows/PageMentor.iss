@@ -154,14 +154,15 @@ begin
   begin
     if IsUpdate() then Need := 15 else Need := 60;
     Free := FreeGb(WizardDirValue());
+    { Still (Update aus der App) gilt Ja: nur Warnung, die Engine prüft den Platz vor Downloads selbst }
     if (Free >= 0) and (Free < Need) then
-      Result := SuppressibleMsgBox(FmtMessage(CustomMessage('LowSpace'), [ExtractFileDrive(WizardDirValue()), IntToStr(Free), IntToStr(Need)]), mbConfirmation, MB_YESNO, IDNO) = IDYES;
+      Result := SuppressibleMsgBox(FmtMessage(CustomMessage('LowSpace'), [ExtractFileDrive(WizardDirValue()), IntToStr(Free), IntToStr(Need)]), mbConfirmation, MB_YESNO, IDYES) = IDYES;
   end
   else if CurPageID = DataDirPage.ID then
   begin
     Free := FreeGb(DataDirPage.Values[0]);
     if (Free >= 0) and (Free < 10) then
-      Result := SuppressibleMsgBox(FmtMessage(CustomMessage('LowSpaceData'), [ExtractFileDrive(DataDirPage.Values[0]), IntToStr(Free)]), mbConfirmation, MB_YESNO, IDNO) = IDYES;
+      Result := SuppressibleMsgBox(FmtMessage(CustomMessage('LowSpaceData'), [ExtractFileDrive(DataDirPage.Values[0]), IntToStr(Free)]), mbConfirmation, MB_YESNO, IDYES) = IDYES;
   end;
 end;
 

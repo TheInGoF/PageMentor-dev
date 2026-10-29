@@ -10,6 +10,7 @@ Endpunkte wie pm-qwen-tts:
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -57,11 +58,43 @@ class _Status:
     load_s: float | None = None
 
 
+def _ready_mark(engine: Engine) -> str:
+    return os.path.join(os.environ.get("HF_HOME", "/root/.cache/huggingface"), f".pm-ready-{engine.name}")
+
+
+def _set_offline(on: bool) -> None:
+    os.environ["HF_HUB_OFFLINE"] = "1" if on else "0"
+    try:
+        from huggingface_hub import constants
+
+        constants.HF_HUB_OFFLINE = on
+    except ImportError:
+        pass
+
+
+def _load(engine: Engine) -> None:
+    # Nach dem ersten Laden liegt alles im Volume: dann ohne Nachfragen beim Hub starten
+    mark = _ready_mark(engine)
+    if os.path.exists(mark):
+        _set_offline(True)
+        try:
+            engine.load()
+            return
+        except Exception as e:  # noqa: BLE001
+            log.warning("%s offline nicht ladbar (%r), lade aus dem Netz", engine.name, e)
+            _set_offline(False)
+    engine.load()
+    try:
+        open(mark, "w").close()
+    except OSError:
+        pass
+
+
 def _load_in_background(engine: Engine, st: _Status) -> None:
     def run() -> None:
         t0 = time.time()
         try:
-            engine.load()
+            _load(engine)
             st.ready = True
             st.load_s = round(time.time() - t0, 1)
             log.info("%s ready after %.1fs (%s)", engine.name, st.load_s, engine.model_id)

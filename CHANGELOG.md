@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.23.1 – 2026-10-29
+### Change
+- F5-TTS, Qwen und TADA starten ohne Nachfrage im Netz, sobald ihre Modelle einmal geladen sind.
+- Qwen auf Deutsch: deutsche Vorlage-Stimmen stehen vorn und sind Standard statt Ryan.
+### Fix
+- Engine-Status wird während einer Reparatur nicht mehr dutzendfach pro Sekunde abgefragt.
+- Stilles Update aus der App bricht bei wenig Speicherplatz nicht mehr ab.
+
 ## 1.23.0 – 2026-10-29
 ### New
 - Module: Suche, Filter nach Semester, Schwerpunkt und Status, Sortierung, Gruppen je Semester.

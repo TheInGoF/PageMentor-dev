@@ -53,3 +53,18 @@ export function resolveDesign(voiceId: string): VoiceDesign | null {
   const id = voiceId.slice(DESIGN_VOICE_PREFIX.length);
   return getVoiceDesign(id);
 }
+
+// Deutsch mit den englisch/chinesisch-muttersprachlichen Presets klingt stark nach Akzent:
+// gibt es deutsche Stimmproben (etwa die Vorlagen), stehen sie vorn und die erste ist Standard
+export function germanFirst(presets: Voice[], designs: Voice[], customs: Voice[]): Voice[] {
+  const seen = new Set<string>();
+  const marked = customs.map((v) => {
+    const first = !seen.has(v.language);
+    seen.add(v.language);
+    return { ...v, flagship: first };
+  });
+  const deCustoms = marked.filter((v) => v.language === "de");
+  if (!deCustoms.length) return [...presets, ...designs, ...marked];
+  const demoted = presets.map((v) => (v.language === "de" ? { ...v, flagship: false } : v));
+  return [...deCustoms, ...demoted, ...designs, ...marked.filter((v) => v.language !== "de")];
+}

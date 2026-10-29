@@ -34,11 +34,12 @@ class F5Engine:
         self._tts = None
 
     def load(self) -> None:
-        from cached_path import cached_path
         from f5_tts.api import F5TTS
+        from huggingface_hub import hf_hub_download
 
-        ckpt = str(cached_path(f"hf://{REPO}/{CKPT}"))
-        vocab = str(cached_path(f"hf://{REPO}/vocab.txt"))
+        # hf_hub_download statt cached_path: liegt dann im HF-Volume und übersteht Image-Updates
+        ckpt = hf_hub_download(REPO, CKPT)
+        vocab = hf_hub_download(REPO, "vocab.txt")
         self._tts = F5TTS(model="F5TTS_Base", ckpt_file=ckpt, vocab_file=vocab, device="cuda")
         os.makedirs(REF_DIR, exist_ok=True)
 
