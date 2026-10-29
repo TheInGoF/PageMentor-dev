@@ -208,6 +208,8 @@ export function useAudiobookData(docId: string, documentLanguage: string) {
               chunkTotal: ev.total ?? 0,
             };
           }
+          // Intro (Kapitel 0) ist kein Buch-Lauf: kein Panel, sonst bleibt „Generiere …“ stehen
+          if (ev.chapterNumber === 0) return null;
           // Reconnect ohne audiobook.start: zumindest Chunk X / Y zeigen
           return {
             totalChapters: 0,
@@ -218,15 +220,18 @@ export function useAudiobookData(docId: string, documentLanguage: string) {
             chapterChars: [],
           };
         });
-      } else if (ev.phase === "audiobook.chapter.done") {
+      } else if (ev.phase === "audiobook.chapter.done" || ev.phase === "audiobook.chapter.failed") {
+        // Ersatz-Panel nach Reconnect (ohne Buch-Lauf) endet mit dem Kapitel
         setBookProgress((prev) =>
-          prev
-            ? {
+          !prev || prev.totalChapters === 0
+            ? null
+            : ev.phase === "audiobook.chapter.failed"
+            ? prev
+            : {
                 ...prev,
                 currentChapter: ev.current ?? prev.currentChapter,
                 chunkCurrent: prev.chunkTotal,
               }
-            : prev
         );
       } else if (
         ev.phase === "audiobook.done" ||

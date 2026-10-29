@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.25.3 – 2026-10-29
+### Fix
+- Hörbuch zeigt nach dem Vertonen des Intros nicht mehr dauerhaft „Generiere …“.
+
 ## 1.25.2 – 2026-10-29
 ### Fix
 - Engine-Pakete laden auch, wenn Docker Desktop installiert ist (Anmeldung über docker-credential-desktop.exe).
