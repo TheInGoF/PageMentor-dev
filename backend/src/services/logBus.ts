@@ -13,6 +13,9 @@
 export type LogSource =
   | "pm-app"
   | "qwen-tts"
+  | "kokoro-tts"
+  | "f5-tts"
+  | "tada-tts"
   | "arbiter"
   | "ollama"
   | "docling"

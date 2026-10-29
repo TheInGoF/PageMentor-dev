@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.23.2 – 2026-10-29
+### New
+- Logs zeigen auch Kokoro, F5-TTS und TADA, mit eigenem Quellen-Filter.
+
 ## 1.23.1 – 2026-10-29
 ### Change
 - F5-TTS, Qwen und TADA starten ohne Nachfrage im Netz, sobald ihre Modelle einmal geladen sind.

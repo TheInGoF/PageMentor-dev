@@ -3,7 +3,7 @@ import { t } from "../../lib/i18n";
 import type { LogLevel } from "../../lib/api";
 import type { LogFilter } from "./model";
 
-const SOURCES = ["pm-app", "qwen-tts", "arbiter", "ollama", "docling", "system"];
+const SOURCES = ["pm-app", "qwen-tts", "kokoro-tts", "f5-tts", "tada-tts", "arbiter", "ollama", "docling", "system"];
 const LEVELS: LogLevel[] = ["debug", "info", "warn", "error"];
 
 interface Props {

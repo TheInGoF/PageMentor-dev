@@ -74,6 +74,10 @@ export function sourceColor(src: string): string {
       return "text-sky-400";
     case "qwen-tts":
       return "text-fuchsia-400";
+    case "kokoro-tts":
+    case "f5-tts":
+    case "tada-tts":
+      return "text-pink-300";
     case "arbiter":
       return "text-amber-400";
     case "ollama":

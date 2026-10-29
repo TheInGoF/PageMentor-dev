@@ -43,6 +43,7 @@ import {
   startSidecarLogPump,
 } from "./services/logTap";
 startSidecarLogPump();
+for (const e of ["kokoro", "f5", "tada"]) startSidecarLogPump(5000, e);
 
 startupHeader(APP_VERSION, {
   Daten: DATA_DIR,

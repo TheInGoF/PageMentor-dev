@@ -20,7 +20,10 @@ interface SidecarLine {
  *  next tick. The first error after a healthy phase is reported
  *  to the bus once so the UI surfaces it; subsequent errors of the
  *  same kind are suppressed until something changes. */
-export function startSidecarLogPump(intervalMs: number = 5000): () => void {
+// engine leer: Qwen über den Standardweg (mit Hinweisen bei Ausfall).
+// engine gesetzt: weitere Stimme über /tts/<engine>/ am Arbiter; gestoppt oder nicht
+// installiert ist dort der Normalfall, darum still
+export function startSidecarLogPump(intervalMs: number = 5000, engine?: string): () => void {
   let stopped = false;
   let sinceTs = 0;
   // Error-state machine. We collapse the noisy "HTTP 503" / "operation
@@ -41,6 +44,7 @@ export function startSidecarLogPump(intervalMs: number = 5000): () => void {
   }
 
   function noteError(detail: string) {
+    if (engine) return;
     const kind = classifyError(detail);
     const now = Date.now();
     if (errorKind !== kind) {
@@ -90,7 +94,7 @@ export function startSidecarLogPump(intervalMs: number = 5000): () => void {
   }
 
   function noteRecovery() {
-    if (errorKind === null) return;
+    if (engine || errorKind === null) return;
     const downForS = Math.round((Date.now() - errorSince) / 1000);
     publish({
       ts: Date.now(),
@@ -117,6 +121,7 @@ export function startSidecarLogPump(intervalMs: number = 5000): () => void {
     try {
       const url =
         base.replace(/\/+$/, "") +
+        (engine ? `/tts/${engine}` : "") +
         "/diagnostics/recent-logs?since=" +
         sinceTs;
       const res = await fetch(url, {
@@ -141,8 +146,7 @@ export function startSidecarLogPump(intervalMs: number = 5000): () => void {
         lines?: SidecarLine[];
         source?: string;
       };
-      const source =
-        (data.source as "qwen-tts" | "arbiter" | undefined) ?? "qwen-tts";
+      const source = (data.source as LogSource | undefined) ?? (engine ? (`${engine}-tts` as LogSource) : "qwen-tts");
       const newest = data.lines ?? [];
       for (const l of newest) {
         if (l.ts <= sinceTs) continue;
