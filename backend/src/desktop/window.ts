@@ -52,7 +52,11 @@ self.onmessage = (e: MessageEvent<WindowStart>) => {
     }
 
     view.bind("__pmWin", (cmd: WindowCommand) => windowCommand(hwnd, cmd));
-    view.bind("__pmReady", () => send({ type: "ready" }));
+    // Rückgabe muss JSON sein, sonst meldet das Fenster „Failed to parse binding result“
+    view.bind("__pmReady", () => {
+      send({ type: "ready" });
+      return true;
+    });
     view.init(
       `window.__pmDesktop = { frameless: ${frameless} };` +
         "addEventListener('DOMContentLoaded', () => window.__pmReady && window.__pmReady());" +

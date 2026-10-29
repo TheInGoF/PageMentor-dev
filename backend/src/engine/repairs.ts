@@ -107,7 +107,11 @@ export async function ensureSparse(): Promise<void> {
     writeFileSync(SPARSE_MARK, new Date().toISOString());
     logEngine("info", "Engine-Festplatte gibt freien Platz jetzt an Windows zurück (sparse)");
   } else {
-    logEngine("warn", `Sparse nicht gesetzt (älteres WSL?): ${failText(r)}`);
+    // Neuere WSL-Versionen erlauben sparse nur noch mit --allow-unsafe: dann lassen wir es,
+    // merken uns das und versuchen es nicht bei jedem Start erneut; aufgeräumt wird trotzdem
+    mkdirSync(ENGINE_DIR, { recursive: true });
+    writeFileSync(SPARSE_MARK, `skipped ${new Date().toISOString()}`);
+    logEngine("info", `Engine-Festplatte bleibt fest groß, WSL erlaubt sparse hier nicht: ${failText(r)}`);
   }
 }
 
@@ -155,6 +159,11 @@ const imageName = (img: string) => img.split("/").pop()!.split(":")[0];
 
 // Pakete einzeln laden, mit lesbarem Fortschritt statt der Docker-Ausgabe. Hat sich der Fingerabdruck nicht
 // geändert (z. B. nur eine Stimme eingeschaltet), nur die fehlenden
+// Eigener Docker-Konfigordner: eine Docker-Desktop-Einstellung (credsStore "desktop") im Standardordner
+// ruft docker-credential-desktop.exe auf, das in der Engine-Umgebung nicht läuft; die Pakete sind öffentlich
+const DOCKER_CONFIG_DIR = "/opt/pagementor/docker";
+const DOCKER = `DOCKER_CONFIG=${DOCKER_CONFIG_DIR} docker`;
+
 async function pullImages(progress: Progress): Promise<void> {
   // Profile der zusätzlichen Stimmen zuerst, sonst fehlen ihre Pakete
   await writeEngineEnv();
@@ -162,7 +171,7 @@ async function pullImages(progress: Progress): Promise<void> {
   const rev = imagesRevision();
   // Merker bis v1.21.3 hieß .images-version: Stände sind frisch, nur Fehlendes laden statt alles erneut
   const mark = (await inDistro(`cat ${IMAGES_MARK_IN_DISTRO} 2>/dev/null || (test -f /opt/pagementor/.images-version && echo '${rev}')`, { timeoutMs: 30_000, quiet: true })).stdout.trim();
-  const compose = `docker compose -f ${COMPOSE_IN_DISTRO}`;
+  const compose = `${DOCKER} compose -f ${COMPOSE_IN_DISTRO}`;
   const list = await inDistro(
     mark === rev
       ? `for i in $(${compose} config --images); do docker image inspect "$i" >/dev/null 2>&1 || echo "$i"; done`
@@ -174,7 +183,7 @@ async function pullImages(progress: Progress): Promise<void> {
   if (images.length) requireSpace("die Programmpakete");
   for (const [i, img] of images.entries()) {
     progress(`Paket ${i + 1} von ${images.length}: ${imageName(img)}`, i / images.length);
-    const r = await inDistro(`docker pull -q ${img}`, { timeoutMs: 6 * 3600_000, quiet: true });
+    const r = await inDistro(`${DOCKER} pull -q ${img}`, { timeoutMs: 6 * 3600_000, quiet: true });
     if (r.code !== 0) {
       // Private Pakete auf ghcr.io: Docker darf sie ohne Anmeldung nicht laden
       if (/unauthorized|denied/i.test(`${r.stdout}\n${r.stderr}`))
@@ -201,7 +210,11 @@ async function pruneImages(progress: Progress): Promise<void> {
 // compose.yaml der installierten App in die Umgebung übernehmen, damit Korrekturen auch ohne Neueinrichtung ankommen
 async function syncCompose(): Promise<void> {
   const src = `${await linuxPath(SCRIPTS_DIR)}/compose.yaml`;
-  const r = await inDistro(`mkdir -p /opt/pagementor && (cmp -s '${src}' ${COMPOSE_IN_DISTRO} || install -m 644 '${src}' ${COMPOSE_IN_DISTRO})`, { timeoutMs: 60_000, quiet: true });
+  const r = await inDistro(
+    `mkdir -p ${DOCKER_CONFIG_DIR} && (test -f ${DOCKER_CONFIG_DIR}/config.json || echo '{}' > ${DOCKER_CONFIG_DIR}/config.json) && ` +
+      `(cmp -s '${src}' ${COMPOSE_IN_DISTRO} || install -m 644 '${src}' ${COMPOSE_IN_DISTRO})`,
+    { timeoutMs: 60_000, quiet: true }
+  );
   if (r.code !== 0) throw new RepairError(`compose.yaml nicht übernommen: ${failText(r)}`);
 }
 
@@ -209,7 +222,7 @@ async function startServices(progress: Progress): Promise<void> {
   progress("Starte Dienste …");
   await syncCompose();
   await writeEngineEnv();
-  const compose = `docker compose -f ${COMPOSE_IN_DISTRO}`;
+  const compose = `${DOCKER} compose -f ${COMPOSE_IN_DISTRO}`;
   const extra = extraServices();
   // Kerndienste zuerst und für sich: eine fehlende Zusatzstimme darf sie nicht blockieren
   const core = await inDistro(`${compose} up -d --remove-orphans ${ALWAYS_ON.join(" ")}`, {

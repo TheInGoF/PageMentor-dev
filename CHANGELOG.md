@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.25.2 – 2026-10-29
+### Fix
+- Engine-Pakete laden auch, wenn Docker Desktop installiert ist (Anmeldung über docker-credential-desktop.exe).
+- Hinweis zu sparse erscheint nicht mehr bei jedem Start, wenn WSL es nicht erlaubt.
+- Kein Fehler „Failed to parse binding result as JSON“ mehr beim Öffnen des Fensters.
+
 ## 1.25.1 – 2026-10-29
 ### New
 - Knopf „Fragen“ im Modul öffnet den Tutor mit diesem Modul als Quelle.
