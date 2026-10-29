@@ -71,6 +71,8 @@ export interface LlmConfig {
    *  OOM/timeout risk depending on GPU. On the 3090, 4000 wasn't
    *  experimentally stable — 2000-2500 is safer. */
   ttsMaxChunk?: string;
+  // "1" = Docling wandelt Diagramme in Datenpunkte um (Granite Vision, viel Grafikspeicher und Zeit)
+  doclingCharts?: string;
   /** Comma-separated preset voice IDs that are hidden from the
    *  audiobook tab's voice picker. Default policy in
    *  `audioVoiceVisibility` hides the ZH/JP/KR-native presets so the

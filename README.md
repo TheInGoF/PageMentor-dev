@@ -200,7 +200,7 @@ flowchart TD
   D1 -- yes --> DUP["Import/Dubletten"]
   D1 -- no --> D2{"Same text<br/>(text layer, MinHash)?"}
   D2 -- yes --> DUP
-  D2 -- no --> DOC["Docling: text, formulas as LaTeX, tables,<br/>pictures classified and described, charts as data"]
+  D2 -- no --> DOC["Docling: text, formulas as LaTeX, tables,<br/>pictures classified and described, charts optional"]
   DOC --> D3{"Scan: same text<br/>after OCR?"}
   D3 -- yes --> DUP
   D3 -- no --> CH["Chapters, quality check,<br/>module assignment with evidence"]
@@ -227,7 +227,8 @@ is restarted after a few idle minutes to give its memory back.
 - **Text extraction** — [Docling](https://github.com/docling-project/docling-serve)
   at its highest level: German OCR for scanned pages, formulas as LaTeX (also
   when embedded as images), accurate tables, code as text, pictures classified
-  and described, charts converted to data points; force-OCR rescue mode for PDFs
+  and described, optionally charts converted to data points (*Settings → AI →
+  PDF conversion*, needs 5–10 GB extra VRAM); force-OCR rescue mode for PDFs
   whose text layer is glyph soup.
 - **Import folder & duplicates** — drop PDFs into `Documents\PageMentor\Import`.
   Before any expensive step the app compares the file fingerprint and the text

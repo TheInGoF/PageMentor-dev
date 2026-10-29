@@ -27,6 +27,7 @@ export const settingsApi = {
           qwenTtsTopK?: string;
           qwenTtsRepetitionPenalty?: string;
           ttsMaxChunk?: string;
+          doclingCharts?: string;
           absEnabled?: string;
           absUrl?: string;
           absApiKeyPresent?: boolean;
@@ -53,6 +54,7 @@ export const settingsApi = {
       qwenTtsTopK?: string;
       qwenTtsRepetitionPenalty?: string;
       ttsMaxChunk?: string;
+      doclingCharts?: string;
       absEnabled?: string;
       absUrl?: string;
       absApiKey?: string;

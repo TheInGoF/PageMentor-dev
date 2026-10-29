@@ -115,6 +115,7 @@ export function useSettingsCore(initialTab?: SettingsTab) {
         qwenTtsTopK: llmConfig.qwenTtsTopK ?? "",
         qwenTtsRepetitionPenalty: llmConfig.qwenTtsRepetitionPenalty ?? "",
         ttsMaxChunk: llmConfig.ttsMaxChunk ?? "",
+        doclingCharts: llmConfig.doclingCharts === "1" ? "1" : "",
         absEnabled: llmConfig.absEnabled === "1" ? "1" : "",
         absUrl: llmConfig.absUrl ?? "",
         absLibraryId: llmConfig.absLibraryId ?? "",

@@ -23,6 +23,7 @@ export interface LlmConfig {
   qwenTtsTopK?: string;
   qwenTtsRepetitionPenalty?: string;
   ttsMaxChunk?: string;
+  doclingCharts?: string;
 }
 
 

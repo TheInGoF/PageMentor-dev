@@ -295,4 +295,7 @@ export const settings: Record<string, string> = {
   "ttsEngines.qwen": "Clones voices, voices from a description, preset voices. Needs the graphics card.",
   "ttsEngines.kokoroFixed": "Kokoro · Martin, Kerstin",
   "ttsEngines.always": "always included",
+  "docling.title": "PDF conversion",
+  "docling.charts": "Charts to data points",
+  "docling.chartsHint": "Slow and needs 5–10 GB of extra graphics memory. Picture descriptions and formulas always run.",
 };

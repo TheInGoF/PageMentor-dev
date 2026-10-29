@@ -14,6 +14,7 @@ import { doclingFetch, numOr, pollUntilDone, subscribeViaWs } from "./client";
 import { buildSections } from "./sections";
 import { splitEmbeddedImages, stripImageData } from "./images";
 import { httpErrorFrom } from "../../log/errors";
+import { effective } from "../llmConfig";
 
 // Titel + Autor aus den Metadaten, null bei fehlenden oder Standard-Werten
 function extractDocMetadata(
@@ -85,11 +86,13 @@ export async function extractPdfViaDocling(params: {
   form.append("do_table_structure", "true");
   form.append("do_formula_enrichment", "true");
   form.append("do_code_enrichment", "true");
-  // Bilder: einordnen (Schaltbild, Diagramm, Logo …), Diagramme in Datenpunkte, kurz beschreiben
+  // Bilder: einordnen (Schaltbild, Diagramm, Logo …) und kurz beschreiben; kleine Bilder (Logos, Symbole) nicht
   form.append("do_picture_classification", "true");
-  form.append("do_chart_extraction", "true");
   form.append("do_picture_description", "true");
-  form.append("picture_description_area_threshold", "0.02");
+  form.append("picture_description_area_threshold", "0.05");
+  // Diagramme in Datenpunkte nur auf Wunsch: Granite Vision belegt 5–10 GB Grafikspeicher und füllte die Karte
+  // so weit, dass Windows auslagerte und eine Foliensammlung die ganze Nacht brauchte
+  if (effective("doclingCharts", "PM_DOCLING_CHARTS") === "1") form.append("do_chart_extraction", "true");
   // Bilder mitliefern; die App legt sie als Dateien in der Wissensdatenbank ab
   form.append("include_images", "true");
   form.append("images_scale", "2");
