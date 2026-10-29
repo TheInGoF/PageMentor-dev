@@ -200,7 +200,8 @@ export function App() {
     if (view !== "settings") {
       setReturnTo(view);
     }
-    setSettingsTab(tab);
+    // Manche Knöpfe reichen das Klick-Ereignis durch: nur echte Reiter-Namen übernehmen
+    setSettingsTab(typeof tab === "string" ? tab : undefined);
     setView("settings");
   }
   function closeOverlayPage() {
