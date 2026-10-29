@@ -3,13 +3,14 @@ import { createHash } from "crypto";
 import { createWriteStream, existsSync, mkdirSync, rmSync } from "fs";
 import { dirname, join } from "path";
 import { APP_DIR, IS_COMPILED } from "../paths";
-import { APP_VERSION } from "../version";
 import { effective } from "../services/llmConfig";
 import type { RepairId } from "./checks";
 import {
   COMPOSE_IN_DISTRO,
   DEFAULT_LLM_MODEL,
   IMAGES_MARK_IN_DISTRO,
+  imagesRevision,
+  SCRIPTS_DIR,
   DISK_DIR,
   DISTRO,
   DOCLING_ARTIFACTS,
@@ -27,7 +28,6 @@ import { extraServices, writeEngineEnv } from "./extraEngines";
 export type Progress = (message: string, fraction?: number) => void;
 
 // Skripte: in der Exe neben dem Programm, im Repo unter engine/
-const SCRIPTS_DIR = IS_COMPILED ? join(APP_DIR, "engine") : join(APP_DIR, "..", "engine");
 // Laufende Dienste; Kokoro ist die Standardstimme, die übrigen Stimmen startet der Arbiter bei Bedarf
 const ALWAYS_ON = ["ollama", "docling", "pm-gpu-arbiter", "infinity", "meilisearch", "kokoro-tts"];
 
@@ -118,22 +118,49 @@ async function startDocker(progress: Progress): Promise<void> {
   if (r.code !== 0) await provision(progress);
 }
 
+// Lesbarer Name eines Pakets: ghcr.io/theingof/pm-kokoro-tts:latest → pm-kokoro-tts
+const imageName = (img: string) => img.split("/").pop()!.split(":")[0];
+
+// Pakete einzeln laden, mit lesbarem Fortschritt statt der Docker-Ausgabe. Hat sich der Fingerabdruck nicht
+// geändert (z. B. nur eine Stimme eingeschaltet), nur die fehlenden
 async function pullImages(progress: Progress): Promise<void> {
   // Profile der zusätzlichen Stimmen zuerst, sonst fehlen ihre Pakete
   await writeEngineEnv();
-  progress("Lade Programmpakete, das dauert beim ersten Mal (ca. 30 GB) …");
-  const r = await inDistro(`docker compose -f ${COMPOSE_IN_DISTRO} pull`, {
-    timeoutMs: 6 * 3600_000,
-    onLine: (l) => progress(l.trim().slice(0, 160)),
-  });
-  if (r.code !== 0) {
-    // Private Pakete auf ghcr.io: Docker darf sie ohne Anmeldung nicht laden
-    if (/unauthorized|denied/i.test(`${r.stdout}\n${r.stderr}`))
-      throw new RepairError("Download der Pakete verweigert: Die PageMentor-Pakete auf ghcr.io sind nicht öffentlich. Bitte auf GitHub unter Packages auf „Public“ stellen und erneut versuchen.");
-    throw new RepairError(`Download der Pakete fehlgeschlagen: ${failText(r)}`);
+  await syncCompose();
+  const rev = imagesRevision();
+  // Merker bis v1.21.3 hieß .images-version: Stände sind frisch, nur Fehlendes laden statt alles erneut
+  const mark = (await inDistro(`cat ${IMAGES_MARK_IN_DISTRO} 2>/dev/null || (test -f /opt/pagementor/.images-version && echo '${rev}')`, { timeoutMs: 30_000, quiet: true })).stdout.trim();
+  const compose = `docker compose -f ${COMPOSE_IN_DISTRO}`;
+  const list = await inDistro(
+    mark === rev
+      ? `for i in $(${compose} config --images); do docker image inspect "$i" >/dev/null 2>&1 || echo "$i"; done`
+      : `${compose} config --images`,
+    { timeoutMs: 60_000, quiet: true }
+  );
+  if (list.code !== 0) throw new RepairError(`Paketliste nicht lesbar: ${failText(list)}`);
+  const images = [...new Set(list.stdout.split("\n").map((s) => s.trim()).filter(Boolean))];
+  for (const [i, img] of images.entries()) {
+    progress(`Paket ${i + 1} von ${images.length}: ${imageName(img)}`, i / images.length);
+    const r = await inDistro(`docker pull -q ${img}`, { timeoutMs: 6 * 3600_000, quiet: true });
+    if (r.code !== 0) {
+      // Private Pakete auf ghcr.io: Docker darf sie ohne Anmeldung nicht laden
+      if (/unauthorized|denied/i.test(`${r.stdout}\n${r.stderr}`))
+        throw new RepairError(`Download verweigert für ${imageName(img)}: Das Paket auf ghcr.io ist nicht öffentlich. Bitte auf GitHub unter Packages auf „Public“ stellen und erneut versuchen.`);
+      throw new RepairError(`Download von ${imageName(img)} fehlgeschlagen: ${failText(r)}`);
+    }
   }
+  progress("Starte Dienste …", 1);
   await startServices(progress);
-  await inDistro(`echo '${APP_VERSION}' > ${IMAGES_MARK_IN_DISTRO}`, { timeoutMs: 30_000, quiet: true });
+  await inDistro(`echo '${rev}' > ${IMAGES_MARK_IN_DISTRO} && rm -f /opt/pagementor/.images-version`, { timeoutMs: 30_000, quiet: true });
+  await pruneImages(progress);
+}
+
+// Alte Paketstände wegräumen: alles, was kein Container mehr nutzt (alte Versionen, umbenannte Pakete,
+// abgeschaltete Engines). Erst nach dem Start der Dienste, sonst wären neue Stände noch unbenutzt
+async function pruneImages(progress: Progress): Promise<void> {
+  progress("Räume alte Paketstände auf …");
+  const r = await inDistro("docker image prune -a -f 2>&1 | tail -n 1", { timeoutMs: 15 * 60_000, quiet: true });
+  if (r.code === 0 && r.stdout.trim()) logEngine("info", `Alte Pakete entfernt: ${r.stdout.trim()}`);
 }
 
 // compose.yaml der installierten App in die Umgebung übernehmen, damit Korrekturen auch ohne Neueinrichtung ankommen

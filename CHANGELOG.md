@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.21.4 – 2026-10-29
+### New
+- Alte Paketstände werden nach dem Laden automatisch entfernt.
+### Change
+- Engine lädt Pakete nur, wenn sich die Pakete ändern, nicht bei jeder App-Version.
+- Fortschritt zeigt „Paket 3 von 8: Name“ statt flackernder Docker-Zeilen.
+### Fix
+- Engine-Disk wächst nicht mehr mit jedem Update.
+- Ollama wird nicht mehr bei jedem Update neu geladen.
+
 ## 1.21.3 – 2026-10-29
 ### New
 - F5-TTS und TADA haben ab dem ersten Start Stimmen zum Klonen.

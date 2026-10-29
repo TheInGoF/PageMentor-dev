@@ -1,6 +1,8 @@
 // Feste Werte der Engine-Umgebung
+import { createHash } from "crypto";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { APP_DIR } from "../paths";
+import { APP_DIR, IS_COMPILED } from "../paths";
 
 export const DISTRO = process.env.PM_ENGINE_DISTRO || "PageMentor-Engine";
 export const ENGINE_HOST = process.env.PM_ENGINE_HOST || "localhost";
@@ -16,8 +18,20 @@ export const ROOTFS_URL =
 export const ROOTFS_SUMS_URL = "https://cloud-images.ubuntu.com/wsl/releases/24.04/current/SHA256SUMS";
 
 export const COMPOSE_IN_DISTRO = "/opt/pagementor/compose.yaml";
-// App-Version, mit der die Pakete zuletzt geladen wurden; weicht sie ab, holt die Engine neue Stände
-export const IMAGES_MARK_IN_DISTRO = "/opt/pagementor/.images-version";
+// Engine-Skripte der App (compose.yaml, provision.sh), im Paket neben der Exe
+export const SCRIPTS_DIR = IS_COMPILED ? join(APP_DIR, "engine") : join(APP_DIR, "..", "engine");
+
+// Fingerabdruck der Engine-Pakete, mit dem sie zuletzt geladen wurden; nur wenn er sich ändert, holt die Engine
+// neue Stände (nicht bei jeder App-Version: Ollama auf latest kostete sonst jedes Mal ~4 GB)
+export const IMAGES_MARK_IN_DISTRO = "/opt/pagementor/.images-rev";
+
+// Der Build schreibt images.rev aus compose.yaml und den Quellordnern der Pakete; sonst zählt compose.yaml
+export function imagesRevision(): string {
+  const rev = join(SCRIPTS_DIR, "images.rev");
+  if (existsSync(rev)) return readFileSync(rev, "utf8").trim();
+  const compose = join(SCRIPTS_DIR, "compose.yaml");
+  return existsSync(compose) ? createHash("sha1").update(readFileSync(compose)).digest("hex").slice(0, 12) : "unbekannt";
+}
 export const DEFAULT_LLM_MODEL = process.env.PM_DEFAULT_LLM_MODEL || "gemma4:e4b";
 
 // Dienste mit Health-Adresse, von Windows aus gesehen

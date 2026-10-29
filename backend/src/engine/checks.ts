@@ -1,7 +1,6 @@
 // Selbsttest: jede Prüfung liefert Status, Erklärung und ggf. Reparatur
 import { statfsSync } from "fs";
 import { IS_WINDOWS } from "../paths";
-import { APP_VERSION } from "../version";
 import { effective } from "../services/llmConfig";
 import {
   COMPOSE_IN_DISTRO,
@@ -11,6 +10,7 @@ import {
   DOCLING_EXTRA_MODELS,
   doclingModelMark,
   IMAGES_MARK_IN_DISTRO,
+  imagesRevision,
   ENGINE_DIR,
   ENGINE_HOST,
   MIN_FREE_GB_ERROR,
@@ -145,8 +145,8 @@ async function checkImages(ctx: Ctx): Promise<CheckResult> {
   }
   // Vorhandene Pakete können veraltet sein (Tag latest): nach jedem App-Update einmal neu holen
   const mark = (await inDistro(`cat ${IMAGES_MARK_IN_DISTRO} 2>/dev/null`, { timeoutMs: 30_000, quiet: true })).stdout.trim();
-  if (mark !== APP_VERSION) {
-    return { id: "images", title: t, status: "warn", message: `Stand ${mark || "unbekannt"}, App ist ${APP_VERSION}: neue Pakete werden geladen`, repair: "pull-images" };
+  if (mark !== imagesRevision()) {
+    return { id: "images", title: t, status: "warn", message: "Neue Paketstände verfügbar, werden geladen", repair: "pull-images" };
   }
   return ok("images", t, "Alle vorhanden");
 }
