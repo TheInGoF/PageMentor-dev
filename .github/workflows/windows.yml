@@ -21,15 +21,22 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
+    # Release mit Versions-Tag auf main
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Version
+        id: ver
+        run: echo "v=$(tr -d '\r\n' < VERSION)" >> "$GITHUB_OUTPUT"
 
       - uses: oven-sh/setup-bun@v2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -95,7 +102,7 @@ jobs:
           if ($log -notmatch "App-Fenster bereit") { Write-Warning "Fenster hat die Seite nicht gemeldet" }
           if ($log -notmatch "Fenster geschlossen") { Write-Warning "Fenster wurde nicht über die eigene Leiste geschlossen" }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: PageMentor-Fenster
           path: dist/screens/
@@ -129,14 +136,29 @@ jobs:
           if (Test-Path "$app\PageMentor.exe") { throw "Exe nach Deinstallation noch da" }
           if (-not (Test-Path ([Environment]::GetFolderPath('MyDocuments') + "\PageMentor"))) { throw "Nutzerdaten wurden gelöscht" }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
-          name: PageMentor-Setup
+          name: PageMentor-Setup-${{ steps.ver.outputs.v }}
           path: dist/PageMentor-Setup-*.exe
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
-          name: PageMentor-windows
+          name: PageMentor-windows-${{ steps.ver.outputs.v }}
           path: dist/PageMentor
           retention-days: 14
+
+      # Auf main: Release v<VERSION> mit dem Setup, die neueste steht oben unter Releases.
+      # Gleiche Version noch einmal gebaut: Setup im bestehenden Release ersetzen
+      - name: Release auf main
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.ver.outputs.v }}"
+          setup=$(ls dist/PageMentor-Setup-*.exe | head -n 1)
+          if gh release view "v$v" > /dev/null 2>&1; then
+            gh release upload "v$v" "$setup" --clobber
+          else
+            gh release create "v$v" "$setup" --target "$GITHUB_SHA" --title "PageMentor $v" --generate-notes --latest
+          fi
