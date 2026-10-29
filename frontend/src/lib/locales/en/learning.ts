@@ -169,6 +169,8 @@ export const learning: Record<string, string> = {
   "material.recipes": "Build recipes",
   "material.recipesHint": "Build recurring task types from {n} exercises",
   "material.recipesStarted": "Building recipes",
+  "module.ask": "Ask",
+  "module.askHint": "Ask about this module's booklets: the tutor answers with sources and pages.",
   "module.tab.learn": "Learn",
   "module.learn.docs": "Booklets",
   "module.learn.summaries": "Summaries",

@@ -17,6 +17,7 @@ import { resolveModuleTab, takeModuleTab, type ModuleTab, type ModuleTarget, typ
 import { ModuleEditModal } from "./module/ModuleEditModal";
 import { OverviewNext } from "./module/OverviewNext";
 import { formatDate } from "./plan/AssessmentRow";
+import { setTutorModule, useNav } from "../lib/nav";
 
 // Vier Reiter nach dem Styleguide: höchstens zwei Ebenen, Unterbereiche als Chips
 const TABS: Array<{ id: ModuleView; key: string }> = [
@@ -47,6 +48,7 @@ export function ModuleDetail({
   const [reviewing, setReviewing] = useState<Card[] | null>(null);
   const toast = useToast();
   const [editing, setEditing] = useState(false);
+  const nav = useNav();
   const [status, setStatus] = useState<{ label: string; passed: boolean } | null>(null);
 
   // Status aus den Leistungen: bestanden (mit Note) oder nächster Termin
@@ -133,6 +135,16 @@ export function ModuleDetail({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTutorModule(m.id);
+                nav?.go("tutor");
+              }}
+              title={t("module.askHint")}
+            >
+              ✦ {t("module.ask")}
+            </Button>
             <Button variant="ghost" onClick={() => setEditing(true)} className="!px-2" title={t("common.edit")} aria-label={t("common.edit")}>
               ✎
             </Button>

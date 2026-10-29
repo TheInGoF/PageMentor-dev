@@ -16,3 +16,16 @@ export const NavContext = createContext<{ view: string; go: (v: MainView) => voi
 export function useNav() {
   return useContext(NavContext);
 }
+
+// Tutor mit vorgewähltem Modul öffnen (z. B. „Fragen“ im Modul); einmalig abholen
+let tutorModule: string | null = null;
+
+export function setTutorModule(moduleId: string): void {
+  tutorModule = moduleId;
+}
+
+export function takeTutorModule(): string | null {
+  const id = tutorModule;
+  tutorModule = null;
+  return id;
+}

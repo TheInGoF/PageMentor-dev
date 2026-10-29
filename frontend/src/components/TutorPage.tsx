@@ -26,6 +26,7 @@ import { cn } from "../lib/cn";
 import { useCloudReady } from "../lib/useCloud";
 import { CloudDialog } from "./cloud/CloudDialog";
 import { renderMarkdown } from "../lib/markdown";
+import { takeTutorModule } from "../lib/nav";
 
 interface Props {
   onOpenSettings: () => void;
@@ -44,7 +45,8 @@ export function TutorPage(props: Props) {
   const [messages, setMessages] = useState<TutorMessage[]>([]);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState("");
-  const [pendingModuleId, setPendingModuleId] = useState<string>("");
+  // Aus einem Modul geöffnet: neuer Chat mit diesem Modul als Suchraum
+  const [pendingModuleId, setPendingModuleId] = useState<string>(() => takeTutorModule() ?? "");
   const toast = useToast();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
