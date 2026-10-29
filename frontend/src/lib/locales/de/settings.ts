@@ -170,7 +170,7 @@ export const settings: Record<string, string> = {
   "settings.abs.enable": "Fertige Hörbücher zu Audiobookshelf hochladen",
   "settings.tab.engine": "Engine",
   "ttsEngines.title": "Stimmen-Engines",
-  "ttsEngines.hint": "Kokoro ist immer dabei. Gewählte Engines lädt die Engine-Umgebung, sie erscheinen im Hörbuch-Tab.",
+  "ttsEngines.hint": "Kokoro ist immer dabei. Gewählte Engines lädt die Engine-Umgebung, sie erscheinen im Hörbuch-Tab. Abgeschaltete löscht die App nach 14 Tagen samt Modellen, das gibt Platz frei.",
   "ttsEngines.kokoro": "Feste Stimmen Martin und Kerstin, sehr schnell, laufen auf dem Prozessor.",
   "ttsEngines.f5": "F5-TTS German vom HPI, klont deine Stimmproben. Gewichte nur für nicht-kommerzielle Nutzung (CC-BY-NC).",
   "ttsEngines.tada": "TADA 3B von Hume AI, klont deine Stimmproben. Braucht einen Hugging-Face-Token mit Freigabe für Llama 3.2.",

@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { IS_WINDOWS } from "../paths";
 import type { RepairId } from "../engine/checks";
+import { trackEngineSwitch } from "../engine/engineCleanup";
 import { inDistro } from "../engine/exec";
 import { engineState, runRepair, runSelftest } from "../engine/manager";
 import { enabledExtras, EXTRA_SERVICES, type ExtraEngine } from "../engine/extraEngines";
@@ -45,6 +46,7 @@ engineRoutes.post("/tts-engines", async (c) => {
   const body = (await c.req.json()) as { enabled?: string[]; hfToken?: string };
   const enabled = (body.enabled ?? []).filter((e): e is ExtraEngine => e in EXTRA_SERVICES);
   setLlmConfig({ ttsEngines: enabled.join(","), ...(body.hfToken?.trim() ? { hfToken: body.hfToken.trim() } : {}) });
+  trackEngineSwitch();
   // Unter Windows gleich übernehmen: Pakete laden, Dienste anlegen
   if (IS_WINDOWS && !engineState().task) void runRepair("apply-tts-engines").catch(() => {});
   return c.json({ enabled, applying: IS_WINDOWS });

@@ -6,6 +6,7 @@ import { registerDiagnostic } from "../log/diagnostics";
 import { runChecks, type CheckResult, type RepairId } from "./checks";
 import { DISTRO } from "./config";
 import { logEngine } from "./exec";
+import { cleanupUnusedEngines } from "./engineCleanup";
 import { ensureSparse, repairTitle, runRepairAction } from "./repairs";
 
 export interface RunningTask {
@@ -106,6 +107,19 @@ export async function autoStart(): Promise<void> {
   }
   const remaining = state.results.filter((r) => r.status === "error");
   state.autoStart = remaining.length ? "braucht-hilfe" : "fertig";
+  if (state.results.find((r) => r.id === "docker" && r.status === "ok")) startCleanupTimer();
+}
+
+// Abgeschaltete Zusatzstimmen löschen: gleich nach dem Start, dann täglich
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+function startCleanupTimer(): void {
+  if (cleanupTimer) return;
+  const tick = () => {
+    if (state.task) return;
+    void cleanupUnusedEngines().catch((err) => logEngine("warn", "Aufräumen der Stimmen fehlgeschlagen", err));
+  };
+  tick();
+  cleanupTimer = setInterval(tick, 24 * 3600_000);
 }
 
 // WSL beendet leere Umgebungen nach kurzer Zeit: offenen Prozess halten

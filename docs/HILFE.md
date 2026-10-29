@@ -57,6 +57,8 @@ Einstellungen (Zahnrad) und Diagnose bleiben oben rechts.
 
 Updates der Engine brauchen kurzzeitig bis zu 15 GB mehr. Der Datenordner wächst mit Heften
 und Hörbüchern. Das Setup warnt unter 60 GB frei, die App lädt unter 15 GB nichts Großes.
+Eine Zusatzstimme, die 14 Tage abgeschaltet bleibt, löscht die App samt Modellen. Wer sie wieder
+einschaltet, lädt sie neu herunter. Eigene Stimmproben und Designs bleiben erhalten.
 
 ## Stimmen
 

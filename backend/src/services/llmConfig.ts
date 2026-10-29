@@ -94,6 +94,8 @@ export interface LlmConfig {
   ttsEngines?: string;
   // "1" = ttsEngines auf v1.21 umgestellt (Kokoro Standard, Qwen optional)
   ttsEnginesV2?: string;
+  // JSON je abgeschalteter Zusatzstimme: seit wann aus, ob Paket und Modelle schon gelöscht
+  ttsEnginesOff?: string;
   // Hugging-Face-Token, für TADA (Llama-Freigabe)
   hfToken?: string;
 }
