@@ -142,8 +142,30 @@ and plots the trend as a sparkline.
 - **Windows 10 22H2 or Windows 11**, 64-bit.
 - **An NVIDIA graphics card** with a current driver. 12 GB VRAM works with smaller
   models, 24 GB (e.g. a used RTX 3090) runs everything comfortably.
-- **About 80 GB free disk space** for models and the engine environment.
+- **Disk space:** about 60 GB free for the base package, more with extra voices
+  (see below). The engine lives in the program folder, so both can go to a
+  second drive in the setup.
 - **Internet** for the first setup and for updates.
+
+### Disk space
+
+| Part | Download | On disk |
+| --- | --- | --- |
+| App (program, FFmpeg, Poppler) | 0.2 GB | ~0.5 GB |
+| Engine base (Ubuntu, Docker, NVIDIA toolkit) | ~1 GB | ~3 GB |
+| Docling with picture and formula models | ~13 GB | ~20 GB |
+| Ollama with `gemma4:e4b` | ~10 GB | ~14 GB |
+| Embeddings (infinity, bge-m3) | ~6 GB | ~10 GB |
+| Kokoro, GPU arbiter, search | ~1.2 GB | ~3 GB |
+| **Base package** | **~30 GB** | **~50 GB** |
+| optional Qwen3-TTS | ~13 GB | ~17 GB |
+| optional F5-TTS | ~5 GB | ~10 GB |
+| optional TADA | ~15 GB | ~20 GB |
+
+Engine updates need up to 15 GB temporarily until old package versions are
+removed. Your data folder grows with booklets and audiobooks. The setup warns
+when the chosen drive has less than 60 GB free; the app refuses large downloads
+below 15 GB.
 
 ### Tuning for your hardware
 

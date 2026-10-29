@@ -46,6 +46,18 @@ Einstellungen (Zahnrad) und Diagnose bleiben oben rechts.
 6. **Üben**: Aufgabentrainer (wenn vorhanden), Lernkarten, Probeklausuren. Übungszeit
    wird automatisch als Lernzeit gebucht.
 
+## Speicherplatz
+
+| Teil | Download | auf der Platte |
+|---|---|---|
+| App und Grundpaket der Engine (Docling, Sprachmodell, Suche, Kokoro) | ca. 30 GB | ca. 50 GB |
+| Qwen3-TTS (optional) | ca. 13 GB | ca. 17 GB |
+| F5-TTS (optional) | ca. 5 GB | ca. 10 GB |
+| TADA (optional) | ca. 15 GB | ca. 20 GB |
+
+Updates der Engine brauchen kurzzeitig bis zu 15 GB mehr. Der Datenordner wächst mit Heften
+und Hörbüchern. Das Setup warnt unter 60 GB frei, die App lädt unter 15 GB nichts Großes.
+
 ## Stimmen
 
 **Kokoro** ist immer dabei und Standard: Martin und Kerstin, schnell, auf dem Prozessor.

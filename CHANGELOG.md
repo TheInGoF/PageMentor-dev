@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.22.4 – 2026-10-29
+### New
+- Setup warnt bei wenig Platz: unter 60 GB beim Programmordner, 15 GB beim Update, 10 GB beim Datenordner.
+- Tabelle zum Speicherbedarf in README und Hilfe.
+
 ## 1.22.3 – 2026-10-29
 ### New
 - Engine-Festplatte gibt frei gewordenen Platz automatisch an Windows zurück (sparse, fstrim).

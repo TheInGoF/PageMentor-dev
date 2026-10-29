@@ -69,6 +69,10 @@ de.DataText=Der Ordner wächst mit Ihren Heften und Hörbüchern. Er wird beim D
 en.DataText=The folder grows with your booklets and audiobooks. It is kept when uninstalling.
 de.MoveData=Im bisherigen Datenordner liegen schon Daten:%n%1%n%nJetzt in den neuen Ordner verschieben?%n%2
 en.MoveData=The previous data folder already contains data:%n%1%n%nMove it to the new folder now?%n%2
+de.LowSpace=Auf %1 sind nur %2 GB frei.%n%nPageMentor braucht für App und Engine etwa 50 GB (Download etwa 30 GB). Jede zusätzliche Stimme braucht mehr: Qwen3-TTS etwa 17 GB, F5-TTS etwa 10 GB, TADA etwa 20 GB. Updates der Engine brauchen kurzzeitig bis zu 15 GB.%n%nEmpfohlen sind hier mindestens %3 GB frei. Trotzdem fortfahren?
+en.LowSpace=Only %2 GB are free on %1.%n%nPageMentor needs about 50 GB for the app and the engine (about 30 GB download). Each extra voice needs more: Qwen3-TTS about 17 GB, F5-TTS about 10 GB, TADA about 20 GB. Engine updates need up to 15 GB temporarily.%n%nAt least %3 GB free are recommended here. Continue anyway?
+de.LowSpaceData=Auf %1 sind nur %2 GB frei. Der Datenordner wächst mit Ihren Heften und Hörbüchern, empfohlen sind mindestens 10 GB. Trotzdem fortfahren?
+en.LowSpaceData=Only %2 GB are free on %1. The data folder grows with your booklets and audiobooks; at least 10 GB are recommended. Continue anyway?
 de.MoveFailed=Die Daten konnten nicht vollständig verschoben werden (robocopy %1). Bitte den Ordner von Hand verschieben.
 en.MoveFailed=The data could not be moved completely (robocopy %1). Please move the folder manually.
 
@@ -124,6 +128,43 @@ begin
   Result := RemoveBackslashUnlessRoot(DataDirPage.Values[0]);
 end;
 
+// Schon installiert: Update, dann ohne Rückfragen und Aufgabenseite
+function IsUpdate(): Boolean;
+begin
+  Result := RegKeyExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6D8E1F0A-6E2B-4C55-9A5E-3F1B2C4D5E6F}_is1');
+end;
+
+// Freier Platz in GB auf dem Laufwerk eines Ordners, -1 wenn unbekannt
+function FreeGb(const Dir: String): Integer;
+var
+  Free, Total: Int64;
+begin
+  Result := -1;
+  if GetSpaceOnDisk64(ExtractFileDrive(Dir) + '\', Free, Total) then
+    Result := Free div 1073741824;
+end;
+
+// Warnung bei wenig Platz: Engine-Festplatte liegt im Programmordner, Daten im Datenordner
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Need, Free: Integer;
+begin
+  Result := True;
+  if CurPageID = wpSelectDir then
+  begin
+    if IsUpdate() then Need := 15 else Need := 60;
+    Free := FreeGb(WizardDirValue());
+    if (Free >= 0) and (Free < Need) then
+      Result := SuppressibleMsgBox(FmtMessage(CustomMessage('LowSpace'), [ExtractFileDrive(WizardDirValue()), IntToStr(Free), IntToStr(Need)]), mbConfirmation, MB_YESNO, IDNO) = IDYES;
+  end
+  else if CurPageID = DataDirPage.ID then
+  begin
+    Free := FreeGb(DataDirPage.Values[0]);
+    if (Free >= 0) and (Free < 10) then
+      Result := SuppressibleMsgBox(FmtMessage(CustomMessage('LowSpaceData'), [ExtractFileDrive(DataDirPage.Values[0]), IntToStr(Free)]), mbConfirmation, MB_YESNO, IDNO) = IDYES;
+  end;
+end;
+
 procedure InitializeWizard();
 begin
   DataDirPage := CreateInputDirPage(wpSelectDir, CustomMessage('DataTitle'), CustomMessage('DataSub'), CustomMessage('DataText'), False, '');
@@ -166,12 +207,6 @@ var
   Code: Integer;
 begin
   Result := RunHidden(ExpandConstant('{sys}\wsl.exe'), '--status', Code) and (Code = 0);
-end;
-
-// Schon installiert: Update, dann ohne Rückfragen und Aufgabenseite
-function IsUpdate(): Boolean;
-begin
-  Result := RegKeyExists(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6D8E1F0A-6E2B-4C55-9A5E-3F1B2C4D5E6F}_is1');
 end;
 
 function RestartAfterUpdate(): Boolean;
