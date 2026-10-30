@@ -212,6 +212,17 @@ export function initDb() {
     d.exec("ALTER TABLE chapters ADD COLUMN card_text_type TEXT");
   }
 
+  // Versionsstempel: zeigen, mit welcher Anweisung/Aussprache/Stimme ein Ergebnis entstand.
+  // Weicht der Stempel ab, erzeugt der nächste Hörbuch-Lauf das Teil neu (services/stamps.ts)
+  if (!chapterCols.some((c) => c.name === "audio_text_stamp")) d.exec("ALTER TABLE chapters ADD COLUMN audio_text_stamp TEXT");
+  const audioCols = d.prepare("PRAGMA table_info(audio)").all() as Array<{ name: string }>;
+  if (!audioCols.some((c) => c.name === "stamp")) d.exec("ALTER TABLE audio ADD COLUMN stamp TEXT");
+  const stampCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!stampCols.some((c) => c.name === "audio_intro_text_tts_stamp")) d.exec("ALTER TABLE documents ADD COLUMN audio_intro_text_tts_stamp TEXT");
+  if (!stampCols.some((c) => c.name === "audio_intro_stamp")) d.exec("ALTER TABLE documents ADD COLUMN audio_intro_stamp TEXT");
+  // Eintrag in Audiobookshelf zum Buch: neue Fassungen ersetzen ihn statt ein zweites Buch anzulegen
+  if (!stampCols.some((c) => c.name === "abs_item_id")) d.exec("ALTER TABLE documents ADD COLUMN abs_item_id TEXT");
+
   const docCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
   if (!docCols.some((c) => c.name === "author")) {
     // Extracted from Docling metadata (PDF metadata field). If the

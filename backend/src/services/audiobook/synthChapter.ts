@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import { segmentText } from "../../tts/segment";
+import { applyPronunciation } from "../pronunciation";
 import { synthesizeChunk, interChunkPause, maxChunkFor } from "../../tts/synth";
 import { concatMp3WithGaps, normalizeAndTag } from "../../tts/ffmpeg";
 import type { Voice } from "../../tts/engines/base";
@@ -44,10 +45,14 @@ export async function synthesizeChapter(params: {
 
   let success = false;
   try {
+    // Deutsche Stimmen: Aussprache-Liste (Anglizismen, Produktnamen) direkt vor der Sprachausgabe
+    const speak = voice.locale.startsWith("de") ? (t: string) => applyPronunciation(t) : (t: string) => t;
     // F5 und Co. sprechen Zeilenumbrüche nicht als Pause: im Intro darum Zeile für Zeile
-    const segments = params.intro
-      ? chapter.text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => ({ paragraphs: [l] }))
-      : segmentText(chapter.text, maxChunkFor(voice.engine));
+    const segments = (
+      params.intro
+        ? chapter.text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => ({ paragraphs: [l] }))
+        : segmentText(chapter.text, maxChunkFor(voice.engine))
+    ).map((seg) => ({ ...seg, paragraphs: seg.paragraphs.map(speak) }));
     if (segments.length === 0) {
       // Sollte nach der Prüfung oben nicht vorkommen
       throw new Error("No segments from chapter text.");
@@ -63,7 +68,7 @@ export async function synthesizeChapter(params: {
     let skippedCount = 0;
     for (let i = 0; i < segments.length; i++) {
       if (signal.aborted) throw new AudiobookCanceled();
-      const explicitTitle = chapter.title?.trim();
+      const explicitTitle = chapter.title?.trim() ? speak(chapter.title.trim()) : undefined;
       let announcement: string | undefined;
       if (i === 0) {
         if (explicitTitle) {

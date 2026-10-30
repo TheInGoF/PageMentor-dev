@@ -6,6 +6,8 @@ import { db } from "../../db";
 import { generate } from "../llm";
 import { withGemmaLock } from "../gemmaLock";
 import { introSystemFor } from "./prompts";
+import { gemmaStamp } from "../stamps";
+import { expandAbbreviations } from "../abbreviations";
 import { runJob } from "../../log/jobs";
 
 export interface IntroPreprocessResult {
@@ -23,7 +25,7 @@ async function preprocessIntroForAudioImpl(params: {
   const d = db();
   const row = d
     .prepare(
-      "SELECT id, language, audio_intro_text, audio_intro_text_tts, audio_intro_text_tts_model FROM documents WHERE id = ?"
+      "SELECT id, language, audio_intro_text, audio_intro_text_tts, audio_intro_text_tts_model, audio_intro_text_tts_stamp FROM documents WHERE id = ?"
     )
     .get(params.docId) as
     | {
@@ -32,15 +34,20 @@ async function preprocessIntroForAudioImpl(params: {
         audio_intro_text: string | null;
         audio_intro_text_tts: string | null;
         audio_intro_text_tts_model: string | null;
+        audio_intro_text_tts_stamp: string | null;
       }
     | undefined;
   if (!row) throw new Error(`Document ${params.docId} not found`);
+  // Gecacht nur, wenn von Hand bearbeitet oder mit der aktuellen Anweisung entstanden
+  const stamp = gemmaStamp("intro", row.language);
+  const fresh = row.audio_intro_text_tts_model === "manual-edit" || row.audio_intro_text_tts_stamp === stamp;
   if (!row.audio_intro_text || row.audio_intro_text.trim().length === 0) {
     throw new Error("Intro text is empty");
   }
 
   if (
     !params.force &&
+    fresh &&
     row.audio_intro_text_tts &&
     row.audio_intro_text_tts.trim().length > 0
   ) {
@@ -54,7 +61,8 @@ async function preprocessIntroForAudioImpl(params: {
   const introLabel = `intro ${params.docId.slice(0, 8)}`;
   return withGemmaLock(introLabel, async () => {
     const tStart = Date.now();
-    const sourceText = row.audio_intro_text!;
+    // Deterministischer Pre-Pass wie bei Kapiteln: Titel und Abkürzungen ausschreiben
+    const sourceText = expandAbbreviations(row.audio_intro_text!, row.language);
     console.log(
       `[audio-preprocess] ${introLabel} START (${sourceText.length} chars source)`
     );
@@ -86,8 +94,8 @@ async function preprocessIntroForAudioImpl(params: {
     }
 
     d.prepare(
-      "UPDATE documents SET audio_intro_text_tts = ?, audio_intro_text_tts_model = ? WHERE id = ?"
-    ).run(piece, result.model, params.docId);
+      "UPDATE documents SET audio_intro_text_tts = ?, audio_intro_text_tts_model = ?, audio_intro_text_tts_stamp = ? WHERE id = ?"
+    ).run(piece, result.model, stamp, params.docId);
 
     console.log(
       `[audio-preprocess] ${introLabel} DONE in ${((Date.now() - tStart) / 1000).toFixed(1)}s ` +

@@ -124,6 +124,13 @@ export const DE_COMPOUND: Rule[] = [
 
 // Titel vor Großbuchstabe, also vor einem Namen
 export const DE_TITLES: Rule[] = [
+  // Zusammengesetzte Doktortitel zuerst, sonst bleibt "-Ing." übrig
+  { pattern: /\bDr\.\s*-\s*Ing\.\s*/g, replacement: "Doktor-Ingenieur " },
+  { pattern: /\bDr\.\s*rer\.\s*nat\.\s*/g, replacement: "Doktor der Naturwissenschaften " },
+  { pattern: /\bDr\.\s*rer\.\s*pol\.\s*/g, replacement: "Doktor der Staatswissenschaften " },
+  { pattern: /\bDr\.\s*phil\.\s*/g, replacement: "Doktor der Philosophie " },
+  { pattern: /\bDr\.\s*med\.\s*/g, replacement: "Doktor der Medizin " },
+  { pattern: /\bDr\.\s*jur\.\s*/g, replacement: "Doktor der Rechte " },
   { pattern: /\bDr\.\s+(?=[A-ZÄÖÜ])/g, replacement: "Doktor " },
   { pattern: /\bProf\.\s+(?=[A-ZÄÖÜ])/g, replacement: "Professor " },
   { pattern: /\bDipl\.\s*-?\s*Ing\.?\s+(?=[A-ZÄÖÜ])/g, replacement: "Diplom-Ingenieur " },

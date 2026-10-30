@@ -8,6 +8,7 @@ import { expandAbbreviations } from "../abbreviations";
 import { withGemmaLock } from "../gemmaLock";
 import { cleanupHints } from "../promptHints";
 import { systemFor } from "./prompts";
+import { gemmaStamp } from "../stamps";
 import {
   stripLeadingSectionNumbers,
   splitForPreprocess,
@@ -50,16 +51,23 @@ async function preprocessChapterForAudioImpl(params: {
   const d = db();
   const row = d
     .prepare(
-      "SELECT id, text, audio_text, audio_text_model, document_id, number, title FROM chapters WHERE id = ?"
+      "SELECT id, text, audio_text, audio_text_model, audio_text_stamp, document_id, number, title FROM chapters WHERE id = ?"
     )
     .get(params.chapterId) as
-    | (ChapterRow & { number: number; title: string })
+    | (ChapterRow & { number: number; title: string; audio_text_stamp: string | null })
     | undefined;
   if (!row) throw new Error(`Chapter ${params.chapterId} not found`);
   const chapterLabel = `chapter ${row.number}${row.title ? ` "${row.title.slice(0, 40)}"` : ""}`;
 
+  // Gilt nur, wenn von Hand bearbeitet oder mit der aktuellen Anweisung entstanden
+  const stamp = gemmaStamp("chapter", params.language);
+  const fresh = row.audio_text_model === "manual-edit" || row.audio_text_stamp === stamp;
+  if (!params.force && row.audio_text && row.audio_text.trim().length > 0 && !fresh) {
+    console.log(`[audio-preprocess] ${chapterLabel} veraltet (andere Anweisung oder Version), neu aufbereiten`);
+  }
   if (
     !params.force &&
+    fresh &&
     row.audio_text &&
     row.audio_text.trim().length > 0
   ) {
@@ -247,8 +255,8 @@ async function preprocessChapterForAudioImpl(params: {
     }
 
     d.prepare(
-      "UPDATE chapters SET audio_text = ?, audio_text_model = ? WHERE id = ?"
-    ).run(cleaned, lastModel, params.chapterId);
+      "UPDATE chapters SET audio_text = ?, audio_text_model = ?, audio_text_stamp = ? WHERE id = ?"
+    ).run(cleaned, lastModel, stamp, params.chapterId);
 
     const totalSeconds = ((Date.now() - tStart) / 1000).toFixed(1);
     console.log(

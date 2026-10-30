@@ -7,7 +7,7 @@ import { startupHeader, startupStep, startupDone, startupNote } from "./log/star
 import { requestLogger, onRouteError } from "./log/http";
 import { logRoutes, clientLogRoutes } from "./routes/logs";
 import { batchRoutes } from "./routes/batch";
-import { promptRoutes } from "./routes/prompts";
+import { promptRoutes, pronunciationRoutes } from "./routes/prompts";
 import { studyRoutes } from "./routes/study";
 import { knowledgeRoutes, startQueue, watchImportFolder } from "./routes/knowledge";
 import { cloudRoutes } from "./routes/cloud";
@@ -102,6 +102,7 @@ app.route("/api/knowledge", knowledgeRoutes);
 app.route("/api/cloud", cloudRoutes);
 app.route("/api/batch", batchRoutes);
 app.route("/api/prompts", promptRoutes);
+app.route("/api/pronunciation", pronunciationRoutes);
 // Für den zweiten Start: Fenster der laufenden Instanz
 app.get("/api/app/window", (c) => c.json({ hwnd: appWindowHandle() }));
 app.post("/api/app/quit", (c) => {

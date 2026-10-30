@@ -238,22 +238,22 @@ async function bookSteps(item: BatchItem): Promise<void> {
   const row = docRow(item.docId)!;
   if (!findVoice(s.voiceId, row.language)) throw new Error(`Stimme nicht gefunden: ${s.voiceId}`);
 
-  // Intro (Vorschlag aus den Metadaten, Gemma für die Aussprache), Bereinigung, Kapitel und M4B: alles im Buch-Lauf, Fertiges wird übersprungen
+  // Intro (Vorschlag aus den Metadaten, Gemma für die Aussprache), Bereinigung, Kapitel und M4B im Buch-Lauf.
+  // Er überspringt, was fertig und aktuell ist (Versionsstempel), und baut veraltete Teile neu
   const book = join(DATA_DIR, "audio", item.docId, "book.m4b");
-  const intro = join(DATA_DIR, "audio", item.docId, "intro.mp3");
-  if (!existsSync(book) || !existsSync(intro) || missingChapters(item.docId) > 0) {
-    await waitIdle();
-    set(item, "audio");
-    await generateAudiobook({ docId: item.docId, voiceId: s.voiceId, rate: s.rate, model: s.model });
-    if (cancelRequested) return;
-    if (!existsSync(book)) {
-      const missing = missingChapters(item.docId);
-      throw new Error(missing ? `Sprachausgabe fehlgeschlagen, ${missing} Kapitel ${missing === 1 ? "fehlt" : "fehlen"} (Details im Log)` : "Hörbuch-Datei nicht erstellt (Details im Log)");
-    }
+  await waitIdle();
+  set(item, "audio");
+  const { regenerated } = await generateAudiobook({ docId: item.docId, voiceId: s.voiceId, rate: s.rate, model: s.model });
+  if (cancelRequested) return;
+  if (!existsSync(book)) {
+    const missing = missingChapters(item.docId);
+    throw new Error(missing ? `Sprachausgabe fehlgeschlagen, ${missing} Kapitel ${missing === 1 ? "fehlt" : "fehlen"} (Details im Log)` : "Hörbuch-Datei nicht erstellt (Details im Log)");
   }
   const missing = missingChapters(item.docId);
 
-  if (s.abs) {
+  // Hochladen, wenn neu erzeugt wurde oder noch nie hochgeladen; die neue Fassung ersetzt die alte
+  const uploaded = !!(db().prepare("SELECT abs_item_id FROM documents WHERE id = ?").get(item.docId) as { abs_item_id: string | null } | undefined)?.abs_item_id;
+  if (s.abs && (regenerated > 0 || !uploaded)) {
     set(item, "abs");
     await uploadBook(item.docId);
   }

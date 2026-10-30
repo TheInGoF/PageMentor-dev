@@ -3,6 +3,17 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.28.0 – 2026-10-30
+### New
+- Aussprache-Liste für deutsche Stimmen (Einstellungen → Stimmen), z. B. „PageMentor → Pejdsch-Mentor“; greift vor jeder Sprachausgabe.
+- Versionsstempel für Gemma-Fassung, Intro und Kapitel-Audio: Neue Anweisungen, Aussprache, Stimme oder Tempo erneuern beim nächsten Lauf nur die veralteten Teile, ohne vorher etwas zu löschen.
+### Change
+- Gemma schreibt im Intro Abkürzungen aus und setzt Anglizismen in deutsche Lautschrift; Personennamen bleiben.
+- Kapitel-Anweisung: Anglizismen ohne deutsche Übersetzung in deutscher Lautschrift statt widersprüchlicher Regeln.
+- Neue Hörbuch-Fassung ersetzt die alte in Audiobookshelf statt ein zweites Buch anzulegen; der Hörbuch-Lauf lädt nur hoch, wenn sich etwas geändert hat.
+### Fix
+- Intro löst Titel wie „Prof. Dr.-Ing.“ auf (vorher nur in Kapiteln, „Dr.-Ing.“ gar nicht).
+
 ## 1.27.0 – 2026-10-30
 ### New
 - Gemma-Anweisungen in den Einstellungen bearbeitbar (KI → Gemma-Anweisungen), mit Knopf zurück zum Original und Hinweis, wenn ein Update das Original geändert hat.

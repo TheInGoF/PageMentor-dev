@@ -10,6 +10,7 @@ import { running, type Chapter } from "./state";
 import { chapterFile, deleteAudioForChapter, relPath, upsertAudio } from "./files";
 import { synthesizeChapter } from "./synthChapter";
 import { runJob } from "../../log/jobs";
+import { ttsStamp } from "../stamps";
 
 // Audio für EIN Kapitel
 // Ohne LLM-Aufbereitung, ohne M4B, ohne Fehlerzähler
@@ -117,6 +118,7 @@ async function generateSingleChapterAudioImpl(params: {
       voice: params.voiceId,
       engine: voice.engine,
       status: "done",
+      stamp: ttsStamp(effectiveText, params.voiceId, rate, voice.locale),
     });
 
     // M4B ist jetzt veraltet: löschen
@@ -160,6 +162,14 @@ async function generateSingleChapterAudioImpl(params: {
   } finally {
     if (!alreadyRunning) running.delete(row.document_id);
   }
+}
+
+// Jede Zeile mit Satzzeichen beenden: ohne liest die Stimme Zeilen ineinander
+export function introSpeechText(text: string): string {
+  return text
+    .split("\n")
+    .map((l) => (l.trim() && !/[.!?…:]$/.test(l.trim()) ? `${l.trimEnd()}.` : l))
+    .join("\n");
 }
 
 // Intro-Audio vor dem ersten Kapitel
@@ -219,11 +229,7 @@ async function generateIntroAudioImpl(params: {
       chapterChars: [params.text.length],
     });
   }
-  // Jede Zeile mit Satzzeichen beenden: ohne liest die Stimme Zeilen ineinander
-  params.text = params.text
-    .split("\n")
-    .map((l) => (l.trim() && !/[.!?…:]$/.test(l.trim()) ? `${l.trimEnd()}.` : l))
-    .join("\n");
+  params.text = introSpeechText(params.text);
   // Leerer Titel: keine Ansage "Intro." vorweg
   const synth: Chapter = {
     id: `intro-${params.docId}`,
@@ -256,6 +262,8 @@ async function generateIntroAudioImpl(params: {
           total,
         }),
     });
+    // Stempel merken: der Buch-Lauf erzeugt das Intro nur neu, wenn sich Text, Stimme oder Tempo ändern
+    db().prepare("UPDATE documents SET audio_intro_stamp = ? WHERE id = ?").run(ttsStamp(params.text, params.voiceId, rate, voice.locale), params.docId);
     // Vor dem Abschluss-Event austragen, sonst hängt die UI
     if (!alreadyRunning) running.delete(params.docId);
     say({

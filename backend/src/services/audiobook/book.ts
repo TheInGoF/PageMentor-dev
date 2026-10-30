@@ -8,7 +8,8 @@ import { findVoice, defaultVoiceFor } from "../../tts/voices";
 import { preprocessChapterForAudio, preprocessAvailable } from "../audioPreprocess";
 import { introTtsText } from "./intro";
 import { defaultIntroText, introTitle } from "../batch/introText";
-import { generateIntroAudio } from "./single";
+import { generateIntroAudio, introSpeechText } from "./single";
+import { ttsStamp } from "../stamps";
 import { ensureCover } from "../covers";
 import { emit } from "../events";
 import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
@@ -31,8 +32,9 @@ async function generateAudiobookImpl(params: {
   rate?: string;
   // LLM für die Aufbereitung, leer = Standard aus den Settings
   model?: string;
-}): Promise<void> {
-  if (running.has(params.docId)) return;
+  // Rückgabe: wie viele Teile (Intro, Kapitel) neu erzeugt wurden; 0 = Hörbuch unverändert
+}): Promise<{ regenerated: number }> {
+  if (running.has(params.docId)) return { regenerated: 0 };
   const abortController = new AbortController();
   const runState: RunState = {
     ctrl: abortController,
@@ -121,23 +123,26 @@ async function generateAudiobookImpl(params: {
     console.warn(tLang(lang, "msg.audioPreprocessUnavailable"));
   }
 
-  // Intro ohne Audio: vor den Kapiteln mit derselben Stimme vertonen. Fehlt der Text, den Vorschlag
-  // aus den Metadaten übernehmen (wie im Hörbuch-Tab); Gemma bereinigt ihn danach für die Aussprache
+  // Intro vor den Kapiteln mit derselben Stimme. Fehlt der Text, den Vorschlag aus den Metadaten
+  // übernehmen (wie im Hörbuch-Tab); Gemma bereinigt ihn für die Aussprache. Neu erzeugt wird es,
+  // wenn das Audio fehlt oder sein Stempel nicht mehr zu Text, Stimme und Tempo passt
+  let regenerated = 0;
   const introFile = join(audioDir, "intro.mp3");
-  if (!existsSync(introFile)) {
-    const saved = d.prepare("SELECT audio_intro_text FROM documents WHERE id = ?").get(doc.id) as { audio_intro_text: string | null } | undefined;
-    if (!saved?.audio_intro_text?.trim()) {
-      const text = defaultIntroText({ title: introTitle(doc.doc_title, doc.title), author: doc.author, language: doc.language }, voice, params.model ?? "");
-      d.prepare("UPDATE documents SET audio_intro_text = ?, audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?").run(text, doc.id);
-    }
-    const introText = await introTtsText(doc.id, params.model);
-    if (introText) {
-      try {
-        await generateIntroAudio({ docId: doc.id, text: introText, voiceId, rate, inBook: true });
-      } catch (err) {
-        // Auch bei Abbruch nicht werfen: die Kapitelschleife prüft das Signal und räumt auf
-        console.warn(`[audiobook] intro failed, book continues without it:`, err instanceof Error ? err.message : err);
-      }
+  const saved = d.prepare("SELECT audio_intro_text, audio_intro_stamp FROM documents WHERE id = ?").get(doc.id) as
+    | { audio_intro_text: string | null; audio_intro_stamp: string | null }
+    | undefined;
+  if (!saved?.audio_intro_text?.trim()) {
+    const text = defaultIntroText({ title: introTitle(doc.doc_title, doc.title), author: doc.author, language: doc.language }, voice, params.model ?? "");
+    d.prepare("UPDATE documents SET audio_intro_text = ?, audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?").run(text, doc.id);
+  }
+  const introText = await introTtsText(doc.id, params.model);
+  if (introText && !(existsSync(introFile) && saved?.audio_intro_stamp === ttsStamp(introSpeechText(introText), voiceId, rate, locale))) {
+    try {
+      await generateIntroAudio({ docId: doc.id, text: introText, voiceId, rate, inBook: true });
+      regenerated++;
+    } catch (err) {
+      // Auch bei Abbruch nicht werfen: die Kapitelschleife prüft das Signal und räumt auf
+      console.warn(`[audiobook] intro failed, book continues without it:`, err instanceof Error ? err.message : err);
     }
   }
 
@@ -157,47 +162,6 @@ async function generateAudiobookImpl(params: {
       runState.currentChapter = i + 1;
       runState.chunkCurrent = 0;
       runState.chunkTotal = 0;
-
-      // Fertige Kapitel nicht neu erzeugen
-      const existingAudio = d
-        .prepare(
-          "SELECT status, duration_ms FROM audio WHERE chapter_id = ?"
-        )
-        .get(ch.id) as
-        | { status: string; duration_ms: number }
-        | undefined;
-
-      // Alte Zeilen ohne done-Status verwerfen, sonst ewig "fehlgeschlagen"
-      if (existingAudio && existingAudio.status !== "done") {
-        console.log(
-          `[audiobook] chapter ${ch.number}: dropping stale audio row (status=${existingAudio.status}) before re-generate`
-        );
-        deleteAudioForChapter(ch.id, outFile);
-      }
-
-      if (
-        existingAudio?.status === "done" &&
-        existsSync(outFile)
-      ) {
-        console.log(
-          `[audiobook] chapter ${ch.number} already done — skip synth (${existingAudio.duration_ms}ms existing)`
-        );
-        successfulChapterFiles.push(outFile);
-        chapterDurations.push({
-          title: ch.title || chapterLabel(lang, ch.number),
-          durationMs: existingAudio.duration_ms,
-        });
-        // Fortschritt trotzdem melden
-        emit({
-          phase: "audiobook.chapter.done",
-          docId: doc.id,
-          chapterId: ch.id,
-          chapterNumber: ch.number,
-          current: i + 1,
-          total: chapters.length,
-        });
-        continue;
-      }
 
       // LLM-Aufbereitung, gecacht in chapters.audio_text
       // Bei Fehler: Rohtext, grobes Hörbuch schlägt keins
@@ -227,6 +191,50 @@ async function generateAudiobookImpl(params: {
             err
           );
         }
+      }
+
+      // Fertige Kapitel nicht neu erzeugen
+      const existingAudio = d
+        .prepare(
+          "SELECT status, duration_ms, stamp FROM audio WHERE chapter_id = ?"
+        )
+        .get(ch.id) as
+        | { status: string; duration_ms: number; stamp: string | null }
+        | undefined;
+      // Stempel aus dem gesprochenen Text: neue Anweisung, Aussprache, Stimme oder Tempo → neu erzeugen
+      const stamp = ttsStamp(chapterText, voiceId, rate, locale);
+
+      // Alte Zeilen ohne done-Status verwerfen, sonst ewig "fehlgeschlagen"
+      if (existingAudio && existingAudio.status !== "done") {
+        console.log(
+          `[audiobook] chapter ${ch.number}: dropping stale audio row (status=${existingAudio.status}) before re-generate`
+        );
+        deleteAudioForChapter(ch.id, outFile);
+      }
+
+      if (
+        existingAudio?.status === "done" &&
+        existingAudio.stamp === stamp &&
+        existsSync(outFile)
+      ) {
+        console.log(
+          `[audiobook] chapter ${ch.number} already done and current — skip synth (${existingAudio.duration_ms}ms existing)`
+        );
+        successfulChapterFiles.push(outFile);
+        chapterDurations.push({
+          title: ch.title || chapterLabel(lang, ch.number),
+          durationMs: existingAudio.duration_ms,
+        });
+        // Fortschritt trotzdem melden
+        emit({
+          phase: "audiobook.chapter.done",
+          docId: doc.id,
+          chapterId: ch.id,
+          chapterNumber: ch.number,
+          current: i + 1,
+          total: chapters.length,
+        });
+        continue;
       }
 
       emit({
@@ -269,7 +277,9 @@ async function generateAudiobookImpl(params: {
           voice: voiceId,
           engine: engineId,
           status: "done",
+          stamp,
         });
+        regenerated++;
 
         successfulChapterFiles.push(outFile);
         chapterDurations.push({
@@ -332,7 +342,7 @@ async function generateAudiobookImpl(params: {
             `sidecar is back.`,
         });
         running.delete(params.docId);
-        return;
+        return { regenerated };
       }
       if (successfulChapterFiles.length > 0) {
         emit({
@@ -425,6 +435,7 @@ async function generateAudiobookImpl(params: {
   } finally {
     running.delete(params.docId);
   }
+  return { regenerated };
 }
 
 export function generateAudiobook(...args: Parameters<typeof generateAudiobookImpl>): ReturnType<typeof generateAudiobookImpl> {

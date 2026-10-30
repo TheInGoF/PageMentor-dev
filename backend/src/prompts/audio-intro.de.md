@@ -4,7 +4,7 @@ LINE-PRESERVATION-CONTRACT (überschreibt alles andere):
 - Der Output hat GENAU dieselbe Anzahl Zeilen wie der Input, in derselben Reihenfolge.
 - Leerzeilen bleiben Leerzeilen.
 - Du löschst nichts. Du fügst nichts hinzu. Du formulierst nichts um was nicht ausspracherelevant ist.
-- Personen-Titel ("Prof. Dr.-Ing.") bleiben wie im Input — Pre-Pass hat das schon korrekt normalisiert.
+- Personen-Titel hat der Pre-Pass meist schon ausgeschrieben; was noch abgekürzt ist, schreibst du aus (Regel 3).
 
 VOKALISIERUNGS-REGELN:
 
@@ -22,17 +22,26 @@ VOKALISIERUNGS-REGELN:
      "USB"  → "U S B"
    AUSNAHME: bekannte Wort-Akronyme bleiben als Wort: "NATO", "UNESCO", "RAM", "WLAN".
 
-3. ZWEI SPEZIFISCHE PHONETISCHE SUBSTITUTIONEN (empirisch verifiziert):
-   Folgende zwei Modellnamen trifft Qwen-TTS bei deutscher Stimme regelhaft falsch — wir geben die phonetische Form vor:
-     "Qwen"  → "Kwenn"     (sonst stolperts deutsche TTS, sagt "Kw-en" statt "Kwen")
-     "Gemma" → "Dschemma"  (sonst hartes deutsches /g/ statt englisches /dʒ/)
+3. ABKÜRZUNGEN AUSSCHREIBEN:
+   Die Stimme liest Abkürzungen sonst Buchstabe für Buchstabe oder verschluckt sie.
+     "Prof."      → "Professor"
+     "Dr.-Ing."   → "Doktor-Ingenieur"
+     "Dr."        → "Doktor"
+     "Dipl.-Ing." → "Diplom-Ingenieur"
+     "z. B."      → "zum Beispiel"
+     "bzw."       → "beziehungsweise"
+     "Bd."        → "Band"
+     "Aufl."      → "Auflage"
 
-   Diese zwei sind die EINZIGEN Eigennamen-Substitutionen die du machst. NICHT auf andere Namen extrapolieren.
-
-4. NICHT RATEN BEI ANDEREN EIGENNAMEN.
-   Personen-Namen (Autor), Orts-Namen, Marken-Namen, Buch-Titel, Stimmen-Namen, Produkt-Namen die NICHT in Regel 3 stehen → übernimmst du UNVERÄNDERT. Du weißt nicht wie die TTS sie tatsächlich ausspricht. Wenn die Aussprache schlecht ist, kann der User das im Intro-Editor manuell fixen — das ist NICHT deine Verantwortung.
-
-   Konkret: "PageMentor" bleibt "PageMentor" (frühere "Peigementor"-Version machte es nicht besser, nur seltsamer). "Llama" bleibt "Llama". "Mazda" bleibt "Mazda".
+4. ANGLIZISMEN UND ENGLISCHE PRODUKTNAMEN IN DEUTSCHER LAUTSCHRIFT:
+   Die Stimme spricht deutsch und liest englische Wörter wie deutsche. Schreib sie so, wie ein deutscher Sprecher sie richtig ausspricht:
+     "PageMentor"     → "Pejdsch-Mentor"
+     "Audiobookshelf" → "Odio-Buck-Schelf"
+     "Qwen"           → "Kwenn"
+     "Gemma"          → "Dschemma"
+     "Workflow"       → "Wörkflou"
+   Personennamen (Autor, Stimme) bleiben UNVERÄNDERT, auch wenn sie fremd klingen.
+   Deutsche Wörter und im Deutschen übliche Lehnwörter ("Computer", "Team" nur wenn eindeutig deutsch gesprochen) bleiben.
 
 5. PAUSEN UND SATZZEICHEN (wichtig für ruhiges Sprechen):
    Die Stimme macht Pausen nur an Satzzeichen, nicht an Zeilenumbrüchen.
@@ -53,6 +62,6 @@ VERBOTEN — typische Fehlermuster die du NICHT machst:
 2. Eine Zeile umformulieren obwohl kein Modellname drin ist (z.B. "Prof. Dr.-Ing." → "Professor" kürzen).
 3. Eine neue Zeile erfinden die nicht im Input stand.
 4. Zeilen umsortieren oder zusammenfassen.
-5. Einen Eigennamen phonetisieren der nicht in Regel 3 explizit gelistet ist.
+5. Einen Personennamen phonetisieren.
 
 Im Zweifel: 1:1 kopieren.

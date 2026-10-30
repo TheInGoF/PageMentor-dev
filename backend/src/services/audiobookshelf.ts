@@ -234,6 +234,9 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   }
   const folderId = folders[0].id;
 
+  // Neue Fassung ersetzt die alte: vorhandenen Eintrag samt Dateien löschen, dann neu hochladen
+  await removePreviousUpload(url, libraryId, docId, bookTitle, authorName);
+
   const form = new FormData();
   form.append("library", libraryId);
   form.append("folder", folderId);
@@ -351,6 +354,8 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
     }
   }
 
+  if (uploadData.libraryItemId) db().prepare("UPDATE documents SET abs_item_id = ? WHERE id = ?").run(uploadData.libraryItemId, docId);
+
   // === Metadata PATCH ===
   // ABS /api/upload creates the LibraryItem from upload metadata and
   // the M4B tags. With the ItemId we can cleanly set the fields we
@@ -416,4 +421,40 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
       ? `${url}/item/${uploadData.libraryItemId}`
       : undefined,
   };
+}
+
+// Früheren Upload dieses Buchs finden (gemerkte ID, sonst gleicher Titel und Autor) und mit Dateien löschen.
+// Hörfortschritt in Audiobookshelf hängt am Eintrag und beginnt danach von vorn.
+async function removePreviousUpload(url: string, libraryId: string, docId: string, title: string, author: string): Promise<void> {
+  const stored = (db().prepare("SELECT abs_item_id FROM documents WHERE id = ?").get(docId) as { abs_item_id: string | null } | undefined)?.abs_item_id;
+  let itemId: string | null = null;
+  if (stored) {
+    const r = await fetch(`${url}/api/items/${stored}`, { headers: absHeaders(), signal: AbortSignal.timeout(8_000) }).catch(() => null);
+    if (r?.ok) itemId = stored;
+  }
+  if (!itemId) {
+    try {
+      const sr = await fetch(`${url}/api/libraries/${libraryId}/search?q=${encodeURIComponent(title)}&limit=10`, { headers: absHeaders(), signal: AbortSignal.timeout(8_000) });
+      if (sr.ok) {
+        const data = (await sr.json()) as {
+          book?: Array<{ libraryItem?: { id?: string; media?: { metadata?: { title?: string; authorName?: string } } } }>;
+        };
+        const norm = (s?: string) => (s ?? "").trim().toLowerCase();
+        // Nur bei eindeutigem Treffer: gleicher Titel und gleicher Autor
+        const hits = (data.book ?? []).filter(
+          (b) => norm(b.libraryItem?.media?.metadata?.title) === norm(title) && norm(b.libraryItem?.media?.metadata?.authorName) === norm(author)
+        );
+        if (hits.length === 1) itemId = hits[0].libraryItem?.id ?? null;
+      }
+    } catch (e) {
+      console.warn(`[abs] search for previous upload failed:`, e);
+    }
+  }
+  if (!itemId) return;
+  const del = await fetch(`${url}/api/items/${itemId}?hard=1`, { method: "DELETE", headers: absHeaders(), signal: AbortSignal.timeout(30_000) });
+  if (!del.ok) throw new Error(`ABS: alte Fassung nicht gelöscht (${del.status})`);
+  console.log(`[abs] previous upload ${itemId} removed, uploading new version`);
+  db().prepare("UPDATE documents SET abs_item_id = NULL WHERE id = ?").run(docId);
+  // ABS braucht einen Moment, bis der Ordner weg ist
+  await new Promise((r) => setTimeout(r, 2000));
 }

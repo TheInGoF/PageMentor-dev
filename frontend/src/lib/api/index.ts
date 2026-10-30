@@ -8,7 +8,7 @@ export type { Assessment, AssessmentKind, AssessmentStatus, StudyProgress, ExamS
 export type { CloudTask, CloudStatus, CloudPreview, CloudResult } from "./cloud";
 export type { UpdateInfo } from "./update";
 export type { AudiobookBatch, BatchStep } from "./batch";
-export type { PromptInfo } from "./prompts";
+export type { PromptInfo, PronunciationEntry } from "./prompts";
 export type { BatchStatus, EnqueueResult, EvalQuestion, EvalReport } from "./knowledge";
 export type { StudyImportReport, ImportCount, ModulePrefix, MaterialItem, MaterialKind, MaterialCounts, Trainer, TrainerCheck } from "./study";
 import { libraryApi } from "./library";
@@ -24,7 +24,7 @@ import { knowledgeApi } from "./knowledge";
 import { cloudApi } from "./cloud";
 import { updateApi } from "./update";
 import { batchApi } from "./batch";
-import { promptsApi } from "./prompts";
+import { promptsApi, pronunciationApi } from "./prompts";
 
 export const api = {
   ...libraryApi,
@@ -41,4 +41,5 @@ export const api = {
   ...updateApi,
   ...batchApi,
   ...promptsApi,
+  ...pronunciationApi,
 };

@@ -58,6 +58,8 @@ export function upsertAudio(params: {
   voice: string;
   engine: EngineId;
   status: "done" | "failed" | "running" | "pending";
+  // Versionsstempel (services/stamps.ts), leer = unbekannt, gilt als veraltet
+  stamp?: string;
 }): void {
   const d = db();
   const existing = d.prepare("SELECT id FROM audio WHERE chapter_id = ?").get(params.chapterId) as
@@ -65,18 +67,19 @@ export function upsertAudio(params: {
     | undefined;
   if (existing) {
     d.prepare(
-      "UPDATE audio SET stored_path = ?, duration_ms = ?, engine = ?, voice = ?, status = ? WHERE chapter_id = ?"
+      "UPDATE audio SET stored_path = ?, duration_ms = ?, engine = ?, voice = ?, status = ?, stamp = ? WHERE chapter_id = ?"
     ).run(
       params.storedRelPath,
       params.durationMs,
       params.engine,
       params.voice,
       params.status,
+      params.stamp ?? null,
       params.chapterId
     );
   } else {
     d.prepare(
-      "INSERT INTO audio (id, chapter_id, stored_path, duration_ms, engine, voice, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO audio (id, chapter_id, stored_path, duration_ms, engine, voice, status, stamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       randomUUID(),
       params.chapterId,
@@ -84,7 +87,8 @@ export function upsertAudio(params: {
       params.durationMs,
       params.engine,
       params.voice,
-      params.status
+      params.status,
+      params.stamp ?? null
     );
   }
 }

@@ -29,6 +29,9 @@ VOCALIZATION RULES:
 
    These are the ONLY proper-noun substitutions you make. Do NOT extrapolate to other names.
 
+3b. EXPAND ABBREVIATIONS:
+   "Prof." → "Professor", "Dr." → "Doctor", "Dr.-Ing." → "Doctor of Engineering", "e.g." → "for example", "Vol." → "Volume".
+
 4. DO NOT GUESS ON OTHER PROPER NOUNS.
    Author names, place names, brand names, book titles, voice names, product names NOT listed in rule 3 → copy them UNCHANGED. You don't know how the TTS will actually pronounce them. If pronunciation is bad, the user can fix it manually in the intro editor — that is NOT your responsibility.
 

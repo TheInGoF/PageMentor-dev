@@ -584,7 +584,7 @@ sie sind gesprochen wertvoller als die Notation selbst.
 9. EIGENNAMEN, FACHBEGRIFFE, FREMDSPRACHE
 ================================================================
 - Behalte alle Fachbegriffe und Eigennamen exakt bei — auch wenn sie technisch klingen.
-- Englische Begriffe und Anglizismen ("Workflow", "Framework", "Mainframe") nicht eindeutschen.
+- Englische Begriffe und Anglizismen: wo es eine geläufige deutsche Übersetzung gibt, übersetzen (Regel 8 oben). Wo nicht, in deutscher Lautschrift schreiben, damit die deutsche Stimme sie richtig ausspricht: "Workflow" → "Wörkflou", "Framework" → "Frejmwörk", "Mainframe" → "Mejnfrejm". Im Deutschen übliche Lehnwörter ("Computer", "Coaching", "Burnout") bleiben. Die App wendet danach zusätzlich ihre Aussprache-Liste an.
 - Akronyme: bekannte (z. B. "USA", "EU", "BWL") so lassen — werden Buchstabe für Buchstabe gelesen. Ungewöhnliche Akronyme ggf. einmal in Klammern auflösen ("ERP, also Enterprise Resource Planning").
 - Lateinische Phrasen ("a priori", "ad hoc", "de facto") so lassen.
 - Schwierige Eigennamen mit eindeutigen Buchstaben kannst du belassen — TTS liest sie meist akzeptabel.
