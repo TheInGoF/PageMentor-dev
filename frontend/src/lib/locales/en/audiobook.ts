@@ -37,7 +37,6 @@ export const audiobook: Record<string, string> = {
   "audiobook.abs.uploading": "Uploading to ABS …",
   "audiobook.abs.uploadTooltip": "Upload the M4B to the configured Audiobookshelf library and trigger a rescan. Metadata is pushed via the ABS API (bypasses iTunes-atom mapping).",
   "audiobook.abs.uploaded": "Uploaded to Audiobookshelf.",
-  "audiobook.abs.uploaded.withLink": "Uploaded. Opening ABS in new tab …",
   "audiobook.voice.top": "Top",
   "audiobook.rate": "Speed",
   "audiobook.preview": "▶ Preview",

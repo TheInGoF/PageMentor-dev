@@ -57,18 +57,9 @@ export function useAudiobookActions(
   async function uploadToAbs() {
     setAbsBusy(true);
     try {
-      const r = await api.abs.upload(docId);
-      const url = r.url;
-      toast.show(
-        url
-          ? t("audiobook.abs.uploaded.withLink")
-          : t("audiobook.abs.uploaded"),
-        "success"
-      );
-      if (url) {
-        // Im neuen Tab öffnen
-        window.open(url, "_blank", "noopener");
-      }
+      // Kein Fenster öffnen: die App bleibt im Vordergrund (docs/STYLEGUIDE.md)
+      await api.abs.upload(docId);
+      toast.show(t("audiobook.abs.uploaded"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {

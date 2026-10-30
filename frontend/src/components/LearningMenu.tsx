@@ -7,6 +7,7 @@ import {
 } from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
 import { Button } from "./ui/Button";
+import { BatchIndicator } from "./batch/BatchIndicator";
 import { useToast } from "./ui/Toast";
 import { Audiobook } from "./Audiobook";
 import { PdfViewer } from "./PdfViewer";
@@ -153,6 +154,7 @@ export function LearningMenu({
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <BatchIndicator />
             <Button
               variant="ghost"
               onClick={onOpenSettings}

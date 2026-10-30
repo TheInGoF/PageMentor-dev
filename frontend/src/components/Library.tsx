@@ -16,6 +16,9 @@ import { useToast } from "./ui/Toast";
 import { DocumentEditModal } from "./DocumentEditModal";
 import { ModuleSectionHeader, EmptyState } from "./library/LibraryParts";
 import { groupBySemester } from "../lib/modules";
+import { Menu, type MenuItem } from "./ui/Menu";
+import { AudiobookBatchDialog } from "./library/AudiobookBatchDialog";
+import { AssignModuleDialog } from "./library/AssignModuleDialog";
 
 type ModuleFilter = "all" | "unassigned" | string;
 
@@ -48,6 +51,10 @@ export function Library({
   const [uploadOpen, setUploadOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
+  // Auswahl für gemeinsame Aktionen; Dialoge für Hörbuch-Lauf und Modul-Zuordnung
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [audioFor, setAudioFor] = useState<string[] | null>(null);
+  const [assignFor, setAssignFor] = useState<string[] | null>(null);
   const [liveEvents, setLiveEvents] = useState<Record<string, ProgressEvent>>({});
   const streams = useRef<Map<string, () => void>>(new Map());
   const toast = useToast();
@@ -261,16 +268,58 @@ export function Library({
     });
   }
 
-  async function handleDelete(doc: Document) {
-    if (!confirm(`${t("library.deleteConfirm")}\n\n${doc.title}`)) return;
+  function toggleSelect(id: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function removeDocs(ids: string[]) {
+    const titles = (docs ?? []).filter((d) => ids.includes(d.id)).map((d) => d.title);
+    if (!confirm(`${t("library.deleteConfirm")}\n\n${titles.join("\n")}`)) return;
     try {
-      await api.documents.remove(doc.id);
-      toast.show(t("library.deleted", { title: doc.title }), "success");
+      for (const id of ids) await api.documents.remove(id);
+      toast.show(ids.length === 1 ? t("library.deleted", { title: titles[0] }) : t("library.deletedMany", { n: ids.length }), "success");
+      setSelected((cur) => new Set([...cur].filter((x) => !ids.includes(x))));
       await load();
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     }
   }
+
+  async function reprocess(ids: string[]) {
+    try {
+      await api.batch.reprocess(ids);
+      toast.show(t("library.retryStarted"), "success");
+      await load();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
+  // Gleiche Aktionen für eine Zeile und für die Auswahl
+  function actionsFor(ids: string[]): MenuItem[] {
+    const single = ids.length === 1 ? (docs ?? []).find((d) => d.id === ids[0]) : null;
+    return [
+      ...(single
+        ? [
+            { label: t("library.openDoc"), onClick: () => onOpen(single.id) },
+            { label: t("common.edit"), onClick: () => setEditDoc(single) },
+          ]
+        : []),
+      { label: t("batch.audio.menu"), onClick: () => setAudioFor(ids) },
+      { label: t("library.reprocess"), onClick: () => void reprocess(ids) },
+      ...(modules.length ? [{ label: t("library.assign.menu"), onClick: () => setAssignFor(ids) }] : []),
+      { label: t("library.delete"), onClick: () => void removeDocs(ids), danger: true },
+    ];
+  }
+
+  const visibleIds = (filtered ?? []).map((d) => d.id);
+  const selectedIds = [...selected].filter((id) => visibleIds.includes(id));
+  const allSelected = visibleIds.length > 0 && selectedIds.length === visibleIds.length;
 
   return (
     <div className="min-h-full flex flex-col">
@@ -309,6 +358,17 @@ export function Library({
             ⇣ {t("batch.title")}
           </button>
         </div>
+
+        {/* Auswahl: alle sichtbaren an- oder abwählen, gemeinsames Menü für die Auswahl */}
+        {visibleIds.length > 0 && (
+          <div className="flex items-center gap-4 mb-4 min-h-8 text-sm">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(visibleIds))} />
+              {selectedIds.length ? t("library.selected", { n: selectedIds.length }) : t("library.selectAll")}
+            </label>
+            {selectedIds.length > 0 && <Menu items={actionsFor(selectedIds)} label={t("library.actionsSelected")} align="left" />}
+          </div>
+        )}
 
         {allTags.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap mb-6">
@@ -362,10 +422,11 @@ export function Library({
                       key={d.id}
                       doc={d}
                       liveEvent={liveEvents[d.id]}
+                      selected={selected.has(d.id)}
+                      onSelect={() => toggleSelect(d.id)}
                       onOpen={() => onOpen(d.id)}
-                      onDelete={() => handleDelete(d)}
-                      onEdit={() => setEditDoc(d)}
-                      onRetried={() => void load()}
+                      actions={actionsFor([d.id])}
+                      onChanged={() => void load()}
                     />
                   ))}
                 </ul>
@@ -405,10 +466,11 @@ export function Library({
                               key={d.id}
                               doc={d}
                               liveEvent={liveEvents[d.id]}
+                              selected={selected.has(d.id)}
+                              onSelect={() => toggleSelect(d.id)}
                               onOpen={() => onOpen(d.id)}
-                              onDelete={() => handleDelete(d)}
-                              onEdit={() => setEditDoc(d)}
-                              onRetried={() => void load()}
+                              actions={actionsFor([d.id])}
+                              onChanged={() => void load()}
                             />
                           ))}
                         </ul>
@@ -440,6 +502,25 @@ export function Library({
           await load();
         }}
       />
+      {audioFor && (
+        <AudiobookBatchDialog
+          docIds={audioFor}
+          onClose={(started) => {
+            setAudioFor(null);
+            if (started) setSelected(new Set());
+          }}
+        />
+      )}
+      {assignFor && (
+        <AssignModuleDialog
+          docIds={assignFor}
+          modules={modules}
+          onClose={(changed) => {
+            setAssignFor(null);
+            if (changed) void load();
+          }}
+        />
+      )}
       <BatchImport open={batchOpen} onClose={() => { setBatchOpen(false); void load(); }} modules={modules} />
     </div>
   );

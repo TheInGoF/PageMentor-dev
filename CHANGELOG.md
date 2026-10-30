@@ -3,6 +3,24 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.26.0 – 2026-10-30
+### New
+- Bibliothek: Dokumente markieren, jede Zeile und die Auswahl haben ein Drei-Punkte-Menü (Öffnen, Bearbeiten, Hörbücher erstellen, Neu umwandeln, Modul zuordnen, Löschen).
+- Fertiger Lauf zeigt eine Zusammenfassung mit Feuerwerk.
+- Fortschritt in der Kopfzeile, Klick zeigt jedes Buch mit seinem Schritt und „Abbrechen“.
+- Hörbücher für mehrere Bücher auf einmal: Umwandlung, Intro, Bereinigung, Sprachausgabe, Hörbuch-Datei und auf Wunsch Audiobookshelf, nur was fehlt.
+- Lauf nach einem Neustart erst nach Bestätigung fortsetzen; weitere Bücher lassen sich nachschieben.
+- Optionen vor dem Lauf: Stimme, Tempo und Audiobookshelf, vorbelegt aus den Einstellungen.
+- Styleguide als docs/STYLEGUIDE.md, mit den UX-Regeln für Popups, Menüs und lange Läufe.
+### Change
+- Hörbuch-Lauf nutzt die Grafikkarte nie doppelt: erst alle Umwandlungen, dann Docling-Speicher freigeben, dann Buch für Buch.
+- Neu umwandeln für mehrere Bücher läuft nacheinander.
+- Popups schließen nur noch über „Schließen“ oder ×, nicht per Klick daneben oder Escape.
+- Stift und Papierkorb in der Bibliothek sind ins Menü gewandert.
+### Fix
+- Dialoge in Kopfzeilen werden nicht mehr abgeschnitten.
+- Upload zu Audiobookshelf öffnet keinen Browser-Tab mehr.
+
 ## 1.25.6 – 2026-10-30
 ### Fix
 - Hörbuch erstellen übernimmt ohne Intro-Text den Vorschlag aus den Metadaten, Gemma bereinigt ihn, dann spricht die Stimme.

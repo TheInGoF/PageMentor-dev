@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 
@@ -23,18 +24,9 @@ const SIZE_CLASS: Record<ModalSize, string> = {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Schließt nur über × bzw. die Knöpfe im Fuß, nicht per Hintergrund oder Escape (docs/STYLEGUIDE.md)
 export function Modal({ open, onClose, title, children, footer, size = "lg" }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  // Nur schließen, wenn der Klick auf dem Hintergrund begann: wer im Textfeld markiert und
-  // die Maus außerhalb loslässt, löst sonst einen Klick auf dem Hintergrund aus
-  const downOnBackdrop = useRef(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
 
   // Focus management: move focus into the dialog on open (so keyboard
   // users don't keep operating hidden background controls), keep Tab
@@ -72,16 +64,10 @@ export function Modal({ open, onClose, title, children, footer, size = "lg" }: P
   }, [open]);
 
   if (!open) return null;
-  return (
+  // Direkt unter <body>: in Kopfzeilen mit Unschärfe (backdrop-blur) würde fixed sonst am Header kleben
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-      onMouseDown={(e) => {
-        downOnBackdrop.current = e.target === e.currentTarget;
-      }}
-      onClick={(e) => {
-        if (downOnBackdrop.current && e.target === e.currentTarget) onClose();
-        downOnBackdrop.current = false;
-      }}
     >
       <div
         ref={dialogRef}
@@ -110,6 +96,7 @@ export function Modal({ open, onClose, title, children, footer, size = "lg" }: P
           </footer>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

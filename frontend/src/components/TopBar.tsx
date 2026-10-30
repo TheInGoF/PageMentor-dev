@@ -1,6 +1,7 @@
 import { Button } from "./ui/Button";
 import { t } from "../lib/i18n";
 import { SearchOverlay } from "./SearchOverlay";
+import { BatchIndicator } from "./batch/BatchIndicator";
 import { Logo } from "./Logo";
 import { isFrameless } from "../lib/desktop";
 import { cn } from "../lib/cn";
@@ -45,6 +46,7 @@ export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
               <SearchOverlay onOpenDocument={onOpenDocument} />
             </div>
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              <BatchIndicator />
               {onUpload && (
                 <Button variant="primary" onClick={onUpload}>
                   +{" "}

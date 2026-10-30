@@ -1,20 +1,19 @@
 // Bibliothek: ein Dokument als kompakte Zeile; Kapitel, Karten und Hörbuch stehen in den Details
 import { AssignHint } from "./AssignHint";
-import { Button } from "../ui/Button";
-import { api, type Document, type ProgressEvent } from "../../lib/api";
+import { Menu, type MenuItem } from "../ui/Menu";
+import { type Document, type ProgressEvent } from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
-import { useToast } from "../ui/Toast";
 
 interface Props {
   doc: Document;
   liveEvent?: ProgressEvent;
+  selected: boolean;
+  onSelect: () => void;
   onOpen: () => void;
-  onDelete: () => void;
-  onEdit: () => void;
-  /** Called after a retry/reprocess was accepted by the backend so
-   *  the list refreshes — a "failed" card otherwise never re-polls. */
-  onRetried?: () => void;
+  // Aktionen dieser Zeile, gleiche Liste wie im gemeinsamen Menü der Auswahl
+  actions: MenuItem[];
+  onChanged?: () => void;
 }
 
 const statusColor: Record<Document["ocr_status"], string> = {
@@ -65,27 +64,18 @@ function describeLive(ev: ProgressEvent): string {
   }
 }
 
-export function DocumentRow({ doc, liveEvent, onOpen, onDelete, onEdit, onRetried }: Props) {
-  const toast = useToast();
-
-  async function retry(e: React.MouseEvent) {
-    e.stopPropagation();
-    try {
-      await api.documents.reprocess(doc.id);
-      toast.show(t("library.retryStarted"), "success");
-      onRetried?.();
-    } catch (err) {
-      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-    }
-  }
-  const stop = (fn: () => void) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    fn();
-  };
-
+export function DocumentRow({ doc, liveEvent, selected, onSelect, onOpen, actions, onChanged }: Props) {
   return (
-    <li className="flex flex-col gap-2 py-2 px-2 rounded-md hover:bg-bg-hover cursor-pointer" onClick={onOpen}>
+    <li className={cn("flex flex-col gap-2 py-2 px-2 rounded-md hover:bg-bg-hover cursor-pointer", selected && "bg-accent/5")} onClick={onOpen}>
       <div className="flex items-center gap-4 min-w-0">
+        <input
+          type="checkbox"
+          className="shrink-0"
+          checked={selected}
+          onClick={(e) => e.stopPropagation()}
+          onChange={onSelect}
+          aria-label={t("library.select", { title: doc.title })}
+        />
         <div className="flex-1 min-w-0">
           <div className="text-sm truncate" title={doc.title}>
             {doc.series_sequence?.trim() && <span className="mr-2 text-accent font-semibold tabular-nums">{doc.series_sequence.trim()}</span>}
@@ -105,21 +95,9 @@ export function DocumentRow({ doc, liveEvent, onOpen, onDelete, onEdit, onRetrie
         ) : (
           doc.ocr_status !== "done" && <span className={cn("tag shrink-0", statusColor[doc.ocr_status] ?? statusColor.pending)}>{t(`ocr.${doc.ocr_status}`)}</span>
         )}
-        <div className="flex items-center gap-1 shrink-0">
-          {doc.ocr_status === "failed" && (
-            <Button variant="outline" onClick={retry} className="!px-2 !py-1 text-xs" title={t("library.retry")}>
-              ↻ {t("library.retry")}
-            </Button>
-          )}
-          <Button variant="ghost" onClick={stop(onEdit)} className="!px-2 !py-1 text-xs" title={t("common.edit")} aria-label={t("common.edit")}>
-            ✎
-          </Button>
-          <Button variant="ghost" onClick={stop(onDelete)} className="!px-2 !py-1 text-xs" title={t("library.delete")} aria-label={t("library.delete")}>
-            🗑
-          </Button>
-        </div>
+        <Menu items={actions} label={t("library.actions")} />
       </div>
-      <AssignHint doc={doc} onChanged={onRetried} />
+      <AssignHint doc={doc} onChanged={onChanged} />
     </li>
   );
 }
