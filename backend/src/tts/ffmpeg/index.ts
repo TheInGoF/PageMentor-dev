@@ -1,6 +1,7 @@
 export { run } from "./run";
 export {
   applyAtempo,
+  padMp3,
   concatMp3,
   concatMp3WithGaps,
   normalizeAndTag,

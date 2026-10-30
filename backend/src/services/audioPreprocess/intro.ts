@@ -7,6 +7,7 @@ import { generate } from "../llm";
 import { withGemmaLock } from "../gemmaLock";
 import { introSystemFor } from "./prompts";
 import { gemmaStamp } from "../stamps";
+import { examplesBlock } from "../pronunciation";
 import { expandAbbreviations } from "../abbreviations";
 import { runJob } from "../../log/jobs";
 
@@ -67,8 +68,9 @@ async function preprocessIntroForAudioImpl(params: {
       `[audio-preprocess] ${introLabel} START (${sourceText.length} chars source)`
     );
 
-    const system =
-      introSystemFor(row.language);
+    // Geprüfte Aussprache-Beispiele: Gemma schreibt neue Namen nach demselben Muster
+    const examples = row.language === "de" ? examplesBlock() : "";
+    const system = examples ? `${introSystemFor(row.language)}\n\n${examples}` : introSystemFor(row.language);
 
     const ollamaOptions = {
       // Reine Ersetzung: deterministisch

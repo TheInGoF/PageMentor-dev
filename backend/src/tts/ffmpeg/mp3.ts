@@ -232,3 +232,19 @@ export async function probeDurationMs(file: string): Promise<number> {
   if (!Number.isFinite(secs)) return 0;
   return Math.round(secs * 1000);
 }
+
+// Stille vor und nach einer MP3 (Hörproben): F5 und Co. verschlucken sonst Anfang und Ende kurzer Beispiele
+export async function padMp3(input: Buffer, ms: number): Promise<Buffer> {
+  const { mkdtemp, readFile, writeFile, rm } = await import("fs/promises");
+  const { tmpdir } = await import("os");
+  const dir = await mkdtemp(join(tmpdir(), "pm-pad-"));
+  try {
+    const inPath = join(dir, "in.mp3");
+    const outPath = join(dir, "out.mp3");
+    await writeFile(inPath, input);
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inPath, "-af", `adelay=${ms}:all=1,apad=pad_dur=${(ms / 1000).toFixed(3)}`, "-c:a", "libmp3lame", "-b:a", "96k", outPath]);
+    return await readFile(outPath);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}

@@ -3,6 +3,18 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.31.0 – 2026-10-30
+### New
+- Aussprache-Liste: Häkchen „geprüft“, Gemma lernt aus geprüften Einträgen und schreibt neue Wörter nach demselben Muster.
+- Aussprache-Liste: ✨ lässt Gemma die Aussprache eines Worts vorschlagen, „Heft durchsuchen“ sammelt Anglizismen eines ganzen Hefts.
+- Geprüfte Einträge lassen sich kopieren, um sie später als Standard in die App zu übernehmen.
+### Change
+- Abkürzungen werden mit deutschen Buchstabennamen gesprochen („Teh Teh Ess“ statt „T T S“).
+- F5-TTS bekommt kürzere Abschnitte und etwas mehr Zeit je Abschnitt; F5-Kapitel werden beim nächsten Lauf einmal erneuert.
+- Hörproben der Aussprache mit 1 s Stille davor und danach.
+### Fix
+- F5-TTS verschluckt am Anfang und Ende von Abschnitten keine Silben mehr.
+
 ## 1.30.0 – 2026-10-30
 ### New
 - Hörbuch spricht Passagen der zweiten Sprache mit eigener Stimme (z. B. Thorsten für Deutsch, Dora für Spanisch); Gemma markiert sie, die App prüft, dass kein Wort verändert wurde.

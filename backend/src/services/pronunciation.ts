@@ -8,12 +8,14 @@ import { DATA_DIR } from "../paths";
 export interface PronunciationEntry {
   from: string;
   to: string;
+  // Angehört und für gut befunden; geprüfte Einträge lernt Gemma als Beispiele
+  checked?: boolean;
 }
 
 export const DEFAULT_PRONUNCIATION: PronunciationEntry[] = [
   { from: "PageMentor", to: "Pejdsch-Mentor" },
-  { from: "F5-TTS", to: "F fünf T T S" },
-  { from: "Qwen3-TTS", to: "Kwenn drei T T S" },
+  { from: "F5-TTS", to: "Eff fünf Teh Teh Ess" },
+  { from: "Qwen3-TTS", to: "Kwenn drei Teh Teh Ess" },
   { from: "Qwen", to: "Kwenn" },
   { from: "Gemma", to: "Dschemma" },
   { from: "Audiobookshelf", to: "Odio-Buck-Schelf" },
@@ -44,7 +46,7 @@ export function pronunciationList(): { entries: PronunciationEntry[]; custom: bo
 }
 
 export function savePronunciation(entries: PronunciationEntry[]): void {
-  const clean = entries.map((e) => ({ from: e.from.trim(), to: e.to.trim() })).filter((e) => e.from && e.to);
+  const clean = entries.map((e) => ({ from: e.from.trim(), to: e.to.trim(), ...(e.checked ? { checked: true } : {}) })).filter((e) => e.from && e.to);
   writeFileSync(FILE, JSON.stringify(clean, null, 2));
   cache = null;
 }
@@ -75,4 +77,15 @@ export function applyPronunciation(text: string, list: PronunciationEntry[] = en
     out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(e.from)}(?![\\p{L}\\p{N}])`, "giu"), e.to);
   }
   return out;
+}
+
+// Geprüfte Einträge als Beispiele für Gemma: so lernt sie, wie neue Wörter für die Stimme zu schreiben sind
+export function checkedExamples(): PronunciationEntry[] {
+  return pronunciationList().entries.filter((e) => e.checked);
+}
+
+export function examplesBlock(): string {
+  const ex = checkedExamples();
+  if (!ex.length) return "";
+  return `GEPRÜFTE AUSSPRACHE-BEISPIELE (vom Nutzer angehört, so klingt es mit seiner Stimme richtig; wende dasselbe Muster auf ähnliche Wörter an):\n${ex.map((e) => `  "${e.from}" → "${e.to}"`).join("\n")}`;
 }

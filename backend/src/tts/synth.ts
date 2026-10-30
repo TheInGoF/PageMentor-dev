@@ -33,8 +33,9 @@ const POLICIES: Record<EngineId, EnginePolicy> = {
   qwen: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0 },
   // Kokoro teilt intern nach Phonemen, kurze Chunks halten die Betonung
   kokoro: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0, maxChunk: 1000 },
-  // F5 teilt selbst nach Länge der Referenz, darüber eine Absatzgröße
-  f5: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0, maxChunk: 600 },
+  // F5: so kurz, dass ein Abschnitt in ein Stück passt (bei ~8 s Referenz rund 250 Zeichen);
+  // längere teilt F5 selbst und verschluckt an den Übergängen Silben
+  f5: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0, maxChunk: 250 },
   // TADA: ein Absatz bis eine Seite
   tada: { interChunkDelayMs: 0, emptyAudioCooldownMs: 0, maxChunk: 1500 },
 };

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { padMp3 } from "../../tts/ffmpeg";
 import { allVoices, findVoice } from "../../tts/voices";
 import { synthesizePreview } from "../../tts/synth";
 import { tt } from "../../lib/i18n";
@@ -62,8 +63,11 @@ voiceRoutes.get("/preview", async (c) => {
       topKOverride: parseOptInt(topKOverride),
       repetitionPenaltyOverride: parseOptFloat(repPenOverride),
     });
+    // pad=ms: Stille davor und danach, damit kurze Beispiele nicht abgeschnitten klingen
+    const padMs = Math.min(3000, Math.max(0, Number(c.req.query("pad") ?? 0) || 0));
+    const out = padMs ? await padMp3(Buffer.from(buf), padMs) : buf;
     // ArrayBuffer: passt für Bun- und Node-Typen
-    const body = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength) as unknown as BodyInit;
+    const body = new Uint8Array(out.buffer, out.byteOffset, out.byteLength) as unknown as BodyInit;
     return new Response(body, {
       headers: {
         "Content-Type": "audio/mpeg",

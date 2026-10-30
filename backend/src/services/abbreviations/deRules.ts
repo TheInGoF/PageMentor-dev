@@ -8,11 +8,18 @@ import type { Rule } from "./markdown";
 // Römische Zahlen bleiben: "Typ II" nicht als "I I"
 export const ROMAN_NUMERAL_RE = /^X{0,3}(?:IX|IV|V?I{0,3})$/;
 
+// Deutsche Buchstabennamen: "T T S" liest F5 als "Tts", "Teh Teh Ess" spricht jede Stimme richtig
+export const DE_LETTER_NAMES: Record<string, string> = {
+  A: "A", B: "Beh", C: "Zeh", D: "Deh", E: "E", F: "Eff", G: "Geh", H: "Hah", I: "I", J: "Jott", K: "Kah",
+  L: "Ell", M: "Emm", N: "Enn", O: "O", P: "Peh", Q: "Kuh", R: "Err", S: "Ess", T: "Teh", U: "U", V: "Fau",
+  W: "Weh", X: "Ix", Y: "Üpsilon", Z: "Zett", Ä: "Ä", Ö: "Ö", Ü: "Ü",
+};
+
 export const DE_CAPS_ACRONYMS: Rule[] = [
   {
     pattern: /\b([A-ZÄÖÜ]{2,3})\b/g,
     replacement: (match: string) =>
-      ROMAN_NUMERAL_RE.test(match) ? match : match.split("").join(" "),
+      ROMAN_NUMERAL_RE.test(match) ? match : match.split("").map((ch) => DE_LETTER_NAMES[ch] ?? ch).join(" "),
   },
 ];
 

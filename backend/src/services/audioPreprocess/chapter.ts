@@ -9,6 +9,7 @@ import { withGemmaLock } from "../gemmaLock";
 import { cleanupHints } from "../promptHints";
 import { systemFor } from "./prompts";
 import { gemmaStamp } from "../stamps";
+import { examplesBlock } from "../pronunciation";
 import {
   stripLeadingSectionNumbers,
   splitForPreprocess,
@@ -103,7 +104,7 @@ async function preprocessChapterForAudioImpl(params: {
     const system = `${baseSystem}\n\n${cleanupHints(
       params.language === "de" ? "de" : "en",
       "audio"
-    )}${lang2 ? `\n\nDIESES BUCH UNTERRICHTET EINE FREMDSPRACHE (${lang2}). Alle Wörter, Sätze und Vokabeln in dieser Sprache bleiben Zeichen für Zeichen unverändert: nicht übersetzen, nicht eindeutschen, nicht in Lautschrift umschreiben, Satzzeichen wie ¿ ¡ behalten.` : ""}`;
+    )}${params.language === "de" && examplesBlock() ? `\n\n${examplesBlock()}` : ""}${lang2 ? `\n\nDIESES BUCH UNTERRICHTET EINE FREMDSPRACHE (${lang2}). Alle Wörter, Sätze und Vokabeln in dieser Sprache bleiben Zeichen für Zeichen unverändert: nicht übersetzen, nicht eindeutschen, nicht in Lautschrift umschreiben, Satzzeichen wie ¿ ¡ behalten.` : ""}`;
 
     // num_ctx: Ollama-Standard 2048 ist viel zu klein
     // num_predict: endlich, "-1" ignorieren manche Ollama-Builds

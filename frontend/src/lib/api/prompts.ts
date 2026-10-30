@@ -21,6 +21,7 @@ export const promptsApi = {
 export interface PronunciationEntry {
   from: string;
   to: string;
+  checked?: boolean;
 }
 type PronunciationRes = { entries: PronunciationEntry[]; custom: boolean; defaults: PronunciationEntry[] };
 
@@ -30,5 +31,7 @@ export const pronunciationApi = {
     save: (entries: PronunciationEntry[]) =>
       request<PronunciationRes>("/api/pronunciation", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entries }) }),
     reset: () => request<PronunciationRes>("/api/pronunciation", { method: "DELETE" }),
+    suggest: (body: { words?: string[]; docId?: string; model?: string }) =>
+      request<{ items: PronunciationEntry[] }>("/api/pronunciation/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   },
 };
