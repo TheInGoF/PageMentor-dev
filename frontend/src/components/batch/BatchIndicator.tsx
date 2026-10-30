@@ -7,6 +7,7 @@ import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { Fireworks } from "./Fireworks";
+import { move } from "../../lib/move";
 
 function useBatch(): [AudiobookBatch | null, (b: AudiobookBatch | null) => void] {
   const [batch, setBatch] = useState<AudiobookBatch | null>(null);
@@ -70,7 +71,7 @@ export function BatchIndicator() {
       {open && (
         <div className="absolute right-0 top-full mt-1 z-40 w-[min(28rem,90vw)] card p-4 flex flex-col gap-4">
           {paused && <p className="text-sm">{t("batch.audio.pausedHint")}</p>}
-          <ItemList batch={batch} />
+          <ItemList batch={batch} onReorder={(ids) => void act(() => api.batch.reorder(ids))} />
           <div className="flex gap-2 justify-end">
             {paused ? (
               <>
@@ -101,7 +102,10 @@ const DOT: Record<string, string> = {
   canceled: "bg-neutral-400",
 };
 
-function ItemList({ batch }: { batch: AudiobookBatch }) {
+// onReorder: wartende Bücher lassen sich verschieben, laufende und fertige nicht
+function ItemList({ batch, onReorder }: { batch: AudiobookBatch; onReorder?: (waitingIds: string[]) => void }) {
+  const waiting = batch.items.filter((i) => i.step === "wait").map((i) => i.docId);
+  const shift = (docId: string, dir: -1 | 1) => onReorder?.(move(waiting, waiting.indexOf(docId), dir));
   return (
     <ul className="flex flex-col divide-y divide-border max-h-[50vh] overflow-y-auto">
       {batch.items.map((i) => {
@@ -117,6 +121,16 @@ function ItemList({ batch }: { batch: AudiobookBatch }) {
                 {i.error ? ` · ${i.error}` : i.note ? ` · ${i.note}` : ""}
               </div>
             </div>
+            {onReorder && i.step === "wait" && waiting.length > 1 && (
+              <span className="flex shrink-0">
+                <Button variant="ghost" className="!px-2 !py-1" disabled={waiting[0] === i.docId} onClick={() => shift(i.docId, -1)} aria-label={t("batch.audio.up")} title={t("batch.audio.up")}>
+                  ↑
+                </Button>
+                <Button variant="ghost" className="!px-2 !py-1" disabled={waiting[waiting.length - 1] === i.docId} onClick={() => shift(i.docId, 1)} aria-label={t("batch.audio.down")} title={t("batch.audio.down")}>
+                  ↓
+                </Button>
+              </span>
+            )}
           </li>
         );
       })}

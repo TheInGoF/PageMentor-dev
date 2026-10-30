@@ -1,6 +1,6 @@
 // Hörbuch-Lauf für mehrere Bücher: Docling, Intro, Sprachausgabe samt Bereinigung, M4B, Audiobookshelf
-// Strikt nacheinander, nie zwei Dinge gleichzeitig auf der Grafikkarte: erst Docling für alle,
-// dann Speicher freigeben, dann Buch für Buch. Jeder Schritt nur, wenn sein Ergebnis noch fehlt.
+// Strikt nacheinander, nie zwei Dinge gleichzeitig auf der Grafikkarte: Heft für Heft oder erst alle
+// Umwandlungen und dann alle Hörbücher; Docling gibt den Speicher vor der Sprachausgabe frei. Jeder Schritt nur, wenn sein Ergebnis noch fehlt.
 // Die Warteschlange liegt als Datei im Datenordner; nach einem Neustart geht es erst nach Bestätigung weiter.
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -32,6 +32,8 @@ export interface BatchState {
   rate: string;
   model?: string;
   abs: boolean;
+  // book: jedes Buch komplett, dann das nächste; phase: erst alle Umwandlungen, dann alle Hörbücher
+  order: "book" | "phase";
   items: BatchItem[];
   startedAt: number;
   finishedAt?: number;
@@ -80,7 +82,7 @@ export function batchStatus(): (BatchState & { current?: { docId: string; chapte
 }
 
 // Neuer Lauf oder Nachschieben in den laufenden; Bücher, die schon drin sind, nicht doppelt
-export function enqueue(docIds: string[], opts: { voiceId: string; rate: string; model?: string; abs: boolean }): BatchState {
+export function enqueue(docIds: string[], opts: { voiceId: string; rate: string; model?: string; abs: boolean; order: "book" | "phase" }): BatchState {
   const fresh = !state || state.status === "done" || state.status === "canceled";
   if (fresh) {
     state = { id: `${Date.now()}`, status: "running", ...opts, abs: opts.abs && absReady(), items: [], startedAt: Date.now() };
@@ -95,6 +97,18 @@ export function enqueue(docIds: string[], opts: { voiceId: string; rate: string;
   save();
   start();
   return state!;
+}
+
+// Wartende Bücher umsortieren; laufende und fertige behalten ihren Platz
+export function reorder(docIds: string[]): void {
+  if (!state) return;
+  const rank = (id: string) => {
+    const i = docIds.indexOf(id);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const waiting = state.items.filter((i) => i.step === "wait").sort((a, b) => rank(a.docId) - rank(b.docId));
+  state.items = state.items.map((i) => (i.step === "wait" ? waiting.shift()! : i));
+  save();
 }
 
 export function resume(): void {
@@ -150,40 +164,26 @@ function set(item: BatchItem, step: Step, extra: Partial<BatchItem> = {}): void 
 async function run(): Promise<void> {
   // Mehrfach durchlaufen: nachgeschobene Bücher kommen in der nächsten Runde dran
   while (state?.status === "running" && !cancelRequested) {
-    const open = state.items.filter((i) => i.step === "wait" || i.step === "docling" || i.step === "audio" || i.step === "abs");
-    if (!open.length) break;
+    // Immer das erste offene Buch nach aktueller Reihenfolge: Umsortieren wirkt sofort
+    const next = (pred: (i: BatchItem) => boolean) => state!.items.find((i) => OPEN.has(i.step) && pred(i));
+    if (!next(() => true)) break;
 
-    // 1. Docling für alle, die noch keinen Text haben
-    let usedDocling = false;
-    for (const item of open) {
-      if (cancelRequested) return;
-      const row = docRow(item.docId);
-      if (!row) {
-        set(item, "failed", { error: "Dokument nicht gefunden" });
-        continue;
-      }
-      if (row.ocr_status === "done") continue;
-      await waitIdle();
-      set(item, "docling");
-      await processDocument(item.docId);
-      usedDocling = true;
-      if (docRow(item.docId)?.ocr_status !== "done") set(item, "failed", { error: "Umwandlung fehlgeschlagen" });
-    }
-    // Docling-Grafikspeicher freigeben, bevor Gemma und die Stimme loslegen
-    if (usedDocling) await releaseDoclingNow();
-
-    // 2.–5. Buch für Buch
-    for (const item of open) {
-      if (cancelRequested || state.status !== "running") return;
-      if (item.step === "failed") continue;
-      try {
-        await bookSteps(item);
-      } catch (err) {
-        if (cancelRequested) return;
-        set(item, "failed", { error: err instanceof Error ? err.message : String(err) });
-        emitLog("warn", "batch", `Hörbuch-Lauf: ${item.title} fehlgeschlagen`, { err });
+    if (state.order === "phase") {
+      // Erst alle Umwandlungen, dann den Docling-Speicher freigeben, dann alle Hörbücher
+      let used = false;
+      for (let item = next(needsText); item && !cancelRequested; item = next(needsText)) used = (await convert(item)) || used;
+      if (used) await releaseDoclingNow();
+      // Nachgeschobene ohne Text kommen in der nächsten Runde zur Umwandlung
+      const ready = (i: BatchItem) => !needsText(i);
+      for (let item = next(ready); item && !cancelRequested && state.status === "running"; item = next(ready)) await safeBook(item);
+    } else {
+      // Heft für Heft: umwandeln, Speicher freigeben, Hörbuch, dann das nächste
+      for (let item = next(() => true); item && !cancelRequested && state.status === "running"; item = next(() => true)) {
+        if (needsText(item) && (await convert(item))) await releaseDoclingNow();
+        if (OPEN.has(item.step)) await safeBook(item);
       }
     }
+    if (cancelRequested || state.status !== "running") return;
   }
   if (state?.status === "running" && !cancelRequested) {
     state.status = "done";
@@ -191,6 +191,35 @@ async function run(): Promise<void> {
     save();
     const ok = state.items.filter((i) => i.step === "done").length;
     emitLog("info", "batch", `Hörbuch-Lauf fertig: ${ok} von ${state.items.length} Büchern`);
+  }
+}
+
+const OPEN = new Set<Step>(["wait", "docling", "audio", "abs"]);
+
+function needsText(item: BatchItem): boolean {
+  return docRow(item.docId)?.ocr_status !== "done";
+}
+
+// Docling für ein Buch; true, wenn umgewandelt wurde (dann liegt Docling im Grafikspeicher)
+async function convert(item: BatchItem): Promise<boolean> {
+  if (!docRow(item.docId)) {
+    set(item, "failed", { error: "Dokument nicht gefunden" });
+    return false;
+  }
+  await waitIdle();
+  set(item, "docling");
+  await processDocument(item.docId);
+  if (needsText(item)) set(item, "failed", { error: "Umwandlung fehlgeschlagen" });
+  return true;
+}
+
+async function safeBook(item: BatchItem): Promise<void> {
+  try {
+    await bookSteps(item);
+  } catch (err) {
+    if (cancelRequested) return;
+    set(item, "failed", { error: err instanceof Error ? err.message : String(err) });
+    emitLog("warn", "batch", `Hörbuch-Lauf: ${item.title} fehlgeschlagen`, { err });
   }
 }
 

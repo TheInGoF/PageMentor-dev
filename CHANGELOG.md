@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.26.1 – 2026-10-30
+### New
+- Hörbuch-Lauf: Reihenfolge der Bücher vor dem Start und für wartende Bücher in der Kopfzeile änderbar.
+- Hörbuch-Lauf wahlweise Heft für Heft (Standard) oder Schritt für Schritt.
+### Change
+- Kästchen in der Bibliothek größer, die ganze Kästchen-Spalte der Zeile ist klickbar; Regel im Styleguide.
+
 ## 1.26.0 – 2026-10-30
 ### New
 - Bibliothek: Dokumente markieren, jede Zeile und die Auswahl haben ein Drei-Punkte-Menü (Öffnen, Bearbeiten, Hörbücher erstellen, Neu umwandeln, Modul zuordnen, Löschen).

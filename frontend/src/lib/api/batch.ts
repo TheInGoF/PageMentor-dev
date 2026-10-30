@@ -9,6 +9,7 @@ export interface AudiobookBatch {
   voiceId: string;
   rate: string;
   abs: boolean;
+  order?: "book" | "phase";
   items: Array<{ docId: string; title: string; step: BatchStep; error?: string; note?: string }>;
   startedAt: number;
   finishedAt?: number;
@@ -22,7 +23,8 @@ const post = (path: string, body?: unknown) =>
 export const batchApi = {
   batch: {
     status: () => request<Res>("/api/batch/audiobooks"),
-    start: (body: { docIds: string[]; voiceId: string; rate: string; model?: string; abs: boolean }) => post("", body),
+    start: (body: { docIds: string[]; voiceId: string; rate: string; model?: string; abs: boolean; order: "book" | "phase" }) => post("", body),
+    reorder: (docIds: string[]) => post("/reorder", { docIds }),
     resume: () => post("/resume"),
     cancel: () => post("/cancel"),
     dismiss: () => post("/dismiss"),

@@ -66,16 +66,12 @@ function describeLive(ev: ProgressEvent): string {
 
 export function DocumentRow({ doc, liveEvent, selected, onSelect, onOpen, actions, onChanged }: Props) {
   return (
-    <li className={cn("flex flex-col gap-2 py-2 px-2 rounded-md hover:bg-bg-hover cursor-pointer", selected && "bg-accent/5")} onClick={onOpen}>
-      <div className="flex items-center gap-4 min-w-0">
-        <input
-          type="checkbox"
-          className="shrink-0"
-          checked={selected}
-          onClick={(e) => e.stopPropagation()}
-          onChange={onSelect}
-          aria-label={t("library.select", { title: doc.title })}
-        />
+    <li className={cn("flex flex-col gap-2 py-2 pr-2 rounded-md hover:bg-bg-hover cursor-pointer", selected && "bg-accent/5")} onClick={onOpen}>
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Die ganze Kästchen-Spalte der Zeile ist Klickfläche (docs/STYLEGUIDE.md) */}
+        <label className="self-stretch -my-2 px-4 flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" className="w-5 h-5 cursor-pointer" checked={selected} onChange={onSelect} aria-label={t("library.select", { title: doc.title })} />
+        </label>
         <div className="flex-1 min-w-0">
           <div className="text-sm truncate" title={doc.title}>
             {doc.series_sequence?.trim() && <span className="mr-2 text-accent font-semibold tabular-nums">{doc.series_sequence.trim()}</span>}

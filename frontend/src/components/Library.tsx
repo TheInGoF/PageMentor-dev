@@ -362,8 +362,8 @@ export function Library({
         {/* Auswahl: alle sichtbaren an- oder abwählen, gemeinsames Menü für die Auswahl */}
         {visibleIds.length > 0 && (
           <div className="flex items-center gap-4 mb-4 min-h-8 text-sm">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(visibleIds))} />
+            <label className="flex items-center gap-2 cursor-pointer py-2 pl-6 pr-2 -ml-2">
+              <input type="checkbox" className="w-5 h-5 cursor-pointer" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(visibleIds))} />
               {selectedIds.length ? t("library.selected", { n: selectedIds.length }) : t("library.selectAll")}
             </label>
             {selectedIds.length > 0 && <Menu items={actionsFor(selectedIds)} label={t("library.actionsSelected")} align="left" />}
@@ -504,7 +504,7 @@ export function Library({
       />
       {audioFor && (
         <AudiobookBatchDialog
-          docIds={audioFor}
+          docs={audioFor.map((id) => ({ id, title: (docs ?? []).find((d) => d.id === id)?.title ?? id }))}
           onClose={(started) => {
             setAudioFor(null);
             if (started) setSelected(new Set());

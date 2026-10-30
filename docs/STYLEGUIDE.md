@@ -20,5 +20,9 @@ Kurzfassung des HeatPilot-UI-Styleguides, angewendet auf PageMentor. Bausteine d
   keine Escape-Taste: Wer beim Markieren oder Tippen danebenklickt, verliert sonst seine Eingaben.
 - Aktionen für einen Eintrag stehen in seinem Drei-Punkte-Menü (⋯), nicht als einzelne Symbole in der
   Zeile. Mehrere ausgewählte Einträge teilen sich ein gemeinsames Menü über der Liste.
+- Kästchen, Schalter und kleine Knöpfe haben eine große Klickfläche: In Listen ist die ganze
+  Kästchen-Spalte der Zeile anklickbar, das Kästchen selbst mindestens 20 px groß.
+- Reihenfolgen, die der Nutzer festlegt (z. B. ein Lauf über mehrere Bücher), lassen sich vor dem Start
+  und, soweit noch nicht begonnen, auch währenddessen ändern.
 - Lange Läufe zeigen ihren Fortschritt in der Kopfzeile; ein Klick klappt die Einzelheiten aus.
 - Nach einem Upload oder Export öffnet die App keine fremden Seiten von selbst.
