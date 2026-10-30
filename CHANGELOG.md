@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.25.5 – 2026-10-30
+### Change
+- Hörbuch: Vorwort und Einleitung sind standardmäßig dabei.
+- Hörbuch erstellen vertont das Intro mit, wenn ein Intro-Text da ist und noch kein Audio.
+### Fix
+- Dialoge schließen nicht mehr, wenn man beim Markieren von Text die Maus außerhalb loslässt.
+
 ## 1.25.4 – 2026-10-29
 ### New
 - Zusammenhänge lassen sich als JSON speichern oder kopieren, mit lesbaren Verbindungen und Kennzahlen.

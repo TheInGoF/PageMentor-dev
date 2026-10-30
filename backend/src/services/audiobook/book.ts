@@ -6,6 +6,8 @@ import { DATA_DIR } from "../../paths";
 import { buildM4B, probeDurationMs } from "../../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../../tts/voices";
 import { preprocessChapterForAudio, preprocessAvailable } from "../audioPreprocess";
+import { introTtsText } from "./intro";
+import { generateIntroAudio } from "./single";
 import { ensureCover } from "../covers";
 import { emit } from "../events";
 import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
@@ -116,6 +118,20 @@ async function generateAudiobookImpl(params: {
   const llmReady = await preprocessAvailable();
   if (!llmReady) {
     console.warn(tLang(lang, "msg.audioPreprocessUnavailable"));
+  }
+
+  // Intro mit Text, aber ohne Audio: vor den Kapiteln mit derselben Stimme vertonen
+  const introFile = join(audioDir, "intro.mp3");
+  if (!existsSync(introFile)) {
+    const introText = await introTtsText(doc.id, params.model);
+    if (introText) {
+      try {
+        await generateIntroAudio({ docId: doc.id, text: introText, voiceId, rate, inBook: true });
+      } catch (err) {
+        // Auch bei Abbruch nicht werfen: die Kapitelschleife prüft das Signal und räumt auf
+        console.warn(`[audiobook] intro failed, book continues without it:`, err instanceof Error ? err.message : err);
+      }
+    }
   }
 
   const successfulChapterFiles: string[] = [];

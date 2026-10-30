@@ -169,7 +169,10 @@ async function generateIntroAudioImpl(params: {
   text: string;
   voiceId: string;
   rate?: string;
+  // Im Buch-Lauf: keine eigenen Kapitel-Events, das Buch meldet den Fortschritt
+  inBook?: boolean;
 }): Promise<{ path: string; durationMs: number }> {
+  const say: typeof emit = params.inBook ? () => {} : emit;
   const introDoc = db()
     .prepare("SELECT language FROM documents WHERE id = ?")
     .get(params.docId) as { language: string } | undefined;
@@ -193,7 +196,7 @@ async function generateIntroAudioImpl(params: {
     }
   }
 
-  emit({
+  say({
     phase: "audiobook.chapter.start",
     docId: params.docId,
     chapterNumber: 0,
@@ -239,7 +242,7 @@ async function generateIntroAudioImpl(params: {
       outFile,
       signal: abortController.signal,
       onChunk: (current, total) =>
-        emit({
+        say({
           phase: "audiobook.chapter.progress",
           docId: params.docId,
           chapterNumber: 0,
@@ -249,7 +252,7 @@ async function generateIntroAudioImpl(params: {
     });
     // Vor dem Abschluss-Event austragen, sonst hängt die UI
     if (!alreadyRunning) running.delete(params.docId);
-    emit({
+    say({
       phase: "audiobook.chapter.done",
       docId: params.docId,
       chapterNumber: 0,
@@ -259,7 +262,7 @@ async function generateIntroAudioImpl(params: {
     return { path: outFile, durationMs };
   } catch (err) {
     if (!alreadyRunning) running.delete(params.docId);
-    emit({
+    say({
       phase: "audiobook.chapter.failed",
       docId: params.docId,
       chapterNumber: 0,

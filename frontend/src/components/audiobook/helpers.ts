@@ -25,7 +25,7 @@ export function compareVoices(a: Voice, b: Voice): number {
 
 // Standard pro Kapitelart, synchron mit defaultIncludeForKind() im Backend
 export function defaultIncludeFor(kind: string): boolean {
-  return kind === "content" || kind === "summary";
+  return kind === "content" || kind === "summary" || kind === "meta";
 }
 export function isChapterIncluded(c: ChapterAudioStatus): boolean {
   if (c.include_in_audio == null) return defaultIncludeFor(c.kind);

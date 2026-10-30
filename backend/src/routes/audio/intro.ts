@@ -6,6 +6,7 @@ import { DATA_DIR } from "../../paths";
 import { defaultVoiceFor } from "../../tts/voices";
 import { generateIntroAudio } from "../../services/audiobook";
 import { preprocessIntroForAudio, clearAudioIntroTtsCache } from "../../services/audioPreprocess";
+import { introTtsText } from "../../services/audiobook/intro";
 import { tt } from "../../lib/i18n";
 import { serveFileWithRange } from "./files";
 
@@ -137,23 +138,7 @@ introRoutes.post("/intro/:docId/generate", async (c) => {
   const voiceId = body.voice || defaultVoiceFor(doc.language);
   if (!voiceId) return c.json({ error: "No voice available" }, 400);
 
-  let ttsText = doc.audio_intro_text_tts;
-  if (!ttsText || ttsText.trim().length === 0) {
-    try {
-      const pre = await preprocessIntroForAudio({
-        docId,
-        model: body.model,
-      });
-      ttsText = pre.text;
-    } catch (err) {
-      // Ohne Gemma: Rohtext, Name evtl. falsch ausgesprochen
-      console.warn(
-        `[tts] intro preprocess failed, falling back to raw text:`,
-        err instanceof Error ? err.message : err
-      );
-      ttsText = doc.audio_intro_text;
-    }
-  }
+  const ttsText = (await introTtsText(docId, body.model)) ?? doc.audio_intro_text;
 
   generateIntroAudio({
     docId,

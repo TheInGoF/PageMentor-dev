@@ -16,9 +16,9 @@ export interface Chapter {
   include_in_audio?: number | null;
 }
 
-// Standard ohne include_in_audio: Inhalt + Zusammenfassung an
+// Standard ohne include_in_audio: Inhalt, Zusammenfassung, Vorwort und Einleitung an
 function defaultIncludeForKind(kind: string | undefined): boolean {
-  return kind === "content" || kind === "summary";
+  return kind === "content" || kind === "summary" || kind === "meta";
 }
 
 export function isIncluded(ch: Pick<Chapter, "kind" | "include_in_audio">): boolean {

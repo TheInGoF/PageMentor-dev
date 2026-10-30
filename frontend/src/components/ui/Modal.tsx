@@ -25,6 +25,9 @@ const FOCUSABLE_SELECTOR =
 
 export function Modal({ open, onClose, title, children, footer, size = "lg" }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Nur schließen, wenn der Klick auf dem Hintergrund begann: wer im Textfeld markiert und
+  // die Maus außerhalb loslässt, löst sonst einen Klick auf dem Hintergrund aus
+  const downOnBackdrop = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -72,7 +75,13 @@ export function Modal({ open, onClose, title, children, footer, size = "lg" }: P
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
-      onClick={onClose}
+      onMouseDown={(e) => {
+        downOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (downOnBackdrop.current && e.target === e.currentTarget) onClose();
+        downOnBackdrop.current = false;
+      }}
     >
       <div
         ref={dialogRef}
@@ -80,7 +89,6 @@ export function Modal({ open, onClose, title, children, footer, size = "lg" }: P
         aria-modal="true"
         tabIndex={-1}
         className={`card w-full ${SIZE_CLASS[size]} flex flex-col max-h-[90vh] outline-none`}
-        onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <header className="flex items-center justify-between px-5 py-4 border-b border-border">
