@@ -16,6 +16,7 @@ import { StudyImportSection } from "./settings/StudyImportSection";
 import { UpdateSection } from "./settings/UpdateSection";
 import { AudiobookSection } from "./settings/AudiobookSection";
 import { AiExpert, AiSection } from "./settings/AiSection";
+import { PromptsSection } from "./settings/PromptsSection";
 import { KnowledgeEval, KnowledgeSection } from "./settings/KnowledgeSection";
 import { DoclingSection } from "./settings/DoclingSection";
 import { CloudSection } from "./settings/CloudSection";
@@ -126,6 +127,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
               <KnowledgeSection st={st} />
               <CloudSection />
               <AiExpert st={st} />
+              <PromptsSection />
               <KnowledgeEval />
             </>
           )}

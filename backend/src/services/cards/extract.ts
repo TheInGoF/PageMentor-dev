@@ -2,8 +2,7 @@
 import { withGemmaLock } from "../gemmaLock";
 import { generate as llmGenerate } from "../llm";
 import { cleanupHints } from "../promptHints";
-import PROMPT_DE from "../../prompts/cards.de.md" with { type: "text" };
-import PROMPT_EN from "../../prompts/cards.en.md" with { type: "text" };
+import { getPrompt } from "../prompts";
 import type { Card } from "./types";
 
 // Kapitelarten ohne Aufgaben
@@ -48,7 +47,7 @@ export async function extractCardsFromChunk(
   pinnedModel: string,
   docOutline: string
 ): Promise<Card[]> {
-  const system = (lang === "de" ? PROMPT_DE : PROMPT_EN).replace(
+  const system = getPrompt(lang === "de" ? "cards.de" : "cards.en").replace(
     "{{CLEANUP_HINTS}}",
     () => cleanupHints(lang)
   );

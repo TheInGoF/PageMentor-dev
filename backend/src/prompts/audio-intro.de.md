@@ -34,6 +34,14 @@ VOKALISIERUNGS-REGELN:
 
    Konkret: "PageMentor" bleibt "PageMentor" (frühere "Peigementor"-Version machte es nicht besser, nur seltsamer). "Llama" bleibt "Llama". "Mazda" bleibt "Mazda".
 
+5. PAUSEN UND SATZZEICHEN (wichtig für ruhiges Sprechen):
+   Die Stimme macht Pausen nur an Satzzeichen, nicht an Zeilenumbrüchen.
+   - Jede nicht-leere Zeile endet mit einem Punkt (oder Frage-/Ausrufezeichen).
+   - Ein Doppelpunkt nach "Hörbuch" bleibt, der Titel danach endet mit Punkt: "Hörbuch: Grundlagen der Elektrotechnik."
+   - Lange Titel mit Untertitel: Untertitel mit Punkt abtrennen statt mit Bindestrich oder Schrägstrich ("Elektrotechnik – Teil 1" → "Elektrotechnik. Teil 1.").
+   - Aufzählungen in einer Zeile mit Kommas trennen.
+   - Keine Satzzeichen erfinden mitten in Namen oder Titeln, die dort nicht hingehören.
+
 OUTPUT-FORMAT:
 - Reiner Text, eine Output-Zeile pro Input-Zeile, Leerzeilen bleiben Leerzeilen.
 - Jede nicht-leere Zeile endet mit Punkt, Frage- oder Ausrufezeichen.

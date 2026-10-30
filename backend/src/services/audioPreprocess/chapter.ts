@@ -7,7 +7,7 @@ import { generate, isAvailable as llmAvailable } from "../llm";
 import { expandAbbreviations } from "../abbreviations";
 import { withGemmaLock } from "../gemmaLock";
 import { cleanupHints } from "../promptHints";
-import { SYSTEM_DE, SYSTEM_EN } from "./prompts";
+import { systemFor } from "./prompts";
 import {
   stripLeadingSectionNumbers,
   splitForPreprocess,
@@ -89,7 +89,7 @@ async function preprocessChapterForAudioImpl(params: {
     const pretreated = stripLeadingSectionNumbers(expanded);
 
     // "audio"-Hinweise: Formeln beschreiben statt LaTeX
-    const baseSystem = params.language === "de" ? SYSTEM_DE : SYSTEM_EN;
+    const baseSystem = systemFor(params.language);
     const system = `${baseSystem}\n\n${cleanupHints(
       params.language === "de" ? "de" : "en",
       "audio"

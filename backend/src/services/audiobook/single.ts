@@ -219,6 +219,11 @@ async function generateIntroAudioImpl(params: {
       chapterChars: [params.text.length],
     });
   }
+  // Jede Zeile mit Satzzeichen beenden: ohne liest die Stimme Zeilen ineinander
+  params.text = params.text
+    .split("\n")
+    .map((l) => (l.trim() && !/[.!?…:]$/.test(l.trim()) ? `${l.trimEnd()}.` : l))
+    .join("\n");
   // Leerer Titel: keine Ansage "Intro." vorweg
   const synth: Chapter = {
     id: `intro-${params.docId}`,
@@ -241,6 +246,7 @@ async function generateIntroAudioImpl(params: {
       rate,
       outFile,
       signal: abortController.signal,
+      intro: true,
       onChunk: (current, total) =>
         say({
           phase: "audiobook.chapter.progress",

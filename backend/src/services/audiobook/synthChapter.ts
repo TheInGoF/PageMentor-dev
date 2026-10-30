@@ -29,6 +29,8 @@ export async function synthesizeChapter(params: {
   outFile: string;
   signal: AbortSignal;
   onChunk: (current: number, total: number) => void;
+  // Intro: jede Zeile ein eigener Abschnitt mit Pause dazwischen, Stille davor
+  intro?: boolean;
 }): Promise<{ durationMs: number }> {
   const { chapter, audioDir, voice, locale, rate, outFile, signal } = params;
 
@@ -42,7 +44,10 @@ export async function synthesizeChapter(params: {
 
   let success = false;
   try {
-    const segments = segmentText(chapter.text, maxChunkFor(voice.engine));
+    // F5 und Co. sprechen Zeilenumbrüche nicht als Pause: im Intro darum Zeile für Zeile
+    const segments = params.intro
+      ? chapter.text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => ({ paragraphs: [l] }))
+      : segmentText(chapter.text, maxChunkFor(voice.engine));
     if (segments.length === 0) {
       // Sollte nach der Prüfung oben nicht vorkommen
       throw new Error("No segments from chapter text.");
@@ -142,11 +147,8 @@ export async function synthesizeChapter(params: {
     );
 
     const mergedPath = join(tmpDir, "merged.mp3");
-    // Pausen: 300 ms zwischen Chunks, 1200 ms am Kapitelende
-    await concatMp3WithGaps(chunkFiles, mergedPath, {
-      interChunkMs: 300,
-      trailingMs: 1200,
-    });
+    // Pausen: 300 ms zwischen Chunks, 1200 ms am Kapitelende; Intro mit 1,5 s davor und 700 ms je Zeile
+    await concatMp3WithGaps(chunkFiles, mergedPath, params.intro ? { leadingMs: 1500, interChunkMs: 700, trailingMs: 1500 } : { interChunkMs: 300, trailingMs: 1200 });
 
     const cover = coverPathFor(chapter.document_id);
     const { durationMs } = await normalizeAndTag({

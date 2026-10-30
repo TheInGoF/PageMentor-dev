@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.27.0 – 2026-10-30
+### New
+- Gemma-Anweisungen in den Einstellungen bearbeitbar (KI → Gemma-Anweisungen), mit Knopf zurück zum Original und Hinweis, wenn ein Update das Original geändert hat.
+### Change
+- Gemma setzt im Intro Satzzeichen für Pausen; fehlende Punkte am Zeilenende ergänzt die App selbst.
+- Intro beginnt mit 1,5 s Stille und spricht Zeile für Zeile mit Pause dazwischen.
+
 ## 1.26.1 – 2026-10-30
 ### New
 - Hörbuch-Lauf: Reihenfolge der Bücher vor dem Start und für wartende Bücher in der Kopfzeile änderbar.

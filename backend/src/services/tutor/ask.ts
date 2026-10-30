@@ -5,16 +5,13 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../db";
 import { generate } from "../llm";
 import { cleanupHints } from "../promptHints";
-import promptDe from "../../prompts/tutor.de.md" with { type: "text" };
-import promptEn from "../../prompts/tutor.en.md" with { type: "text" };
+import { getPrompt } from "../prompts";
 import { MAX_HISTORY_TURNS, type ChatMessageRow, type TutorAnswer, type TutorSource } from "./types";
 import { getChatSession, listChatMessages } from "./sessions";
 import { retrieveChunks, formatSourcesForPrompt } from "./retrieve";
 import { materialSources, retrieveMaterial } from "./material";
 import { runJob } from "../../log/jobs";
 
-const SYSTEM_PROMPT_DE = promptDe;
-const SYSTEM_PROMPT_EN = promptEn;
 
 function buildPrompt(
   history: ChatMessageRow[],
@@ -174,7 +171,7 @@ async function askImpl(params: {
   const language = detectQuestionLanguage(question);
   // Gemeinsame Bereinigungs-Hinweise: Kopfzeilen und kaputte Formeln
   const baseSystem =
-    language === "en" ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT_DE;
+    getPrompt(language === "en" ? "tutor.en" : "tutor.de");
   const systemPrompt = `${baseSystem}\n\n${cleanupHints(language)}`;
 
   const prompt = buildPrompt(history, question, sources, language);

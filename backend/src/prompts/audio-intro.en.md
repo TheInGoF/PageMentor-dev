@@ -34,6 +34,14 @@ VOCALIZATION RULES:
 
    Concretely: "PageMentor" stays "PageMentor" (the older "Peigementor" substitution didn't make it better, just stranger). "Llama" stays "Llama". "Mazda" stays "Mazda".
 
+5. PAUSES AND PUNCTUATION (important for calm narration):
+   The voice pauses only at punctuation, not at line breaks.
+   - Every non-empty line ends with a period (or question/exclamation mark).
+   - A colon after "Audiobook" stays, the title after it ends with a period: "Audiobook: Basics of Electrical Engineering."
+   - Long titles with a subtitle: separate the subtitle with a period instead of a dash or slash ("Electronics – Part 1" → "Electronics. Part 1.").
+   - Separate lists within a line with commas.
+   - Do not invent punctuation inside names or titles where it does not belong.
+
 OUTPUT FORMAT:
 - Plain text, one output line per input line, blank lines stay blank.
 - Every non-empty line ends in a period, question mark, or exclamation mark.

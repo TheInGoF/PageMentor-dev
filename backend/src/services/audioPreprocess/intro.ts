@@ -5,7 +5,7 @@
 import { db } from "../../db";
 import { generate } from "../llm";
 import { withGemmaLock } from "../gemmaLock";
-import { INTRO_SYSTEM_DE, INTRO_SYSTEM_EN } from "./prompts";
+import { introSystemFor } from "./prompts";
 import { runJob } from "../../log/jobs";
 
 export interface IntroPreprocessResult {
@@ -60,7 +60,7 @@ async function preprocessIntroForAudioImpl(params: {
     );
 
     const system =
-      row.language === "de" ? INTRO_SYSTEM_DE : INTRO_SYSTEM_EN;
+      introSystemFor(row.language);
 
     const ollamaOptions = {
       // Reine Ersetzung: deterministisch

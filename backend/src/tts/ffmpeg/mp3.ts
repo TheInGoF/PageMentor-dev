@@ -67,15 +67,16 @@ export async function concatMp3(inputs: string[], output: string): Promise<void>
 export async function concatMp3WithGaps(
   inputs: string[],
   output: string,
-  opts: { interChunkMs?: number; trailingMs?: number } = {}
+  opts: { interChunkMs?: number; trailingMs?: number; leadingMs?: number } = {}
 ): Promise<void> {
   if (inputs.length === 0) {
     throw new Error("concatMp3WithGaps: inputs is empty");
   }
   const interMs = Math.max(0, opts.interChunkMs ?? 0);
   const trailMs = Math.max(0, opts.trailingMs ?? 0);
+  const leadMs = Math.max(0, opts.leadingMs ?? 0);
 
-  if (interMs === 0 && trailMs === 0) {
+  if (interMs === 0 && trailMs === 0 && leadMs === 0) {
     return concatMp3(inputs, output);
   }
 
@@ -109,6 +110,7 @@ export async function concatMp3WithGaps(
   };
 
   const seq: string[] = [];
+  if (leadMs > 0) seq.push(await ensureSilence(leadMs));
   for (let i = 0; i < inputs.length; i++) {
     seq.push(inputs[i]);
     if (interMs > 0 && i < inputs.length - 1) {
