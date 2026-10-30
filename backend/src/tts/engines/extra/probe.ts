@@ -9,6 +9,8 @@ interface EngineStatus {
 
 const TTL_MS = 60_000;
 let engines: Record<string, EngineStatus> = {};
+// Stimmen des Kokoro-Sidecars: Martin und Kerstin, mit Sprachpaket dazu z. B. "es:ef_dora"
+let kokoroNames: string[] = ["martin", "kerstin"];
 let checkedAt = 0;
 let running: Promise<void> | null = null;
 
@@ -17,6 +19,11 @@ async function refresh(): Promise<void> {
     const res = await fetch(`${baseUrl()}/status`, { signal: AbortSignal.timeout(5000) });
     const data = (await res.json()) as { engines?: Record<string, EngineStatus> };
     engines = data.engines ?? {};
+    const kv = await fetch(`${baseUrl()}/tts/kokoro/v1/audio/voices`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    if (kv?.ok) {
+      const list = ((await kv.json()) as { voices?: unknown[] }).voices;
+      if (Array.isArray(list) && list.length) kokoroNames = list.map(String);
+    }
   } catch {
     // Aussetzer (Arbiter wechselt gerade die Stimme): letzten bekannten Stand behalten,
     // sonst verschwinden Kokoro und Co. für eine Minute aus der Auswahl
@@ -47,4 +54,9 @@ export function qwenInstalled(): boolean {
 
 export function extraStatus(): Record<string, EngineStatus> {
   return engines;
+}
+
+export function kokoroVoiceNames(): string[] {
+  if (Date.now() - checkedAt > TTL_MS) void refreshExtraStatus();
+  return kokoroNames;
 }

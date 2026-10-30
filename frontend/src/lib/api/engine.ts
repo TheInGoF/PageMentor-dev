@@ -30,6 +30,14 @@ export interface TtsEnginesInfo {
   arbiter: Record<string, { container: string; gpu: boolean }>;
 }
 
+export interface KokoroPack {
+  installed: boolean;
+  downloading: boolean;
+  fraction: number;
+  error: string | null;
+  available?: boolean;
+}
+
 export const engineApi = {
   engine: {
     status: () => request<EngineStatus>("/api/engine/status"),
@@ -37,6 +45,8 @@ export const engineApi = {
     quitApp: () => request<{ ok: boolean }>("/api/app/quit", { method: "POST" }),
     repair: (id: string) => request<{ started: boolean }>(`/api/engine/repair/${id}`, { method: "POST" }),
     ttsEngines: () => request<TtsEnginesInfo>("/api/engine/tts-engines"),
+    kokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack"),
+    installKokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack", { method: "POST" }),
     saveTtsEngines: (enabled: string[], hfToken?: string) =>
       request<{ enabled: string[]; applying: boolean }>("/api/engine/tts-engines", {
         method: "POST",

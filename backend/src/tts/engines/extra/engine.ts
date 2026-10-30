@@ -9,8 +9,8 @@ import type { PreviewParams, SynthesizeParams, SynthesizeResult, TtsEngine, Voic
 import { authHeaders, parseRate, PREVIEW_TIMEOUT_MS, qwenLanguageFor, SYNTH_TIMEOUT_MS } from "../qwen/config";
 import { ensureDesignReference } from "../qwen/designRef";
 import { ttsFetch } from "../qwen/http";
-import { EXTRA, KOKORO_VOICES, speechUrl, type ExtraId } from "./config";
-import { extraAvailable } from "./probe";
+import { EXTRA, KOKORO_VOICES, kokoroPackVoice, speechUrl, type ExtraId } from "./config";
+import { extraAvailable, kokoroVoiceNames } from "./probe";
 
 interface CloneRef {
   b64: string;
@@ -23,7 +23,18 @@ const locale = (lang: string) => (lang === "de" ? "de-DE" : lang === "en" ? "en-
 function listFor(id: ExtraId): Voice[] {
   const meta = EXTRA[id];
   if (!meta.clones) {
-    return KOKORO_VOICES.map((v, i): Voice => ({ id: `${id}:${v.id}`, label: v.label, language: "de", locale: "de-DE", gender: v.gender, engine: id, flagship: i === 0, note: meta.note }));
+    const de = KOKORO_VOICES.map((v, i): Voice => ({ id: `${id}:${v.id}`, label: v.label, language: "de", locale: "de-DE", gender: v.gender, engine: id, flagship: i === 0, note: meta.note }));
+    // Sprachpaket: erste Stimme je Sprache ist Standard
+    const seen = new Set<string>();
+    const pack = kokoroVoiceNames()
+      .map(kokoroPackVoice)
+      .filter((v): v is NonNullable<typeof v> => !!v)
+      .map((v): Voice => {
+        const flagship = !seen.has(v.language);
+        seen.add(v.language);
+        return { id: `${id}:${v.id}`, label: v.label, language: v.language, locale: v.locale, gender: v.gender, engine: id, flagship, note: `Kokoro-82M · ${v.langLabel}` };
+      });
+    return [...de, ...pack];
   }
   // Beide Modelle sind auf Deutsch trainiert
   const samples = listVoiceSamples()

@@ -24,8 +24,23 @@ export const EXTRA_IDS = Object.keys(EXTRA) as ExtraId[];
 
 export const speechUrl = (id: ExtraId) => `${baseUrl()}/tts/${id}/v1/audio/speech`;
 
-// Kokoro: je Stimme ein eigenes Modell im Image pm-kokoro-tts
+// Kokoro: Martin und Kerstin je ein eigenes Modell im Image; mit Sprachpaket weitere Stimmen "<sprache>:<name>"
 export const KOKORO_VOICES = [
   { id: "martin", label: "Martin", gender: "male" },
   { id: "kerstin", label: "Kerstin", gender: "female" },
 ] as const;
+
+const PACK_LANG: Record<string, { language: string; locale: string; label: string }> = {
+  "en-us": { language: "en", locale: "en-US", label: "Englisch (US)" },
+  "en-gb": { language: "en", locale: "en-GB", label: "Englisch (UK)" },
+  es: { language: "es", locale: "es-ES", label: "Spanisch" },
+};
+
+// "es:ef_dora" → Dora, weiblich, Spanisch; unbekannte Sprachen fallen weg
+export function kokoroPackVoice(name: string): { id: string; label: string; gender: "female" | "male"; language: string; locale: string; langLabel: string } | null {
+  const [lang, v] = name.split(":");
+  const meta = PACK_LANG[lang];
+  if (!meta || !v) return null;
+  const base = v.split("_")[1] ?? v;
+  return { id: name, label: base.charAt(0).toUpperCase() + base.slice(1), gender: v[1] === "m" ? "male" : "female", language: meta.language, locale: meta.locale, langLabel: meta.label };
+}

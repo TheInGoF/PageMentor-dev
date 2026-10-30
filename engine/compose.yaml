@@ -92,6 +92,9 @@ services:
     environment:
       KOKORO_SPEED: "1.125"
       OMP_NUM_THREADS: "4"
+    # Sprachpaket (Englisch, Spanisch), lädt erst auf Wunsch
+    volumes:
+      - kokoro-packs:/packs
 
   # Weitere Stimmen, optional über COMPOSE_PROFILES in /opt/pagementor/.env
   # F5-TTS German, klont Stimmen; startet der Arbiter
@@ -175,5 +178,6 @@ volumes:
   docling-cache:
   qwen-tts-hf:
   tts-hf:
+  kokoro-packs:
   infinity-cache:
   meili-data:

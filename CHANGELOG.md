@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.29.0 – 2026-10-30
+### New
+- Aussprache-Liste: ▶ neben jedem Eintrag spielt die Aussprache sofort vor, mit wählbarer Teststimme.
+- Sprachen (Einstellungen → Stimmen): Kokoro lädt Englisch und Spanisch auf Knopfdruck (~340 MB), Qwen spricht beide von Haus aus.
+
 ## 1.28.0 – 2026-10-30
 ### New
 - Aussprache-Liste für deutsche Stimmen (Einstellungen → Stimmen), z. B. „PageMentor → Pejdsch-Mentor“; greift vor jeder Sprachausgabe.

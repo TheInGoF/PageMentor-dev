@@ -1,5 +1,6 @@
 // Engine: Status, Selbsttest, Reparaturen, Dienst-Logs
 import { Hono } from "hono";
+import { baseUrl } from "../tts/engines/qwen/config";
 import { IS_WINDOWS } from "../paths";
 import type { RepairId } from "../engine/checks";
 import { trackEngineSwitch } from "../engine/engineCleanup";
@@ -50,4 +51,18 @@ engineRoutes.post("/tts-engines", async (c) => {
   // Unter Windows gleich übernehmen: Pakete laden, Dienste anlegen
   if (IS_WINDOWS && !engineState().task) void runRepair("apply-tts-engines").catch(() => {});
   return c.json({ enabled, applying: IS_WINDOWS });
+});
+
+// Kokoro-Sprachpaket (Englisch, Spanisch): Stand und Download im Sidecar
+engineRoutes.get("/kokoro-pack", async (c) => {
+  const r = await fetch(`${baseUrl()}/tts/kokoro/v1/audio/packs`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+  if (!r?.ok) return c.json({ installed: false, downloading: false, fraction: 0, error: "Kokoro nicht erreichbar", available: false });
+  return c.json({ ...((await r.json()) as object), available: true });
+});
+
+engineRoutes.post("/kokoro-pack", async (c) => {
+  const r = await fetch(`${baseUrl()}/tts/kokoro/v1/audio/packs/install`, { method: "POST", signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  if (!r?.ok) return c.json({ error: "Kokoro nicht erreichbar" }, 503);
+  void refreshExtraStatus();
+  return c.json((await r.json()) as object);
 });
