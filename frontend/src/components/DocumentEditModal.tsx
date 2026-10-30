@@ -29,6 +29,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
   const [author, setAuthor] = useState("");
   const [shortCode, setShortCode] = useState("");
   const [seriesSequence, setSeriesSequence] = useState("");
+  const [secondLanguage, setSecondLanguage] = useState("");
   const [type, setType] = useState<DocType>("studienheft");
   const [tags, setTags] = useState("");
   const [moduleId, setModuleId] = useState<string>("");
@@ -43,6 +44,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
       setAuthor(doc.author ?? "");
       setShortCode(doc.short_code ?? "");
       setSeriesSequence(doc.series_sequence ?? "");
+      setSecondLanguage(doc.second_language ?? "");
       setType(doc.type);
       setTags(doc.tags.join(", "));
       setModuleId(doc.module_id ?? "");
@@ -69,6 +71,7 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
         author: author.trim() ? author.trim() : null,
         short_code: shortCode.trim() ? shortCode.trim() : null,
         series_sequence: seriesSequence.trim() ? seriesSequence.trim() : null,
+        second_language: secondLanguage || null,
       });
       onSaved();
       onClose();
@@ -160,6 +163,16 @@ export function DocumentEditModal({ open, doc, onClose, onSaved }: Props) {
                   </option>
                 ))}
               </select>
+            </div>
+            {/* Lehrbuch für eine Fremdsprache: das Hörbuch spricht diese Passagen mit eigener Stimme */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-neutral-400">{t("doc.field.secondLanguage")}</label>
+              <select className="input" value={secondLanguage} onChange={(e) => setSecondLanguage(e.target.value)}>
+                <option value="">{t("doc.field.secondLanguage.none")}</option>
+                <option value="es">{t("lang.name.es")}</option>
+                <option value="en">{t("lang.name.en")}</option>
+              </select>
+              <p className="text-xs text-neutral-500">{t("doc.field.secondLanguage.hint")}</p>
             </div>
             <TagInput
               label={t("upload.tags")}

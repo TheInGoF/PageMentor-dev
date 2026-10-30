@@ -35,6 +35,8 @@ export interface Document {
   series_sequence: string | null;
   module_name: string | null;
   language: string;
+  second_language?: string | null;
+  voice2?: string | null;
 }
 
 // Fortschritt pro laufendem Hörbuch, nur im Speicher

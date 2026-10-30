@@ -60,7 +60,9 @@ async function preprocessChapterForAudioImpl(params: {
   const chapterLabel = `chapter ${row.number}${row.title ? ` "${row.title.slice(0, 40)}"` : ""}`;
 
   // Gilt nur, wenn von Hand bearbeitet oder mit der aktuellen Anweisung entstanden
-  const stamp = gemmaStamp("chapter", params.language);
+  // Zweisprachiges Buch: die Bereinigung lässt die Fremdsprache stehen (Hinweis unten, zählt zum Stempel)
+  const lang2 = (d.prepare("SELECT second_language FROM documents WHERE id = ?").get(row.document_id) as { second_language: string | null } | undefined)?.second_language ?? "";
+  const stamp = gemmaStamp("chapter", params.language, lang2);
   const fresh = row.audio_text_model === "manual-edit" || row.audio_text_stamp === stamp;
   if (!params.force && row.audio_text && row.audio_text.trim().length > 0 && !fresh) {
     console.log(`[audio-preprocess] ${chapterLabel} veraltet (andere Anweisung oder Version), neu aufbereiten`);
@@ -101,7 +103,7 @@ async function preprocessChapterForAudioImpl(params: {
     const system = `${baseSystem}\n\n${cleanupHints(
       params.language === "de" ? "de" : "en",
       "audio"
-    )}`;
+    )}${lang2 ? `\n\nDIESES BUCH UNTERRICHTET EINE FREMDSPRACHE (${lang2}). Alle Wörter, Sätze und Vokabeln in dieser Sprache bleiben Zeichen für Zeichen unverändert: nicht übersetzen, nicht eindeutschen, nicht in Lautschrift umschreiben, Satzzeichen wie ¿ ¡ behalten.` : ""}`;
 
     // num_ctx: Ollama-Standard 2048 ist viel zu klein
     // num_predict: endlich, "-1" ignorieren manche Ollama-Builds

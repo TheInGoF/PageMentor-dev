@@ -21,6 +21,20 @@ function ensureSentenceEnd(text: string): string {
   return trimmed + "." + trailingWs;
 }
 
+// "[es]Me llamo[/es] bedeutet: ich heiße." → Abschnitte mit Sprache (null = Hauptsprache)
+export function splitLanguageRuns(text: string): Array<{ lang: string | null; text: string }> {
+  const runs: Array<{ lang: string | null; text: string }> = [];
+  const re = /\[([a-z]{2})\]([\s\S]*?)\[\/\1\]/g;
+  let last = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > last) runs.push({ lang: null, text: text.slice(last, m.index) });
+    runs.push({ lang: m[1], text: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) runs.push({ lang: null, text: text.slice(last) });
+  return runs.filter((r) => /[\p{L}\p{N}]/u.test(r.text));
+}
+
 export async function synthesizeChapter(params: {
   chapter: Chapter;
   audioDir: string;
@@ -32,6 +46,8 @@ export async function synthesizeChapter(params: {
   onChunk: (current: number, total: number) => void;
   // Intro: jede Zeile ein eigener Abschnitt mit Pause dazwischen, Stille davor
   intro?: boolean;
+  // Zweisprachige Bücher: Stimme je markierter Sprache ([es]…[/es]), z. B. { es: Dora }
+  voices?: Record<string, Voice>;
 }): Promise<{ durationMs: number }> {
   const { chapter, audioDir, voice, locale, rate, outFile, signal } = params;
 
@@ -46,18 +62,25 @@ export async function synthesizeChapter(params: {
   let success = false;
   try {
     // Deutsche Stimmen: Aussprache-Liste (Anglizismen, Produktnamen) direkt vor der Sprachausgabe
-    const speak = voice.locale.startsWith("de") ? (t: string) => applyPronunciation(t) : (t: string) => t;
-    // F5 und Co. sprechen Zeilenumbrüche nicht als Pause: im Intro darum Zeile für Zeile
-    const segments = (
-      params.intro
-        ? chapter.text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => ({ paragraphs: [l] }))
-        : segmentText(chapter.text, maxChunkFor(voice.engine))
-    ).map((seg) => ({ ...seg, paragraphs: seg.paragraphs.map(speak) }));
-    if (segments.length === 0) {
-      // Sollte nach der Prüfung oben nicht vorkommen
-      throw new Error("No segments from chapter text.");
+    const speakFor = (v: Voice) => (v.locale.startsWith("de") ? (t: string) => applyPronunciation(t) : (t: string) => t);
+    const speak = speakFor(voice);
+    const maxChunk = maxChunkFor(voice.engine);
+    // Abschnitte samt Stimme: Fremdsprachige Passagen gehen an die Stimme ihrer Sprache
+    let segments: Array<{ paragraphs: string[]; voice: Voice }>;
+    if (params.intro) {
+      // F5 und Co. sprechen Zeilenumbrüche nicht als Pause: im Intro darum Zeile für Zeile
+      segments = chapter.text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => ({ paragraphs: [speak(l)], voice }));
+    } else if (params.voices && Object.keys(params.voices).length) {
+      segments = splitLanguageRuns(chapter.text).flatMap((run) => {
+        const v = (run.lang && params.voices![run.lang]) || voice;
+        if (v === voice) return segmentText(run.text, maxChunk).map((seg) => ({ paragraphs: seg.paragraphs.map(speak), voice }));
+        return [{ paragraphs: [run.text.trim()], voice: v }];
+      });
+      // Kapitelansage immer mit der Hauptstimme
+      if (segments.length && segments[0].voice !== voice) segments.unshift({ paragraphs: [], voice });
+    } else {
+      segments = segmentText(chapter.text, maxChunk).map((seg) => ({ paragraphs: seg.paragraphs.map(speak), voice }));
     }
-
     // Gesamtzahl sofort melden
     params.onChunk(0, segments.length);
 
@@ -81,17 +104,23 @@ export async function synthesizeChapter(params: {
             : `Chapter ${chapter.number}`;
         }
       }
+      const segVoice = segments[i].voice;
+      // Leerer Platzhalter ohne Ansage (Kapitel 0 ohne Titel): nichts zu sprechen
+      if (!announcement && !segments[i].paragraphs.length) {
+        params.onChunk(i + 1, segments.length);
+        continue;
+      }
       const paragraphText = segments[i].paragraphs.join("\n\n");
       const plainText = ensureSentenceEnd(
         announcement
-          ? `${announcement}.\n\n${paragraphText}`
+          ? paragraphText ? `${announcement}.\n\n${paragraphText}` : announcement
           : paragraphText
       );
 
       // Cache-Schlüssel aus Text, Stimme, Tempo
       const cacheKey = chunkHash({
         text: plainText,
-        voice: voice.id,
+        voice: segVoice.id,
         rate,
         chapterId: chapter.id,
         index: i,
@@ -127,10 +156,10 @@ export async function synthesizeChapter(params: {
         `[tts] chunk ${i + 1}/${segments.length} (${cacheKey}) → ${plainText.length} chars, synth start`
       );
       const { engineId } = await synthesizeChunk({
-        segment: segments[i],
+        segment: { paragraphs: segments[i].paragraphs },
         text: plainText,
-        voice,
-        locale,
+        voice: segVoice,
+        locale: segVoice === voice ? locale : segVoice.locale,
         rate,
         announce: announcement,
         outPath: chunkPath,

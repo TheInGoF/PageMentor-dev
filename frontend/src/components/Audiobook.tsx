@@ -13,6 +13,7 @@ import { ComparePanel } from "./audiobook/ComparePanel";
 import { ChapterWorkbench } from "./audiobook/ChapterWorkbench";
 import { BookProgressPanel } from "./audiobook/BookProgressPanel";
 import { IntroEditor } from "./audiobook/IntroEditor";
+import { SecondVoice } from "./audiobook/SecondVoice";
 import { KindFilterBar } from "./audiobook/KindFilterBar";
 
 interface Props {
@@ -315,6 +316,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
             </Button>
           </div>
         </div>
+
+        <SecondVoice docId={docId} voices={voices} />
 
         <div className="flex items-center gap-3 pt-2 border-t border-border">
           <Button

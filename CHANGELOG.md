@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.30.0 – 2026-10-30
+### New
+- Hörbuch spricht Passagen der zweiten Sprache mit eigener Stimme (z. B. Thorsten für Deutsch, Dora für Spanisch); Gemma markiert sie, die App prüft, dass kein Wort verändert wurde.
+- Neue Gemma-Anweisung „Sprachen markieren“, in den Einstellungen bearbeitbar.
+- Zweisprachige Lehrbücher: im Bearbeiten-Dialog „Zweite Sprache im Buch“ (Spanisch, Englisch), im Hörbuch-Reiter die Stimme dafür.
+### Change
+- Bei zweisprachigen Büchern lässt die Kapitel-Bereinigung die Fremdsprache unverändert.
+
 ## 1.29.0 – 2026-10-30
 ### New
 - Aussprache-Liste: ▶ neben jedem Eintrag spielt die Aussprache sofort vor, mit wählbarer Teststimme.

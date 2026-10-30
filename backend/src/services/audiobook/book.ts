@@ -10,6 +10,7 @@ import { introTtsText } from "./intro";
 import { defaultIntroText, introTitle } from "../batch/introText";
 import { generateIntroAudio, introSpeechText } from "./single";
 import { ttsStamp } from "../stamps";
+import { tagChapterLanguages } from "../audioPreprocess/lang";
 import { ensureCover } from "../covers";
 import { emit } from "../events";
 import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
@@ -52,7 +53,7 @@ async function generateAudiobookImpl(params: {
   const doc = d
     .prepare(
       `SELECT d.id, d.title, d.doc_title, d.author, d.short_code, d.series_sequence, d.language,
-              m.name AS module_name
+              d.second_language, d.voice2, m.name AS module_name
        FROM documents d
        LEFT JOIN modules m ON m.id = d.module_id
        WHERE d.id = ?`
@@ -93,6 +94,10 @@ async function generateAudiobookImpl(params: {
   }
   const engineId = voice.engine;
   const locale = voice.locale;
+  // Zweisprachiges Buch: Stimme für die zweite Sprache; ohne sie liest die Hauptstimme alles
+  const lang2 = doc.second_language || null;
+  const voice2 = lang2 && doc.voice2 ? findVoice(doc.voice2, lang2) ?? null : null;
+  const extraVoices = lang2 && voice2 ? { [lang2]: voice2 } : undefined;
   const rate = params.rate || "+0%";
 
   const audioDir = join(DATA_DIR, "audio", doc.id);
@@ -201,8 +206,16 @@ async function generateAudiobookImpl(params: {
         .get(ch.id) as
         | { status: string; duration_ms: number; stamp: string | null }
         | undefined;
+      // Zweite Sprache markieren (Gemma, gecacht), damit die passende Stimme sie spricht
+      if (lang2 && voice2 && llmReady) {
+        try {
+          chapterText = await tagChapterLanguages(ch.id, chapterText, lang2, params.model);
+        } catch (err) {
+          console.warn(`[audiobook] language tagging failed for chapter ${ch.number}:`, err);
+        }
+      }
       // Stempel aus dem gesprochenen Text: neue Anweisung, Aussprache, Stimme oder Tempo → neu erzeugen
-      const stamp = ttsStamp(chapterText, voiceId, rate, locale);
+      const stamp = ttsStamp(chapterText, voice2 ? `${voiceId}+${voice2.id}` : voiceId, rate, locale);
 
       // Alte Zeilen ohne done-Status verwerfen, sonst ewig "fehlgeschlagen"
       if (existingAudio && existingAudio.status !== "done") {
@@ -256,6 +269,7 @@ async function generateAudiobookImpl(params: {
           rate,
           outFile,
           signal,
+          voices: extraVoices,
           onChunk: (chunkIdx, chunkTotal) => {
             runState.chunkCurrent = chunkIdx;
             runState.chunkTotal = chunkTotal;

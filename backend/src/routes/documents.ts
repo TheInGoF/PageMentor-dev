@@ -292,6 +292,8 @@ documentRoutes.patch("/:id", async (c) => {
     author?: string | null;
     short_code?: string | null;
     series_sequence?: string | null;
+    second_language?: string | null;
+    voice2?: string | null;
   }>();
 
   const doc = db().prepare("SELECT id, page_count FROM documents WHERE id = ?").get(id) as
@@ -332,6 +334,14 @@ documentRoutes.patch("/:id", async (c) => {
         ? null
         : body.short_code.trim();
     db().prepare("UPDATE documents SET short_code = ? WHERE id = ?").run(value, id);
+  }
+  // Zweite Sprache (Lehrbücher) und die Stimme dafür; leer = einsprachig
+  if (body.second_language !== undefined) {
+    const v = body.second_language && /^[a-z]{2}$/.test(body.second_language) ? body.second_language : null;
+    db().prepare("UPDATE documents SET second_language = ? WHERE id = ?").run(v, id);
+  }
+  if (body.voice2 !== undefined) {
+    db().prepare("UPDATE documents SET voice2 = ? WHERE id = ?").run(body.voice2 || null, id);
   }
   if (body.series_sequence !== undefined) {
     // String fields, weil ABS auch "1.5" / "1a" akzeptiert. Trim +

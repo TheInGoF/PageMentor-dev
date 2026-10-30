@@ -215,6 +215,11 @@ export function initDb() {
   // Versionsstempel: zeigen, mit welcher Anweisung/Aussprache/Stimme ein Ergebnis entstand.
   // Weicht der Stempel ab, erzeugt der nächste Hörbuch-Lauf das Teil neu (services/stamps.ts)
   if (!chapterCols.some((c) => c.name === "audio_text_stamp")) d.exec("ALTER TABLE chapters ADD COLUMN audio_text_stamp TEXT");
+  // Zweisprachige Bücher: Text mit Sprachmarkierungen ([es]…[/es]) samt Stempel
+  if (!chapterCols.some((c) => c.name === "audio_lang_text")) {
+    d.exec("ALTER TABLE chapters ADD COLUMN audio_lang_text TEXT");
+    d.exec("ALTER TABLE chapters ADD COLUMN audio_lang_stamp TEXT");
+  }
   const audioCols = d.prepare("PRAGMA table_info(audio)").all() as Array<{ name: string }>;
   if (!audioCols.some((c) => c.name === "stamp")) d.exec("ALTER TABLE audio ADD COLUMN stamp TEXT");
   const stampCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
@@ -222,6 +227,11 @@ export function initDb() {
   if (!stampCols.some((c) => c.name === "audio_intro_stamp")) d.exec("ALTER TABLE documents ADD COLUMN audio_intro_stamp TEXT");
   // Eintrag in Audiobookshelf zum Buch: neue Fassungen ersetzen ihn statt ein zweites Buch anzulegen
   if (!stampCols.some((c) => c.name === "abs_item_id")) d.exec("ALTER TABLE documents ADD COLUMN abs_item_id TEXT");
+  // Zweite Sprache im Buch (z. B. "es" bei Spanisch-Lehrbüchern) und die Stimme dafür
+  if (!stampCols.some((c) => c.name === "second_language")) {
+    d.exec("ALTER TABLE documents ADD COLUMN second_language TEXT");
+    d.exec("ALTER TABLE documents ADD COLUMN voice2 TEXT");
+  }
 
   const docCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
   if (!docCols.some((c) => c.name === "author")) {

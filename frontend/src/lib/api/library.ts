@@ -31,6 +31,8 @@ export const libraryApi = {
         author?: string | null;
         short_code?: string | null;
         series_sequence?: string | null;
+        second_language?: string | null;
+        voice2?: string | null;
       }
     ) =>
       request<Document>(`/api/documents/${id}`, {

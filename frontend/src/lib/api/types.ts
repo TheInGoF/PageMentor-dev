@@ -25,6 +25,9 @@ export interface Document {
   short_code?: string | null;
   // Position in der Modul-Serie, für Sortierung und M4B-Track
   series_sequence?: string | null;
+  // Lehrbuch mit zweiter Sprache (z. B. "es") und Stimme dafür
+  second_language?: string | null;
+  voice2?: string | null;
   chapter_count?: number;
   card_count?: number;
   audio_done?: number;

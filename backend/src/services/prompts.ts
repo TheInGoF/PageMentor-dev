@@ -13,6 +13,7 @@ import cardsDe from "../prompts/cards.de.md" with { type: "text" };
 import cardsEn from "../prompts/cards.en.md" with { type: "text" };
 import tutorDe from "../prompts/tutor.de.md" with { type: "text" };
 import tutorEn from "../prompts/tutor.en.md" with { type: "text" };
+import langDe from "../prompts/audio-lang.de.md" with { type: "text" };
 
 export const PROMPTS = {
   "audio-chapter.de": chapterDe,
@@ -23,6 +24,7 @@ export const PROMPTS = {
   "cards.en": cardsEn,
   "tutor.de": tutorDe,
   "tutor.en": tutorEn,
+  "audio-lang.de": langDe,
 } as const;
 
 export type PromptId = keyof typeof PROMPTS;
