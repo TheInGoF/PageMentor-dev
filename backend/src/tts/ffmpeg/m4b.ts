@@ -135,7 +135,8 @@ export async function buildM4B(params: {
     `[m4b] encode ${params.output} (${(outSize / 1024 / 1024).toFixed(1)} MB) in ${((Date.now() - encodeStart) / 1000).toFixed(1)}s`
   );
   // Letzte stderr-Zeilen helfen, wenn das M4B zu klein ist
-  const tailLines = stderr.trim().split(/\r?\n/).slice(-8).join(" | ");
+  // Fortschrittszeilen (mit \r getrennt) überspringen, sonst steht hier die ganze Kodierung
+  const tailLines = stderr.trim().split(/[\r\n]+/).filter((l) => !/^\s*(frame|size)=/.test(l)).slice(-6).join(" | ");
   if (tailLines) {
     console.log(`[m4b] ffmpeg tail: ${tailLines}`);
   }

@@ -42,6 +42,8 @@ export function isEmbeddingModel(name: string): boolean {
 // - gewünscht, fehlt: /api/pull versuchen, sonst klarer Fehler
 // - nichts gewünscht: erstes Nicht-Embedding-Modell
 // Nie still auf ein anderes Modell ausweichen
+let autoPickWarned = "";
+
 export async function resolveOllamaModel(
   url: string,
   requested: string | undefined
@@ -76,6 +78,9 @@ export async function resolveOllamaModel(
   // Kein Modell gewünscht: laut loggen, erstes Textmodell nehmen
   const generative = available.filter((n) => !isEmbeddingModel(n));
   if (generative.length > 0) {
+    // Nur einmal je Modell melden, sonst steht die Warnung vor jedem Gemma-Aufruf im Log
+    if (autoPickWarned === generative[0]) return generative[0];
+    autoPickWarned = generative[0];
     console.warn(
       `[llm] no model pinned (Settings → Default Ollama Model is empty), ` +
         `auto-picked "${generative[0]}" from /api/tags at ${url}. ` +

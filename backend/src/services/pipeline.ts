@@ -1,4 +1,5 @@
 import { join } from "path";
+import { isIncluded } from "./audiobook/state";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { db } from "../db";
@@ -180,10 +181,8 @@ async function processDocumentImpl(docId: string): Promise<void> {
           ch.text,
           idx,
           ch.kind,
-          // Default: content + summary go into the audiobook,
-          // everything else (examples, exercises, indexes, solutions,
-          // …) is excluded. User can toggle per chapter.
-          ch.kind === "content" || ch.kind === "summary" ? 1 : 0
+          // Standard je Kapitelart wie im Hörbuch (Inhalt, Zusammenfassung, Vorwort/Einleitung an)
+          isIncluded({ kind: ch.kind, include_in_audio: null }) ? 1 : 0
         );
       });
     });

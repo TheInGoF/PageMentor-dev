@@ -127,17 +127,14 @@ async function preprocessChapterForAudioImpl(params: {
 
     const responses: string[] = [];
     let lastModel = "(unknown)";
+    let rawPieces = 0;
     for (let i = 0; i < subChunks.length; i++) {
       const chunk = subChunks[i];
       const label = subChunks.length > 1 ? ` [${i + 1}/${subChunks.length}]` : "";
       const t0 = Date.now();
 
-      let result = await generate({
-        prompt: chunk,
-        system,
-        model: params.model,
-        options: ollamaOptions,
-      });
+      let result = await generateChunk(chunk, system, params.model, ollamaOptions, label);
+      if (result.raw) rawPieces++;
 
       if (!result.response || result.response.trim().length < 20) {
         console.warn(
@@ -259,7 +256,9 @@ async function preprocessChapterForAudioImpl(params: {
 
     d.prepare(
       "UPDATE chapters SET audio_text = ?, audio_text_model = ?, audio_text_stamp = ? WHERE id = ?"
-    ).run(cleaned, lastModel, stamp, params.chapterId);
+    ).run(cleaned, lastModel, rawPieces ? null : stamp, params.chapterId);
+    // Ohne Stempel versucht der nächste Lauf die rohen Stücke erneut
+    if (rawPieces) console.warn(`[audio-preprocess] ${chapterLabel}: ${rawPieces} Teilstück(e) unbearbeitet, nächster Lauf versucht es erneut`);
 
     const totalSeconds = ((Date.now() - tStart) / 1000).toFixed(1);
     console.log(
@@ -269,6 +268,43 @@ async function preprocessChapterForAudioImpl(params: {
 
     return { text: cleaned, model: lastModel, cached: false };
   });
+}
+
+type ChunkResult = Awaited<ReturnType<typeof generate>> & { raw?: boolean };
+
+// Ollama bricht ab, wenn Gemma in einer Schleife hängt ("token repeat limit"). Dann mit mehr
+// Abwechslung wiederholen, danach in halben Stücken; erst ganz zuletzt bleibt nur dieses Stück roh
+async function generateChunk(
+  prompt: string,
+  system: string,
+  model: string | undefined,
+  options: Record<string, unknown>,
+  label: string,
+  depth = 0
+): Promise<ChunkResult> {
+  const looped = (err: unknown) => /repeat limit/i.test(err instanceof Error ? err.message : String(err));
+  try {
+    return await generate({ prompt, system, model, options });
+  } catch (err) {
+    if (!looped(err)) throw err;
+  }
+  console.warn(`[audio-preprocess]${label} Gemma hing in einer Wiederholung fest, neuer Versuch mit mehr Abwechslung`);
+  try {
+    return await generate({ prompt, system, model, options: { ...options, temperature: 0.4, repeat_penalty: 1.15, repeat_last_n: 256 } });
+  } catch (err) {
+    if (!looped(err)) throw err;
+  }
+  if (depth === 0 && prompt.length > 1500) {
+    const halves = splitForPreprocess(prompt, Math.ceil(prompt.length / 2));
+    if (halves.length > 1) {
+      console.warn(`[audio-preprocess]${label} wieder Schleife, versuche ${halves.length} kleinere Stücke`);
+      const parts: ChunkResult[] = [];
+      for (const h of halves) parts.push(await generateChunk(h, system, model, options, label, 1));
+      return { ...parts[0], response: parts.map((p) => p.response).join("\n\n"), raw: parts.some((p) => p.raw) };
+    }
+  }
+  console.warn(`[audio-preprocess]${label} Stück bleibt unbearbeitet (${prompt.length} Zeichen)`);
+  return { response: prompt, model: model ?? "(roh)", provider: "", totalMs: 0, raw: true };
 }
 
 // Cache leeren, z. B. nach Modellwechsel oder Textänderung

@@ -218,6 +218,20 @@ async function syncCompose(): Promise<void> {
   if (r.code !== 0) throw new RepairError(`compose.yaml nicht übernommen: ${failText(r)}`);
 }
 
+// Belegter Port: meist hängt Docker Desktop mit seiner WSL-Integration in der PageMentor-Umgebung
+// und hält den Port noch von einem alten Container. Dann eine klare Anleitung statt der Docker-Meldung
+async function portHint(text: string): Promise<string | null> {
+  const m = /ports are not available: exposing port TCP [\d.]+:(\d+)|bind: address already in use.*?:(\d+)/i.exec(text);
+  if (!m) return null;
+  const port = m[1] ?? m[2] ?? "?";
+  const info = await inDistro(`${DOCKER} info --format '{{.OperatingSystem}}' 2>/dev/null; test -e /mnt/wsl/docker-desktop && echo desktop`, { timeoutMs: 30_000, quiet: true });
+  const desktop = /desktop/i.test(info.stdout);
+  return desktop
+    ? `Port ${port} ist belegt. Docker Desktop ist mit der PageMentor-Umgebung verbunden und hält den Port noch fest. ` +
+        `Abhilfe: Docker Desktop beenden (oder dort unter Einstellungen → Resources → WSL integration „${DISTRO}“ ausschalten), danach „Dienste starten“.`
+    : `Port ${port} ist belegt, ein anderes Programm nutzt ihn. Bitte Windows neu starten oder das Programm beenden, danach „Dienste starten“.`;
+}
+
 async function startServices(progress: Progress): Promise<void> {
   progress("Starte Dienste …");
   await syncCompose();
@@ -229,7 +243,7 @@ async function startServices(progress: Progress): Promise<void> {
     timeoutMs: 15 * 60_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
   });
-  if (core.code !== 0) throw new RepairError(`Dienste starten fehlgeschlagen: ${failText(core)}`);
+  if (core.code !== 0) throw new RepairError(await portHint(failText(core)) ?? `Dienste starten fehlgeschlagen: ${failText(core)}`);
   // Abgeschaltete Zusatzstimmen entfernen; scheitert ohne Folgen, wenn es sie nicht gibt
   if (extra.off.length) await inDistro(`docker rm -f ${extra.off.join(" ")} >/dev/null 2>&1 || true`, { timeoutMs: 120_000, quiet: true });
   const cmds = [extra.up.length ? `${compose} up -d ${extra.up.join(" ")}` : "", extra.create.length ? `${compose} up --no-start ${extra.create.join(" ")}` : ""].filter(Boolean);

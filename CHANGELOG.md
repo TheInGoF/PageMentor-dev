@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.32.1 – 2026-10-30
+### Change
+- Log: ffmpeg-Fortschritt nur noch alle 10 Sekunden, Modell-Hinweis von Gemma nur einmal.
+### Fix
+- Belegter Port beim Dienststart: klare Anleitung statt Docker-Meldung, mit Hinweis auf Docker Desktop.
+- Erkanntes Vorwort und Einleitung sind fürs Hörbuch wieder vorausgewählt, auch bei schon umgewandelten Heften.
+- Hängt Gemma in einer Wiederholung fest, versucht die App es erneut und in kleineren Stücken, statt das ganze Kapitel unbearbeitet vorzulesen.
+
 ## 1.32.0 – 2026-10-30
 ### New
 - Jede Verbindung nennt die gemeinsamen Fachbegriffe (Export und Tooltip in der Grafik).

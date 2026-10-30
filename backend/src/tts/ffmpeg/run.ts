@@ -18,6 +18,8 @@ export async function run(
     let stdout = "";
     let stderr = "";
     const prefix = opts?.logPrefix ?? `[${bin}]`;
+    // Fortschrittszeilen kommen alle 0,5 s; ins Log nur alle 10 s
+    let lastProgressLog = 0;
     child.stdout.on("data", (b) => (stdout += b.toString()));
     child.stderr.on("data", (b) => {
       const chunk = b.toString();
@@ -26,7 +28,11 @@ export async function run(
         .split(/[\r\n]+/)
         .filter((l: string) => l.trim().length > 0);
       for (const line of lines) {
-        if (opts?.liveStderr) console.log(`${prefix} ${line}`);
+        const progress = /^\s*(frame|size)=/.test(line);
+        if (opts?.liveStderr && (!progress || Date.now() - lastProgressLog >= 10_000)) {
+          if (progress) lastProgressLog = Date.now();
+          console.log(`${prefix} ${line}`);
+        }
         opts?.onStderrLine?.(line);
       }
     });
