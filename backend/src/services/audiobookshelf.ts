@@ -14,12 +14,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { db } from "../db";
-import { effective } from "./llmConfig";
+import { absEnabled, effective } from "./llmConfig";
 import { ensureCover } from "./covers";
 import { pickLang, tLang } from "../lib/i18n";
 import { DATA_DIR } from "../paths";
 import { httpErrorFrom } from "../log/errors";
 
+
+// Eingerichtet: Adresse, Schlüssel und Bibliothek vorhanden
+export function absReady(): boolean {
+  return absEnabled() && !!absBaseUrl() && !!absApiKey() && !!effective("absLibraryId", "PM_ABS_LIBRARY_ID");
+}
 
 function absBaseUrl(): string | null {
   const url = effective("absUrl", "PM_ABS_URL");

@@ -54,3 +54,15 @@ export async function withDocling<T>(fn: () => Promise<T>): Promise<T> {
     }
   }
 }
+
+// Vor anderer GPU-Arbeit (z. B. Hörbuch-Lauf): Speicher gleich freigeben statt die Ruhepause abzuwarten
+export async function releaseDoclingNow(): Promise<void> {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  if (restarting) return restarting;
+  if (busy > 0 || !managed()) return;
+  restarting = release()
+    .catch((err) => emitLog("warn", "docling", "Docling-Neustart fehlgeschlagen", { err }))
+    .finally(() => (restarting = null));
+  return restarting;
+}

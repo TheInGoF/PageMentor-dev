@@ -3,6 +3,8 @@ export {
   getRunProgress,
   AudiobookCanceled,
   cancelAudiobook,
+  anyGenerating,
+  isIncluded,
 } from "./state";
 export { generateAudiobook } from "./book";
 export { generateSingleChapterAudio, generateIntroAudio } from "./single";

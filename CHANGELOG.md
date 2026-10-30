@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.25.6 – 2026-10-30
+### Fix
+- Hörbuch erstellen übernimmt ohne Intro-Text den Vorschlag aus den Metadaten, Gemma bereinigt ihn, dann spricht die Stimme.
+- Intro-Vorschlag nimmt den Titel aus den PDF-Metadaten, sonst den lesbaren Dateinamen ohne Endung.
+
 ## 1.25.5 – 2026-10-30
 ### Change
 - Hörbuch: Vorwort und Einleitung sind standardmäßig dabei.

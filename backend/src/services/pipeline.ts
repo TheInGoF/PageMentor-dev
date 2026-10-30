@@ -33,6 +33,10 @@ export function isProcessing(docId: string): boolean {
   return running.has(docId);
 }
 
+export function anyProcessing(): boolean {
+  return running.size > 0;
+}
+
 export function cancelProcessing(docId: string): boolean {
   const ctrl = running.get(docId);
   if (!ctrl) return false;

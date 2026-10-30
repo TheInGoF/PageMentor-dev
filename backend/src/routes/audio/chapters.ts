@@ -1,3 +1,4 @@
+import { introTitle } from "../../services/batch/introText";
 import { Hono } from "hono";
 import { join } from "path";
 import { existsSync } from "fs";
@@ -52,7 +53,7 @@ chapterRoutes.get("/chapter-status/:docId", (c) => {
       // Rohdaten für den Standard-Vorschlag, den Rest baut das Frontend
       docMeta: doc
         ? {
-            title: doc.doc_title || doc.title,
+            title: introTitle(doc.doc_title, doc.title),
             author: doc.author,
             language: doc.language,
           }

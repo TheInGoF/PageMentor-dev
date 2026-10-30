@@ -7,6 +7,7 @@ import { buildM4B, probeDurationMs } from "../../tts/ffmpeg";
 import { findVoice, defaultVoiceFor } from "../../tts/voices";
 import { preprocessChapterForAudio, preprocessAvailable } from "../audioPreprocess";
 import { introTtsText } from "./intro";
+import { defaultIntroText, introTitle } from "../batch/introText";
 import { generateIntroAudio } from "./single";
 import { ensureCover } from "../covers";
 import { emit } from "../events";
@@ -120,9 +121,15 @@ async function generateAudiobookImpl(params: {
     console.warn(tLang(lang, "msg.audioPreprocessUnavailable"));
   }
 
-  // Intro mit Text, aber ohne Audio: vor den Kapiteln mit derselben Stimme vertonen
+  // Intro ohne Audio: vor den Kapiteln mit derselben Stimme vertonen. Fehlt der Text, den Vorschlag
+  // aus den Metadaten übernehmen (wie im Hörbuch-Tab); Gemma bereinigt ihn danach für die Aussprache
   const introFile = join(audioDir, "intro.mp3");
   if (!existsSync(introFile)) {
+    const saved = d.prepare("SELECT audio_intro_text FROM documents WHERE id = ?").get(doc.id) as { audio_intro_text: string | null } | undefined;
+    if (!saved?.audio_intro_text?.trim()) {
+      const text = defaultIntroText({ title: introTitle(doc.doc_title, doc.title), author: doc.author, language: doc.language }, voice, params.model ?? "");
+      d.prepare("UPDATE documents SET audio_intro_text = ?, audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?").run(text, doc.id);
+    }
     const introText = await introTtsText(doc.id, params.model);
     if (introText) {
       try {

@@ -57,6 +57,10 @@ export function isGenerating(docId: string): boolean {
 }
 
 // Fortschritt für das Frontend nach Reload, null ohne Lauf
+export function anyGenerating(): boolean {
+  return running.size > 0;
+}
+
 export function getRunProgress(docId: string): {
   startedAt: number;
   totalChapters: number;
