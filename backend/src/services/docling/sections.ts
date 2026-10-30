@@ -3,8 +3,9 @@
 import type { ChapterKind, DoclingSection, DoclingTextItem, DoclingDocumentJson } from "./types";
 
 // Nummerierte Überschrift erkennen, liefert die Tiefe
+// Nach der Nummer muss ein Wort folgen: Tabellenzeilen wie "1111 1110." sind keine Überschrift
 export function numberedHeadingDepth(title: string): number | null {
-  const m = /^\s*(\d+(?:\.\d+)*)\s+\S/.exec(title);
+  const m = /^\s*(\d+(?:\.\d+)*)\s+(?=.*\p{L}{3,})\S/u.exec(title);
   if (!m) return null;
   return m[1].split(".").length;
 }

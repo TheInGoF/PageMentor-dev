@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.32.0 – 2026-10-30
+### New
+- Jede Verbindung nennt die gemeinsamen Fachbegriffe (Export und Tooltip in der Grafik).
+- Zusammenhänge: Ansicht „Themen“ zeigt, welche Kapitel welcher Hefte dasselbe behandeln, benannt nach gemeinsamen Fachbegriffen.
+### Change
+- Zusammenhänge: nur noch die stärksten Verbindungen des Moduls (relative Schwelle statt fester 0,5).
+- Zusammenhänge: Zusammenfassungen zählen zu ihrem Kapitel statt als eigene Knoten.
+### Fix
+- Tabellenzeilen wie „1111 1110.“ werden nicht mehr als Kapitelüberschrift erkannt.
+
 ## 1.31.0 – 2026-10-30
 ### New
 - Aussprache-Liste: Häkchen „geprüft“, Gemma lernt aus geprüften Einträgen und schreibt neue Wörter nach demselben Muster.
