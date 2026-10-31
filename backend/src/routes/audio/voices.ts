@@ -3,6 +3,7 @@ import { padMp3 } from "../../tts/ffmpeg";
 import { allVoices, defaultVoiceFor, findVoice, setVoicePrefs, voicePrefs, type VoicePrefs } from "../../tts/voices";
 import { synthesizePreview } from "../../tts/synth";
 import { tt } from "../../lib/i18n";
+import { ttsActivity } from "../../services/ttsActivity";
 
 export const voiceRoutes = new Hono();
 
@@ -19,6 +20,9 @@ const prefsBody = () => ({
   ...voicePrefs(),
   effective: Object.fromEntries(PREF_LANGS.map((l) => [l, defaultVoiceFor(l)])),
 });
+// Lädt eine Stimm-Engine gerade (Start, Modell, Download)? Für die Anzeige im Kopf
+voiceRoutes.get("/tts-activity", async (c) => c.json({ activity: await ttsActivity() }));
+
 voiceRoutes.get("/voice-defaults", (c) => c.json(prefsBody()));
 voiceRoutes.put("/voice-defaults", async (c) => {
   const body = await c.req.json<Partial<VoicePrefs>>();

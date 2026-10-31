@@ -27,6 +27,9 @@ class ArbiterState:
     queue_depth: int = 0
     # Modell im VRAM, Basis für das Entladen vor einem Wechsel
     loaded_model: str | None = None
+    # Engine, die gerade startet (Container hoch, Modell lädt), für die Anzeige in der App
+    starting: str | None = None
+    starting_since: float = 0.0
 
     def snapshot(self) -> dict[str, Any]:
         return {

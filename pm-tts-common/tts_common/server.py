@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from .audio_io import Ref, decode_ref, encode, normalize
+from .activity import activity, snapshot
 from .logs import get_logger, ring
 
 log = get_logger("tts")
@@ -94,7 +95,8 @@ def _load_in_background(engine: Engine, st: _Status) -> None:
     def run() -> None:
         t0 = time.time()
         try:
-            _load(engine)
+            with activity("load", engine.model_id):
+                _load(engine)
             st.ready = True
             st.load_s = round(time.time() - t0, 1)
             log.info("%s ready after %.1fs (%s)", engine.name, st.load_s, engine.model_id)
@@ -123,9 +125,10 @@ def create_app(engine: Engine) -> FastAPI:
         if not st.ready:
             return JSONResponse(
                 status_code=503,
-                content={"ok": False, "reason": st.error or "model_loading", "model": engine.model_id},
+                content={"ok": False, "reason": st.error or "model_loading", "model": engine.model_id, "activity": snapshot()},
             )
-        return {"ok": True, "engine": engine.name, "model": engine.model_id, "sample_rate": engine.sample_rate, "load_s": st.load_s}
+        # activity: lädt gerade ein weiteres Modell (z. B. F5 Spanisch), sichtbar in der App
+        return {"ok": True, "engine": engine.name, "model": engine.model_id, "sample_rate": engine.sample_rate, "load_s": st.load_s, "activity": snapshot()}
 
     @app.get("/diagnostics/recent-logs")
     async def recent_logs(since: int = 0):

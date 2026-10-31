@@ -11,6 +11,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onUploaded: () => void;
+  // Aus einem Modul geöffnet: dieses Modul ist vorgewählt
+  defaultModuleId?: string;
 }
 
 const TYPES: DocType[] = ["studienheft", "script", "klausur", "uebung", "literatur", "sonstiges"];
@@ -19,11 +21,11 @@ const LANGS = [
   { code: "de", label: "Deutsch" },
 ];
 
-export function UploadModal({ open, onClose, onUploaded }: Props) {
+export function UploadModal({ open, onClose, onUploaded, defaultModuleId }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [type, setType] = useState<DocType>("studienheft");
   const [language, setLanguage] = useState("de");
-  const [moduleId, setModuleId] = useState("");
+  const [moduleId, setModuleId] = useState(defaultModuleId ?? "");
   const [modules, setModules] = useState<ModuleListItem[]>([]);
   const [tags, setTags] = useState("");
   const [forceOcr, setForceOcr] = useState(false);
@@ -35,6 +37,7 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
   useEffect(() => {
     if (open) {
       setLanguage(getSettings().defaultLanguage);
+      if (defaultModuleId) setModuleId(defaultModuleId);
       // Module-Liste lazy laden — alle Modals tun das so. Wenn der
       // Endpoint fehlschlägt bleibt das Dropdown leer ("ohne Modul"),
       // der Upload geht trotzdem durch.
@@ -43,13 +46,13 @@ export function UploadModal({ open, onClose, onUploaded }: Props) {
         .then(setModules)
         .catch(() => setModules([]));
     }
-  }, [open]);
+  }, [open, defaultModuleId]);
 
   function reset() {
     setFiles([]);
     setType("studienheft");
     setLanguage(getSettings().defaultLanguage);
-    setModuleId("");
+    setModuleId(defaultModuleId ?? "");
     setTags("");
     setForceOcr(false);
     setBusy(false);

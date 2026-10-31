@@ -8,7 +8,7 @@ import time
 import docker.errors
 
 from config import TTS_STARTUP_TIMEOUT, Engine
-from state import clients, http, log
+from state import clients, http, log, state
 
 
 def _get(name: str):
@@ -79,8 +79,12 @@ async def wait_healthy(url: str, timeout: float) -> tuple[bool, str | None]:
 
 async def start_engine_and_wait(engine: Engine) -> None:
     t0 = time.time()
-    await asyncio.to_thread(_start_sync, engine.container)
-    ok, err = await wait_healthy(f"{engine.url}/health", TTS_STARTUP_TIMEOUT)
+    state.starting, state.starting_since = engine.name, t0
+    try:
+        await asyncio.to_thread(_start_sync, engine.container)
+        ok, err = await wait_healthy(f"{engine.url}/health", TTS_STARTUP_TIMEOUT)
+    finally:
+        state.starting = None
     if not ok:
         raise TimeoutError(
             f"TTS {engine.name} did not become healthy within {TTS_STARTUP_TIMEOUT}s (last error: {err})"

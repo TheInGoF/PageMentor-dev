@@ -1,5 +1,5 @@
 """Arbiter mit Attrappen für Docker und Engines: Wechsel, CPU-Engine, LLM, Reset."""
-import os, sys, json
+import os, sys, json, time
 os.environ["TTS_ENGINES"] = "qwen=http://qwen:8880|pm-qwen-tts,f5=http://f5:8880|pm-f5-tts,kokoro=http://kokoro:8880|pm-kokoro-tts|cpu"
 os.environ["TTS_IDLE_LINGER_SECONDS"] = "0"
 os.environ["TTS_STARTUP_TIMEOUT"] = "3"
@@ -26,7 +26,8 @@ docker.from_env = lambda: D()
 def handler(req: httpx.Request):
     host = req.url.host
     if req.url.path == "/health":
-        return httpx.Response(200 if host == "ollama" or running.get(f"pm-{host}-tts") else 503, json={})
+        body = {"activity": {"phase": "download", "model": "F5 Spanish", "bytes": 5, "total": 10}} if host == "f5" else {}
+        return httpx.Response(200 if host == "ollama" or running.get(f"pm-{host}-tts") else 503, json=body)
     if host == "ollama":
         if req.url.path == "/api/ps": return httpx.Response(200, json={"models": [{"name": "gemma4:e4b"}]})
         events.append(f"ollama {req.url.path} {json.loads(req.content or b'{}').get('keep_alive')}")
@@ -42,22 +43,26 @@ from fastapi.testclient import TestClient
 with TestClient(main.app) as c:
     r = c.post("/tts/f5/v1/audio/speech", json={"input": "Hallo"}); assert r.status_code == 200 and r.content == b"RIFFxxxx", r.text
     assert "start pm-f5-tts" in events and "speech f5" in events, events
-    events.clear(); running["pm-f5-tts"] = True
+    time.sleep(0.3); events.clear(); running["pm-f5-tts"] = True
     r = c.post("/v1/audio/speech", json={"input": "x"}); assert r.status_code == 200
     assert events.index("stop pm-f5-tts") < events.index("start pm-qwen-tts") < events.index("speech qwen"), events
-    events.clear()
+    time.sleep(0.3); events.clear()
     r = c.post("/tts/kokoro/v1/audio/speech", json={"input": "x"}); assert r.status_code == 200
     assert events == ["speech kokoro"], events
-    events.clear(); running["pm-qwen-tts"] = True
+    time.sleep(0.3); events.clear(); running["pm-qwen-tts"] = True
     r = c.post("/api/chat", json={"model": "gemma4:e4b", "messages": []}); assert r.status_code == 200
     assert "stop pm-qwen-tts" in events and "stop pm-kokoro-tts" not in events, events
     # Modellliste stoppt keine Stimme
-    events.clear(); running["pm-qwen-tts"] = True
+    time.sleep(0.3); events.clear(); running["pm-qwen-tts"] = True
     r = c.get("/api/tags"); assert r.status_code == 200
     assert "stop pm-qwen-tts" not in events and running["pm-qwen-tts"], events
     running["pm-qwen-tts"] = False
     r = c.post("/tts/nope/v1/audio/speech", json={}); assert r.status_code == 404
+    running["pm-f5-tts"] = True
     st = c.get("/status").json(); assert set(st["engines"]) == {"qwen", "f5", "kokoro"}, st
+    # Ladestand einer laufenden Engine kommt durch, Start ist vorbei
+    assert st["engines"]["f5"]["activity"]["phase"] == "download", st
+    assert st["starting"] is None, st
     running["pm-f5-tts"] = False
     r = c.post("/admin/gpu/reset"); assert r.status_code == 200, r.text
     print("ARBITER OK", r.json()["tts_qwen"]["healthy"])

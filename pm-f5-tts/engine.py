@@ -14,6 +14,7 @@ import threading
 import numpy as np
 import soundfile as sf
 
+from tts_common.activity import activity, remote_size
 from tts_common.audio_io import Ref
 from tts_common.logs import get_logger
 from tts_common.server import SpeechRequest, _set_offline
@@ -50,7 +51,8 @@ def _fetch(repo: str, name: str) -> str:
     except Exception:  # noqa: BLE001
         _set_offline(False)
         log.info("lade %s/%s aus dem Netz", repo, name)
-        return hf_hub_download(repo, name)
+        with activity("download", f"{repo}/{name}", repo=repo, total=remote_size(repo, name)):
+            return hf_hub_download(repo, name)
 
 
 class F5Engine:
@@ -71,15 +73,17 @@ class F5Engine:
                 from f5_tts.api import F5TTS
 
                 repo, ckpt_name, vocab_name, arch = MODELS[lang]
-                ckpt = _fetch(repo, ckpt_name)
-                vocab = ""
-                if vocab_name:
-                    try:
-                        vocab = _fetch(repo, vocab_name)
-                    except Exception:  # noqa: BLE001
-                        # Ohne eigenes Vokabular gilt das des F5-Basismodells
-                        log.warning("%s ohne %s, nehme das Standard-Vokabular", repo, vocab_name)
-                self._models[lang] = F5TTS(model=arch, ckpt_file=ckpt, vocab_file=vocab, device="cuda")
+                # Sichtbar in der App: erst ggf. Download (innen), dann Laden in den Grafikspeicher
+                with activity("load", f"F5 {lang}"):
+                    ckpt = _fetch(repo, ckpt_name)
+                    vocab = ""
+                    if vocab_name:
+                        try:
+                            vocab = _fetch(repo, vocab_name)
+                        except Exception:  # noqa: BLE001
+                            # Ohne eigenes Vokabular gilt das des F5-Basismodells
+                            log.warning("%s ohne %s, nehme das Standard-Vokabular", repo, vocab_name)
+                    self._models[lang] = F5TTS(model=arch, ckpt_file=ckpt, vocab_file=vocab, device="cuda")
                 log.info("f5: Modell %s geladen (%s)", lang, repo)
             return self._models[lang]
 

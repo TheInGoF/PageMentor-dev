@@ -19,6 +19,7 @@ export const learning: Record<string, string> = {
   "brain.neededBy": "Basis for",
   "brain.places": "Mentions (★ = explained)",
   "brain.hint": "Click a concept for its explanation and mentions. Or ask a question above: the concepts the tutor would use light up, with prerequisites down to level 3.",
+  "module.uploadHint": "Upload documents straight into this module",
   "tutor.sessions": "Conversations",
   "tutor.newChat": "New chat",
   "tutor.noSessions": "No conversations yet — paste a question to start.",

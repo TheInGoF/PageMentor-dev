@@ -19,6 +19,7 @@ export const learning: Record<string, string> = {
   "brain.neededBy": "Grundlage für",
   "brain.places": "Fundstellen (★ = erklärt)",
   "brain.hint": "Begriff anklicken für Erklärung und Fundstellen. Oder oben eine Frage stellen: Dann leuchten die Begriffe auf, die der Tutor dafür nutzt, samt Grundlagen bis Ebene 3.",
+  "module.uploadHint": "Hefte direkt in dieses Modul hochladen",
   "tutor.sessions": "Unterhaltungen",
   "tutor.newChat": "Neuer Chat",
   "tutor.noSessions": "Noch keine Unterhaltungen — frag etwas, dann geht's los.",

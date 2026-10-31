@@ -16,6 +16,8 @@ import { PracticePanel } from "./module/PracticePanel";
 import { LearnPanel } from "./module/LearnPanel";
 import { resolveModuleTab, takeModuleTab, type ModuleTab, type ModuleTarget, type ModuleView } from "../lib/moduleTab";
 import { ModuleEditModal } from "./module/ModuleEditModal";
+import { UploadModal } from "./UploadModal";
+import { TtsActivityIndicator } from "./tts/TtsActivityIndicator";
 import { OverviewNext } from "./module/OverviewNext";
 import { formatDate } from "./plan/AssessmentRow";
 import { setTutorModule, useNav } from "../lib/nav";
@@ -49,6 +51,7 @@ export function ModuleDetail({
   const [reviewing, setReviewing] = useState<Card[] | null>(null);
   const toast = useToast();
   const [editing, setEditing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const nav = useNav();
   const [status, setStatus] = useState<{ label: string; passed: boolean } | null>(null);
 
@@ -136,7 +139,11 @@ export function ModuleDetail({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <TtsActivityIndicator />
             <BatchIndicator />
+            <Button variant="outline" onClick={() => setUploading(true)} title={t("module.uploadHint")}>
+              ↑ {t("library.upload")}
+            </Button>
             <Button
               variant="outline"
               onClick={() => {
@@ -202,6 +209,16 @@ export function ModuleDetail({
         )}
 
       </main>
+
+      <UploadModal
+        open={uploading}
+        defaultModuleId={m.id}
+        onClose={() => setUploading(false)}
+        onUploaded={() => {
+          toast.show(t("library.uploadStarted"), "success");
+          void load();
+        }}
+      />
 
       <ModuleEditModal
         open={editing}

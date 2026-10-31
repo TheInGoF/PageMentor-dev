@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.53.0 – 2026-10-31
+### New
+- Hefte lassen sich jetzt direkt im geöffneten Modul hochladen, das Modul ist vorgewählt.
+- Ladeanzeige für Stimm-Engines im Kopf: Engine startet, Modell lädt oder wird heruntergeladen, mit Fortschritt.
+
+### Fix
+- Arbiter-Test wartet auf Hintergrund-Stopps und schlägt nicht mehr zufällig fehl.
+
 ## 1.52.0 – 2026-10-31
 ### New
 - Stimm-Extraktor: Bei eigenen Stimmen lassen sich jetzt Videos wählen. Vorschau, grobe Auswahl mit Zoom und Feinauswahl auf Hundertstel.

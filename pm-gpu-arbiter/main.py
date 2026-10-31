@@ -73,6 +73,14 @@ async def status():
             engines[e.name] = {"container": await containers.status(e.container), "gpu": e.gpu}
         except Exception as err:  # noqa: BLE001
             engines[e.name] = {"container": f"error: {err!r}", "gpu": e.gpu}
+            continue
+        # Was die Engine gerade lädt (Modell, Download mit Fortschritt); kurz fragen, nie blockieren
+        if engines[e.name]["container"] == "running":
+            try:
+                r = await http().get(f"{e.url}/health", timeout=1.5)
+                engines[e.name]["activity"] = r.json().get("activity")
+            except Exception:  # noqa: BLE001
+                pass
     default = engines.get(DEFAULT_ENGINE, {})
     return {
         **state.snapshot(),
@@ -80,6 +88,7 @@ async def status():
         "tts_container": default.get("container"),
         "tts_idle_pending": bool(gpu.idle_pending()),
         "engines": engines,
+        "starting": {"engine": state.starting, "seconds": round(time.time() - state.starting_since, 1)} if state.starting else None,
         "default_engine": DEFAULT_ENGINE,
         "config": {
             "ollama_url": OLLAMA_URL,
