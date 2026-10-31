@@ -65,12 +65,19 @@ engineRoutes.get("/llm-models", async (c) => {
     enabled: enabledLlmExtras(),
     installed: installed ? Object.keys(EXTRA_LLMS).filter((m) => isInstalled(installed, m)) : null,
     tutorModel: getLlmConfig().tutorModel ?? "",
+    learnModelLanguage: getLlmConfig().learnModelLanguage ?? "",
+    learnModelSubject: getLlmConfig().learnModelSubject ?? "",
   });
 });
 
 engineRoutes.post("/llm-models", async (c) => {
-  const body = (await c.req.json()) as { enabled?: string[]; tutorModel?: string };
+  const body = (await c.req.json()) as { enabled?: string[]; tutorModel?: string; learnModelLanguage?: string; learnModelSubject?: string };
   await setLlmExtras(body.enabled ?? [], body.tutorModel);
+  // Lernhörbuch-Modelle: leer = Vorschlag der App; abgewählte Modelle fallen auf den Vorschlag zurück
+  const keep = (m?: string) => (m && enabledLlmExtras().includes(m) ? m : "");
+  if (body.learnModelLanguage !== undefined || body.learnModelSubject !== undefined) {
+    setLlmConfig({ learnModelLanguage: keep(body.learnModelLanguage), learnModelSubject: keep(body.learnModelSubject) });
+  }
   // Neue Auswahl gleich laden (Windows-Engine)
   const pulling = IS_WINDOWS && enabledLlmExtras().length > 0 && !engineState().task;
   if (pulling) void runRepair("pull-model").catch(() => {});

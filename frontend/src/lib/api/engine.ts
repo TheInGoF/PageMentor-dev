@@ -46,6 +46,9 @@ export interface LlmModelsInfo {
   enabled: string[];
   installed: string[] | null;
   tutorModel: string;
+  // Lernhörbuch: leer = Vorschlag (Gemma 26B für Sprachkurse, Qwen 3.6 für Fachhefte, wenn geladen)
+  learnModelLanguage: string;
+  learnModelSubject: string;
 }
 
 export const engineApi = {
@@ -58,11 +61,11 @@ export const engineApi = {
     kokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack"),
     installKokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack", { method: "POST" }),
     llmModels: () => request<LlmModelsInfo>("/api/engine/llm-models"),
-    saveLlmModels: (enabled: string[], tutorModel: string) =>
+    saveLlmModels: (body: { enabled: string[]; tutorModel: string; learnModelLanguage: string; learnModelSubject: string }) =>
       request<{ enabled: string[]; tutorModel: string; pulling: boolean }>("/api/engine/llm-models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, tutorModel }),
+        body: JSON.stringify(body),
       }),
     saveTtsEngines: (enabled: string[], hfToken?: string) =>
       request<{ enabled: string[]; applying: boolean }>("/api/engine/tts-engines", {

@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.46.0 – 2026-10-31
+### New
+- Hörbuch-Tab: Karte „Lernhörbuch“ mit Art (Sprachkurs oder Fachheft), Zielsprache, Probe der ersten Einheit und ganzem Heft, Fortschritt und Abbrechen.
+- Jede Einheit lässt sich anhören; im ⋯-Menü zeigt sie Skript, Merkpunkte und die Prüfnotiz.
+- Engine → Sprachmodelle: eigenes Modell für Sprachkurse und für Fachhefte wählbar, sonst der Vorschlag der App.
+
 ## 1.45.0 – 2026-10-31
 ### New
 - Lernhörbuch, Teil 2 (Sprache): Skripte werden gesprochen, Deutsch und Fremdsprache mit eigener Stimme, [PAUSE n] als echte Stille zum Antworten und Nachsprechen.

@@ -14,6 +14,7 @@ import { ChapterWorkbench } from "./audiobook/ChapterWorkbench";
 import { BookProgressPanel } from "./audiobook/BookProgressPanel";
 import { IntroEditor } from "./audiobook/IntroEditor";
 import { SecondVoice } from "./audiobook/SecondVoice";
+import { LearnbookPanel } from "./audiobook/LearnbookPanel";
 import { KindFilterBar } from "./audiobook/KindFilterBar";
 
 interface Props {
@@ -349,6 +350,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           )}
         </div>
       </section>
+
+      <LearnbookPanel docId={docId} rate={rate} />
 
       <ComparePanel
         docId={docId}
