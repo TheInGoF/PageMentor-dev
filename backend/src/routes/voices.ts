@@ -12,6 +12,7 @@ import {
   type Gender,
   type VoiceSamplePatch,
 } from "../services/voiceSamples";
+import { cut, dropSource, peaks, saveSource } from "../services/voiceExtract";
 import {
   createVoiceDesign,
   deleteVoiceDesign,
@@ -264,6 +265,38 @@ voiceRoutes.get("/design/:id/preview", async (c) => {
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
   }
+});
+
+// Stimm-Extraktor: Video hochladen (roher Body, Dateiname im Kopf), Wellenform, Ausschnitt als WAV
+voiceRoutes.put("/extract", async (c) => {
+  const name = decodeURIComponent(c.req.header("x-filename") ?? "video.mp4");
+  if (!c.req.raw.body) return c.json({ error: "Datei fehlt" }, 400);
+  try {
+    return c.json(await saveSource(c.req.raw.body, name));
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+voiceRoutes.get("/extract/:id/peaks", async (c) => {
+  const from = Number(c.req.query("from") ?? 0), to = Number(c.req.query("to") ?? 0), bins = Number(c.req.query("bins") ?? 800);
+  try {
+    return c.json({ peaks: await peaks(c.req.param("id"), from, to, bins) });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+voiceRoutes.post("/extract/:id/cut", async (c) => {
+  const b = (await c.req.json().catch(() => ({}))) as { start?: number; end?: number };
+  try {
+    const wav = await cut(c.req.param("id"), Number(b.start), Number(b.end));
+    return new Response(new Uint8Array(wav), { headers: { "Content-Type": "audio/wav" } });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+voiceRoutes.delete("/extract/:id", (c) => {
+  dropSource(c.req.param("id"));
+  return c.json({ ok: true });
 });
 
 voiceRoutes.get("/custom", (c) => {

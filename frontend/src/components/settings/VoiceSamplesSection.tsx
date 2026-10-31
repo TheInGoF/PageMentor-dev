@@ -7,6 +7,7 @@ import type { SettingsState } from "./state";
 import { Card, Notice } from "./parts";
 import { Menu, type MenuItem } from "../ui/Menu";
 import type { Voice } from "../../lib/api";
+import { VoiceExtractor, isVideoFile } from "./VoiceExtractor";
 
 type Form = null | "sample" | "design";
 
@@ -54,6 +55,9 @@ export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: Se
     deleteDesign, designBusy, designDraft, designPreviewSeed, designPreviewUrl, openDesignEdit, playDesignPreview, previewDesign, regenerateDesignReference, saveDesign, setDesignDraft, toggleDesignVisibility, voiceDesigns,
   } = st;
   const [form, setForm] = useState<Form>(null);
+  // Stimm-Extraktor: gewähltes Video und Länge des übernommenen Ausschnitts
+  const [extractFrom, setExtractFrom] = useState<File | null>(null);
+  const [extracted, setExtracted] = useState<number | null>(null);
   const count = customVoices.length + voiceDesigns.length;
   const toggleForm = (f: Form) => setForm((cur) => (cur === f ? null : f));
 
@@ -137,12 +141,35 @@ export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: Se
             <label className="text-xs text-neutral-400">{t("voices.own.file")}</label>
             <input
               type="file"
-              accept="audio/wav,audio/mpeg,audio/mp3,audio/flac,audio/ogg,audio/mp4,audio/x-m4a,.wav,.mp3,.flac,.ogg,.m4a"
-              onChange={(e) => setVoiceDraft({ ...voiceDraft, file: e.target.files?.[0] ?? null })}
+              accept="audio/*,video/*,.wav,.mp3,.flac,.ogg,.m4a,.mp4,.mkv,.mov,.webm,.avi"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                // Video: erst den Ausschnitt mit der Stimme wählen
+                if (f && isVideoFile(f)) {
+                  setExtractFrom(f);
+                  setExtracted(null);
+                  setVoiceDraft({ ...voiceDraft, file: null });
+                } else {
+                  setExtractFrom(null);
+                  setVoiceDraft({ ...voiceDraft, file: f });
+                }
+              }}
               className="text-sm text-neutral-400"
             />
-            <p className="text-xs text-neutral-500">{t("voices.own.fileHint")}</p>
+            <p className="text-xs text-neutral-500">{t("voices.own.fileHint")} {t("voiceExtract.fileHint")}</p>
           </div>
+          {extractFrom && (
+            <VoiceExtractor
+              key={extractFrom.name + extractFrom.size}
+              file={extractFrom}
+              onExtract={(wav, seconds) => {
+                setVoiceDraft({ ...voiceDraft, file: wav });
+                setExtracted(seconds);
+              }}
+              onClose={() => setExtractFrom(null)}
+            />
+          )}
+          {extracted !== null && voiceDraft.file && <Notice>{t("voiceExtract.applied", { s: extracted.toFixed(2), name: voiceDraft.file.name })}</Notice>}
           <div>
             <Button onClick={uploadVoiceSample} disabled={voiceUploadBusy || !voiceDraft.label.trim() || !voiceDraft.file}>
               {voiceUploadBusy ? t("settings.voices.uploading") : t("settings.voices.upload")}

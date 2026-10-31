@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.52.0 – 2026-10-31
+### New
+- Stimm-Extraktor: Bei eigenen Stimmen lassen sich jetzt Videos wählen. Vorschau, grobe Auswahl mit Zoom und Feinauswahl auf Hundertstel.
+- Stimm-Extraktor: Der Ausschnitt wird als WAV mit je 0,5 s Stille davor und danach zur Stimmprobe.
+
 ## 1.51.0 – 2026-10-31
 ### New
 - Gehirn im Tutor: Das Begriffsnetz aller Module als Grafik, Begriff anklicken zeigt Erklärung, Grundlagen und Fundstellen.

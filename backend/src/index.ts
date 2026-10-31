@@ -154,6 +154,8 @@ export default {
   // slow long-polling / encode paths. LLM streaming and ranges
   // are active streams and don't need the timer anyway.
   idleTimeout: 0,
+  // Videos für den Stimm-Extraktor können groß sein (Standard wären 128 MB)
+  maxRequestBodySize: 8 * 1024 ** 3,
 };
 
 startupNote(`API läuft auf http://${HOST}:${PORT}, Version ${APP_VERSION}`);
