@@ -25,6 +25,7 @@ import {
 } from "./config";
 import { failText, inDistro, logEngine, run, wsl } from "./exec";
 import { extraServices, writeEngineEnv } from "./extraEngines";
+import { enabledLlmExtras } from "./llmExtras";
 
 export type Progress = (message: string, fraction?: number) => void;
 
@@ -275,9 +276,14 @@ async function doclingModels(progress: Progress): Promise<void> {
   if (restart.code !== 0) throw new RepairError(`Docling startet nicht neu: ${failText(restart)}`);
 }
 
+// Standardmodell und gewählte Zusatzmodelle laden; fehlende nacheinander, vorhandene prüft Ollama selbst schnell
 async function pullModel(progress: Progress): Promise<void> {
   requireSpace("das Sprachmodell");
-  const name = effective("ollamaModel", "PM_OLLAMA_MODEL") || DEFAULT_LLM_MODEL;
+  const names = [effective("ollamaModel", "PM_OLLAMA_MODEL") || DEFAULT_LLM_MODEL, ...enabledLlmExtras()];
+  for (const name of names) await pullOne(name, progress);
+}
+
+async function pullOne(name: string, progress: Progress): Promise<void> {
   progress(`Lade Sprachmodell ${name} …`);
   const res = await fetch(`http://${ENGINE_HOST}:8790/api/pull`, {
     method: "POST",
@@ -292,7 +298,7 @@ async function pullModel(progress: Progress): Promise<void> {
     for (const line of lines) {
       if (!line.trim()) continue;
       const ev = JSON.parse(line) as { status?: string; completed?: number; total?: number; error?: string };
-      if (ev.error) throw new RepairError(`Modell-Download: ${ev.error}`);
+      if (ev.error) throw new RepairError(`Modell-Download ${name}: ${ev.error}`);
       const frac = ev.total ? (ev.completed ?? 0) / ev.total : undefined;
       progress(`${name}: ${ev.status ?? ""}${frac !== undefined ? ` ${(frac * 100).toFixed(0)} %` : ""}`, frac);
     }

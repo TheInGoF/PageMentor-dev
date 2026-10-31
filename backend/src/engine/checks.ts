@@ -2,6 +2,7 @@
 import { statfsSync } from "fs";
 import { IS_WINDOWS } from "../paths";
 import { effective } from "../services/llmConfig";
+import { enabledLlmExtras } from "./llmExtras";
 import {
   COMPOSE_IN_DISTRO,
   DEFAULT_LLM_MODEL,
@@ -186,9 +187,10 @@ async function checkModel(): Promise<CheckResult> {
     const res = await fetch(`http://${ENGINE_HOST}:8790/api/tags`, { signal: AbortSignal.timeout(5000) });
     const data = (await res.json()) as { models?: Array<{ name: string }> };
     const names = (data.models ?? []).map((m) => m.name);
-    const has = names.some((n) => n === wanted || n === `${wanted}:latest` || n.split(":")[0] === wanted);
-    if (has) return ok("model", t, `${wanted} ist geladen`);
-    return { id: "model", title: t, status: "warn", message: `${wanted} fehlt noch (vorhanden: ${names.join(", ") || "keins"})`, repair: "pull-model" };
+    const present = (m: string) => names.some((n) => n === m || n === `${m}:latest` || n.split(":")[0] === m);
+    const missing = [wanted, ...enabledLlmExtras()].filter((m) => !present(m));
+    if (!missing.length) return ok("model", t, `${[wanted, ...enabledLlmExtras()].join(", ")} geladen`);
+    return { id: "model", title: t, status: "warn", message: `${missing.join(", ")} fehlt noch (vorhanden: ${names.join(", ") || "keins"})`, repair: "pull-model" };
   } catch {
     return skip("model", t, "Wartet auf den GPU-Arbiter");
   }

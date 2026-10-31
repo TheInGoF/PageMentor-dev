@@ -34,6 +34,14 @@ export function imagesRevision(): string {
 }
 export const DEFAULT_LLM_MODEL = process.env.PM_DEFAULT_LLM_MODEL || "gemma4:e4b";
 
+// Größere Sprachmodelle zum Dazuladen, für den Tutor. Kontext so gewählt, dass Modell, Kontext und der
+// dauerhaft geladene Embedding-Dienst (~2 GB) unter den 24 GB einer RTX 3090 bleiben; voll ausgelastet
+// lagert Ollama aus und wird langsam
+export const EXTRA_LLMS: Record<string, { title: string; sizeGb: number; ctx: number }> = {
+  "gemma4:26b": { title: "Gemma 4 26B", sizeGb: 17, ctx: 24576 },
+  "qwen3.6:27b": { title: "Qwen 3.6 27B", sizeGb: 18, ctx: 16384 },
+};
+
 // Dienste mit Health-Adresse, von Windows aus gesehen
 export const SERVICES = [
   { id: "arbiter", title: "GPU-Arbiter", url: `http://${ENGINE_HOST}:8790/health` },

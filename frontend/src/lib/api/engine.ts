@@ -38,6 +38,15 @@ export interface KokoroPack {
   available?: boolean;
 }
 
+// Zusätzliche Sprachmodelle für den Tutor; installed null = Ollama nicht erreichbar
+export interface LlmModelsInfo {
+  defaultModel: string;
+  models: Record<string, { title: string; sizeGb: number; ctx: number }>;
+  enabled: string[];
+  installed: string[] | null;
+  tutorModel: string;
+}
+
 export const engineApi = {
   engine: {
     status: () => request<EngineStatus>("/api/engine/status"),
@@ -47,6 +56,13 @@ export const engineApi = {
     ttsEngines: () => request<TtsEnginesInfo>("/api/engine/tts-engines"),
     kokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack"),
     installKokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack", { method: "POST" }),
+    llmModels: () => request<LlmModelsInfo>("/api/engine/llm-models"),
+    saveLlmModels: (enabled: string[], tutorModel: string) =>
+      request<{ enabled: string[]; tutorModel: string; pulling: boolean }>("/api/engine/llm-models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, tutorModel }),
+      }),
     saveTtsEngines: (enabled: string[], hfToken?: string) =>
       request<{ enabled: string[]; applying: boolean }>("/api/engine/tts-engines", {
         method: "POST",

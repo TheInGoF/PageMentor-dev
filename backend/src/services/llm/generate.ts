@@ -23,6 +23,8 @@ export async function generate(params: {
   options?: Record<string, unknown>;
   // JSON-Schema: Ollama erzwingt die Struktur grammatisch, andere Anbieter bekommen es als Hinweis
   format?: Record<string, unknown>;
+  // Denkmodus von Modellen wie Qwen 3.6: false antwortet direkt (schneller), ohne Angabe gilt der Standard des Modells
+  think?: boolean;
 }): Promise<GenerateResult> {
   const p = await pickProvider();
   if (!p) throw new Error("No LLM provider configured");
@@ -44,6 +46,7 @@ export async function generate(params: {
         system: params.system,
         stream: false,
         ...(params.format ? { format: params.format } : {}),
+        ...(params.think !== undefined ? { think: params.think } : {}),
         options: { temperature: 0.3, top_p: 0.9, ...params.options },
       }),
       signal: AbortSignal.timeout(15 * 60 * 1000),

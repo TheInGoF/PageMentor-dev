@@ -98,6 +98,9 @@ export interface LlmConfig {
   ttsEnginesOff?: string;
   // Hugging-Face-Token, für TADA (Llama-Freigabe)
   hfToken?: string;
+  // Zusätzliche Sprachmodelle (Ollama-Namen, Komma-getrennt) und das Modell für den Tutor
+  llmExtras?: string;
+  tutorModel?: string;
   // Stimmlage für alle Sprachen ("female"/"male"), damit Haupt- und Zweitstimme zusammenpassen
   voiceGender?: string;
   // JSON Sprache → Stimmen-ID, z. B. {"de":"f5:custom:…","es":"f5:custom:…"}

@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
 import { useEngineStatus } from "./useEngineStatus";
 import { TtsEnginesPanel } from "./TtsEnginesPanel";
+import { LlmModelsPanel } from "./LlmModelsPanel";
 import { Card, Expert, Notice, SettingRow } from "../settings/parts";
 
 const DOT: Record<string, string> = {
@@ -93,6 +94,7 @@ export function EnginePanel() {
       </Card>
 
       <TtsEnginesPanel />
+      <LlmModelsPanel />
 
       {status?.windows && (
         <Expert title={t("engine.maintenance")}>

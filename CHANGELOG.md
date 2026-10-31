@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.41.0 – 2026-10-31
+### New
+- Engine → Sprachmodelle: Gemma 4 26B und Qwen 3.6 27B zum Dazuladen; Abwählen löscht sie wieder von der Festplatte.
+- Modell für den Tutor wählbar; Kontext je Modell so bemessen, dass alles in die 24 GB einer RTX 3090 passt.
+### Change
+- Tutor reiht sich in die Gemma-Warteschlange ein und gibt vorher den Docling-Speicher frei; läuft gerade eine Umwandlung, antwortet das kleine Modell und sagt es dazu.
+
 ## 1.40.1 – 2026-10-31
 ### Change
 - Tutor: Relevanz gilt als Hinweis auf den Wortlaut, nicht auf die Erklärung; steht die eigentliche Herleitung in einer schwächer bewerteten Quelle, nutzt Gemma sie.

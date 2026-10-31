@@ -11,6 +11,12 @@ import { getChatSession, listChatMessages } from "./sessions";
 import { retrieveChunks, formatSourcesForPrompt } from "./retrieve";
 import { materialSources, retrieveMaterial } from "./material";
 import { runJob } from "../../log/jobs";
+import { withGemmaLock } from "../gemmaLock";
+import { getLlmConfig } from "../llmConfig";
+import { EXTRA_LLMS } from "../../engine/config";
+import { installedModels, isInstalled } from "../../engine/llmExtras";
+import { anyProcessing } from "../pipeline";
+import { releaseDoclingNow } from "../docling/release";
 
 
 function buildPrompt(
@@ -151,6 +157,20 @@ function detectQuestionLanguage(question: string): "de" | "en" {
   return enHits > deHits ? "en" : "de";
 }
 
+// Großes Tutor-Modell aus den Einstellungen, wenn geladen und die Grafikkarte frei ist. Läuft gerade eine
+// Umwandlung (Docling belegt bis 14 GB), antwortet das kleine Modell, statt den Speicher zu überfüllen.
+// Ein laufendes Hörbuch wird nicht abgebrochen: der Arbiter pausiert die Stimme für die Dauer der Antwort
+async function tutorModel(): Promise<{ model?: string; ctx: number; note?: string }> {
+  const wanted = getLlmConfig().tutorModel;
+  const fallback = { ctx: 32768 };
+  if (!wanted || !(wanted in EXTRA_LLMS)) return fallback;
+  const installed = await installedModels();
+  if (!installed || !isInstalled(installed, wanted)) return { ...fallback, note: `${wanted} noch nicht geladen` };
+  if (anyProcessing()) return { ...fallback, note: "Grafikkarte durch Umwandlung belegt" };
+  await releaseDoclingNow();
+  return { model: wanted, ctx: EXTRA_LLMS[wanted].ctx };
+}
+
 async function askImpl(params: {
   sessionId: string;
   question: string;
@@ -186,17 +206,24 @@ async function askImpl(params: {
   const systemPrompt = `${baseSystem}\n\n${cleanupHints(language)}`;
 
   const prompt = buildPrompt(history, question, sources, language, conceptNet);
-  const result = await generate({
-    prompt,
-    system: systemPrompt,
-    options: {
-      temperature: 0.2,
-      // num_ctx reicht für bis zu 20 Abschnitte + Begriffsnetz + Verlauf + Antwort (rund 12 000 Token)
-      num_ctx: 32768,
-      // 4096: lange Antworten nicht mitten im Satz abschneiden
-      num_predict: 4096,
-    },
-  });
+  const pick = await tutorModel();
+  // Eine Antwort zur Zeit auf der Grafikkarte: Hörbuch-Aufbereitung und Begriffsnetz warten, bis der Tutor fertig ist
+  const result = await withGemmaLock("tutor", () =>
+    generate({
+      prompt,
+      system: systemPrompt,
+      model: pick.model,
+      think: pick.model?.startsWith("qwen") ? false : undefined,
+      options: {
+        temperature: 0.2,
+        // bis zu 20 Abschnitte + Begriffsnetz + Verlauf + Antwort brauchen rund 12 000 Token
+        num_ctx: pick.ctx,
+        // 4096: lange Antworten nicht mitten im Satz abschneiden
+        num_predict: 4096,
+      },
+    })
+  );
+  if (pick.note) result.model = `${result.model} · ${pick.note}`;
 
   const answer = parseAssistantOutput(
     result.response ?? "",

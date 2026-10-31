@@ -1,5 +1,7 @@
 // Engine: Status, Selbsttest, Reparaturen, Dienst-Logs
 import { Hono } from "hono";
+import { enabledLlmExtras, installedModels, isInstalled, setLlmExtras } from "../engine/llmExtras";
+import { DEFAULT_LLM_MODEL, EXTRA_LLMS } from "../engine/config";
 import { baseUrl } from "../tts/engines/qwen/config";
 import { IS_WINDOWS } from "../paths";
 import type { RepairId } from "../engine/checks";
@@ -7,7 +9,7 @@ import { trackEngineSwitch } from "../engine/engineCleanup";
 import { inDistro } from "../engine/exec";
 import { engineState, runRepair, runSelftest } from "../engine/manager";
 import { enabledExtras, EXTRA_SERVICES, type ExtraEngine } from "../engine/extraEngines";
-import { getLlmConfig, setLlmConfig } from "../services/llmConfig";
+import { effective, getLlmConfig, setLlmConfig } from "../services/llmConfig";
 import { extraStatus, refreshExtraStatus } from "../tts/engines/extra/probe";
 
 export const engineRoutes = new Hono();
@@ -51,6 +53,27 @@ engineRoutes.post("/tts-engines", async (c) => {
   // Unter Windows gleich übernehmen: Pakete laden, Dienste anlegen
   if (IS_WINDOWS && !engineState().task) void runRepair("apply-tts-engines").catch(() => {});
   return c.json({ enabled, applying: IS_WINDOWS });
+});
+
+// Zusätzliche Sprachmodelle für den Tutor: Auswahl, Stand, Tutor-Modell
+engineRoutes.get("/llm-models", async (c) => {
+  const installed = await installedModels();
+  return c.json({
+    defaultModel: effective("ollamaModel", "PM_OLLAMA_MODEL") || DEFAULT_LLM_MODEL,
+    models: EXTRA_LLMS,
+    enabled: enabledLlmExtras(),
+    installed: installed ? Object.keys(EXTRA_LLMS).filter((m) => isInstalled(installed, m)) : null,
+    tutorModel: getLlmConfig().tutorModel ?? "",
+  });
+});
+
+engineRoutes.post("/llm-models", async (c) => {
+  const body = (await c.req.json()) as { enabled?: string[]; tutorModel?: string };
+  await setLlmExtras(body.enabled ?? [], body.tutorModel);
+  // Neue Auswahl gleich laden (Windows-Engine)
+  const pulling = IS_WINDOWS && enabledLlmExtras().length > 0 && !engineState().task;
+  if (pulling) void runRepair("pull-model").catch(() => {});
+  return c.json({ enabled: enabledLlmExtras(), tutorModel: getLlmConfig().tutorModel ?? "", pulling });
 });
 
 // Kokoro-Sprachpaket (Englisch, Spanisch): Stand und Download im Sidecar
