@@ -73,10 +73,19 @@ export async function retrieveChunks(question: string, moduleId: string | null):
   const byRid = new Map(rows.map((r) => [r.rid, r]));
   const ordered = candidates.map((rid) => byRid.get(rid)).filter((r): r is NonNullable<typeof r> => !!r);
   const order = await rerank(question, ordered.map((r) => r.text.slice(0, 2000)));
-  const ranked = (order ? order.map((i) => ordered[i]) : ordered).map((r) => r.rid);
+  // Mit Reranker entscheidet die Bewertung, wie viele Stellen mitgehen: bis zu 20 bei breiten Fragen,
+  // mindestens 8; was weit unter dem besten Treffer liegt, bleibt draußen. Ohne Reranker feste Zahl
+  const score = new Map<number, number>();
+  let keep = TOP_K;
+  if (order) {
+    const top = order[0].score;
+    order.forEach((o) => score.set(ordered[o.index].rid, top > 0 ? o.score / top : 0));
+    keep = Math.min(MAX_HITS, Math.max(MIN_HITS, order.filter((o) => top > 0 && o.score / top >= KEEP_RATIO).length));
+  }
+  const ranked = (order ? order.map((o) => ordered[o.index]) : ordered).map((r) => r.rid);
   // Grundlagen treffen die Frage oft nicht wörtlich: zwei Plätze bleiben für sie reserviert
-  const reserved = [...viaConcept.keys()].filter((rid) => !ranked.slice(0, TOP_K - PREREQ_SLOTS).includes(rid)).slice(0, PREREQ_SLOTS);
-  const rowids = [...ranked.filter((rid) => !reserved.includes(rid)).slice(0, TOP_K - reserved.length), ...reserved];
+  const reserved = [...viaConcept.keys()].filter((rid) => !ranked.slice(0, keep - PREREQ_SLOTS).includes(rid)).slice(0, PREREQ_SLOTS);
+  const rowids = [...ranked.filter((rid) => !reserved.includes(rid)).slice(0, keep - reserved.length), ...reserved];
   const sources = rowids
     .map((rid) => byRid.get(rid))
     .filter((r): r is NonNullable<typeof r> => !!r)
@@ -90,6 +99,7 @@ export async function retrieveChunks(question: string, moduleId: string | null):
       chapterTitle: row.chapter_title,
       related: viaGraph.has(row.rid) || undefined,
       concept: viaConcept.get(row.rid),
+      relevance: relevanceOf(score.get(row.rid)),
       startPage: row.start_page,
       endPage: row.end_page,
       // Die besten Treffer mit ihren Nachbarabschnitten: Definitionen und Herleitungen reißen sonst an der Abschnittsgrenze ab
@@ -102,7 +112,17 @@ const NEIGHBOR_HITS = 4;
 const ASSOCIATION_SEEDS = 5;
 const PREREQ_SLOTS = 2;
 
-const RERANK_CANDIDATES = 30;
+const RERANK_CANDIDATES = 40;
+const MAX_HITS = 20;
+const MIN_HITS = 8;
+// Anteil an der Bewertung des besten Treffers, ab dem eine Stelle noch mitgeht
+const KEEP_RATIO = 0.1;
+
+// Stufe für Gemma: wie sicher die Stelle zur Frage passt
+function relevanceOf(rel: number | undefined): TutorSource["relevance"] {
+  if (rel === undefined) return undefined;
+  return rel >= 0.5 ? "hoch" : rel >= 0.2 ? "mittel" : "niedrig";
+}
 const NEIGHBOR_CHARS = 600;
 
 function withNeighbors(docId: string, index: number, text: string): string {
@@ -136,7 +156,8 @@ export function formatSourcesForPrompt(sources: TutorSource[]): string {
           ? `, Seite ${s.startPage}`
           : `, Seiten ${s.startPage}–${s.endPage}`;
       const via = s.concept ? ` (Grundlage „${s.concept}“ aus dem Begriffsnetz)` : s.related ? " (verwandtes Kapitel aus den Zusammenhängen)" : "";
-      return `[Quelle ${s.n}] ${heft}${kapitel}${pages}${via}\n${s.snippet}`;
+      const rel = s.relevance ? ` · Relevanz ${s.relevance}` : "";
+      return `[Quelle ${s.n}] ${heft}${kapitel}${pages}${via}${rel}\n${s.snippet}`;
     })
     .join("\n\n---\n\n");
 }

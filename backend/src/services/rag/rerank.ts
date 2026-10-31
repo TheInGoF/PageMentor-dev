@@ -20,8 +20,13 @@ async function rerankModel(url: string): Promise<string | null> {
   return model;
 }
 
-// Indizes der Texte, beste zuerst; null ohne Reranker
-export async function rerank(query: string, texts: string[]): Promise<number[] | null> {
+export interface Ranked {
+  index: number;
+  score: number;
+}
+
+// Texte mit Bewertung, beste zuerst; null ohne Reranker
+export async function rerank(query: string, texts: string[]): Promise<Ranked[] | null> {
   const url = effective("teiUrl", "PM_TEI_URL")?.replace(/\/+$/, "");
   if (!url || texts.length < 2) return null;
   const model = await rerankModel(url);
@@ -35,7 +40,7 @@ export async function rerank(query: string, texts: string[]): Promise<number[] |
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { results?: Array<{ index: number; relevance_score: number }> };
-    const order = (data.results ?? []).slice().sort((a, b) => b.relevance_score - a.relevance_score).map((r) => r.index);
+    const order = (data.results ?? []).map((r) => ({ index: r.index, score: r.relevance_score })).sort((a, b) => b.score - a.score);
     return order.length ? order : null;
   } catch (err) {
     console.warn(`[rerank] übersprungen: ${err instanceof Error ? err.message : err}`);

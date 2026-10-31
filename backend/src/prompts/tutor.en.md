@@ -75,3 +75,6 @@ If an excerpt contains "[Formel unsicher erkannt]", text recognition may have mi
 
 CONCEPT NETWORK:
 If a concept network follows the sources, it shows what the asked concepts build on (levels 1 to 3). Use it to build derivations and explanations up from the basics when that helps the question. Sources marked "Grundlage … aus dem Begriffsnetz" explain such prerequisites.
+
+SOURCE RELEVANCE:
+Each source carries a relevance (hoch = high, mittel = medium, niedrig = low) from the search. Base the core statements on high-relevance sources. Use low-relevance sources only as a supplement when they really fit the question; otherwise ignore them. Basics from the concept network serve as background for derivations regardless of their relevance.

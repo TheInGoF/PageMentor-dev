@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.40.0 – 2026-10-31
+### Change
+- Tutor: der Reranker bestimmt, wie viele Stellen mitgehen (8 bis 20 aus 40 Kandidaten); was weit unter dem besten Treffer liegt, bleibt draußen.
+- Tutor: jede Quelle trägt ihre Relevanz (hoch, mittel, niedrig), Gemma stützt sich auf die hohen und nutzt niedrige nur ergänzend.
+
 ## 1.39.0 – 2026-10-31
 ### New
 - Begriffsnetz: Gemma erfasst je Kapitel die Fachbegriffe, ihre Erklärung und worauf sie aufbauen; gleiche Begriffe aus verschiedenen Heften sind ein Eintrag.

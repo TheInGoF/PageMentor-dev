@@ -76,3 +76,6 @@ Steht in einem Auszug „[Formel unsicher erkannt]“, hat die Texterkennung die
 
 BEGRIFFSNETZ:
 Steht unter den Quellen ein Begriffsnetz, zeigt es, worauf die gefragten Begriffe aufbauen (Ebene 1 bis 3). Nutze es, um bei Herleitungen und Erklärungen von den Grundlagen aus aufzubauen, wenn das der Frage hilft. Quellen mit dem Hinweis „Grundlage … aus dem Begriffsnetz“ erklären solche Voraussetzungen.
+
+RELEVANZ DER QUELLEN:
+Jede Quelle trägt eine Relevanz (hoch, mittel, niedrig) aus der Suche. Stütze die Kernaussagen auf Quellen mit hoher Relevanz. Quellen mit niedriger Relevanz nur ergänzend nutzen, wenn sie wirklich zur Frage passen; sonst ignorieren. Grundlagen aus dem Begriffsnetz gelten unabhängig von ihrer Relevanz als Hintergrund für Herleitungen.

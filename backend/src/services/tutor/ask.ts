@@ -191,7 +191,7 @@ async function askImpl(params: {
     system: systemPrompt,
     options: {
       temperature: 0.2,
-      // num_ctx reicht für 12 Chunks + Verlauf + Antwort
+      // num_ctx reicht für bis zu 20 Abschnitte + Begriffsnetz + Verlauf + Antwort (rund 12 000 Token)
       num_ctx: 32768,
       // 4096: lange Antworten nicht mitten im Satz abschneiden
       num_predict: 4096,

@@ -23,6 +23,8 @@ export interface TutorSource {
   related?: boolean;
   // Über das Begriffsnetz als Grundlage gefunden: Name des Begriffs
   concept?: string;
+  // Bewertung des Rerankers im Verhältnis zum besten Treffer
+  relevance?: "hoch" | "mittel" | "niedrig";
 }
 
 export interface TutorAnswer {
