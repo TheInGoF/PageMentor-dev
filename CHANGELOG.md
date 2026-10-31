@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.57.0 – 2026-10-31
+### New
+- Whisper als Zusatz-Engine (Einstellungen → Engine → Stimm-Engines): hört fertige Hörbücher ab, Grundlage für die Ausspracheprüfung.
+
 ## 1.56.0 – 2026-10-31
 ### New
 - Die drei Hörbuch-Knöpfe zeigen „läuft · 3/12“, auch wenn gerade ein anderer Bereich offen ist.

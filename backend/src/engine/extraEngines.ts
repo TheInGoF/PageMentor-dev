@@ -8,6 +8,8 @@ export const EXTRA_SERVICES = {
   qwen: { service: "qwen-tts", alwaysOn: false, title: "Qwen3-TTS", sizeGb: 12 },
   f5: { service: "f5-tts", alwaysOn: false, title: "F5-TTS", sizeGb: 9 },
   tada: { service: "tada-tts", alwaysOn: false, title: "TADA", sizeGb: 10 },
+  // Keine Stimme: Whisper hört Hörbücher zur Ausspracheprüfung ab (Debug)
+  stt: { service: "whisper-stt", alwaysOn: false, title: "Whisper (Aussprache prüfen)", sizeGb: 5 },
 } as const;
 
 export type ExtraEngine = keyof typeof EXTRA_SERVICES;

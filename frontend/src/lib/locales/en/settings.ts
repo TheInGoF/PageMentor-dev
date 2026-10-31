@@ -203,6 +203,7 @@ export const settings: Record<string, string> = {
   "ttsEngines.hint": "Kokoro is always included. Selected engines are loaded into the engine environment and show up in the audiobook tab. Engines switched off for 14 days are deleted with their models to free space.",
   "ttsEngines.kokoro": "Fixed voices Martin and Kerstin, very fast, run on the CPU.",
   "ttsEngines.f5": "F5-TTS German by HPI, clones your voice samples. Weights for non-commercial use only (CC-BY-NC).",
+  "ttsEngines.stt": "Not a voice: listens to finished audiobooks and finds mispronounced or skipped words (Settings → Check pronunciation). Runs only on request.",
   "ttsEngines.tada": "TADA 3B by Hume AI, clones your voice samples. Needs a Hugging Face token with Llama 3.2 access.",
   "ttsEngines.hfToken": "Hugging Face token",
   "ttsEngines.hfTokenSet": "saved",

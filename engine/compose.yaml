@@ -122,6 +122,16 @@ services:
       TADA_LANGUAGE: "de"
     <<: *gpu
 
+  # Whisper large-v3-turbo, hört Hörbücher zur Ausspracheprüfung ab (Debug); startet der Arbiter
+  whisper-stt:
+    image: ghcr.io/theingof/pm-whisper-stt:${PM_IMAGE_TAG:-latest}
+    container_name: pm-whisper-stt
+    profiles: ["stt"]
+    restart: "no"
+    volumes:
+      - stt-hf:/root/.cache/huggingface
+    <<: *gpu
+
   # Türsteher: immer nur ein Modell im VRAM
   pm-gpu-arbiter:
     image: ghcr.io/theingof/pm-gpu-arbiter-dev:${PM_IMAGE_TAG:-latest}
@@ -132,7 +142,7 @@ services:
     environment:
       OLLAMA_URL: "http://ollama:11434"
       OLLAMA_CONTAINER: "pm-ollama"
-      TTS_ENGINES: "qwen=http://qwen-tts:8880|pm-qwen-tts,kokoro=http://kokoro-tts:8880|pm-kokoro-tts|cpu,f5=http://f5-tts:8880|pm-f5-tts,tada=http://tada-tts:8880|pm-tada-tts"
+      TTS_ENGINES: "qwen=http://qwen-tts:8880|pm-qwen-tts,kokoro=http://kokoro-tts:8880|pm-kokoro-tts|cpu,f5=http://f5-tts:8880|pm-f5-tts,tada=http://tada-tts:8880|pm-tada-tts,stt=http://whisper-stt:8880|pm-whisper-stt"
       TTS_DEFAULT_ENGINE: "qwen"
       TTS_STARTUP_TIMEOUT: "600"
       TTS_IDLE_LINGER_SECONDS: "60"
@@ -179,6 +189,7 @@ volumes:
   docling-cache:
   qwen-tts-hf:
   tts-hf:
+  stt-hf:
   kokoro-packs:
   infinity-cache:
   meili-data:

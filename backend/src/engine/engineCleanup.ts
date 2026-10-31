@@ -12,6 +12,7 @@ const DATA: Record<ExtraEngine, { image: string; volume: string; models: string[
   qwen: { image: "ghcr.io/theingof/pm-qwen-tts-dev", volume: "qwen-tts-hf", models: [] },
   f5: { image: "ghcr.io/theingof/pm-f5-tts", volume: "tts-hf", models: ["aihpi--F5-TTS-German", "charactr--vocos-mel-24khz"] },
   tada: { image: "ghcr.io/theingof/pm-tada-tts", volume: "tts-hf", models: ["HumeAI--tada-3b-ml", "HumeAI--tada-codec", "meta-llama--Llama-3.2-1B"] },
+  stt: { image: "ghcr.io/theingof/pm-whisper-stt", volume: "stt-hf", models: ["mobiuslabsgmbh--faster-whisper-large-v3-turbo"] },
 };
 
 // Je abgeschalteter Engine: seit wann aus, ob schon gelöscht

@@ -44,6 +44,6 @@ cp "$VEC" "$OUT/"
 mkdir -p "$OUT/engine"
 cp engine/provision.sh engine/compose.yaml "$OUT/engine/"
 # Fingerabdruck der Engine-Pakete: ändert sich nur mit compose.yaml oder den Paketquellen, nicht mit jeder App-Version
-{ git rev-parse HEAD:engine/compose.yaml; for d in pm-gpu-arbiter pm-qwen-tts pm-kokoro-tts pm-f5-tts pm-tada-tts pm-tts-common pm-docling-de; do git rev-parse "HEAD:$d" 2>/dev/null || true; done; } \
+{ git rev-parse HEAD:engine/compose.yaml; for d in pm-gpu-arbiter pm-qwen-tts pm-kokoro-tts pm-f5-tts pm-tada-tts pm-whisper-stt pm-tts-common pm-docling-de; do git rev-parse "HEAD:$d" 2>/dev/null || true; done; } \
   | sha1sum | cut -c1-12 > "$OUT/engine/images.rev" || true
 echo "Fertig: $OUT"
