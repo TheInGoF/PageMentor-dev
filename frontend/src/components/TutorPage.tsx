@@ -322,9 +322,32 @@ export function TutorPage(props: Props) {
               {busy ? t("tutor.sending") : t("tutor.send")}
             </Button>
           </form>
-          <p className="text-xs text-neutral-500">{t("tutor.sendHint")}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-neutral-500">{t("tutor.sendHint")}</p>
+            <ContextMeter messages={messages} />
+          </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+// Wie voll das Kontextfenster der letzten Antwort war, und wie viel schon ins Gedächtnis verdichtet ist
+function ContextMeter({ messages }: { messages: TutorMessage[] }) {
+  const last = [...messages].reverse().find((m) => m.role === "assistant");
+  const usage = last ? parseAnswer(last.content)?.usage : undefined;
+  if (!usage?.ctx) return null;
+  const used = usage.promptTokens + usage.outputTokens;
+  const pct = Math.min(100, Math.round((used / usage.ctx) * 100));
+  const tone = pct >= 80 ? "bg-red-500" : pct >= 60 ? "bg-amber-500" : "bg-emerald-500";
+  const fmt = (n: number) => n.toLocaleString("de-DE");
+  return (
+    <div className="flex items-center gap-2 text-xs text-neutral-500" title={t("tutor.contextHint")}>
+      <div className="w-24 h-1.5 rounded-full bg-neutral-800 overflow-hidden" aria-hidden>
+        <div className={`h-full ${tone}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span>{t("tutor.context", { pct, used: fmt(used), ctx: fmt(usage.ctx) })}</span>
+      {usage.memoryTurns > 0 && <span>· {t(usage.compacted ? "tutor.memoryNow" : "tutor.memory", { n: usage.memoryTurns })}</span>}
     </div>
   );
 }
@@ -457,6 +480,7 @@ function parseAnswer(content: string): TutorAnswer | null {
       reasoning: typeof v.reasoning === "string" ? v.reasoning : "",
       sources: Array.isArray(v.sources) ? v.sources : [],
       model: typeof v.model === "string" ? v.model : "",
+      usage: v.usage,
     };
   } catch {
     return null;

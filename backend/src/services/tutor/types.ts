@@ -2,7 +2,6 @@
 
 // Top-K: 12 statt 8, Fragen verweisen oft auf mehrere Modelle in verschiedenen Kapiteln
 export const TOP_K = 12;
-export const MAX_HISTORY_TURNS = 5;
 export const MAX_CHUNK_CHARS = 1200;
 
 export interface TutorSource {
@@ -34,6 +33,17 @@ export interface TutorAnswer {
   // Zitierte Quellen mit Metadaten
   sources: TutorSource[];
   model: string;
+  // Auslastung des Kontextfensters dieser Antwort; fehlt bei alten Antworten und anderen Anbietern
+  usage?: TutorUsage;
+}
+
+export interface TutorUsage {
+  promptTokens: number;
+  outputTokens: number;
+  ctx: number;
+  // Runden im Gesprächsgedächtnis; compacted: in dieser Runde verdichtet
+  memoryTurns: number;
+  compacted: boolean;
 }
 
 export interface ChatSessionRow {
@@ -42,6 +52,9 @@ export interface ChatSessionRow {
   module_id: string | null;
   created_at: string;
   updated_at: string;
+  memory?: string | null;
+  memory_upto?: string | null;
+  memory_turns?: number;
 }
 
 export interface ChatMessageRow {

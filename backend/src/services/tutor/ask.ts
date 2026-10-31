@@ -6,11 +6,12 @@ import { db } from "../../db";
 import { generate } from "../llm";
 import { cleanupHints } from "../promptHints";
 import { getPrompt } from "../prompts";
-import { MAX_HISTORY_TURNS, type ChatMessageRow, type TutorAnswer, type TutorSource } from "./types";
+import { type ChatMessageRow, type TutorAnswer, type TutorSource } from "./types";
 import { getChatSession, listChatMessages } from "./sessions";
 import { retrieveChunks, formatSourcesForPrompt } from "./retrieve";
 import { materialSources, retrieveMaterial } from "./material";
 import { runJob } from "../../log/jobs";
+import { foldIntoMemory, lastUsageRatio, planWindow } from "./memory";
 import { withGemmaLock } from "../gemmaLock";
 import { getLlmConfig } from "../llmConfig";
 import { DEFAULT_LLM_BUDGET, EXTRA_LLMS, type LlmBudget } from "../../engine/config";
@@ -25,7 +26,7 @@ function buildPrompt(
   sources: TutorSource[],
   language: "de" | "en",
   conceptNet = "",
-  turns = MAX_HISTORY_TURNS
+  memory = ""
 ): string {
   const sourcesBlock = formatSourcesForPrompt(sources);
   const lines: string[] = [];
@@ -36,9 +37,13 @@ function buildPrompt(
       ? "Relevant excerpts from the student's booklets:"
       : "Relevante Ausschnitte aus den Lernheften:";
 
-  // Letzte Runden als Klartext, Antworten ohne JSON-Hülle
-  const recent = history.slice(-turns * 2);
-  for (const m of recent) {
+  // Verdichtetes Gedächtnis früherer Runden, dann die letzten Runden wörtlich, Antworten ohne JSON-Hülle
+  if (memory) {
+    lines.push(language === "en" ? "Conversation memory (earlier rounds, condensed):" : "Gesprächsgedächtnis (frühere Runden, verdichtet):");
+    lines.push(memory);
+    lines.push("");
+  }
+  for (const m of history) {
     if (m.role === "user") {
       lines.push(`${studentLabel}: ${m.content}`);
     } else {
@@ -209,7 +214,14 @@ async function askImpl(params: {
     getPrompt(language === "en" ? "tutor.en" : "tutor.de");
   const systemPrompt = `${baseSystem}\n\n${cleanupHints(language)}`;
 
-  const prompt = buildPrompt(history, question, sources, language, conceptNet, pick.turns);
+  // Was aus dem Fenster fällt, kommt ins Gedächtnis statt in den Papierkorb
+  const plan = planWindow(history, session.memory_upto ?? null, pick.turns, lastUsageRatio(history));
+  let memory = session.memory ?? "";
+  let memoryTurns = session.memory_turns ?? 0;
+  const compacted = plan.fold.length > 0;
+  if (compacted) ({ memory, turns: memoryTurns } = await withGemmaLock("tutor-memory", () => foldIntoMemory(session, plan.fold, pick.model)));
+
+  const prompt = buildPrompt(plan.keep, question, sources, language, conceptNet, memory);
   // Eine Antwort zur Zeit auf der Grafikkarte: Hörbuch-Aufbereitung und Begriffsnetz warten, bis der Tutor fertig ist
   const result = await withGemmaLock("tutor", () =>
     generate({
@@ -233,6 +245,9 @@ async function askImpl(params: {
     sources,
     result.model
   );
+  if (result.promptTokens !== undefined) {
+    answer.usage = { promptTokens: result.promptTokens, outputTokens: result.outputTokens ?? 0, ctx: pick.ctx, memoryTurns, compacted };
+  }
 
   const d = db();
   const userId = randomUUID();

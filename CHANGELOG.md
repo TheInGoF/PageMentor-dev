@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.43.0 – 2026-10-31
+### New
+- Tutor zeigt, wie voll das Kontextfenster der letzten Antwort war (Token, Prozent, Farbe).
+- Tutor-Gedächtnis: Runden, die aus dem Fenster fallen, werden gezielt verdichtet statt weggeworfen; Fachliches, gute Antworten sowie Fehler mit Korrektur bleiben, Abschweifungen fallen weg. Gebündelt ab drei Runden, ab 80 % Auslastung sofort.
+- Gemma-Anweisung „Tutor: Gesprächsgedächtnis“ lässt sich in den Einstellungen anpassen.
+
 ## 1.42.0 – 2026-10-31
 ### Change
 - Tutor: jedes Modell hat ein eigenes Budget; das kleine Modell antwortet mit 64k Kontext, bis zu 30 Quellen und 12 Gesprächsrunden, Gemma 26B mit 20 Quellen, Qwen 3.6 mit 14.

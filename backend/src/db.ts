@@ -337,6 +337,14 @@ export function initDb() {
       ON chat_sessions(updated_at DESC);
   `);
 
+  // Gesprächsgedächtnis des Tutors: verdichtete ältere Runden, bis zu welcher Nachricht, wie viele Runden
+  const chatCols = d.prepare("PRAGMA table_info(chat_sessions)").all() as Array<{ name: string }>;
+  if (!chatCols.some((c) => c.name === "memory")) {
+    d.exec("ALTER TABLE chat_sessions ADD COLUMN memory TEXT");
+    d.exec("ALTER TABLE chat_sessions ADD COLUMN memory_upto TEXT");
+    d.exec("ALTER TABLE chat_sessions ADD COLUMN memory_turns INTEGER NOT NULL DEFAULT 0");
+  }
+
   // Voice samples for Qwen3-TTS voice clone. User uploads a 3-10 s
   // reference WAV/MP3, we store the file in the data volume and keep
   // metadata in this table. The fixed seed (rolled at upload) ensures

@@ -275,4 +275,6 @@ export interface TutorAnswer {
   reasoning: string;
   sources: TutorSource[];
   model: string;
+  // Auslastung des Kontextfensters dieser Antwort
+  usage?: { promptTokens: number; outputTokens: number; ctx: number; memoryTurns: number; compacted: boolean };
 }

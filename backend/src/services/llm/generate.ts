@@ -14,6 +14,8 @@ export interface GenerateResult {
   doneReason?: string;
   // Erzeugte Tokens, bisher nur Ollama
   outputTokens?: number;
+  // Token der Anfrage (System, Prompt), bisher nur Ollama: zeigt, wie voll der Kontext ist
+  promptTokens?: number;
 }
 
 export async function generate(params: {
@@ -79,6 +81,7 @@ export async function generate(params: {
       totalMs: Date.now() - started,
       doneReason: data.done_reason,
       outputTokens: data.eval_count,
+      promptTokens: data.prompt_eval_count,
     };
   }
 
