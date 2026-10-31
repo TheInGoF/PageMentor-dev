@@ -47,6 +47,8 @@ export interface DoclingExtraction {
 export interface DoclingTextItem {
   label?: string;
   text?: string;
+  // Text aus der PDF-Textebene; bei Formeln die Grundlage für fehlende "="
+  orig?: string;
   level?: number;
   prov?: Array<{ page_no?: number }>;
 }

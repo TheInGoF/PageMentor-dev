@@ -14,6 +14,7 @@ import type { DoclingExtraction } from "./docling/types";
 import { extractPdf } from "./pdf";
 import { withDocling } from "./docling/release";
 import { cleanForReading } from "./clean";
+import { cleanStudyMarkdown } from "./studyClean";
 import { emit } from "./events";
 import { indexDocument, indexChapters } from "./search";
 import { renderCover } from "./ocr";
@@ -103,6 +104,9 @@ async function processDocumentImpl(docId: string): Promise<void> {
         });
       });
     }
+
+    // Symbol-Font, persönliche Fußzeile, Formulare und Formeln im Markdown (Wissensordner, Zuordnung)
+    extraction = { ...extraction, markdown: cleanStudyMarkdown(extraction.markdown) };
 
     // Dubletten vor Kapiteln, Embeddings und KI: bei Scans gibt es erst jetzt Text zum Vergleichen
     const known = d.prepare("SELECT text_minhash FROM documents WHERE id = ?").get(docId) as { text_minhash: string | null } | null;

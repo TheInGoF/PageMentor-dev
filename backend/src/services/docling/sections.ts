@@ -1,5 +1,6 @@
 // Kapitel aus Docling-Überschriften bilden und einordnen
 // Grenze: kleinste Überschriften-Ebene, die mindestens dreimal vorkommt
+import { fixFormula } from "../studyClean";
 import type { ChapterKind, DoclingSection, DoclingTextItem, DoclingDocumentJson } from "./types";
 
 // Nummerierte Überschrift erkennen, liefert die Tiefe
@@ -159,6 +160,8 @@ export function buildSections(
         // Unterüberschrift im Kapitel als ##
         cur.parts.push(`\n## ${text}\n`);
       }
+    } else if (label === "formula") {
+      cur.parts.push(fixFormula(text, item.orig ?? ""));
     } else {
       cur.parts.push(text);
     }

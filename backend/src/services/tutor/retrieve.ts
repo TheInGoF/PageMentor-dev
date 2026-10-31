@@ -27,7 +27,7 @@ export async function retrieveChunks(
   if (!rowids.length) return [];
   const rows = db()
     .prepare(
-      `SELECT ch.rowid AS rid, ch.id, ch.document_id, ch.chapter_id, ch.text,
+      `SELECT ch.rowid AS rid, ch.id, ch.document_id, ch.chapter_id, ch.chunk_index, ch.text,
               ch.start_page, ch.end_page,
               d.title  AS doc_title,
               d.short_code AS doc_short_code,
@@ -38,7 +38,7 @@ export async function retrieveChunks(
          LEFT JOIN chapters c ON c.id = ch.chapter_id
         WHERE ch.rowid IN (${rowids.map(() => "?").join(",")})`
     )
-    .all(...rowids) as Array<Omit<ChunkRow, "embedding"> & { rid: number }>;
+    .all(...rowids) as Array<Omit<ChunkRow, "embedding"> & { rid: number; chunk_index: number }>;
   const byRid = new Map(rows.map((r) => [r.rid, r]));
   return rowids
     .map((rid) => byRid.get(rid))
@@ -53,8 +53,23 @@ export async function retrieveChunks(
       chapterTitle: row.chapter_title,
       startPage: row.start_page,
       endPage: row.end_page,
-      snippet: truncate(row.text, MAX_CHUNK_CHARS),
+      // Die besten Treffer mit ihren Nachbarabschnitten: Definitionen und Herleitungen reißen sonst an der Abschnittsgrenze ab
+      snippet: i < NEIGHBOR_HITS ? withNeighbors(row.document_id, row.chunk_index, row.text) : truncate(row.text, MAX_CHUNK_CHARS),
     }));
+}
+
+const NEIGHBOR_HITS = 4;
+const NEIGHBOR_CHARS = 600;
+
+function withNeighbors(docId: string, index: number, text: string): string {
+  const near = db()
+    .prepare("SELECT chunk_index, text FROM chunks WHERE document_id = ? AND chunk_index IN (?, ?)")
+    .all(docId, index - 1, index + 1) as Array<{ chunk_index: number; text: string }>;
+  const prev = near.find((n) => n.chunk_index === index - 1)?.text ?? "";
+  const next = near.find((n) => n.chunk_index === index + 1)?.text ?? "";
+  return [prev && `… ${prev.slice(-NEIGHBOR_CHARS).trim()}`, truncate(text, MAX_CHUNK_CHARS), next && `${next.slice(0, NEIGHBOR_CHARS).trim()} …`]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function truncate(s: string, max: number): string {

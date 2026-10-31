@@ -15,6 +15,8 @@
  * idempotent — applying them multiple times doesn't change the result.
  */
 
+import { mapSymbols, stripPersonalData } from "./studyClean";
+
 // ---------------------------------------------------------------------------
 // Unicode normalization
 // ---------------------------------------------------------------------------
@@ -40,7 +42,8 @@ const LIGATURES: Record<string, string> = {
  *    base + combining
  */
 export function normalizeUnicode(text: string): string {
-  let t = text.normalize("NFC");
+  // Symbol-Font-Zeichen (Private Use) zuerst, sonst gehen sie in Suche und Sprachausgabe verloren
+  let t = mapSymbols(text).normalize("NFC");
   for (const [from, to] of Object.entries(LIGATURES)) {
     t = t.split(from).join(to);
   }
@@ -111,7 +114,8 @@ export function stripBoilerplate(pages: string[]): string[] {
 // ---------------------------------------------------------------------------
 
 export function cleanForReading(raw: string): string {
-  let t = normalizeUnicode(raw);
+  // Persönliche Fußzeile (Name, Matrikelnummer) und Einsende-Formular gehören nirgends hin
+  let t = stripPersonalData(normalizeUnicode(raw));
 
   // Page numbers on their own line
   t = t.replace(/^\s*(?:Seite|Page|S\.)\s*\d{1,4}(?:\s*[\/-]\s*\d{1,4})?\s*$/gim, "");

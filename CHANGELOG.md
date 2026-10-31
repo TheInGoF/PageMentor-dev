@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.35.0 – 2026-10-31
+### New
+- Formeln aus der Texterkennung werden repariert: fehlende Gleichheitszeichen aus der PDF-Textebene, zerlegte Ziffern und Wörter; Unsicheres wird als „[Formel unsicher erkannt]“ markiert.
+- Tutor: die besten Treffer kommen mit ihren Nachbarabschnitten, damit Definitionen und Herleitungen nicht an der Abschnittsgrenze abreißen.
+### Change
+- Tutor weist auf unsicher erkannte Formeln hin, statt sie ungeprüft zu übernehmen.
+### Fix
+- Mathe-Zeichen aus dem Symbol-Font (z. B. =, π, ∈, ℝ, ℕ) gehen bei der Umwandlung nicht mehr verloren.
+- Persönliche Fußzeile mit Name und Matrikelnummer, Einsende-Formular und Hinweisseiten landen nicht mehr in Kapiteln, Hörbuch und Suche.
+
 ## 1.34.1 – 2026-10-31
 ### Fix
 - Der einmalige Nachtrag für Vorwort und Einleitung legt seine Markierung neben die Datenbank und bricht nicht mehr ab, wenn der Ordner fehlt.
