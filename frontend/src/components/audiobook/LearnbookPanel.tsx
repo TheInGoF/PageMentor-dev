@@ -41,7 +41,7 @@ interface Info {
 const LANGS = ["es", "en", "fr", "it", "pt"];
 const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.round((ms % 60000) / 1000)).padStart(2, "0")}`;
 
-export function LearnbookPanel({ docId, rate }: { docId: string; rate: string }) {
+export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: string; kind: "language" | "subject" }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -63,7 +63,10 @@ export function LearnbookPanel({ docId, rate }: { docId: string; rate: string })
 
   if (!info) return null;
   const st = info.state;
+  // Gewählt ist der Knopf oben; das Heft stellt erst beim Start um, damit Anschauen nichts verwirft
+  const other = info.kind !== kind;
   const post = async (path: string, body?: object) => {
+    if (path === "/start" && other) await request(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) });
     await request(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
     await load();
   };
@@ -81,21 +84,13 @@ export function LearnbookPanel({ docId, rate }: { docId: string; rate: string })
   return (
     <section className="card p-4 flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold flex-1">{t("learn.title")}</h2>
-        {totalMs > 0 && <span className="text-xs text-neutral-500">{t("learn.total", { n: info.units.filter((u) => u.hasAudio).length, time: mmss(totalMs) })}</span>}
+        <h2 className="text-lg font-semibold flex-1">{t(`learn.title.${kind}`)}</h2>
+        {!other && totalMs > 0 && <span className="text-xs text-neutral-500">{t("learn.total", { n: info.units.filter((u) => u.hasAudio).length, time: mmss(totalMs) })}</span>}
       </div>
-      <p className="text-xs text-neutral-500">{t("learn.hint")}</p>
+      <p className="text-xs text-neutral-500">{t(`learn.kind.${kind}Hint`)}</p>
+      {other && info.units.some((u) => u.script) && <Notice kind="warn">{t("learn.otherKind", { kind: t(`learn.kind.${info.kind}`) })}</Notice>}
 
-      <SettingRow label={t("learn.kind")} hint={t(`learn.kind.${info.kind}Hint`)}>
-        <div className="flex gap-2">
-          {(["language", "subject"] as const).map((k) => (
-            <button key={k} type="button" className={cn("chip flex-1", info.kind === k && "chip-active")} disabled={running} onClick={() => void setKind({ kind: k })}>
-              {t(`learn.kind.${k}`)}
-            </button>
-          ))}
-        </div>
-      </SettingRow>
-      {info.kind === "language" && (
+      {kind === "language" && (
         <SettingRow label={t("learn.lang")}>
           <select className="input w-full" value={info.lang} disabled={running} onChange={(e) => void setKind({ lang: e.target.value })}>
             {LANGS.map((l) => (
@@ -125,7 +120,7 @@ export function LearnbookPanel({ docId, rate }: { docId: string; rate: string })
       {st?.phase === "failed" && <Notice kind="error">{st.error}</Notice>}
       {st?.phase === "done" && st.bookPath && <Notice>{t("learn.saved", { path: st.bookPath })}</Notice>}
 
-      {info.units.length > 0 && (
+      {!other && info.units.length > 0 && (
         <ul className="flex flex-col divide-y divide-border">
           {info.units.map((u) => (
             <li key={u.idx} className="py-2 flex flex-col gap-2">

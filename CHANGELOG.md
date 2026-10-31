@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.55.0 – 2026-10-31
+### Change
+- Hörbuch-Aktionen (Herunterladen, Ordner, M4B, Audiobookshelf, Löschen) stehen hinter dem ⋯-Menü.
+- Hörbuch-Reiter aufgeräumt: drei große Knöpfe für Original-Hörbuch, Lernhörbuch und Sprachlern-Hörbuch, darunter nur der gewählte Bereich.
+- Stimme, Tempo, Zweitstimme und Stimmvergleich gelten für alle drei und sind oben zusammengeklappt.
+
 ## 1.54.0 – 2026-10-31
 ### New
 - Warteschlange im Kopf: zeigt, was gerade auf der Grafikkarte läuft und was wartet, mit Fortschritt je Aufgabe.
