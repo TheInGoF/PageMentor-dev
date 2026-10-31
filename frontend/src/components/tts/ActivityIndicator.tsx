@@ -7,7 +7,7 @@ import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
 
 export interface ActivityItem {
-  kind: "docling" | "import" | "learnbook" | "audiobook" | "batch" | "maintenance" | "concepts" | "tts";
+  kind: "docling" | "import" | "learnbook" | "audiobook" | "batch" | "maintenance" | "concepts" | "tts" | "proncheck";
   status: "running" | "waiting";
   title: string;
   step?: string;

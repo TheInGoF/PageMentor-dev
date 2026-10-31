@@ -19,6 +19,7 @@ import { AudiobookSection } from "./settings/AudiobookSection";
 import { AiExpert, AiSection } from "./settings/AiSection";
 import { PromptsSection } from "./settings/PromptsSection";
 import { PronunciationSection } from "./settings/PronunciationSection";
+import { PronCheckSection } from "./settings/PronCheckSection";
 import { LanguagesSection } from "./settings/LanguagesSection";
 import { KnowledgeEval, KnowledgeSection } from "./settings/KnowledgeSection";
 import { DoclingSection } from "./settings/DoclingSection";
@@ -141,6 +142,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
               <AudiobookSection st={st} />
               <VoiceSamplesSection st={st} qwenOn={qwenOn} cloneOn={cloneOn} onEngines={() => setTab("engine")} />
               <PronunciationSection />
+              <PronCheckSection onEngines={() => setTab("engine")} />
               <LanguagesSection qwenOn={qwenOn} onEngines={() => setTab("engine")} />
               {qwenOn && <TtsSection st={st} />}
             </>

@@ -12,6 +12,7 @@ import { anyProcessing } from "./pipeline";
 import { anyGenerating } from "./audiobook";
 import { learnBusy } from "./learnbook/run";
 import { batchStatus } from "./batch/audiobooks";
+import { pronRunState } from "./pronCheck/run";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters } from "./concepts/extract";
 
 const COUNTDOWN_MS = 60_000;
@@ -49,7 +50,7 @@ export function maintenanceState(): MaintenanceState {
 
 // Andere Arbeit auf der Grafikkarte oder an Gemma: Umwandlung, Hörbuch, Stapel, Lernhörbuch, Begriffe von Hand
 function busy(): boolean {
-  return anyProcessing() || anyGenerating() || learnBusy() || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
+  return anyProcessing() || anyGenerating() || learnBusy() || !!pronRunState()?.running || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
 }
 
 async function scanOpen(): Promise<MaintenanceOpen> {

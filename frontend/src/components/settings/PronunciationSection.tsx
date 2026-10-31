@@ -41,6 +41,10 @@ export function PronunciationSection() {
   };
   useEffect(() => {
     void api.pronunciation.get().then(apply);
+    // Aus der Ausspracheprüfung übernommen: neu laden
+    const reload = () => void api.pronunciation.get().then(apply);
+    window.addEventListener("pm:pronunciation-changed", reload);
+    return () => window.removeEventListener("pm:pronunciation-changed", reload);
   }, []);
 
   const set = (i: number, patch: Partial<PronunciationEntry>) => setRows((cur) => cur.map((r, j) => (j === i ? { ...r, ...patch } : r)));

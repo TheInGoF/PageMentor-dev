@@ -6,6 +6,7 @@ import { migrateStudy } from "./study/schema";
 import { loadVec } from "./services/rag/vec";
 import { ensureFts } from "./services/rag/fts";
 import { ensureConceptTables } from "./services/concepts/store";
+import { ensurePronTables } from "./services/pronCheck/store";
 import { ensureLearnTables } from "./services/learnbook/store";
 
 let DB_PATH = join(DATA_DIR, "pagementor.db");
@@ -471,6 +472,8 @@ export function initDb() {
   ensureConceptTables(d);
   // Lernhörbuch-Einheiten
   ensureLearnTables(d);
+  // Ausspracheprüfung (Whisper)
+  ensurePronTables(d);
 
   // Studien-Datenmodell, mit Backup vor jeder Hochstufung
   const study = migrateStudy(d, DB_PATH);

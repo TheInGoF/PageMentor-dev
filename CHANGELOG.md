@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.58.0 – 2026-10-31
+### New
+- Aussprache prüfen (Debug) unter Stimmen: Whisper hört ein fertiges Hörbuch ab und meldet falsch gesprochene, verschluckte und unsichere Wörter.
+- Befunde lassen sich anhören, mit ✓ abhaken, ignorieren oder direkt in die Ausspracheliste übernehmen (mit Gemma-Vorschlag).
+- Die Warteschlange zeigt laufende Ausspracheprüfungen.
+
 ## 1.57.0 – 2026-10-31
 ### New
 - Whisper als Zusatz-Engine (Einstellungen → Engine → Stimm-Engines): hört fertige Hörbücher ab, Grundlage für die Ausspracheprüfung.

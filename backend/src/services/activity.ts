@@ -11,9 +11,10 @@ import { batchStatus } from "./batch/audiobooks";
 import { maintenanceState } from "./maintenance";
 import { conceptRunState } from "./concepts/extract";
 import { ttsActivity, type TtsActivity } from "./ttsActivity";
+import { pronRunState } from "./pronCheck/run";
 
 export interface ActivityItem {
-  kind: "docling" | "import" | "learnbook" | "audiobook" | "batch" | "maintenance" | "concepts" | "tts";
+  kind: "docling" | "import" | "learnbook" | "audiobook" | "batch" | "maintenance" | "concepts" | "tts" | "proncheck";
   status: "running" | "waiting";
   title: string;
   // Schlüssel für die Anzeige, z. B. "wait", "script", "audio"
@@ -70,6 +71,8 @@ export function collectActivity(tts: TtsActivity | null = null): ActivityItem[] 
   }
   const c = conceptRunState();
   if (c.running && m.status !== "running") items.push({ kind: "concepts", status: "running", title: c.doc ?? "", detail: c.current, done: c.done, total: c.total });
+  const pc = pronRunState();
+  if (pc?.running) items.push({ kind: "proncheck", status: pc.waiting ? "waiting" : "running", title: docTitle(pc.docId), detail: pc.current, done: pc.done, total: pc.total, docId: pc.docId });
   if (tts) items.push({ kind: "tts", status: "running", step: tts.phase, title: tts.engine, detail: tts.model, done: tts.bytes, total: tts.total });
   // Laufendes zuerst, dann Wartendes
   return items.sort((a, b) => Number(a.status === "waiting") - Number(b.status === "waiting"));

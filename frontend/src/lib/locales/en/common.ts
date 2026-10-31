@@ -69,6 +69,7 @@ export const common: Record<string, string> = {
   "activity.sub.check": "checking",
   "activity.sub.revise": "fixing",
   "activity.sub.speak": "speaking",
+  "activity.kind.proncheck": "Pronunciation check {step}",
   "logs.copy": "Copy",
   "logs.clear": "Clear",
   "logs.filter": "Show",
