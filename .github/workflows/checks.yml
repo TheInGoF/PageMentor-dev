@@ -31,6 +31,10 @@ jobs:
         working-directory: backend
         run: bun install
 
+      # ffmpeg für den Test, der eine Lernhörbuch-Einheit wirklich zusammensetzt (Stille, Verketten, Lautheit)
+      - name: ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
       - name: Backend Typecheck
         working-directory: backend
         run: npx tsc --noEmit -p .

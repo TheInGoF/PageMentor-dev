@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.48.1 – 2026-10-31
+### Fix
+- Automatische Prüfungen auf GitHub wieder grün: der Testlauf installiert ffmpeg für den Lernhörbuch-Test.
+
 ## 1.48.0 – 2026-10-31
 ### New
 - Wissenspflege, Teil 2 (Anzeige): in der Kopfzeile „Wissenspflege in 42 s“ mit Liste, was fehlt, „Jetzt starten“ und Abbrechen; im Lauf „Wissenspflege · Begriffe · 12/40“, aufgeklappt mit Heft, Kapitel und Fortschrittsbalken.
