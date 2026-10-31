@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { padMp3 } from "../../tts/ffmpeg";
-import { allVoices, findVoice } from "../../tts/voices";
+import { allVoices, defaultVoiceFor, findVoice, setVoicePrefs, voicePrefs, type VoicePrefs } from "../../tts/voices";
 import { synthesizePreview } from "../../tts/synth";
 import { tt } from "../../lib/i18n";
 
@@ -11,6 +11,22 @@ export const voiceRoutes = new Hono();
 voiceRoutes.get("/voices", (c) => {
   const showHidden = c.req.query("showHidden") === "1";
   return c.json({ voices: allVoices(showHidden) });
+});
+
+// Standardstimmen je Sprache und Stimmlage; effective zeigt, welche Stimme ohne eigene Wahl greift
+const PREF_LANGS = ["de", "en", "es"];
+const prefsBody = () => ({
+  ...voicePrefs(),
+  effective: Object.fromEntries(PREF_LANGS.map((l) => [l, defaultVoiceFor(l)])),
+});
+voiceRoutes.get("/voice-defaults", (c) => c.json(prefsBody()));
+voiceRoutes.put("/voice-defaults", async (c) => {
+  const body = await c.req.json<Partial<VoicePrefs>>();
+  setVoicePrefs({
+    gender: body.gender === "female" || body.gender === "male" || body.gender === "" ? body.gender : undefined,
+    byLang: body.byLang && typeof body.byLang === "object" ? body.byLang : undefined,
+  });
+  return c.json(prefsBody());
 });
 
 // Kurze Hörprobe der Stimme

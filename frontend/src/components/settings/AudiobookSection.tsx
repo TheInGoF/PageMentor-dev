@@ -1,26 +1,18 @@
-// Hörbuch-Grundeinstellungen: Standardstimme, Tempo, Audiobookshelf
+// Hörbuch-Grundeinstellungen: Standardstimmen je Sprache, Tempo, Audiobookshelf
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { t } from "../../lib/i18n";
 import type { SettingsState } from "./state";
 import { RATES } from "./types";
 import { Card, SettingRow } from "./parts";
+import { VoiceDefaultsRows } from "./VoiceDefaultsRows";
 
 export function AudiobookSection({ st }: { st: SettingsState }) {
-  const { absBusy, absKeyInput, absLibraries, absTest, absTestResult, llmConfig, removeApiKey, s, setAbsKeyInput, setLlmConfig, setS, voicesForLang } = st;
+  const { absBusy, absKeyInput, absLibraries, absTest, absTestResult, llmConfig, removeApiKey, s, setAbsKeyInput, setLlmConfig, setS, voices } = st;
   const absOn = llmConfig.absEnabled === "1";
   return (
     <Card title={t("settings.section.audiobook")}>
-      <SettingRow label={t("settings.defaultVoice")}>
-        <select className="input w-full" value={s.defaultVoice} onChange={(e) => setS({ ...s, defaultVoice: e.target.value })}>
-          <option value="">{t("settings.voice.server")}</option>
-          {voicesForLang.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.label} · {t(`audiobook.engine.${v.engine}`)}
-            </option>
-          ))}
-        </select>
-      </SettingRow>
+      <VoiceDefaultsRows voices={voices} />
       <SettingRow label={t("settings.defaultRate")}>
         <select className="input w-full" value={s.defaultRate} onChange={(e) => setS({ ...s, defaultRate: e.target.value })}>
           {RATES.map((r) => (

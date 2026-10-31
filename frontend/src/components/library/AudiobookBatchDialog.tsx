@@ -15,7 +15,8 @@ export function AudiobookBatchDialog({ docs, onClose }: { docs: Array<{ id: stri
   const [order, setOrder] = useState<"book" | "phase">("book");
   const docIds = list.map((d) => d.id);
   const [voices, setVoices] = useState<Voice[]>([]);
-  const [voiceId, setVoiceId] = useState(getSettings().defaultVoice);
+  // Leer = je Buch die Standardstimme seiner Sprache aus den Einstellungen
+  const [voiceId, setVoiceId] = useState("");
   const [rate, setRate] = useState(getSettings().defaultRate || "+0%");
   const [absReady, setAbsReady] = useState(false);
   const [abs, setAbs] = useState(true);
@@ -25,8 +26,6 @@ export function AudiobookBatchDialog({ docs, onClose }: { docs: Array<{ id: stri
   useEffect(() => {
     void api.audio.voices().then((v) => {
       setVoices(v.voices);
-      // Ohne gespeicherte Standardstimme: die erste deutsche
-      setVoiceId((cur) => (cur && v.voices.some((x) => x.id === cur) ? cur : v.voices.find((x) => x.language === "de")?.id ?? v.voices[0]?.id ?? ""));
     });
     void api.batch.status().then((r) => setAbsReady(!!r.absReady));
   }, []);
@@ -64,6 +63,7 @@ export function AudiobookBatchDialog({ docs, onClose }: { docs: Array<{ id: stri
         <p className="text-xs text-neutral-500">{t("batch.audio.hint")}</p>
         <SettingRow label={t("settings.defaultVoice")}>
           <select className="input w-full" value={voiceId} onChange={(e) => setVoiceId(e.target.value)}>
+            <option value="">{t("voiceDefaults.perLanguage")}</option>
             {voices.map((v) => (
               <option key={v.id + v.language} value={v.id}>
                 {v.label} · {t(`audiobook.engine.${v.engine}`)} · {v.language.toUpperCase()}

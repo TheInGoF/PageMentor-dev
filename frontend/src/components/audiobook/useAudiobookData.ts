@@ -108,19 +108,16 @@ export function useAudiobookData(docId: string, documentLanguage: string) {
   }, [docId]);
   useEffect(() => {
     const loadVoicesAndState = () => {
-      Promise.all([api.audio.voices(), api.audio.get(docId)])
-        .then(([v, a]) => {
+      Promise.all([api.audio.voices(), api.audio.get(docId), api.audio.voiceDefaults().catch(() => null)])
+        .then(([v, a, defaults]) => {
           setVoices(v.voices);
           setState(a);
-          const settings = getSettings();
           const langVoices = v.voices.filter(
             (vc) => vc.language === documentLanguage
           );
-          const fromSettings =
-            settings.defaultVoice &&
-            v.voices.find((vc) => vc.id === settings.defaultVoice)
-              ? settings.defaultVoice
-              : null;
+          // Standardstimme der Buchsprache aus den Einstellungen
+          const wanted = defaults?.effective[documentLanguage];
+          const fromSettings = wanted && langVoices.some((vc) => vc.id === wanted) ? wanted : null;
           const preferred =
             fromSettings ??
             langVoices.find((vc) => vc.flagship)?.id ??

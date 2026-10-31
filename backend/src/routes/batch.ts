@@ -14,8 +14,9 @@ batchRoutes.get("/audiobooks", (c) => c.json({ batch: batchStatus(), absReady: a
 
 batchRoutes.post("/audiobooks", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { docIds?: string[]; voiceId?: string; rate?: string; model?: string; abs?: boolean; order?: string };
-  if (!body.docIds?.length || !body.voiceId) return c.json({ error: "docIds und voiceId nötig" }, 400);
-  enqueue(body.docIds, { voiceId: body.voiceId, rate: body.rate || "+0%", model: body.model || undefined, abs: !!body.abs, order: body.order === "phase" ? "phase" : "book" });
+  // Leere Stimme: je Buch die Standardstimme seiner Sprache
+  if (!body.docIds?.length) return c.json({ error: "docIds nötig" }, 400);
+  enqueue(body.docIds, { voiceId: body.voiceId ?? "", rate: body.rate || "+0%", model: body.model || undefined, abs: !!body.abs, order: body.order === "phase" ? "phase" : "book" });
   return c.json({ batch: batchStatus() });
 });
 

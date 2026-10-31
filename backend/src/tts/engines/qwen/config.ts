@@ -52,8 +52,10 @@ export function seedForSpeaker(speaker: string): number {
   return Math.abs(h) % 2_147_483_647 || 42;
 }
 
+// Sprachname für die Sidecars (Qwen kennt 10 Sprachen, F5 wählt danach sein Modell)
+const LANGUAGE_NAMES: Record<string, string> = { de: "German", en: "English", es: "Spanish", fr: "French", it: "Italian", pt: "Portuguese" };
 export function qwenLanguageFor(lang: string): string {
-  return lang === "de" ? "German" : "English";
+  return LANGUAGE_NAMES[lang] ?? "English";
 }
 
 function parseNumConfig(raw: string | undefined): number | undefined {

@@ -102,7 +102,10 @@ async function generateAudiobookImpl(params: {
   const locale = voice.locale;
   // Zweisprachiges Buch: Stimme für die zweite Sprache; ohne sie liest die Hauptstimme alles
   const lang2 = doc.second_language || null;
-  const voice2 = lang2 && doc.voice2 ? findVoice(doc.voice2, lang2) ?? null : null;
+  // Ohne eigene Wahl am Heft: Standardstimme der zweiten Sprache (Einstellungen, passende Stimmlage)
+  // "main": die Hauptstimme liest alles
+  const voice2Id = lang2 && doc.voice2 !== "main" ? doc.voice2 || defaultVoiceFor(lang2) : "";
+  const voice2 = lang2 && voice2Id ? findVoice(voice2Id, lang2) ?? null : null;
   const extraVoices = lang2 && voice2 ? { [lang2]: voice2 } : undefined;
   const rate = params.rate || "+0%";
 

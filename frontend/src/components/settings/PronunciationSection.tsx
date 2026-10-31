@@ -24,11 +24,11 @@ export function PronunciationSection() {
 
   // Testen mit einer deutschen Stimme, vorbelegt mit der Standardstimme
   useEffect(() => {
-    void api.audio.voices().then((r) => {
+    void Promise.all([api.audio.voices(), api.audio.voiceDefaults().catch(() => null)]).then(([r, defaults]) => {
       const de = r.voices.filter((v) => v.language === "de");
       setVoices(de);
-      const pref = getSettings().defaultVoice;
-      setVoiceId(de.some((v) => v.id === pref) ? pref : de[0]?.id ?? "");
+      const pref = defaults?.effective.de;
+      setVoiceId(pref && de.some((v) => v.id === pref) ? pref : de[0]?.id ?? "");
     });
     void api.documents.list().then((d) => setDocs(d.filter((x) => x.ocr_status === "done")));
     return () => audio.current?.pause();

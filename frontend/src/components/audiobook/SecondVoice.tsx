@@ -1,4 +1,5 @@
-// Zweisprachiges Lehrbuch: Stimme für die zweite Sprache wählen; nur sichtbar, wenn das Buch eine hat
+// Zweisprachiges Lehrbuch: Stimme für die zweite Sprache wählen; nur sichtbar, wenn das Buch eine hat.
+// Leer = Standardstimme der Sprache aus den Einstellungen, "main" = Hauptstimme liest alles
 import { useEffect, useState } from "react";
 import { api, type Document, type Voice } from "../../lib/api";
 import { t } from "../../lib/i18n";
@@ -21,7 +22,8 @@ export function SecondVoice({ docId, voices }: { docId: string; voices: Voice[] 
       <label className="text-xs font-medium text-neutral-400">{t("audiobook.voice2", { lang: t(`lang.name.${lang}`) })}</label>
       {options.length ? (
         <select className="input max-w-xs" value={doc?.voice2 ?? ""} onChange={(e) => void pick(e.target.value)}>
-          <option value="">{t("audiobook.voice2.none")}</option>
+          <option value="">{t("audiobook.voice2.default")}</option>
+          <option value="main">{t("audiobook.voice2.none")}</option>
           {options.map((v) => (
             <option key={v.id} value={v.id}>
               {v.label} · {t(`audiobook.engine.${v.engine}`)}

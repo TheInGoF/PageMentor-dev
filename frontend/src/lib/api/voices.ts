@@ -130,7 +130,7 @@ export const voicesApi = {
     previewUnsaved: async (input: {
       description: string;
       gender: "female" | "male";
-      language: "de" | "en";
+      language: "de" | "en" | "es";
       seed?: number;
       text?: string;
     }): Promise<{ blob: Blob; seed: number }> => {

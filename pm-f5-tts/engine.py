@@ -1,30 +1,52 @@
-"""F5-TTS German vom HPI, klont aus Referenz-Audio.
+"""F5-TTS, klont aus Referenz-Audio: deutsches Modell vom HPI, spanisches von jpgallegoar.
 
-Checkpoint: aihpi/F5-TTS-German, Ordner F5TTS_Base (Vocos-Vocoder).
+Deutsch: aihpi/F5-TTS-German, Ordner F5TTS_Base (Vocos-Vocoder), lädt beim Start.
+Spanisch: jpgallegoar/F5-Spanish, lädt beim ersten spanischen Auftrag und bleibt geladen,
+damit Sprachwechsel mitten im Kapitel nichts kosten (beide zusammen rund 3–4 GB Grafikspeicher).
 Lizenz der Gewichte: CC-BY-NC-4.0, zur Laufzeit geladen, nicht im Image.
 """
 
 from __future__ import annotations
 
 import os
+import threading
 
 import numpy as np
 import soundfile as sf
 
 from tts_common.audio_io import Ref
 from tts_common.logs import get_logger
-from tts_common.server import SpeechRequest
+from tts_common.server import SpeechRequest, _set_offline
 
 log = get_logger("f5")
 
 REPO = os.environ.get("F5_REPO", "aihpi/F5-TTS-German")
 CKPT = os.environ.get("F5_CKPT", "F5TTS_Base/model_420000.safetensors")
+ES_REPO = os.environ.get("F5_ES_REPO", "jpgallegoar/F5-Spanish")
+ES_CKPT = os.environ.get("F5_ES_CKPT", "model_1200000.safetensors")
+# Sprache aus der Anfrage → (Repo, Checkpoint, Vokabular); unbekannte Sprachen sprechen Deutsch
+MODELS = {
+    "German": (REPO, CKPT, "vocab.txt"),
+    "Spanish": (ES_REPO, ES_CKPT, "vocab.txt"),
+}
 NFE_STEPS = int(os.environ.get("F5_NFE_STEPS", "32"))
 # F5 schätzt die Länge aus Referenz und Text; knapp geschätzt verschluckt es Anfang oder Ende.
 # Darum etwas Luft: Faktor auf die geschätzte Sprechzeit plus feste Sekunden
 DURATION_MARGIN = float(os.environ.get("F5_DURATION_MARGIN", "1.15"))
 DURATION_PAD = float(os.environ.get("F5_DURATION_PAD", "0.5"))
 REF_DIR = "/tmp/f5-refs"
+
+
+def _fetch(repo: str, name: str) -> str:
+    """Erst aus dem Volume, sonst aus dem Netz (nach dem Start steht der Hub auf offline)."""
+    from huggingface_hub import hf_hub_download
+
+    try:
+        return hf_hub_download(repo, name, local_files_only=True)
+    except Exception:  # noqa: BLE001
+        _set_offline(False)
+        log.info("lade %s/%s aus dem Netz", repo, name)
+        return hf_hub_download(repo, name)
 
 
 class F5Engine:
@@ -35,16 +57,30 @@ class F5Engine:
     voices: list[str] = []
 
     def __init__(self) -> None:
-        self._tts = None
+        self._models: dict[str, object] = {}
+        self._lock = threading.Lock()
+
+    def _model(self, language: str):
+        lang = language if language in MODELS else "German"
+        with self._lock:
+            if lang not in self._models:
+                from f5_tts.api import F5TTS
+
+                repo, ckpt_name, vocab_name = MODELS[lang]
+                ckpt = _fetch(repo, ckpt_name)
+                try:
+                    vocab = _fetch(repo, vocab_name)
+                except Exception:  # noqa: BLE001
+                    # Ohne eigenes Vokabular gilt das des F5-Basismodells
+                    log.warning("%s ohne %s, nehme das Standard-Vokabular", repo, vocab_name)
+                    vocab = ""
+                self._models[lang] = F5TTS(model="F5TTS_Base", ckpt_file=ckpt, vocab_file=vocab, device="cuda")
+                log.info("f5: Modell %s geladen (%s)", lang, repo)
+            return self._models[lang]
 
     def load(self) -> None:
-        from f5_tts.api import F5TTS
-        from huggingface_hub import hf_hub_download
-
         # hf_hub_download statt cached_path: liegt dann im HF-Volume und übersteht Image-Updates
-        ckpt = hf_hub_download(REPO, CKPT)
-        vocab = hf_hub_download(REPO, "vocab.txt")
-        self._tts = F5TTS(model="F5TTS_Base", ckpt_file=ckpt, vocab_file=vocab, device="cuda")
+        self._model("German")
         os.makedirs(REF_DIR, exist_ok=True)
 
     def _ref_file(self, ref: Ref) -> str:
@@ -55,11 +91,12 @@ class F5Engine:
         return path
 
     def synth(self, text: str, ref: Ref | None, req: SpeechRequest) -> np.ndarray:
-        assert self._tts is not None and ref is not None
+        assert ref is not None
         if not ref.text:
             # Ohne Transkript lädt F5 Whisper nach, das kostet Zeit und VRAM
             log.warning("ref_text fehlt, F5 transkribiert die Referenz selbst")
-        wav, sr, _ = self._tts.infer(
+        tts = self._model(req.language)
+        wav, sr, _ = tts.infer(
             self._ref_file(ref),
             ref.text or "",
             text,

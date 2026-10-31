@@ -27,6 +27,13 @@ export interface CompareRun {
   items: CompareItem[];
 }
 
+// Standardstimmen je Sprache; effective = was ohne eigene Wahl greift
+export interface VoiceDefaults {
+  gender: "female" | "male" | "";
+  byLang: Record<string, string>;
+  effective: Record<string, string>;
+}
+
 export const audioApi = {
   audio: {
     compare: (docId: string, chapterId: string, voices: string[]) =>
@@ -37,6 +44,9 @@ export const audioApi = {
       }),
     compareStatus: (docId: string) => request<{ run: CompareRun | null }>(`/api/audio/compare/${docId}`),
     compareFileUrl: (docId: string, engine: string, runId: string) => `/api/audio/compare/${docId}/file/${engine}?r=${runId}`,
+    voiceDefaults: () => request<VoiceDefaults>("/api/audio/voice-defaults"),
+    setVoiceDefaults: (body: { gender?: VoiceDefaults["gender"]; byLang?: Record<string, string> }) =>
+      request<VoiceDefaults>("/api/audio/voice-defaults", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
     voices: (showHidden: boolean = false) =>
       request<{ voices: Voice[] }>(
         "/api/audio/voices" + (showHidden ? "?showHidden=1" : "")

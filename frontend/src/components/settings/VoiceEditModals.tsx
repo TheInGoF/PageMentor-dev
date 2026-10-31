@@ -71,6 +71,7 @@ export function VoiceEditModals({ st }: { st: SettingsState }) {
                 >
                   <option value="de">Deutsch</option>
                   <option value="en">English</option>
+                  <option value="es">Español</option>
                 </select>
               </div>
             </div>
@@ -168,6 +169,7 @@ export function VoiceEditModals({ st }: { st: SettingsState }) {
                 >
                   <option value="de">Deutsch</option>
                   <option value="en">English</option>
+                  <option value="es">Español</option>
                 </select>
               </div>
             </div>

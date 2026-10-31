@@ -74,7 +74,8 @@ export async function synthesizeChapter(params: {
       segments = splitLanguageRuns(chapter.text).flatMap((run) => {
         const v = (run.lang && params.voices![run.lang]) || voice;
         if (v === voice) return segmentText(run.text, maxChunk).map((seg) => ({ paragraphs: seg.paragraphs.map(speak), voice }));
-        return [{ paragraphs: [run.text.trim()], voice: v }];
+        // Fremdsprache ohne Aussprache-Liste, aber in Stücken, die ihre Stimme verträgt (F5: 250 Zeichen)
+        return segmentText(run.text, maxChunkFor(v.engine)).map((seg) => ({ paragraphs: seg.paragraphs, voice: v }));
       });
       // Kapitelansage immer mit der Hauptstimme
       if (segments.length && segments[0].voice !== voice) segments.unshift({ paragraphs: [], voice });

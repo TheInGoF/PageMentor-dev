@@ -57,7 +57,7 @@ export function useVoiceManager(core: SettingsCore) {
   const [designDraft, setDesignDraft] = useState<{
     label: string;
     gender: "female" | "male";
-    language: "de" | "en";
+    language: "de" | "en" | "es";
     description: string;
     seed: string;
   }>({

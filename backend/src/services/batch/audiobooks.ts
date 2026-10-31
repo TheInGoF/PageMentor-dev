@@ -8,7 +8,7 @@ import { setTimeout as sleep } from "timers/promises";
 import { db } from "../../db";
 import { DATA_DIR } from "../../paths";
 import { emitLog } from "../../log/logger";
-import { findVoice } from "../../tts/voices";
+import { defaultVoiceFor, findVoice } from "../../tts/voices";
 import { anyProcessing, cancelProcessing, processDocument } from "../pipeline";
 import { releaseDoclingNow } from "../docling/release";
 import { anyGenerating, cancelAudiobook, generateAudiobook, getRunProgress, hasSpeakableText, isIncluded } from "../audiobook";
@@ -237,14 +237,17 @@ function missingChapters(docId: string): number {
 async function bookSteps(item: BatchItem): Promise<void> {
   const s = state!;
   const row = docRow(item.docId)!;
-  if (!findVoice(s.voiceId, row.language)) throw new Error(`Stimme nicht gefunden: ${s.voiceId}`);
+  // Gewählte Stimme nur für Bücher ihrer Sprache, sonst die Standardstimme der Buchsprache
+  const chosen = s.voiceId ? findVoice(s.voiceId, row.language) : undefined;
+  const voiceId = chosen?.language === row.language ? chosen.id : defaultVoiceFor(row.language);
+  if (!voiceId || !findVoice(voiceId, row.language)) throw new Error(`Keine Stimme für die Sprache ${row.language}`);
 
   // Intro (Vorschlag aus den Metadaten, Gemma für die Aussprache), Bereinigung, Kapitel und M4B im Buch-Lauf.
   // Er überspringt, was fertig und aktuell ist (Versionsstempel), und baut veraltete Teile neu
   const book = join(DATA_DIR, "audio", item.docId, "book.m4b");
   await waitIdle();
   set(item, "audio");
-  const { regenerated } = await generateAudiobook({ docId: item.docId, voiceId: s.voiceId, rate: s.rate, model: s.model });
+  const { regenerated } = await generateAudiobook({ docId: item.docId, voiceId, rate: s.rate, model: s.model });
   if (cancelRequested) return;
   if (!existsSync(book)) {
     const missing = missingChapters(item.docId);

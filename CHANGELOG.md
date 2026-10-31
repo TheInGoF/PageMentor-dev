@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.33.0 – 2026-10-31
+### New
+- Einstellungen → Hörbuch: Standardstimme je Sprache (Deutsch, Englisch, Spanisch) und eine gemeinsame Stimmlage weiblich oder männlich.
+- F5-TTS spricht Spanisch (Modell F5-Spanish, lädt beim ersten spanischen Auftrag); Stimmproben lassen sich als Español anlegen.
+### Change
+- Hörbuch-Lauf mit „Standardstimme je Sprache“: jedes Buch bekommt die Stimme seiner Sprache.
+- Lange fremdsprachige Passagen werden in Stücke geteilt, die die Stimme verträgt.
+- Ohne eigene Wahl am Heft liest die Standardstimme der zweiten Sprache; „Hauptstimme liest alles“ bleibt wählbar.
+- Qwen bekommt bei Spanisch, Französisch, Italienisch und Portugiesisch die richtige Sprache statt Englisch.
+
 ## 1.32.2 – 2026-10-31
 ### Fix
 - Bricht die Verbindung zur Stimme ab (Neustart), wird das Stück nach kurzer Pause einmal wiederholt.

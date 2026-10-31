@@ -152,9 +152,10 @@ export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: Se
             <GenderSelect value={designDraft.gender} onChange={(g) => setDesignDraft({ ...designDraft, gender: g })} />
             <div className="flex flex-col gap-2">
               <label className="text-xs text-neutral-400">{t("settings.design.language")}</label>
-              <select className="input" value={designDraft.language} onChange={(e) => setDesignDraft({ ...designDraft, language: e.target.value as "de" | "en" })}>
+              <select className="input" value={designDraft.language} onChange={(e) => setDesignDraft({ ...designDraft, language: e.target.value as "de" | "en" | "es" })}>
                 <option value="de">Deutsch</option>
                 <option value="en">English</option>
+                <option value="es">Español</option>
               </select>
             </div>
           </div>
