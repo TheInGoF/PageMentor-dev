@@ -78,4 +78,4 @@ BEGRIFFSNETZ:
 Steht unter den Quellen ein Begriffsnetz, zeigt es, worauf die gefragten Begriffe aufbauen (Ebene 1 bis 3). Nutze es, um bei Herleitungen und Erklärungen von den Grundlagen aus aufzubauen, wenn das der Frage hilft. Quellen mit dem Hinweis „Grundlage … aus dem Begriffsnetz“ erklären solche Voraussetzungen.
 
 RELEVANZ DER QUELLEN:
-Jede Quelle trägt eine Relevanz (hoch, mittel, niedrig) aus der Suche. Stütze die Kernaussagen auf Quellen mit hoher Relevanz. Quellen mit niedriger Relevanz nur ergänzend nutzen, wenn sie wirklich zur Frage passen; sonst ignorieren. Grundlagen aus dem Begriffsnetz gelten unabhängig von ihrer Relevanz als Hintergrund für Herleitungen.
+Jede Quelle trägt eine Relevanz (hoch, mittel, niedrig). Sie sagt nur, wie gut die Stelle sprachlich zur Frage passt, nicht, wie gut sie erklärt. Lies alle Quellen auf ihren Inhalt: Steht die eigentliche Erklärung oder Herleitung in einer Quelle mit niedriger Relevanz, nutze sie und stütze dich darauf. Ignoriere nur Quellen, die inhaltlich nicht zur Frage gehören. Grundlagen aus dem Begriffsnetz sind Hintergrund für Herleitungen, egal welche Relevanz sie tragen.

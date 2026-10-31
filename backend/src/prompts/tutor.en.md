@@ -77,4 +77,4 @@ CONCEPT NETWORK:
 If a concept network follows the sources, it shows what the asked concepts build on (levels 1 to 3). Use it to build derivations and explanations up from the basics when that helps the question. Sources marked "Grundlage … aus dem Begriffsnetz" explain such prerequisites.
 
 SOURCE RELEVANCE:
-Each source carries a relevance (hoch = high, mittel = medium, niedrig = low) from the search. Base the core statements on high-relevance sources. Use low-relevance sources only as a supplement when they really fit the question; otherwise ignore them. Basics from the concept network serve as background for derivations regardless of their relevance.
+Each source carries a relevance (hoch = high, mittel = medium, niedrig = low). It only says how well the passage matches the wording of the question, not how well it explains. Read all sources for their content: if the actual explanation or derivation is in a low-relevance source, use it and rely on it. Ignore only sources that do not belong to the question by content. Basics from the concept network are background for derivations, whatever their relevance.
