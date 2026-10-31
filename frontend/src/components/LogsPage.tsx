@@ -5,6 +5,7 @@ import { t } from "../lib/i18n";
 import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
 import { LogRow } from "./logs/LogRow";
+import { formatTs } from "./logs/model";
 import { LogToolbar } from "./logs/LogToolbar";
 import {
   EMPTY_FILTER,
@@ -88,6 +89,24 @@ export function LogsContent() {
     stickyBottomRef.current = el.scrollHeight - (el.scrollTop + el.clientHeight) < 40;
   }
 
+  // Sichtbare Zeilen (mit Filter) als Text in die Zwischenablage, mit Kontext und Fehlerdetails
+  async function copyVisible() {
+    const text = visible
+      .map((l) => {
+        const head = `${formatTs(l.ts)} ${l.source} ${l.level}${l.area ? ` ${l.area}` : ""} ${l.message}`;
+        const ctx = l.ctx ? ` ${Object.entries(l.ctx).map(([k, v]) => `${k}=${v}`).join(" ")}` : "";
+        const err = l.err ? `\n  ${l.err.name}: ${l.err.message}${l.err.stack ? `\n${l.err.stack}` : ""}` : "";
+        return head + ctx + err;
+      })
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.show(t("logs.copied", { n: visible.length }), "success");
+    } catch {
+      toast.show(t("common.error"), "error");
+    }
+  }
+
   async function createDiagnostics() {
     setDiagBusy(true);
     try {
@@ -135,6 +154,9 @@ export function LogsContent() {
             </Button>
           </>
         )}
+        <Button variant="ghost" onClick={() => void copyVisible()} disabled={!visible.length}>
+          {t("logs.copy")}
+        </Button>
         <Button variant="outline" onClick={createDiagnostics} disabled={diagBusy}>
           {diagBusy ? t("logs.diagnostics.creating") : t("logs.diagnostics.create")}
         </Button>

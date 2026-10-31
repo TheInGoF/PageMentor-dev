@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.49.0 – 2026-10-31
+### New
+- Logs: „Kopieren“ legt die sichtbaren Zeilen (mit Filter, Kontext und Fehlerdetails) in die Zwischenablage.
+### Fix
+- Selbsttest: ein Dienst, der gerade startet und Modelle lädt (z. B. Embeddings mit dem neuen Reranker), gilt als „startet noch“ mit seiner letzten Log-Zeile, statt alle zwei Sekunden neu gestartet zu werden.
+
 ## 1.48.1 – 2026-10-31
 ### Fix
 - Automatische Prüfungen auf GitHub wieder grün: der Testlauf installiert ffmpeg für den Lernhörbuch-Test.

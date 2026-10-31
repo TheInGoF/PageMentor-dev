@@ -52,10 +52,10 @@ export const DEFAULT_LLM_BUDGET: LlmBudget = { ctx: 65536, hits: 30, turns: 12 }
 
 // Dienste mit Health-Adresse, von Windows aus gesehen
 export const SERVICES = [
-  { id: "arbiter", title: "GPU-Arbiter", url: `http://${ENGINE_HOST}:8790/health` },
-  { id: "docling", title: "Docling (PDF)", url: `http://${ENGINE_HOST}:5001/health` },
-  { id: "embeddings", title: "Embeddings", url: `http://${ENGINE_HOST}:8080/health` },
-  { id: "search", title: "Suche", url: `http://${ENGINE_HOST}:7700/health` },
+  { id: "arbiter", title: "GPU-Arbiter", url: `http://${ENGINE_HOST}:8790/health`, container: "pm-gpu-arbiter" },
+  { id: "docling", title: "Docling (PDF)", url: `http://${ENGINE_HOST}:5001/health`, container: "pm-docling" },
+  { id: "embeddings", title: "Embeddings", url: `http://${ENGINE_HOST}:8080/health`, container: "pm-infinity" },
+  { id: "search", title: "Suche", url: `http://${ENGINE_HOST}:7700/health`, container: "pm-meilisearch" },
 ] as const;
 
 // Zusatzmodelle für Docling in höchster Stufe (Bildbeschreibung, Diagramme, Formeln).

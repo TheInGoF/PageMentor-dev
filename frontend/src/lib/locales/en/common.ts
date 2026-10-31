@@ -37,6 +37,8 @@ export const common: Record<string, string> = {
   "logs.connection.closed": "disconnected",
   "logs.pause": "Pause auto-scroll",
   "logs.resume": "Resume auto-scroll",
+  "logs.copied": "{n} lines copied",
+  "logs.copy": "Copy",
   "logs.clear": "Clear",
   "logs.filter": "Show",
   "logs.lines": "lines",

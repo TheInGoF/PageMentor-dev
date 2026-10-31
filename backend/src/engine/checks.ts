@@ -158,6 +158,9 @@ async function checkService(svc: (typeof SERVICES)[number]): Promise<CheckResult
     if (res.ok) return ok(`svc-${svc.id}`, svc.title, "Antwortet");
     return { id: `svc-${svc.id}`, title: svc.title, status: "error", message: `Antwortet mit HTTP ${res.status}`, repair: "start-services" };
   } catch (err) {
+    // Läuft der Container erst seit Kurzem, lädt er meist noch Modelle: kein Neustart, sondern „startet noch“
+    const starting = IS_WINDOWS ? await startingUp(svc.container) : null;
+    if (starting) return { id: `svc-${svc.id}`, title: svc.title, status: "warn", message: `Startet noch (lädt Modelle)${starting.last ? `: ${starting.last}` : ""}` };
     return {
       id: `svc-${svc.id}`,
       title: svc.title,
@@ -166,6 +169,20 @@ async function checkService(svc: (typeof SERVICES)[number]): Promise<CheckResult
       repair: IS_WINDOWS ? "start-services" : undefined,
     };
   }
+}
+
+// Container läuft (nicht im Neustart-Kreislauf) und ist jünger als 20 Minuten: letzte Log-Zeile als Hinweis
+const STARTUP_GRACE_MS = 20 * 60_000;
+async function startingUp(container: string): Promise<{ last: string } | null> {
+  const r = await inDistro(
+    `docker inspect -f '{{.State.Running}} {{.State.Restarting}} {{.State.StartedAt}}' ${container} 2>/dev/null && docker logs --tail 3 ${container} 2>&1 | tail -n 1`,
+    { timeoutMs: 20_000, quiet: true }
+  );
+  const [state, ...rest] = r.stdout.trim().split("\n");
+  const [running, restarting, startedAt] = (state ?? "").split(" ");
+  if (running !== "true" || restarting === "true" || !startedAt) return null;
+  if (Date.now() - Date.parse(startedAt) > STARTUP_GRACE_MS) return null;
+  return { last: rest.join(" ").replace(/\s+/g, " ").trim().slice(0, 140) };
 }
 
 async function checkDoclingModels(ctx: Ctx): Promise<CheckResult> {
