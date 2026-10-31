@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.38.0 – 2026-10-31
+### New
+- Tutor nutzt die Zusammenhänge wie ein Gedächtnis: die besten Treffer holen passende Stellen aus verwandten Kapiteln anderer Hefte dazu, der Reranker entscheidet; solche Quellen tragen den Hinweis „über Zusammenhang“.
+
 ## 1.37.0 – 2026-10-31
 ### New
 - Tutor: ein Reranker (bge-reranker-v2-m3, lädt einmalig rund 2 GB) sortiert die gefundenen Stellen nach Relevanz, bevor Gemma antwortet.

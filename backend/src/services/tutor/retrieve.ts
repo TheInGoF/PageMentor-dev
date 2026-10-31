@@ -2,6 +2,7 @@
 import { db } from "../../db";
 import { hybridSearch } from "../rag/hybrid";
 import { rerank } from "../rag/rerank";
+import { associatedChunks, relatedChapters } from "../rag/associate";
 import { TOP_K, MAX_CHUNK_CHARS, type TutorSource } from "./types";
 
 
@@ -25,8 +26,12 @@ export async function retrieveChunks(
 ): Promise<TutorSource[]> {
   // Volltext und Vektoren gemeinsam (ohne Embedder bleibt die Volltextsuche), dann sortiert der Reranker
   // die Kandidaten nach echter Relevanz und nur die besten gehen an Gemma
-  const { rowids: candidates } = await hybridSearch(question, moduleId, RERANK_CANDIDATES);
-  if (!candidates.length) return [];
+  const { rowids: found, query } = await hybridSearch(question, moduleId, RERANK_CANDIDATES);
+  if (!found.length) return [];
+  // Zusammenhänge als Gedächtnis: die besten Treffer holen passende Abschnitte verwandter Kapitel dazu
+  const associated = query ? associate(found.slice(0, ASSOCIATION_SEEDS), query, moduleId).filter((r) => !found.includes(r)) : [];
+  const viaGraph = new Set(associated);
+  const candidates = [...found, ...associated];
   const rows = db()
     .prepare(
       `SELECT ch.rowid AS rid, ch.id, ch.document_id, ch.chapter_id, ch.chunk_index, ch.text,
@@ -56,6 +61,7 @@ export async function retrieveChunks(
       chapterId: row.chapter_id,
       chapterNumber: row.chapter_number,
       chapterTitle: row.chapter_title,
+      related: viaGraph.has(row.rid) || undefined,
       startPage: row.start_page,
       endPage: row.end_page,
       // Die besten Treffer mit ihren Nachbarabschnitten: Definitionen und Herleitungen reißen sonst an der Abschnittsgrenze ab
@@ -64,6 +70,18 @@ export async function retrieveChunks(
 }
 
 const NEIGHBOR_HITS = 4;
+const ASSOCIATION_SEEDS = 5;
+
+function associate(seedRowids: number[], query: Float32Array, moduleId: string | null): number[] {
+  const d = db();
+  const seeds = d
+    .prepare(`SELECT DISTINCT chapter_id FROM chunks WHERE chapter_id IS NOT NULL AND rowid IN (${seedRowids.map(() => "?").join(",")})`)
+    .all(...seedRowids) as Array<{ chapter_id: string }>;
+  const allowed = moduleId
+    ? new Set((d.prepare("SELECT id FROM documents WHERE module_id = ?").all(moduleId) as Array<{ id: string }>).map((r) => r.id))
+    : undefined;
+  return associatedChunks(query, relatedChapters(seeds.map((r) => r.chapter_id), 2, 0.75, allowed), 2);
+}
 const RERANK_CANDIDATES = 30;
 const NEIGHBOR_CHARS = 600;
 
@@ -97,7 +115,8 @@ export function formatSourcesForPrompt(sources: TutorSource[]): string {
         s.startPage === s.endPage
           ? `, Seite ${s.startPage}`
           : `, Seiten ${s.startPage}–${s.endPage}`;
-      return `[Quelle ${s.n}] ${heft}${kapitel}${pages}\n${s.snippet}`;
+      const via = s.related ? " (verwandtes Kapitel aus den Zusammenhängen)" : "";
+      return `[Quelle ${s.n}] ${heft}${kapitel}${pages}${via}\n${s.snippet}`;
     })
     .join("\n\n---\n\n");
 }

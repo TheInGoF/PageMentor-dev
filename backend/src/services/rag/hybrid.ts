@@ -17,6 +17,8 @@ export function rrf(lists: number[][], k = RRF_K): Array<{ rowid: number; score:
 export interface HybridResult {
   rowids: number[];
   mode: "hybrid" | "text" | "vector";
+  // Frage als Vektor, für die Assoziation über die Zusammenhänge; ohne Embedder null
+  query: Float32Array | null;
 }
 
 // Ohne sqlite-vec: alle Vektoren im Bereich lesen (bis einige Tausend Abschnitte vertretbar)
@@ -36,11 +38,12 @@ export async function hybridSearch(question: string, moduleId: string | null, to
   const d = db();
   const text = ftsSearch(d, question, CANDIDATES, moduleId).map((r) => r.rowid);
   let vector: number[] = [];
+  let q: Float32Array | null = null;
   const embedder = await resolveEmbedder().catch(() => null);
   if (embedder) {
-    const q = await embedText(question, embedder, "query");
+    q = await embedText(question, embedder, "query");
     vector = vecState.available ? vecSearch(d, q, CANDIDATES, moduleId).map((r) => r.rowid) : bruteForce(q, CANDIDATES, moduleId);
   }
   const mode = vector.length && text.length ? "hybrid" : vector.length ? "vector" : "text";
-  return { rowids: rrf([vector, text]).slice(0, topK).map((r) => r.rowid), mode };
+  return { rowids: rrf([vector, text]).slice(0, topK).map((r) => r.rowid), mode, query: q };
 }

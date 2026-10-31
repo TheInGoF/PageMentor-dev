@@ -264,6 +264,8 @@ export interface TutorSource {
   snippet: string;
   // Katalog-Eintrag statt Heftstelle
   grepId?: string | null;
+  // Über die Zusammenhänge gefunden (verwandtes Kapitel)
+  related?: boolean;
 }
 
 export interface TutorAnswer {

@@ -3,6 +3,8 @@ export const learning: Record<string, string> = {
   "tutor.newChat": "Neuer Chat",
   "tutor.noSessions": "Noch keine Unterhaltungen — frag etwas, dann geht's los.",
   "tutor.untitled": "(ohne Titel)",
+  "tutor.related": "über Zusammenhang",
+  "tutor.relatedHint": "Gefunden über die Zusammenhänge: verwandtes Kapitel eines anderen Hefts",
   "tutor.allModules": "Alle Module",
   "tutor.scopeModule": "Modul aus dem zitiert wird",
   "tutor.scopeHint": "Quellen werden nur aus den PDFs dieses Moduls gezogen.",

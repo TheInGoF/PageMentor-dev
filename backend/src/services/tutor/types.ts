@@ -19,6 +19,8 @@ export interface TutorSource {
   snippet: string;
   // Katalog-Eintrag statt Heftstelle: Grep-ID zum Nachschlagen
   grepId?: string | null;
+  // Über die Zusammenhänge gefunden (verwandtes Kapitel eines anderen Hefts), nicht direkt über die Suche
+  related?: boolean;
 }
 
 export interface TutorAnswer {

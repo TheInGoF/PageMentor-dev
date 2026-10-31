@@ -439,6 +439,7 @@ function SourcePill({
       <span className="text-neutral-200">{heft}</span>
       {kapitel && <span className="text-neutral-400"> — {kapitel}</span>}
       {(!source.grepId || source.docId) && <span className="text-neutral-400">, {pages}</span>}
+      {source.related && <span className="text-neutral-500" title={t("tutor.relatedHint")}> · {t("tutor.related")}</span>}
     </button>
   );
 }

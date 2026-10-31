@@ -81,7 +81,7 @@ describe("Prüffragen", () => {
     addEval({ question: "Spannungsteiler", module_id: null, expected_document_id: "d1", expected_page: 4 });
     addEval({ question: "Fourier", module_id: null, expected_document_id: "d1", expected_page: null });
     const rid = (id: string) => (d.prepare("SELECT rowid AS r FROM chunks WHERE id = ?").get(id) as { r: number }).r;
-    const fake = async (q: string) => ({ rowids: q === "Spannungsteiler" ? [rid("k3"), rid("k1")] : [rid("k3")], mode: "hybrid" as const });
+    const fake = async (q: string) => ({ rowids: q === "Spannungsteiler" ? [rid("k3"), rid("k1")] : [rid("k3")], mode: "hybrid" as const, query: null });
     const r = await runEval(12, fake);
     expect(r).toMatchObject({ questions: 2, recall: 0.5, mrr: 0.25, mode: "hybrid" });
     expect(isHit({ document_id: "d1", start_page: 3, end_page: 4 }, { expected_document_id: "d1", expected_page: 9 })).toBe(false);
@@ -95,5 +95,18 @@ describe("Wissensgraph", () => {
     const edges = edgesFor([n("a", "d1", 1), n("b", "d1", 0.95, 0.05), n("c", "d2", 0.9, 0.1), n("d", "d2", 0, 1)]);
     expect(edges.map((e) => `${e.a}-${e.b}`).sort()).toEqual(["a-c", "b-c"]);
     expect(Array.from(centroid([v(1, 0), v(0, 1)]))).toEqual([0.5, 0.5, 0, 0]);
+  });
+});
+
+describe("Assoziation über die Zusammenhänge", () => {
+  test("Treffer holt das ähnlichste Kapitel eines anderen Hefts, mit dem passendsten Abschnitt", async () => {
+    const { relatedChapters, associatedChunks } = await import("./associate");
+    // c1 (Mittel aus k1, k2) und c2 (k3) liegen nah beieinander, aber in verschiedenen Heften
+    const related = relatedChapters(["c1"], 2, 0.5);
+    expect(related).toEqual(["c2"]);
+    const rid = (x.db.db().prepare("SELECT rowid AS r FROM chunks WHERE id = 'k3'").get() as { r: number }).r;
+    expect(associatedChunks(v(1), related, 1)).toEqual([rid]);
+    // Modulfilter: nur Hefte im erlaubten Bereich
+    expect(relatedChapters(["c1"], 2, 0.5, new Set(["d1"]))).toEqual([]);
   });
 });
