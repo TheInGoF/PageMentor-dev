@@ -27,6 +27,8 @@ export interface LearnRunState {
   model?: string;
   // Fertiges M4B im Hörbücher-Ordner (nur beim ganzen Heft)
   bookPath?: string;
+  // Wartet gerade auf die Grafikkarte (Umwandlung oder Hörbuch läuft)
+  waiting?: boolean;
 }
 
 const states = new Map<string, LearnRunState>();
@@ -41,6 +43,33 @@ export function learnState(docId: string): LearnRunState | null {
 // Für andere GPU-Arbeit (Hörbuch-Stapel): solange ein Lernhörbuch läuft, warten sie
 export function learnBusy(): boolean {
   return [...states.values()].some((s) => s.running);
+}
+
+// Gerade auf der Grafikkarte (eine Einheit schreiben oder sprechen); dazwischen dürfen andere ran
+let unitActive = false;
+export function learnUnitActive(): boolean {
+  return unitActive;
+}
+// Warten, bis Umwandlung und Hörbuch fertig sind, dann sofort (ohne await dazwischen) die Karte belegen:
+// so sieht eine gleichzeitig startende Umwandlung den Platz besetzt und wartet ihrerseits
+async function gpuSlot<T>(docId: string, fn: () => Promise<T>): Promise<T | undefined> {
+  const st = states.get(docId);
+  while (cancelDoc !== docId && (anyProcessing() || anyGenerating())) {
+    if (st) st.waiting = true;
+    await sleep(5000);
+  }
+  if (st) st.waiting = false;
+  if (cancelDoc === docId) return undefined;
+  unitActive = true;
+  try {
+    return await fn();
+  } finally {
+    unitActive = false;
+  }
+}
+
+export function learnStates(): LearnRunState[] {
+  return [...states.values()];
 }
 
 export function startLearnbook(docId: string, probe: boolean, rate = "+0%"): LearnRunState {
@@ -92,24 +121,23 @@ async function scripts(docId: string, probe: boolean, st: LearnRunState): Promis
   for (let idx = 0; idx < total; idx++) {
     if (cancelDoc === docId) return;
     // Nie zwei Dinge gleichzeitig auf der Grafikkarte: Umwandlung und Hörbuch laufen zu Ende
-    while (cancelDoc !== docId && (anyProcessing() || anyGenerating())) await sleep(5000);
-    const units = listUnits(docId);
-    const unit = units.find((u) => u.idx === idx)!;
-    const pick = await learnModel(kind);
-    st.model = pick.model ?? "Standardmodell";
-    const review = reviewPoints(units, idx);
-    const stamp = scriptStamp(kind, lang, pick.model ?? "default", unit.source, review);
-    st.current = unit.title ?? `Einheit ${idx + 1}`;
-    if (unit.script && unit.script_stamp === stamp) {
-      st.done = idx + 1;
-      continue;
-    }
-    if (pick.model) await releaseDoclingNow();
-    const out = await withGemmaLock(`learnbook ${idx + 1}/${total}`, () =>
-      writeUnit({ kind, lang, docTitle: doc.doc_title || doc.title, idx, total: plan.length, unit, review, model: pick.model, ctx: pick.ctx })
-    );
-    saveScript(docId, idx, { ...out, model: pick.model ?? "default", stamp });
-    console.log(`[learnbook] ${doc.title} Einheit ${idx + 1}/${total}: „${out.title}“ (${out.script.length} Zeichen${out.checkNote ? `, ${out.checkNote.split("\n")[0]}` : ""})`);
+    await gpuSlot(docId, async () => {
+      const units = listUnits(docId);
+      const unit = units.find((u) => u.idx === idx)!;
+      const pick = await learnModel(kind);
+      st.model = pick.model ?? "Standardmodell";
+      const review = reviewPoints(units, idx);
+      const stamp = scriptStamp(kind, lang, pick.model ?? "default", unit.source, review);
+      st.current = unit.title ?? `Einheit ${idx + 1}`;
+      if (unit.script && unit.script_stamp === stamp) return;
+      if (pick.model) await releaseDoclingNow();
+      const out = await withGemmaLock(`learnbook ${idx + 1}/${total}`, () =>
+        writeUnit({ kind, lang, docTitle: doc.doc_title || doc.title, idx, total: plan.length, unit, review, model: pick.model, ctx: pick.ctx })
+      );
+      saveScript(docId, idx, { ...out, model: pick.model ?? "default", stamp });
+      console.log(`[learnbook] ${doc.title} Einheit ${idx + 1}/${total}: „${out.title}“ (${out.script.length} Zeichen${out.checkNote ? `, ${out.checkNote.split("\n")[0]}` : ""})`);
+    });
+    if (cancelDoc === docId) return;
     st.done = idx + 1;
   }
 }
@@ -133,13 +161,15 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
   Object.assign(st, { phase: "audio", done: 0, total: units.length });
   for (const u of units) {
     if (cancelDoc === docId) return;
-    while (cancelDoc !== docId && (anyProcessing() || anyGenerating())) await sleep(5000);
-    st.current = u.title ?? `Einheit ${u.idx + 1}`;
-    const stamp = audioStamp(u.script!, second ? [main, second] : [main], rate);
-    if (!(u.audio_path && existsSync(u.audio_path) && u.audio_stamp === stamp)) {
-      const r = await speakUnit({ docId, idx: u.idx, title: st.current, album, script: u.script!, main, second, rate, isCanceled: () => cancelDoc === docId });
-      saveAudio(docId, u.idx, r.path, stamp, r.durationMs);
-    }
+    await gpuSlot(docId, async () => {
+      st.current = u.title ?? `Einheit ${u.idx + 1}`;
+      const stamp = audioStamp(u.script!, second ? [main, second] : [main], rate);
+      if (!(u.audio_path && existsSync(u.audio_path) && u.audio_stamp === stamp)) {
+        const r = await speakUnit({ docId, idx: u.idx, title: st.current, album, script: u.script!, main, second, rate, isCanceled: () => cancelDoc === docId });
+        saveAudio(docId, u.idx, r.path, stamp, r.durationMs);
+      }
+    });
+    if (cancelDoc === docId) return;
     st.done++;
   }
   if (probe || cancelDoc === docId) return;

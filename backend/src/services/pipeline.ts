@@ -27,9 +27,17 @@ import {
 import { pickLang, tLang } from "../lib/i18n";
 import { DATA_DIR, fromDataPath } from "../paths";
 import { runJob } from "../log/jobs";
+import { setTimeout as sleep } from "node:timers/promises";
+import { learnUnitActive } from "./learnbook/run";
 
 
 const running = new Map<string, AbortController>();
+// Stand je Heft für die Warteschlangen-Anzeige: wartet auf die Grafikkarte, Docling, Nacharbeit
+const stage = new Map<string, "wait" | "docling" | "post">();
+
+export function pipelineStages(): Array<{ docId: string; stage: "wait" | "docling" | "post" }> {
+  return [...running.keys()].map((docId) => ({ docId, stage: stage.get(docId) ?? "post" }));
+}
 
 export function isProcessing(docId: string): boolean {
   return running.has(docId);
@@ -86,6 +94,14 @@ async function processDocumentImpl(docId: string): Promise<void> {
       extraction = extractionFromMarkdown(adopted, pages);
       emit({ phase: "pipeline.extraction", docId, message: "Docling-Markdown übernommen" });
     } else {
+      // Nie zwei Dinge auf der Grafikkarte: eine laufende Lernhörbuch-Einheit erst fertig werden lassen.
+      // Das Lernhörbuch pausiert danach, solange hier etwas läuft (anyProcessing)
+      if (learnUnitActive()) {
+        stage.set(docId, "wait");
+        emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.waitGpu") });
+        while (!signal.aborted && learnUnitActive()) await sleep(3000);
+      }
+      stage.set(docId, "docling");
       emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
       // Wartet einen laufenden Docling-Neustart (Grafikspeicher freigeben) ab
       extraction = await withDocling(async () => {
@@ -105,6 +121,7 @@ async function processDocumentImpl(docId: string): Promise<void> {
       });
     }
 
+    stage.set(docId, "post");
     // Symbol-Font, persönliche Fußzeile, Formulare und Formeln im Markdown (Wissensordner, Zuordnung)
     extraction = { ...extraction, markdown: cleanStudyMarkdown(extraction.markdown) };
 
@@ -308,6 +325,7 @@ async function processDocumentImpl(docId: string): Promise<void> {
     });
   } finally {
     running.delete(docId);
+    stage.delete(docId);
   }
 }
 

@@ -1,6 +1,6 @@
 // Einstellungen: Übersicht aus Kacheln, darunter höchstens eine Ebene
 import { useEffect, useRef, useState } from "react";
-import { TtsActivityIndicator } from "./tts/TtsActivityIndicator";
+import { ActivityIndicator } from "./tts/ActivityIndicator";
 import { api } from "../lib/api";
 import { Button } from "./ui/Button";
 import { LogsContent } from "./LogsPage";
@@ -100,7 +100,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
             {tab === "home" ? t("settings.title") : t(`settings.tile.${tab}`)}
           </h1>
           {/* Stimmen testen startet oft eine Engine oder lädt ein Modell: hier sichtbar */}
-          <TtsActivityIndicator />
+          <ActivityIndicator />
         </div>
       </header>
 

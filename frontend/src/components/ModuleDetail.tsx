@@ -17,7 +17,7 @@ import { LearnPanel } from "./module/LearnPanel";
 import { resolveModuleTab, takeModuleTab, type ModuleTab, type ModuleTarget, type ModuleView } from "../lib/moduleTab";
 import { ModuleEditModal } from "./module/ModuleEditModal";
 import { UploadModal } from "./UploadModal";
-import { TtsActivityIndicator } from "./tts/TtsActivityIndicator";
+import { ActivityIndicator } from "./tts/ActivityIndicator";
 import { OverviewNext } from "./module/OverviewNext";
 import { formatDate } from "./plan/AssessmentRow";
 import { setTutorModule, useNav } from "../lib/nav";
@@ -139,7 +139,7 @@ export function ModuleDetail({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <TtsActivityIndicator />
+            <ActivityIndicator />
             <BatchIndicator />
             <Button variant="outline" onClick={() => setUploading(true)} title={t("module.uploadHint")}>
               ↑ {t("library.upload")}

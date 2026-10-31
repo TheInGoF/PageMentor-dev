@@ -3,7 +3,7 @@ import { t } from "../lib/i18n";
 import { SearchOverlay } from "./SearchOverlay";
 import { BatchIndicator } from "./batch/BatchIndicator";
 import { MaintenanceIndicator } from "./maintenance/MaintenanceIndicator";
-import { TtsActivityIndicator } from "./tts/TtsActivityIndicator";
+import { ActivityIndicator } from "./tts/ActivityIndicator";
 import { Logo } from "./Logo";
 import { isFrameless } from "../lib/desktop";
 import { cn } from "../lib/cn";
@@ -48,7 +48,7 @@ export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
               <SearchOverlay onOpenDocument={onOpenDocument} />
             </div>
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-              <TtsActivityIndicator />
+              <ActivityIndicator />
               <MaintenanceIndicator />
               <BatchIndicator />
               {onUpload && (

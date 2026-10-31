@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.54.0 – 2026-10-31
+### New
+- Warteschlange im Kopf: zeigt, was gerade auf der Grafikkarte läuft und was wartet, mit Fortschritt je Aufgabe.
+
+### Change
+- Die Ladeanzeige der Stimm-Engines ist jetzt Teil der Warteschlange.
+
+### Fix
+- Docling startet nicht mehr, solange das Lernhörbuch eine Einheit schreibt oder spricht. Das Lernhörbuch pausiert danach, bis die Umwandlung fertig ist.
+
 ## 1.53.0 – 2026-10-31
 ### New
 - Hefte lassen sich jetzt direkt im geöffneten Modul hochladen, das Modul ist vorgewählt.
