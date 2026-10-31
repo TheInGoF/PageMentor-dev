@@ -3,6 +3,15 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.44.0 – 2026-10-31
+### New
+- Lernhörbuch, Teil 1 (Skripte): das Heft wird als fortlaufender Text gelesen, in Lerneinheiten von einigen Minuten geteilt und je Einheit neu geschrieben, als Sprachkurs (Abrufen, Nachsprechen, Geschichte) oder Fach-Lernskript (Erklärung, Formeln in Worten, Denkfragen).
+- Frühere Merkpunkte kommen in wachsenden Abständen wieder (1, 3 und 7 Einheiten zurück).
+- Fachhefte: Prüfdurchgang gegen die Vorlage, gefundene Abweichungen werden korrigiert und notiert.
+- Schreibt mit Gemma 4 26B (Sprachkurse) bzw. Qwen 3.6 27B (Fachhefte), wenn geladen; drei neue Gemma-Anweisungen in den Einstellungen.
+### Change
+- Der Hörbuch-Stapel wartet, solange ein Lernhörbuch geschrieben wird.
+
 ## 1.43.0 – 2026-10-31
 ### New
 - Tutor zeigt, wie voll das Kontextfenster der letzten Antwort war (Token, Prozent, Farbe).

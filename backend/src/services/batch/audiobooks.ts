@@ -13,6 +13,7 @@ import { anyProcessing, cancelProcessing, processDocument } from "../pipeline";
 import { releaseDoclingNow } from "../docling/release";
 import { anyGenerating, cancelAudiobook, generateAudiobook, getRunProgress, hasSpeakableText, isIncluded } from "../audiobook";
 import { absReady, uploadBook } from "../audiobookshelf";
+import { learnBusy } from "../learnbook/run";
 
 export type Step = "wait" | "docling" | "audio" | "abs" | "done" | "failed" | "canceled";
 
@@ -152,9 +153,9 @@ function start(): void {
     .finally(() => (worker = null));
 }
 
-// Andere GPU-Arbeit (Umwandlung, einzelnes Hörbuch) erst zu Ende laufen lassen
+// Andere GPU-Arbeit (Umwandlung, einzelnes Hörbuch, Lernhörbuch) erst zu Ende laufen lassen
 async function waitIdle(): Promise<void> {
-  while (!cancelRequested && (anyProcessing() || anyGenerating())) await sleep(3000);
+  while (!cancelRequested && (anyProcessing() || anyGenerating() || learnBusy())) await sleep(3000);
 }
 
 function set(item: BatchItem, step: Step, extra: Partial<BatchItem> = {}): void {

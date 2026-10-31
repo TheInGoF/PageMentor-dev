@@ -6,6 +6,7 @@ import { migrateStudy } from "./study/schema";
 import { loadVec } from "./services/rag/vec";
 import { ensureFts } from "./services/rag/fts";
 import { ensureConceptTables } from "./services/concepts/store";
+import { ensureLearnTables } from "./services/learnbook/store";
 
 let DB_PATH = join(DATA_DIR, "pagementor.db");
 
@@ -468,6 +469,8 @@ export function initDb() {
 
   // Begriffs-Datenbank (Fachbegriffe und ihre Beziehungen über alle Hefte)
   ensureConceptTables(d);
+  // Lernhörbuch-Einheiten
+  ensureLearnTables(d);
 
   // Studien-Datenmodell, mit Backup vor jeder Hochstufung
   const study = migrateStudy(d, DB_PATH);

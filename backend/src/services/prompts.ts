@@ -16,6 +16,9 @@ import tutorEn from "../prompts/tutor.en.md" with { type: "text" };
 import langDe from "../prompts/audio-lang.de.md" with { type: "text" };
 import conceptsDe from "../prompts/concepts.de.md" with { type: "text" };
 import tutorMemoryDe from "../prompts/tutor-memory.de.md" with { type: "text" };
+import learnLanguageDe from "../prompts/learn-language.de.md" with { type: "text" };
+import learnSubjectDe from "../prompts/learn-subject.de.md" with { type: "text" };
+import learnCheckDe from "../prompts/learn-check.de.md" with { type: "text" };
 
 export const PROMPTS = {
   "audio-chapter.de": chapterDe,
@@ -29,6 +32,9 @@ export const PROMPTS = {
   "audio-lang.de": langDe,
   "concepts.de": conceptsDe,
   "tutor-memory.de": tutorMemoryDe,
+  "learn-language.de": learnLanguageDe,
+  "learn-subject.de": learnSubjectDe,
+  "learn-check.de": learnCheckDe,
 } as const;
 
 export type PromptId = keyof typeof PROMPTS;

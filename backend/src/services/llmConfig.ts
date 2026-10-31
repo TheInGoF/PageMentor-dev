@@ -101,6 +101,9 @@ export interface LlmConfig {
   // Zusätzliche Sprachmodelle (Ollama-Namen, Komma-getrennt) und das Modell für den Tutor
   llmExtras?: string;
   tutorModel?: string;
+  // Modell, das Lernhörbücher schreibt: Sprachkurse und Fachhefte getrennt (leer = Vorschlag der App)
+  learnModelLanguage?: string;
+  learnModelSubject?: string;
   // Stimmlage für alle Sprachen ("female"/"male"), damit Haupt- und Zweitstimme zusammenpassen
   voiceGender?: string;
   // JSON Sprache → Stimmen-ID, z. B. {"de":"f5:custom:…","es":"f5:custom:…"}
