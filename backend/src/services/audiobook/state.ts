@@ -26,6 +26,11 @@ export function isIncluded(ch: Pick<Chapter, "kind" | "include_in_audio">): bool
   return ch.include_in_audio === 1;
 }
 
+// Kapitel ohne sprechbaren Text (nur Überschrift, leere Tabelle) überspringt das Hörbuch
+export function hasSpeakableText(ch: { text?: string | null }): boolean {
+  return (ch.text ?? "").trim().length >= 20;
+}
+
 export interface Document {
   id: string;
   title: string;

@@ -17,6 +17,7 @@ import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
 import {
   running,
   isIncluded,
+  hasSpeakableText,
   AudiobookCanceled,
   type Chapter,
   type Document,
@@ -76,8 +77,13 @@ async function generateAudiobookImpl(params: {
   }
 
   // Auswahl des Nutzers; ist nichts gewählt: alle Kapitel
+  // Leere Kapitel fallen weg, sie würden nur als Fehler zählen und den Lauf abbrechen
   const filtered = allChapters.filter(isIncluded);
-  const chapters = filtered.length > 0 ? filtered : allChapters;
+  const chapters = (filtered.length > 0 ? filtered : allChapters).filter(hasSpeakableText);
+  if (chapters.length === 0) {
+    running.delete(params.docId);
+    throw new Error("Keine Kapitel mit Text für das Hörbuch.");
+  }
 
   const voiceId = params.voiceId || defaultVoiceFor(doc.language);
   if (!voiceId) {

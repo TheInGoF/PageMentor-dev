@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.32.2 – 2026-10-31
+### Fix
+- Bricht die Verbindung zur Stimme ab (Neustart), wird das Stück nach kurzer Pause einmal wiederholt.
+- Gemma mit leerer Antwort oder Ollama-Absturz: neuer Versuch, notfalls in kleineren Stücken, statt das Kapitel unbearbeitet vorzulesen.
+- Hörbuch-Lauf stürzt nicht mehr ab, wenn der Abschluss geschlossen wird, während noch ein Schritt läuft.
+- Kapitel ohne Text werden übersprungen statt als Fehler gezählt; drei davon brachen bisher das ganze Hörbuch ab.
+- Textstücke ohne Buchstaben (nur Satzzeichen) gehen nicht mehr an die Stimme, F5 lehnte sie ab.
+
 ## 1.32.1 – 2026-10-30
 ### Change
 - Log: ffmpeg-Fortschritt nur noch alle 10 Sekunden, Modell-Hinweis von Gemma nur einmal.

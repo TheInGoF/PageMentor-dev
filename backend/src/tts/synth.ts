@@ -89,6 +89,8 @@ export async function synthesizeChunk(
   // MAX_RETRIES, so the loop-rescue path stays available even when
   // generic retries are off.
   let loopRetryUsed = false;
+  // Verbindung abgerissen (Stimme startet gerade neu): einmal nach kurzer Pause wiederholen
+  let resetRetryUsed = false;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (params.signal?.aborted) {
       throw new ChunkSynthesisFailure(params.voice.id, new Error("canceled"));
@@ -132,6 +134,17 @@ export async function synthesizeChunk(
           );
         }
         // Re-enter the loop without consuming an attempt.
+        attempt -= 1;
+        continue;
+      }
+      if (/ECONNRESET|ECONNREFUSED|socket hang up/i.test(cause) && !resetRetryUsed) {
+        resetRetryUsed = true;
+        console.warn(`[tts] connection dropped — one retry in 5s (sidecar may be restarting)`);
+        try {
+          await sleep(5000, undefined, { signal: params.signal });
+        } catch {
+          throw new ChunkSynthesisFailure(params.voice.id, new Error("canceled"));
+        }
         attempt -= 1;
         continue;
       }

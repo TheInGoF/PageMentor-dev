@@ -11,7 +11,7 @@ import { emitLog } from "../../log/logger";
 import { findVoice } from "../../tts/voices";
 import { anyProcessing, cancelProcessing, processDocument } from "../pipeline";
 import { releaseDoclingNow } from "../docling/release";
-import { anyGenerating, cancelAudiobook, generateAudiobook, getRunProgress, isIncluded } from "../audiobook";
+import { anyGenerating, cancelAudiobook, generateAudiobook, getRunProgress, hasSpeakableText, isIncluded } from "../audiobook";
 import { absReady, uploadBook } from "../audiobookshelf";
 
 export type Step = "wait" | "docling" | "audio" | "abs" | "done" | "failed" | "canceled";
@@ -134,7 +134,8 @@ export function cancel(): void {
 
 // Abschluss gesehen: aus der Kopfzeile entfernen
 export function dismiss(): void {
-  if (!state || state.status === "running") return;
+  // Auch nach Abbruch erst, wenn der laufende Schritt zu Ende ist; sonst greift run() ins Leere
+  if (!state || state.status === "running" || worker) return;
   state = null;
   try {
     writeFileSync(FILE, "null");
@@ -165,7 +166,7 @@ async function run(): Promise<void> {
   // Mehrfach durchlaufen: nachgeschobene Bücher kommen in der nächsten Runde dran
   while (state?.status === "running" && !cancelRequested) {
     // Immer das erste offene Buch nach aktueller Reihenfolge: Umsortieren wirkt sofort
-    const next = (pred: (i: BatchItem) => boolean) => state!.items.find((i) => OPEN.has(i.step) && pred(i));
+    const next = (pred: (i: BatchItem) => boolean) => state?.items.find((i) => OPEN.has(i.step) && pred(i));
     if (!next(() => true)) break;
 
     if (state.order === "phase") {
@@ -175,15 +176,15 @@ async function run(): Promise<void> {
       if (used) await releaseDoclingNow();
       // Nachgeschobene ohne Text kommen in der nächsten Runde zur Umwandlung
       const ready = (i: BatchItem) => !needsText(i);
-      for (let item = next(ready); item && !cancelRequested && state.status === "running"; item = next(ready)) await safeBook(item);
+      for (let item = next(ready); item && !cancelRequested && state?.status === "running"; item = next(ready)) await safeBook(item);
     } else {
       // Heft für Heft: umwandeln, Speicher freigeben, Hörbuch, dann das nächste
-      for (let item = next(() => true); item && !cancelRequested && state.status === "running"; item = next(() => true)) {
+      for (let item = next(() => true); item && !cancelRequested && state?.status === "running"; item = next(() => true)) {
         if (needsText(item) && (await convert(item))) await releaseDoclingNow();
         if (OPEN.has(item.step)) await safeBook(item);
       }
     }
-    if (cancelRequested || state.status !== "running") return;
+    if (cancelRequested || state?.status !== "running") return;
   }
   if (state?.status === "running" && !cancelRequested) {
     state.status = "done";
@@ -226,11 +227,11 @@ async function safeBook(item: BatchItem): Promise<void> {
 function missingChapters(docId: string): number {
   const rows = db()
     .prepare(
-      `SELECT c.kind, c.include_in_audio, a.status FROM chapters c LEFT JOIN audio a ON a.chapter_id = c.id WHERE c.document_id = ?`
+      `SELECT c.kind, c.include_in_audio, c.text, a.status FROM chapters c LEFT JOIN audio a ON a.chapter_id = c.id WHERE c.document_id = ?`
     )
-    .all(docId) as Array<{ kind: string; include_in_audio: number | null; status: string | null }>;
+    .all(docId) as Array<{ kind: string; include_in_audio: number | null; text: string | null; status: string | null }>;
   const included = rows.filter(isIncluded);
-  return (included.length ? included : rows).filter((r) => r.status !== "done").length;
+  return (included.length ? included : rows).filter((r) => hasSpeakableText(r) && r.status !== "done").length;
 }
 
 async function bookSteps(item: BatchItem): Promise<void> {

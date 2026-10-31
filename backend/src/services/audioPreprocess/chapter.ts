@@ -136,23 +136,8 @@ async function preprocessChapterForAudioImpl(params: {
       let result = await generateChunk(chunk, system, params.model, ollamaOptions, label);
       if (result.raw) rawPieces++;
 
-      if (!result.response || result.response.trim().length < 20) {
-        console.warn(
-          `[audio-preprocess]${label} empty/short response from ${result.model} ` +
-            `(${result.response.length} chars, reason=${result.doneReason ?? "?"}, ` +
-            `output_tokens=${result.outputTokens ?? "?"}), input ${chunk.length} chars — retrying after 2s`
-        );
-        await new Promise((r) => setTimeout(r, 2000));
-        result = await generate({
-          prompt: chunk,
-          system,
-          model: params.model,
-          options: ollamaOptions,
-        });
-      }
-
       const piece = result.response.trim();
-      if (piece.length < 20) {
+      if (piece.length === 0) {
         // Stop-Grund in klaren Hinweis übersetzen
         const hint =
           result.doneReason === "length"
@@ -190,12 +175,13 @@ async function preprocessChapterForAudioImpl(params: {
           "\n\nLass an diesen Stellen die ZIFFERN stehen. Verbalisiere Jahres- und " +
           "Abschnittszahlen NICHT zu deutschen Wort-Compounds. " +
           '"2018" bleibt "2018", "Beispiel 2.5" bleibt "Beispiel 2.5".\n';
+        // Scheitert der Zusatzversuch (z. B. Schleife), bleibt der erste Durchgang
         const retry = await generate({
           prompt: chunk,
           system: retrySystem,
           model: params.model,
           options: ollamaOptions,
-        });
+        }).catch(() => ({ ...result, response: "" }));
         const retryPiece = retry.response?.trim() ?? "";
         if (retryPiece.length >= 20) {
           const retryPass = fixGermanNumeralBleed(retryPiece);
@@ -272,8 +258,9 @@ async function preprocessChapterForAudioImpl(params: {
 
 type ChunkResult = Awaited<ReturnType<typeof generate>> & { raw?: boolean };
 
-// Ollama bricht ab, wenn Gemma in einer Schleife hängt ("token repeat limit"). Dann mit mehr
-// Abwechslung wiederholen, danach in halben Stücken; erst ganz zuletzt bleibt nur dieses Stück roh
+// Gemma kann sich festfahren: Ollama bricht mit "token repeat limit" ab, oder die Antwort bleibt leer,
+// weil das Modell bis num_predict in einer Schleife lief. Dann mit mehr Abwechslung wiederholen,
+// danach in halben Stücken; erst ganz zuletzt bleibt nur dieses Stück roh
 async function generateChunk(
   prompt: string,
   system: string,
@@ -282,22 +269,37 @@ async function generateChunk(
   label: string,
   depth = 0
 ): Promise<ChunkResult> {
-  const looped = (err: unknown) => /repeat limit/i.test(err instanceof Error ? err.message : String(err));
-  try {
-    return await generate({ prompt, system, model, options });
-  } catch (err) {
-    if (!looped(err)) throw err;
-  }
-  console.warn(`[audio-preprocess]${label} Gemma hing in einer Wiederholung fest, neuer Versuch mit mehr Abwechslung`);
-  try {
-    return await generate({ prompt, system, model, options: { ...options, temperature: 0.4, repeat_penalty: 1.15, repeat_last_n: 256 } });
-  } catch (err) {
-    if (!looped(err)) throw err;
-  }
+  // Sehr kurze Stücke (Überschriftreste) dürfen kurz antworten
+  const minLen = Math.min(20, Math.max(1, Math.floor(prompt.trim().length / 3)));
+  const attempt = async (opts: Record<string, unknown>): Promise<ChunkResult | null> => {
+    try {
+      const r = await generate({ prompt, system, model, options: opts });
+      if (r.response.trim().length >= minLen) return r;
+      console.warn(
+        `[audio-preprocess]${label} leere Antwort (reason=${r.doneReason ?? "?"}, output_tokens=${r.outputTokens ?? "?"}, input ${prompt.length} Zeichen)`
+      );
+      return null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/repeat limit/i.test(msg)) return null;
+      // Ollama-Absturz (500): Server startet das Modell neu, kurz warten und erneut versuchen
+      if (/Ollama 5\d\d/.test(msg)) {
+        console.warn(`[audio-preprocess]${label} ${msg.slice(0, 120)} — neuer Versuch in 5 s`);
+        await new Promise((r) => setTimeout(r, 5000));
+        return null;
+      }
+      throw err;
+    }
+  };
+  const first = await attempt(options);
+  if (first) return first;
+  console.warn(`[audio-preprocess]${label} Gemma hing fest, neuer Versuch mit mehr Abwechslung`);
+  const second = await attempt({ ...options, temperature: 0.4, repeat_penalty: 1.15, repeat_last_n: 256 });
+  if (second) return second;
   if (depth === 0 && prompt.length > 1500) {
     const halves = splitForPreprocess(prompt, Math.ceil(prompt.length / 2));
     if (halves.length > 1) {
-      console.warn(`[audio-preprocess]${label} wieder Schleife, versuche ${halves.length} kleinere Stücke`);
+      console.warn(`[audio-preprocess]${label} wieder festgefahren, versuche ${halves.length} kleinere Stücke`);
       const parts: ChunkResult[] = [];
       for (const h of halves) parts.push(await generateChunk(h, system, model, options, label, 1));
       return { ...parts[0], response: parts.map((p) => p.response).join("\n\n"), raw: parts.some((p) => p.raw) };

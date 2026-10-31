@@ -5,6 +5,7 @@ export {
   cancelAudiobook,
   anyGenerating,
   isIncluded,
+  hasSpeakableText,
 } from "./state";
 export { generateAudiobook } from "./book";
 export { generateSingleChapterAudio, generateIntroAudio } from "./single";

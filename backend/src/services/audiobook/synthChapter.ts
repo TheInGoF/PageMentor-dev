@@ -117,6 +117,12 @@ export async function synthesizeChapter(params: {
           : paragraphText
       );
 
+      // Stücke ohne Buchstaben und Ziffern (nur Satzzeichen, Leerraum) lehnt die Stimme ab: überspringen
+      if (!/[\p{L}\p{N}]/u.test(plainText)) {
+        params.onChunk(i + 1, segments.length);
+        continue;
+      }
+
       // Cache-Schlüssel aus Text, Stimme, Tempo
       const cacheKey = chunkHash({
         text: plainText,
