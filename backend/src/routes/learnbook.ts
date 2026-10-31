@@ -1,4 +1,5 @@
 // Lernhörbuch: Einstellungen am Heft, Einheiten mit Skripten, Lauf starten (Probe oder ganzes Heft) und abbrechen
+import { existsSync } from "node:fs";
 import { Hono } from "hono";
 import { db } from "../db";
 import { learnSettings, listUnits } from "../services/learnbook/store";
@@ -33,11 +34,18 @@ learnbookRoutes.put("/:docId", async (c) => {
 });
 
 learnbookRoutes.post("/:docId/start", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { probe?: boolean };
-  return c.json(startLearnbook(c.req.param("docId"), !!body.probe));
+  const body = (await c.req.json().catch(() => ({}))) as { probe?: boolean; rate?: string };
+  return c.json(startLearnbook(c.req.param("docId"), !!body.probe, body.rate || "+0%"));
 });
 
 learnbookRoutes.post("/:docId/cancel", (c) => {
   cancelLearnbook(c.req.param("docId"));
   return c.json(learnState(c.req.param("docId")));
+});
+
+// Audio einer Einheit zum Anhören in der App
+learnbookRoutes.get("/:docId/unit/:idx/audio", (c) => {
+  const u = listUnits(c.req.param("docId")).find((x) => x.idx === Number(c.req.param("idx")));
+  if (!u?.audio_path || !existsSync(u.audio_path)) return c.json({ error: "Noch kein Audio" }, 404);
+  return new Response(Bun.file(u.audio_path), { headers: { "Content-Type": "audio/mpeg" } });
 });

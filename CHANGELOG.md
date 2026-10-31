@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.45.0 – 2026-10-31
+### New
+- Lernhörbuch, Teil 2 (Sprache): Skripte werden gesprochen, Deutsch und Fremdsprache mit eigener Stimme, [PAUSE n] als echte Stille zum Antworten und Nachsprechen.
+- Je Einheit eine MP3 mit Lautheitsausgleich; das ganze Heft wird ein M4B mit einem Kapitel je Einheit und landet als „… - Lernhoerbuch.m4b“ neben dem normalen Hörbuch im Hörbücher-Ordner.
+- Probe: nur die erste Einheit wird geschrieben und gesprochen, ohne M4B.
+- Fertige Einheiten werden übersprungen, solange Skript, Stimmen und Tempo gleich bleiben.
+
 ## 1.44.0 – 2026-10-31
 ### New
 - Lernhörbuch, Teil 1 (Skripte): das Heft wird als fortlaufender Text gelesen, in Lerneinheiten von einigen Minuten geteilt und je Einheit neu geschrieben, als Sprachkurs (Abrufen, Nachsprechen, Geschichte) oder Fach-Lernskript (Erklärung, Formeln in Worten, Denkfragen).

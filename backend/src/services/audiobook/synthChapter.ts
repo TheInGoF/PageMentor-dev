@@ -11,7 +11,7 @@ import { chunkHash, coverPathFor, documentTitle } from "./files";
 
 // Text mit . ! ? abschließen
 // Ohne Punkt spricht Qwen das letzte Wort abgehackt
-function ensureSentenceEnd(text: string): string {
+export function ensureSentenceEnd(text: string): string {
   const trimmed = text.replace(/\s+$/, "");
   if (trimmed.length === 0) return text;
   const lastChar = trimmed[trimmed.length - 1];

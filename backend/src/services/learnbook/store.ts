@@ -84,3 +84,7 @@ export function learnSettings(docId: string): { kind: LearnKind; lang: string } 
   const kind: LearnKind = r?.learn_kind === "language" || r?.learn_kind === "subject" ? r.learn_kind : r?.second_language ? "language" : "subject";
   return { kind, lang: r?.learn_lang || r?.second_language || "es" };
 }
+
+export function saveAudio(docId: string, idx: number, path: string, stamp: string, durationMs: number): void {
+  db().prepare("UPDATE learn_units SET audio_path = ?, audio_stamp = ?, duration_ms = ? WHERE document_id = ? AND idx = ?").run(path, stamp, durationMs, docId, idx);
+}
