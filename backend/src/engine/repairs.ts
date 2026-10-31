@@ -26,6 +26,7 @@ import {
 import { failText, inDistro, logEngine, run, wsl } from "./exec";
 import { extraServices, writeEngineEnv } from "./extraEngines";
 import { enabledLlmExtras } from "./llmExtras";
+import { withDownloadLimit } from "./throttle";
 
 export type Progress = (message: string, fraction?: number) => void;
 
@@ -317,6 +318,8 @@ const REPAIRS: Record<RepairId, { title: string; fn: (p: Progress) => Promise<vo
   "apply-tts-engines": { title: "Stimmen-Engines übernehmen", fn: pullImages },
 };
 
+const DOWNLOADS: RepairId[] = ["pull-images", "apply-tts-engines", "pull-model", "docling-models"];
+
 export function repairTitle(id: RepairId): string {
   return REPAIRS[id]?.title ?? id;
 }
@@ -325,7 +328,9 @@ export async function runRepairAction(id: RepairId, progress: Progress): Promise
   const r = REPAIRS[id];
   if (!r) throw new RepairError(`Unbekannte Reparatur: ${id}`);
   logEngine("info", `Reparatur gestartet: ${r.title}`);
-  await r.fn(progress);
+  // Downloads mit Bremse, damit die Leitung frei bleibt
+  if (DOWNLOADS.includes(id)) await withDownloadLimit(() => r.fn(progress));
+  else await r.fn(progress);
   logEngine("info", `Reparatur fertig: ${r.title}`);
 }
 

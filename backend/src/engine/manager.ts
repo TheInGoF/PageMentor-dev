@@ -8,6 +8,7 @@ import { DISTRO } from "./config";
 import { logEngine } from "./exec";
 import { cleanupUnusedEngines } from "./engineCleanup";
 import { ensureSparse, repairTitle, runRepairAction } from "./repairs";
+import { applyThrottle } from "./throttle";
 
 export interface RunningTask {
   repair: RepairId;
@@ -93,9 +94,17 @@ export async function autoStart(): Promise<void> {
   state.autoStart = "läuft";
   // Einmalig für bestehende Installationen, bevor die Engine hochfährt
   await ensureSparse().catch(() => {});
+  // Download-Bremse gilt nur bis zum Neustart von WSL: bei jedem Start neu setzen
+  let throttled = false;
   for (let round = 0; round < AUTO_REPAIRS.length + 1; round++) {
     const results = await runSelftest();
-    if (results.find((r) => r.id === "distro" && r.status === "ok")) startKeepAlive();
+    if (results.find((r) => r.id === "distro" && r.status === "ok")) {
+      startKeepAlive();
+      if (!throttled) {
+        throttled = true;
+        await applyThrottle().catch(() => undefined);
+      }
+    }
     const next = results.find((r) => r.status !== "ok" && r.repair && AUTO_REPAIRS.includes(r.repair));
     if (!next?.repair) break;
     try {

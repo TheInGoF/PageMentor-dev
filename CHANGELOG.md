@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.50.0 – 2026-10-31
+### New
+- Download-Bremse: Die App misst beim ersten Download 60 Sekunden lang die Geschwindigkeit und begrenzt Engine-Downloads danach auf 90 % davon.
+- Einstellbar unter Engine: Anteil von 50 bis 100 % (aus), dazu „Neu messen“.
+
 ## 1.49.0 – 2026-10-31
 ### New
 - Logs: „Kopieren“ legt die sichtbaren Zeilen (mit Filter, Kontext und Fehlerdetails) in die Zwischenablage.

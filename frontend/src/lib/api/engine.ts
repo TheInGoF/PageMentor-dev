@@ -60,6 +60,9 @@ export const engineApi = {
     ttsEngines: () => request<TtsEnginesInfo>("/api/engine/tts-engines"),
     kokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack"),
     installKokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack", { method: "POST" }),
+    throttle: () => request<ThrottleInfo>("/api/engine/throttle"),
+    setThrottle: (body: { pct?: number; remeasure?: boolean }) =>
+      request<ThrottleInfo>("/api/engine/throttle", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
     llmModels: () => request<LlmModelsInfo>("/api/engine/llm-models"),
     saveLlmModels: (body: { enabled: string[]; tutorModel: string; learnModelLanguage: string; learnModelSubject: string }) =>
       request<{ enabled: string[]; tutorModel: string; pulling: boolean }>("/api/engine/llm-models", {
@@ -75,3 +78,13 @@ export const engineApi = {
       }),
   },
 };
+
+// Download-Bremse: Anteil der gemessenen Leitungsrate, Grenze in Mbit/s (null = ungebremst)
+export interface ThrottleInfo {
+  pct: number;
+  maxMbit: number | null;
+  limitMbit: number | null;
+  measuring: boolean;
+  error?: string;
+  windows: boolean;
+}

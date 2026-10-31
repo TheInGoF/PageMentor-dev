@@ -11,6 +11,7 @@ import { engineState, runRepair, runSelftest } from "../engine/manager";
 import { enabledExtras, EXTRA_SERVICES, type ExtraEngine } from "../engine/extraEngines";
 import { effective, getLlmConfig, setLlmConfig } from "../services/llmConfig";
 import { extraStatus, refreshExtraStatus } from "../tts/engines/extra/probe";
+import { setThrottle, throttleStatus } from "../engine/throttle";
 
 export const engineRoutes = new Hono();
 
@@ -28,6 +29,14 @@ engineRoutes.post("/repair/:id", (c) => {
   if (engineState().task) return c.json({ error: `Es läuft schon: ${engineState().task!.title}` }, 409);
   void runRepair(id as RepairId).catch(() => {});
   return c.json({ started: true });
+});
+
+// Download-Bremse: Stand, Anteil ändern, neu messen
+engineRoutes.get("/throttle", (c) => c.json({ ...throttleStatus(), windows: IS_WINDOWS }));
+engineRoutes.put("/throttle", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { pct?: unknown; remeasure?: unknown };
+  const pct = typeof body.pct === "number" ? body.pct : undefined;
+  return c.json({ ...(await setThrottle({ pct, remeasure: body.remeasure === true })), windows: IS_WINDOWS });
 });
 
 // Letzte Zeilen eines Dienstes, ersetzt die Log-Bridge

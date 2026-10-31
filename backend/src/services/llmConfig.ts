@@ -108,6 +108,9 @@ export interface LlmConfig {
   voiceGender?: string;
   // JSON Sprache → Stimmen-ID, z. B. {"de":"f5:custom:…","es":"f5:custom:…"}
   voiceDefaults?: string;
+  // Download-Bremse: Anteil der gemessenen Leitungsrate (Standard 90, 100 = aus) und der Messwert in Mbit/s
+  downloadLimitPct?: string;
+  downloadMaxMbit?: string;
 }
 
 let cached: LlmConfig | null = null;
