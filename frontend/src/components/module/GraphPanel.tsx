@@ -11,8 +11,8 @@ interface Edge { a: string; b: string; weight: number; terms?: string[] }
 interface Topic { terms: string[]; nodes: string[] }
 
 // Kategorien in fester Reihenfolge (geprüfte Palette), ab dem neunten Heft grau
-const LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
-const DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
+export const LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
+export const DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"];
 const W = 720;
 const H = 460;
 

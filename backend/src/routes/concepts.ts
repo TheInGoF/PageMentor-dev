@@ -2,6 +2,9 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters } from "../services/concepts/extract";
+import { brainExtend, brainGraph, conceptDetail } from "../services/concepts/brain";
+import { activate } from "../services/concepts/activate";
+import { embedText, resolveEmbedder } from "../services/embeddings";
 
 export const conceptRoutes = new Hono();
 
@@ -55,4 +58,27 @@ conceptRoutes.get("/module/:id", (c) => {
     neededBy: neededBy.all(k.id) as Array<{ id: string; name: string }>,
   }));
   return c.json({ concepts });
+});
+
+// Gehirn: das ganze Begriffsnetz (oder ein Modul) als Graph
+conceptRoutes.get("/brain", (c) => {
+  const limit = Number(c.req.query("limit")) || undefined;
+  return c.json(brainGraph({ moduleId: c.req.query("moduleId") || undefined, limit }));
+});
+
+// Eine Frage durchs Netz schicken wie im Tutor: welche Begriffe leuchten auf, über welche Ebenen
+conceptRoutes.post("/brain/activate", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { question?: string; have?: string[] };
+  const question = (body.question ?? "").trim();
+  if (!question) return c.json({ error: "Frage fehlt" }, 400);
+  const embedder = await resolveEmbedder().catch(() => null);
+  const query = embedder ? await embedText(question, embedder, "query").catch(() => null) : null;
+  const active = query ? activate(query, []) : [];
+  const ext = brainExtend(Array.isArray(body.have) ? body.have : [], active.map((a) => a.id));
+  return c.json({ active, ...ext, embeddings: !!query });
+});
+
+conceptRoutes.get("/:id", (c) => {
+  const r = conceptDetail(c.req.param("id"));
+  return r ? c.json(r) : c.json({ error: "nicht gefunden" }, 404);
 });

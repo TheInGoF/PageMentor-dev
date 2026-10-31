@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.51.0 – 2026-10-31
+### New
+- Gehirn im Tutor: Das Begriffsnetz aller Module als Grafik, Begriff anklicken zeigt Erklärung, Grundlagen und Fundstellen.
+- Gehirn-Frage: Eine Frage lässt die Begriffe aufleuchten, die der Tutor nutzt, mit Grundlagen bis Ebene 3.
+
 ## 1.50.0 – 2026-10-31
 ### New
 - Download-Bremse: Die App misst beim ersten Download 60 Sekunden lang die Geschwindigkeit und begrenzt Engine-Downloads danach auf 90 % davon.

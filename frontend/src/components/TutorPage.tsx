@@ -27,6 +27,7 @@ import { useCloudReady } from "../lib/useCloud";
 import { CloudDialog } from "./cloud/CloudDialog";
 import { renderMarkdown } from "../lib/markdown";
 import { takeTutorModule } from "../lib/nav";
+import { BrainView } from "./brain/BrainView";
 
 interface Props {
   onOpenSettings: () => void;
@@ -47,6 +48,8 @@ export function TutorPage(props: Props) {
   const [draft, setDraft] = useState("");
   // Aus einem Modul geöffnet: neuer Chat mit diesem Modul als Suchraum
   const [pendingModuleId, setPendingModuleId] = useState<string>(() => takeTutorModule() ?? "");
+  // Chat oder Gehirn (globales Begriffsnetz)
+  const [mode, setMode] = useState<"chat" | "brain">("chat");
   const toast = useToast();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -166,6 +169,18 @@ export function TutorPage(props: Props) {
         onOpenSettings={props.onOpenSettings}
         onOpenDocument={props.onOpenDocument}
       />
+      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4 flex gap-2">
+        {(["chat", "brain"] as const).map((m) => (
+          <button key={m} type="button" className={cn("chip", mode === m && "chip-active")} onClick={() => setMode(m)}>
+            {t(`tutor.mode.${m}`)}
+          </button>
+        ))}
+      </div>
+      {mode === "brain" ? (
+        <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-4">
+          <BrainView onOpenSource={props.onOpenDocumentSource} />
+        </div>
+      ) : (
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4 min-h-0">
         {/* Session list */}
         <aside className="bg-neutral-950 border border-border rounded-lg p-3 flex flex-col gap-2 min-h-0">
@@ -328,6 +343,7 @@ export function TutorPage(props: Props) {
           </div>
         </section>
       </div>
+      )}
     </div>
   );
 }
