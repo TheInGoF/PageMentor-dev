@@ -142,7 +142,7 @@ services:
     depends_on:
       - ollama
 
-  # Embeddings für Tutor und Karten, dauerhaft geladen (~1 GB VRAM)
+  # Embeddings und Reranker für Tutor und Karten, dauerhaft geladen (~2 GB VRAM)
   infinity:
     image: michaelf34/infinity:0.0.76
     container_name: pm-infinity
@@ -151,7 +151,8 @@ services:
       - "127.0.0.1:8080:7997"
     # bge-m3: mehrsprachig, 1024 Dimensionen, ohne fremden Modellcode
     # (jina-v3 baute beim Start Triton-Module mit gcc und scheiterte daran unter WSL)
-    command: ["v2", "--model-id", "BAAI/bge-m3", "--engine", "torch", "--port", "7997", "--batch-size", "32"]
+    # bge-reranker-v2-m3: sortiert die Treffer des Tutors nach Relevanz (/rerank, ~1 GB mehr)
+    command: ["v2", "--model-id", "BAAI/bge-m3", "--model-id", "BAAI/bge-reranker-v2-m3", "--engine", "torch", "--port", "7997", "--batch-size", "32"]
     environment:
       HF_HOME: /app/.cache
     volumes:

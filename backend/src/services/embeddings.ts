@@ -62,7 +62,8 @@ async function probeEmbedder(url: string): Promise<EmbedderInfo | null> {
     const data = (await res.json()) as {
       data?: Array<{ id?: string }>;
     };
-    const modelId = data.data?.[0]?.id;
+    // Neben dem Embedder läuft der Reranker im selben Server
+    const modelId = data.data?.map((m) => m.id).find((id) => id && !/rerank/i.test(id));
     if (!modelId) return null;
     return { modelId };
   } catch {

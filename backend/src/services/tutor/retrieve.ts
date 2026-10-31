@@ -1,6 +1,7 @@
 // Passende Textstücke für eine Frage finden
 import { db } from "../../db";
 import { hybridSearch } from "../rag/hybrid";
+import { rerank } from "../rag/rerank";
 import { TOP_K, MAX_CHUNK_CHARS, type TutorSource } from "./types";
 
 
@@ -22,9 +23,10 @@ export async function retrieveChunks(
   question: string,
   moduleId: string | null
 ): Promise<TutorSource[]> {
-  // Volltext und Vektoren gemeinsam; ohne Embedder bleibt die Volltextsuche
-  const { rowids } = await hybridSearch(question, moduleId, TOP_K);
-  if (!rowids.length) return [];
+  // Volltext und Vektoren gemeinsam (ohne Embedder bleibt die Volltextsuche), dann sortiert der Reranker
+  // die Kandidaten nach echter Relevanz und nur die besten gehen an Gemma
+  const { rowids: candidates } = await hybridSearch(question, moduleId, RERANK_CANDIDATES);
+  if (!candidates.length) return [];
   const rows = db()
     .prepare(
       `SELECT ch.rowid AS rid, ch.id, ch.document_id, ch.chapter_id, ch.chunk_index, ch.text,
@@ -36,10 +38,13 @@ export async function retrieveChunks(
          FROM chunks ch
          JOIN documents d ON d.id = ch.document_id
          LEFT JOIN chapters c ON c.id = ch.chapter_id
-        WHERE ch.rowid IN (${rowids.map(() => "?").join(",")})`
+        WHERE ch.rowid IN (${candidates.map(() => "?").join(",")})`
     )
-    .all(...rowids) as Array<Omit<ChunkRow, "embedding"> & { rid: number; chunk_index: number }>;
+    .all(...candidates) as Array<Omit<ChunkRow, "embedding"> & { rid: number; chunk_index: number }>;
   const byRid = new Map(rows.map((r) => [r.rid, r]));
+  const ordered = candidates.map((rid) => byRid.get(rid)).filter((r): r is NonNullable<typeof r> => !!r);
+  const order = await rerank(question, ordered.map((r) => r.text.slice(0, 2000)));
+  const rowids = (order ? order.map((i) => ordered[i]) : ordered).slice(0, TOP_K).map((r) => r.rid);
   return rowids
     .map((rid) => byRid.get(rid))
     .filter((r): r is NonNullable<typeof r> => !!r)
@@ -59,6 +64,7 @@ export async function retrieveChunks(
 }
 
 const NEIGHBOR_HITS = 4;
+const RERANK_CANDIDATES = 30;
 const NEIGHBOR_CHARS = 600;
 
 function withNeighbors(docId: string, index: number, text: string): string {

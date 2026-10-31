@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.37.0 – 2026-10-31
+### New
+- Tutor: ein Reranker (bge-reranker-v2-m3, lädt einmalig rund 2 GB) sortiert die gefundenen Stellen nach Relevanz, bevor Gemma antwortet.
+### Change
+- Tutor: kurze Nachfragen suchen zusammen mit der vorigen Frage, damit „und wie berechnet man die?“ die richtigen Stellen findet.
+
 ## 1.36.0 – 2026-10-31
 ### New
 - Eigene Stimmen: jede Stimmprobe lässt sich mit jeder Engine anhören, die sie klonen kann (▶ F5, ▶ Qwen, ▶ TADA), zum direkten Vergleich.

@@ -155,10 +155,13 @@ async function askImpl(params: {
 
   const history = listChatMessages(params.sessionId);
   // Heftstellen plus Katalog-Einträge; ohne Embedder reichen auch Katalog-Treffer
-  const hits = retrieveMaterial(question, session.module_id);
+  // Kurze Nachfragen („und wie berechnet man die?“) allein finden nichts: die vorige Frage mitsuchen
+  const prevQuestion = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+  const searchQuery = prevQuestion && question.split(/\s+/).length < 12 ? `${prevQuestion}\n${question}` : question;
+  const hits = retrieveMaterial(searchQuery, session.module_id);
   let chunks: TutorSource[] = [];
   try {
-    chunks = await retrieveChunks(question, session.module_id);
+    chunks = await retrieveChunks(searchQuery, session.module_id);
   } catch (err) {
     if (!hits.length) throw err;
   }
