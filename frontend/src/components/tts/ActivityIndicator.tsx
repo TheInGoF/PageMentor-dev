@@ -15,6 +15,8 @@ export interface ActivityItem {
   done?: number;
   total?: number;
   docId?: string;
+  sub?: string;
+  learnKind?: "subject" | "language";
 }
 
 const ENGINE: Record<string, string> = { f5: "F5", qwen: "Qwen", kokoro: "Kokoro", tada: "TADA" };
@@ -100,6 +102,7 @@ export function ActivityIndicator() {
                       a.status === "waiting" ? t("activity.waits") : null,
                       a.kind === "tts" ? null : a.title,
                       a.kind === "tts" ? null : a.detail,
+                      a.sub ? t(`activity.sub.${a.sub}`) : null,
                       a.kind === "tts" && a.total ? t("activity.ttsBytes", { done: gb(a.done ?? 0), total: gb(a.total) }) : null,
                     ]
                       .filter(Boolean)

@@ -5,6 +5,7 @@ import { db } from "../db";
 import { pipelineStages } from "./pipeline";
 import { queueStatus } from "./batch/queue";
 import { learnStates } from "./learnbook/run";
+import { learnSettings } from "./learnbook/store";
 import { running as audioRuns } from "./audiobook/state";
 import { batchStatus } from "./batch/audiobooks";
 import { maintenanceState } from "./maintenance";
@@ -21,6 +22,10 @@ export interface ActivityItem {
   done?: number;
   total?: number;
   docId?: string;
+  // Zwischenschritt, z. B. Lernhörbuch "check" (prüft gegen das Heft)
+  sub?: string;
+  // Lernhörbuch: Fachheft oder Sprachkurs (für den passenden Knopf im Hörbuch-Reiter)
+  learnKind?: "subject" | "language";
 }
 
 function docTitle(docId: string): string {
@@ -47,6 +52,8 @@ export function collectActivity(tts: TtsActivity | null = null): ActivityItem[] 
       done: s.done,
       total: s.total,
       docId: s.docId,
+      sub: s.waiting ? undefined : s.step,
+      learnKind: learnSettings(s.docId).kind,
     });
   }
   for (const [docId, r] of audioRuns) {

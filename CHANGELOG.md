@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.56.0 – 2026-10-31
+### New
+- Die drei Hörbuch-Knöpfe zeigen „läuft · 3/12“, auch wenn gerade ein anderer Bereich offen ist.
+
+### Fix
+- Lernhörbuch zählt Einheiten ab 1 statt „Einheit 0 von 12“.
+- Lernhörbuch zeigt den Fortschritt innerhalb einer Einheit: schreibt, prüft, korrigiert oder spricht (Stück x von y), mit Laufzeit und Balken.
+
 ## 1.55.0 – 2026-10-31
 ### Change
 - Hörbuch-Aktionen (Herunterladen, Ordner, M4B, Audiobookshelf, Löschen) stehen hinter dem ⋯-Menü.

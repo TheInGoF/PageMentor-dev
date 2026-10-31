@@ -29,6 +29,11 @@ export interface LearnRunState {
   bookPath?: string;
   // Wartet gerade auf die Grafikkarte (Umwandlung oder Hörbuch läuft)
   waiting?: boolean;
+  // Innerhalb der aktuellen Einheit: Schritt, Start (ms) und beim Sprechen gesprochene Stücke
+  step?: "write" | "check" | "revise" | "speak";
+  unitStartedAt?: number;
+  partsDone?: number;
+  partsTotal?: number;
 }
 
 const states = new Map<string, LearnRunState>();
@@ -130,9 +135,10 @@ async function scripts(docId: string, probe: boolean, st: LearnRunState): Promis
       const stamp = scriptStamp(kind, lang, pick.model ?? "default", unit.source, review);
       st.current = unit.title ?? `Einheit ${idx + 1}`;
       if (unit.script && unit.script_stamp === stamp) return;
+      Object.assign(st, { step: "write", unitStartedAt: Date.now(), partsDone: undefined, partsTotal: undefined });
       if (pick.model) await releaseDoclingNow();
       const out = await withGemmaLock(`learnbook ${idx + 1}/${total}`, () =>
-        writeUnit({ kind, lang, docTitle: doc.doc_title || doc.title, idx, total: plan.length, unit, review, model: pick.model, ctx: pick.ctx })
+        writeUnit({ kind, lang, docTitle: doc.doc_title || doc.title, idx, total: plan.length, unit, review, model: pick.model, ctx: pick.ctx, onStep: (step) => (st.step = step) })
       );
       saveScript(docId, idx, { ...out, model: pick.model ?? "default", stamp });
       console.log(`[learnbook] ${doc.title} Einheit ${idx + 1}/${total}: „${out.title}“ (${out.script.length} Zeichen${out.checkNote ? `, ${out.checkNote.split("\n")[0]}` : ""})`);
@@ -165,7 +171,12 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
       st.current = u.title ?? `Einheit ${u.idx + 1}`;
       const stamp = audioStamp(u.script!, second ? [main, second] : [main], rate);
       if (!(u.audio_path && existsSync(u.audio_path) && u.audio_stamp === stamp)) {
-        const r = await speakUnit({ docId, idx: u.idx, title: st.current, album, script: u.script!, main, second, rate, isCanceled: () => cancelDoc === docId });
+        Object.assign(st, { step: "speak", unitStartedAt: Date.now(), partsDone: 0, partsTotal: undefined });
+        const r = await speakUnit({
+          docId, idx: u.idx, title: st.current, album, script: u.script!, main, second, rate,
+          isCanceled: () => cancelDoc === docId,
+          onProgress: (done, total) => Object.assign(st, { partsDone: done, partsTotal: total }),
+        });
         saveAudio(docId, u.idx, r.path, stamp, r.durationMs);
       }
     });

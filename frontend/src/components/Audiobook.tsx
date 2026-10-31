@@ -18,6 +18,8 @@ import { LearnbookPanel } from "./audiobook/LearnbookPanel";
 import { KindFilterBar } from "./audiobook/KindFilterBar";
 import { Menu, type MenuItem } from "./ui/Menu";
 import { cn } from "../lib/cn";
+import { request } from "../lib/api/request";
+import type { ActivityItem } from "./tts/ActivityIndicator";
 
 type Mode = "original" | "subject" | "language";
 // Zuletzt gewählter Bereich je Heft (nur Bequemlichkeit, darf fehlen)
@@ -40,6 +42,23 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const d = useAudiobookData(docId, documentLanguage);
   const [mode, setMode] = useState<Mode>(() => loadMode(docId));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Was für dieses Heft gerade läuft, als Hinweis auf dem passenden Knopf (auch wenn ein anderer Bereich offen ist)
+  const [running, setRunning] = useState<ActivityItem[]>([]);
+  useEffect(() => {
+    let stop = false;
+    const load = () =>
+      void request<{ items: ActivityItem[] }>("/api/activity")
+        .then((r) => !stop && setRunning(r.items.filter((i) => i.docId === docId)))
+        .catch(() => undefined);
+    load();
+    const iv = setInterval(load, 5000);
+    return () => {
+      stop = true;
+      clearInterval(iv);
+    };
+  }, [docId]);
+  const modeRun = (m: Mode) =>
+    running.find((i) => (m === "original" ? i.kind === "audiobook" : i.kind === "learnbook" && i.learnKind === m));
   const pickMode = (m: Mode) => {
     setMode(m);
     try {
@@ -281,6 +300,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
           >
             <span className={cn("text-base font-semibold", mode === m && "text-accent")}>{t(`audiobook.mode.${m}`)}</span>
             <span className="text-xs text-neutral-500">{t(`audiobook.mode.${m}Hint`)}</span>
+            {modeRun(m) && (
+              <span className="text-xs text-accent font-medium tabular-nums">
+                {modeRun(m)!.status === "waiting" ? t("activity.waits") : t("audiobook.mode.running")}
+                {modeRun(m)!.total ? ` · ${modeRun(m)!.done ?? 0}/${modeRun(m)!.total}` : ""}
+              </span>
+            )}
           </button>
         ))}
       </div>

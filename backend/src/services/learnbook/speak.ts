@@ -66,6 +66,8 @@ export async function speakUnit(p: {
   second: Voice | null;
   rate: string;
   isCanceled: () => boolean;
+  // Fortschritt innerhalb der Einheit: gesprochene Stücke von allen
+  onProgress?: (done: number, total: number) => void;
 }): Promise<{ path: string; durationMs: number }> {
   // Absolute Pfade: ffmpeg löst Einträge der Verkettungsliste sonst relativ zur Liste auf
   const dir = resolve(DATA_DIR, "audio", p.docId, "learn", `unit-${String(p.idx + 1).padStart(3, "0")}`);
@@ -73,7 +75,11 @@ export async function speakUnit(p: {
   // Erst sprechen, dann zusammensetzen: so steht die Abtastrate für die Stille fest
   const plan: Array<{ pause: number } | { file: string }> = [];
   let prevLang: string | null | undefined;
-  for (const part of parseScript(p.script)) {
+  const parts = parseScript(p.script);
+  const speech = parts.filter((x) => x.kind === "speech").length;
+  let spoken = 0;
+  p.onProgress?.(0, speech);
+  for (const part of parts) {
     if (p.isCanceled()) throw new Error("abgebrochen");
     if (part.kind === "pause") {
       plan.push({ pause: part.ms });
@@ -93,6 +99,7 @@ export async function speakUnit(p: {
       plan.push({ file: out });
     }
     prevLang = part.lang;
+    p.onProgress?.(++spoken, speech);
   }
   const files = plan.filter((x): x is { file: string } => "file" in x);
   if (!files.length) throw new Error("Skript ohne Sprechtext");

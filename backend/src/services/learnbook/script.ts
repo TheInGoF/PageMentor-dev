@@ -149,6 +149,8 @@ export async function writeUnit(p: {
   review: string[];
   model?: string;
   ctx: number;
+  // Zwischenschritt für die Anzeige: schreiben, gegen das Heft prüfen, überarbeiten
+  onStep?: (step: "write" | "check" | "revise") => void;
 }): Promise<WrittenUnit> {
   const system = getPrompt(p.kind === "language" ? "learn-language.de" : "learn-subject.de");
   const think = p.model?.startsWith("qwen") ? false : undefined;
@@ -169,10 +171,12 @@ export async function writeUnit(p: {
     return { title: (j.titel ?? "").trim() || `Einheit ${p.idx + 1}`, script: j.skript.trim(), points: (j.merkpunkte ?? []).filter((x) => typeof x === "string").slice(0, 8) };
   };
 
+  p.onStep?.("write");
   let out = await write();
   let checkNote: string | null = null;
   if (p.kind === "subject") {
     // Prüfdurchgang: fachliche Abweichungen von der Vorlage finden und, wenn nötig, gezielt korrigieren lassen
+    p.onStep?.("check");
     const c = await generate({
       prompt: `Vorlage:\n\n${p.unit.source}\n\nSkript:\n\n${out.script}`,
       system: getPrompt("learn-check.de"),
@@ -187,6 +191,7 @@ export async function writeUnit(p: {
     else {
       const list = issues.map((i) => `- „${i.stelle}“: ${i.problem} → ${i.korrektur}`).join("\n");
       try {
+        p.onStep?.("revise");
         out = await write(`\n\nDein erster Entwurf hatte diese fachlichen Fehler. Schreibe das Skript neu und korrigiere genau diese Stellen:\n${list}`);
         checkNote = `${issues.length} Abweichung(en) gefunden und korrigiert:\n${list}`;
       } catch {

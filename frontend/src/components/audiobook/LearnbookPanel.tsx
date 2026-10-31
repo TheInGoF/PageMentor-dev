@@ -29,6 +29,11 @@ interface RunState {
   error?: string;
   probe: boolean;
   bookPath?: string;
+  waiting?: boolean;
+  step?: "write" | "check" | "revise" | "speak";
+  unitStartedAt?: number;
+  partsDone?: number;
+  partsTotal?: number;
 }
 interface Info {
   kind: "language" | "subject";
@@ -54,6 +59,13 @@ export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: str
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);
   const running = !!info?.state?.running;
+  // Sekundentakt für die Laufzeit der aktuellen Einheit
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const iv = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(iv);
+  }, [running]);
   useEffect(() => {
     if (!running) return;
     const iv = setInterval(() => void load(), 4000);
@@ -107,14 +119,35 @@ export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: str
 
       {st?.running ? (
         <Notice action={<Button variant="ghost" onClick={() => void post("/cancel")}>{t("common.cancel")}</Button>}>
-          {t(`learn.phase.${st.phase}`, { done: st.done, total: st.total, current: st.current ?? "" })}
+          <div className="flex flex-col gap-2 w-full">
+            <span>
+              {st.waiting
+                ? t("learn.phase.wait")
+                : t(`learn.phase.${st.phase}`, { done: Math.min(st.done + 1, Math.max(1, st.total)), total: st.total, current: st.current ?? "" })}
+            </span>
+            {!st.waiting && st.step && (st.phase === "script" || st.phase === "audio") && (
+              <span className="text-xs text-neutral-500 tabular-nums">
+                {t(`learn.step.${st.step}`)}
+                {st.step === "speak" && st.partsTotal ? ` · ${t("learn.parts", { done: st.partsDone ?? 0, total: st.partsTotal })}` : ""}
+                {st.unitStartedAt ? ` · ${mmss(Date.now() - st.unitStartedAt)}` : ""}
+              </span>
+            )}
+            {st.total > 0 && (
+              <div className="h-1.5 rounded bg-bg-elevated overflow-hidden">
+                <div
+                  className="h-full bg-accent transition-[width] duration-500"
+                  style={{ width: `${Math.min(100, ((st.done + (st.step === "speak" && st.partsTotal ? (st.partsDone ?? 0) / st.partsTotal : 0)) / st.total) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
         </Notice>
       ) : (
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => void post("/start", { probe: true, rate })}>
             {t("learn.probe")}
           </Button>
-          <Button onClick={() => void post("/start", { probe: false, rate })}>{t(info.units.some((u) => u.hasAudio) ? "learn.update" : "learn.full")}</Button>
+          <Button onClick={() => void post("/start", { probe: false, rate })}>{t(!other && info.units.some((u) => u.hasAudio) ? "learn.update" : "learn.full")}</Button>
         </div>
       )}
       {st?.phase === "failed" && <Notice kind="error">{st.error}</Notice>}
