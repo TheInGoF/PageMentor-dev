@@ -33,6 +33,9 @@ export function ensurePronTables(d: Database): void {
     );
     CREATE INDEX IF NOT EXISTS pron_issues_doc ON pron_issues(document_id, status);
   `);
+  // Was Gemma aus dem gelösten Befund gelernt hat: Hinweis, "-" = nichts Neues, NULL = noch nicht gefragt
+  const cols = d.prepare("PRAGMA table_info(pron_issues)").all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "learned")) d.exec("ALTER TABLE pron_issues ADD COLUMN learned TEXT");
 }
 
 // Neuer Lauf für ein Kapitel ersetzt dessen offene Befunde; gelöste und ignorierte bleiben als Verlauf
@@ -73,13 +76,14 @@ export interface IssueRow {
   context: string;
   status: "open" | "resolved" | "ignored";
   note: string | null;
+  learned: string | null;
 }
 
 export function listIssues(docId: string): IssueRow[] {
   return db()
     .prepare(
       `SELECT i.id, i.chapter_id, c.title AS chapter_title, c.number AS chapter_number, i.kind, i.expected, i.heard, i.start, i.end, i.prob,
-              i.context, i.status, i.note
+              i.context, i.status, i.note, i.learned
          FROM pron_issues i JOIN chapters c ON c.id = i.chapter_id
         WHERE i.document_id = ? ORDER BY c.sort_order, c.number, i.start`
     )

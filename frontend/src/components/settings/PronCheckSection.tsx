@@ -40,6 +40,8 @@ interface Issue {
   context: string;
   status: "open" | "resolved" | "ignored";
   note: string | null;
+  // Was Gemma daraus gelernt hat: Hinweis, "-" = nichts Neues, null = noch nicht gefragt
+  learned: string | null;
 }
 interface Chapter {
   id: string;
@@ -98,12 +100,14 @@ export function PronCheckSection({ onEngines }: { onEngines: () => void }) {
     void loadDoc(docId);
   }, [docId]);
   const running = !!state?.running;
+  // Nach dem grünen Haken fragt das Backend Gemma; so lange nachsehen, bis eine Antwort da ist
+  const learning = issues.some((i) => i.status === "resolved" && !i.learned);
   useEffect(() => {
-    if (!running) return;
+    if (!running && !learning) return;
     const iv = setInterval(() => void loadDoc(docId), 3000);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, docId]);
+  }, [running, learning, docId]);
 
   async function run(chapterIds?: string[]) {
     try {
@@ -114,7 +118,7 @@ export function PronCheckSection({ onEngines }: { onEngines: () => void }) {
   }
   async function setStatus(id: string, status: Issue["status"], note?: string) {
     const r = await request<Issue>(`/api/pron-check/issue/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status, note }) });
-    setIssues((cur) => cur.map((i) => (i.id === id ? { ...i, status: r.status, note: r.note } : i)));
+    setIssues((cur) => cur.map((i) => (i.id === id ? { ...i, status: r.status, note: r.note, learned: r.learned } : i)));
   }
   function play(id: string) {
     audio.current?.pause();
@@ -156,6 +160,7 @@ export function PronCheckSection({ onEngines }: { onEngines: () => void }) {
   return (
     <Card title={t("pronCheck.title")} status={t("pronCheck.debug")}>
       <p className="text-xs text-neutral-500">{t("pronCheck.hint")}</p>
+      <p className="text-xs text-neutral-500">{t("pronCheck.learnHint")}</p>
       {!available ? (
         <Notice action={<Button variant="outline" onClick={onEngines}>{t("pronCheck.openEngines")}</Button>}>{t("pronCheck.notAvailable")}</Notice>
       ) : !docs.length ? (
@@ -265,6 +270,11 @@ export function PronCheckSection({ onEngines }: { onEngines: () => void }) {
                             ]}
                           />
                         </div>
+                        {i.status === "resolved" && (
+                          <div className={cn("text-xs pl-[104px]", i.learned && i.learned !== "-" ? "text-emerald-600" : "text-neutral-500")}>
+                            {!i.learned ? t("pronCheck.learning") : i.learned === "-" ? t("pronCheck.learnedNothing") : t("pronCheck.learned", { rule: i.learned })}
+                          </div>
+                        )}
                         {adding?.id === i.id && (
                           <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
                             <label className="flex flex-col gap-1 text-xs text-neutral-400 flex-1 min-w-[140px]">

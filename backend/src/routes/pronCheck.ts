@@ -7,6 +7,7 @@ import { toolPath } from "../tools";
 import { chapterOverview, getIssue, listIssues, setIssueStatus } from "../services/pronCheck/store";
 import { cancelPronCheck, pronRunState, startPronCheck } from "../services/pronCheck/run";
 import { sttAvailable } from "../services/pronCheck/stt";
+import { enqueueLearn } from "../services/pronCheck/learn";
 import { refreshExtraStatus } from "../tts/engines/extra/probe";
 
 export const pronCheckRoutes = new Hono();
@@ -48,6 +49,8 @@ pronCheckRoutes.post("/issue/:id", async (c) => {
   const status = body.status === "resolved" || body.status === "ignored" || body.status === "open" ? body.status : null;
   if (!status || !getIssue(c.req.param("id"))) return c.json({ error: "ungültig" }, 400);
   setIssueStatus(c.req.param("id"), status, body.note);
+  // Nur der grüne Haken (gelöst) bringt Gemma etwas bei
+  if (status === "resolved") enqueueLearn(c.req.param("id"));
   return c.json(getIssue(c.req.param("id")));
 });
 

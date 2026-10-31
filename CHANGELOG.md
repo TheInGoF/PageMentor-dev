@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.59.0 – 2026-10-31
+### New
+- Gemma lernt aus gelösten Aussprache-Befunden: Nur beim grünen Haken leitet sie einen allgemeinen Hinweis ab und hängt ihn an den Hörbuch-Prompt an. Bestehender Text bleibt immer erhalten.
+- Jeder gelöste Befund zeigt, was Gemma daraus gelernt hat oder dass nichts Neues dabei war.
+- Neuer bearbeitbarer Prompt „Aussprache: aus Befunden lernen“.
+
 ## 1.58.0 – 2026-10-31
 ### New
 - Aussprache prüfen (Debug) unter Stimmen: Whisper hört ein fertiges Hörbuch ab und meldet falsch gesprochene, verschluckte und unsichere Wörter.
