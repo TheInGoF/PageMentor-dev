@@ -20,6 +20,11 @@ interface CloneRef {
 
 const locale = (lang: string) => ({ de: "de-DE", en: "en-US", es: "es-ES" })[lang] ?? lang;
 
+const F5_NOTES: Record<string, string> = {
+  es: "F5-TTS Spanish · klont aus der Stimmprobe",
+  en: "F5-TTS (Original, Englisch) · klont aus der Stimmprobe",
+};
+
 function listFor(id: ExtraId): Voice[] {
   const meta = EXTRA[id];
   if (!meta.clones) {
@@ -36,8 +41,8 @@ function listFor(id: ExtraId): Voice[] {
       });
     return [...de, ...pack];
   }
-  // TADA nur Deutsch; F5 hat ein deutsches und ein spanisches Modell und wechselt je Sprache
-  const langs = id === "f5" ? ["de", "es"] : ["de"];
+  // TADA nur Deutsch; F5 hat je ein Modell für Deutsch, Spanisch und Englisch und wechselt je Sprache
+  const langs = id === "f5" ? ["de", "es", "en"] : ["de"];
   const firstOfLang = new Set<string>();
   const samples = listVoiceSamples()
     .filter((s) => langs.includes(s.language))
@@ -49,7 +54,7 @@ function listFor(id: ExtraId): Voice[] {
       gender: s.gender,
       engine: id,
       flagship: !firstOfLang.has(s.language) && !!firstOfLang.add(s.language),
-      note: `${s.language === "es" ? "F5-TTS Spanish · klont aus der Stimmprobe" : meta.note}${s.refText ? "" : " · Transkript fehlt"}`,
+      note: `${id === "f5" ? F5_NOTES[s.language] ?? meta.note : meta.note}${s.refText ? "" : " · Transkript fehlt"}`,
       showInAudiobook: s.showInAudiobook,
     }));
   const designs = listVoiceDesigns()

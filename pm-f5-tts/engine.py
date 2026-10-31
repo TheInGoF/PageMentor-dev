@@ -1,8 +1,8 @@
-"""F5-TTS, klont aus Referenz-Audio: deutsches Modell vom HPI, spanisches von jpgallegoar.
+"""F5-TTS, klont aus Referenz-Audio: deutsches Modell vom HPI, spanisches von jpgallegoar, englisches Original.
 
 Deutsch: aihpi/F5-TTS-German, Ordner F5TTS_Base (Vocos-Vocoder), lädt beim Start.
-Spanisch: jpgallegoar/F5-Spanish, lädt beim ersten spanischen Auftrag und bleibt geladen,
-damit Sprachwechsel mitten im Kapitel nichts kosten (beide zusammen rund 3–4 GB Grafikspeicher).
+Spanisch (jpgallegoar/F5-Spanish) und Englisch (SWivid/F5-TTS) laden beim ersten Auftrag ihrer Sprache
+und bleiben geladen, damit Sprachwechsel mitten im Kapitel nichts kosten (je Modell rund 1,5–2 GB Grafikspeicher).
 Lizenz der Gewichte: CC-BY-NC-4.0, zur Laufzeit geladen, nicht im Image.
 """
 
@@ -24,10 +24,14 @@ REPO = os.environ.get("F5_REPO", "aihpi/F5-TTS-German")
 CKPT = os.environ.get("F5_CKPT", "F5TTS_Base/model_420000.safetensors")
 ES_REPO = os.environ.get("F5_ES_REPO", "jpgallegoar/F5-Spanish")
 ES_CKPT = os.environ.get("F5_ES_CKPT", "model_1200000.safetensors")
-# Sprache aus der Anfrage → (Repo, Checkpoint, Vokabular); unbekannte Sprachen sprechen Deutsch
+EN_REPO = os.environ.get("F5_EN_REPO", "SWivid/F5-TTS")
+EN_CKPT = os.environ.get("F5_EN_CKPT", "F5TTS_v1_Base/model_1250000.safetensors")
+# Sprache aus der Anfrage → (Repo, Checkpoint, Vokabular, Modellaufbau); unbekannte Sprachen sprechen Deutsch.
+# Englisch ist das Originalmodell (Englisch/Chinesisch, v1-Aufbau)
 MODELS = {
-    "German": (REPO, CKPT, "vocab.txt"),
-    "Spanish": (ES_REPO, ES_CKPT, "vocab.txt"),
+    "German": (REPO, CKPT, "vocab.txt", "F5TTS_Base"),
+    "Spanish": (ES_REPO, ES_CKPT, "vocab.txt", "F5TTS_Base"),
+    "English": (EN_REPO, EN_CKPT, "F5TTS_v1_Base/vocab.txt", "F5TTS_v1_Base"),
 }
 NFE_STEPS = int(os.environ.get("F5_NFE_STEPS", "32"))
 # F5 schätzt die Länge aus Referenz und Text; knapp geschätzt verschluckt es Anfang oder Ende.
@@ -66,15 +70,16 @@ class F5Engine:
             if lang not in self._models:
                 from f5_tts.api import F5TTS
 
-                repo, ckpt_name, vocab_name = MODELS[lang]
+                repo, ckpt_name, vocab_name, arch = MODELS[lang]
                 ckpt = _fetch(repo, ckpt_name)
-                try:
-                    vocab = _fetch(repo, vocab_name)
-                except Exception:  # noqa: BLE001
-                    # Ohne eigenes Vokabular gilt das des F5-Basismodells
-                    log.warning("%s ohne %s, nehme das Standard-Vokabular", repo, vocab_name)
-                    vocab = ""
-                self._models[lang] = F5TTS(model="F5TTS_Base", ckpt_file=ckpt, vocab_file=vocab, device="cuda")
+                vocab = ""
+                if vocab_name:
+                    try:
+                        vocab = _fetch(repo, vocab_name)
+                    except Exception:  # noqa: BLE001
+                        # Ohne eigenes Vokabular gilt das des F5-Basismodells
+                        log.warning("%s ohne %s, nehme das Standard-Vokabular", repo, vocab_name)
+                self._models[lang] = F5TTS(model=arch, ckpt_file=ckpt, vocab_file=vocab, device="cuda")
                 log.info("f5: Modell %s geladen (%s)", lang, repo)
             return self._models[lang]
 

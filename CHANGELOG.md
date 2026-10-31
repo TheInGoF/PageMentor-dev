@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.34.0 – 2026-10-31
+### New
+- F5-TTS spricht auch Englisch (Originalmodell, lädt beim ersten englischen Auftrag); eigene Stimmproben gehen in Deutsch, Spanisch und Englisch.
+- Vorlage-Stimmen für Spanisch (Lucía, Tux) und Englisch (Clara, Arthur), je weiblich und männlich, frei lizenziert.
+
 ## 1.33.0 – 2026-10-31
 ### New
 - Einstellungen → Hörbuch: Standardstimme je Sprache (Deutsch, Englisch, Spanisch) und eine gemeinsame Stimmlage weiblich oder männlich.

@@ -1,5 +1,5 @@
-// Mitgelieferte deutsche Vorlage-Stimmen, frei lizenziert: damit F5-TTS und TADA (klonen nur) ab dem
-// ersten Start Stimmen haben. Einmal je Stimme als normale Stimmprobe angelegt; wer sie löscht, behält das
+// Mitgelieferte Vorlage-Stimmen, frei lizenziert: damit F5-TTS und TADA (klonen nur) ab dem ersten Start
+// Stimmen haben, je Sprache weiblich und männlich. Einmal je Stimme als normale Stimmprobe angelegt; wer sie löscht, behält das
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { APP_DIR, PUBLIC_DIR } from "../paths";
@@ -12,6 +12,7 @@ interface BuiltinVoice {
   file: string;
   label: string;
   gender: "female" | "male";
+  language: string;
   // Exakter Wortlaut der Aufnahme, für gutes Klonen
   text: string;
 }
@@ -23,6 +24,7 @@ export const BUILTIN_VOICES: BuiltinVoice[] = [
     file: "thorsten.wav",
     label: "Thorsten (Vorlage)",
     gender: "male",
+    language: "de",
     text: "Der Schutz der Menschen vor Hochwasser ist eine gesellschaftliche Daueraufgabe. Die Trinkwassernachfrage hat sich in den letzten Jahren stetig erhöht.",
   },
   {
@@ -30,7 +32,40 @@ export const BUILTIN_VOICES: BuiltinVoice[] = [
     file: "hokuspokus.wav",
     label: "Hokuspokus (Vorlage)",
     gender: "female",
+    language: "de",
     text: "Dann ging sie durch die Kammern des Hauses nach den Wandschränken, wo die Kleider gefaltet in großen Lacktruhen lagen.",
+  },
+  {
+    id: "lucia",
+    file: "lucia.wav",
+    label: "Lucía (Vorlage)",
+    gender: "female",
+    language: "es",
+    text: "Si te mareas fácil en un barco, puedes llegar por tierra ya que no es una isla, sino una península. Tienes muchas opciones si te interesa la fotografía.",
+  },
+  {
+    id: "tux-es",
+    file: "tux.wav",
+    label: "Tux (Vorlage)",
+    gender: "male",
+    language: "es",
+    text: "El gentío aumentaba en todas partes, y especialmente en la plaza de San Antonio. Mira, salen algunos con un carro para ir a casa del abastecedor en busca de las provisiones.",
+  },
+  {
+    id: "libritts-2035",
+    file: "libritts-2035.wav",
+    label: "Clara (Vorlage)",
+    gender: "female",
+    language: "en",
+    text: "The barren rock, about three miles in length, was covered with monastic buildings, and its cemetery was already adorned with the tombs of saints and kings.",
+  },
+  {
+    id: "libritts-2803",
+    file: "libritts-2803.wav",
+    label: "Arthur (Vorlage)",
+    gender: "male",
+    language: "en",
+    text: "And so through many questions, and many experiments, they learn at last how to use the contents of this one storehouse.",
   },
 ];
 
@@ -51,7 +86,7 @@ export async function seedBuiltinVoices(): Promise<number> {
     const path = voiceFile(v.file);
     if (!path) continue;
     try {
-      await createVoiceSample({ label: v.label, gender: v.gender, language: "de", refText: v.text, filename: v.file, bytes: readFileSync(path) });
+      await createVoiceSample({ label: v.label, gender: v.gender, language: v.language, refText: v.text, filename: v.file, bytes: readFileSync(path) });
       setProfileValue(key, "1");
       added++;
     } catch (err) {
