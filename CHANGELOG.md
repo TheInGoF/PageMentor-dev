@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.34.1 – 2026-10-31
+### Fix
+- Der einmalige Nachtrag für Vorwort und Einleitung legt seine Markierung neben die Datenbank und bricht nicht mehr ab, wenn der Ordner fehlt.
+
 ## 1.34.0 – 2026-10-31
 ### New
 - F5-TTS spricht auch Englisch (Originalmodell, lädt beim ersten englischen Auftrag); eigene Stimmproben gehen in Deutsch, Spanisch und Englisch.

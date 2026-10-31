@@ -445,11 +445,16 @@ export function initDb() {
   }
 
   // Bis 1.32.1 legte die Umwandlung Vorwort und Einleitung fest als „aus“ an; einmalig auf den Standard (an) setzen
-  const metaMark = join(DATA_DIR, ".meta-audio-default");
+  // Markierung neben der Datenbank: gilt je Datenbank, auch in Tests mit eigener Datei
+  const metaMark = join(dirname(DB_PATH), ".meta-audio-default");
   if (!existsSync(metaMark)) {
     const r = d.prepare("UPDATE chapters SET include_in_audio = NULL WHERE kind = 'meta' AND include_in_audio = 0").run();
     if (r.changes > 0) console.log(`[db] ${r.changes} Vorwort/Einleitung-Kapitel wieder fürs Hörbuch vorgesehen`);
-    writeFileSync(metaMark, "1");
+    try {
+      writeFileSync(metaMark, "1");
+    } catch {
+      /* ohne Markierung läuft der Nachtrag beim nächsten Start noch einmal, schadet nicht */
+    }
   }
 
   // Studien-Datenmodell, mit Backup vor jeder Hochstufung
