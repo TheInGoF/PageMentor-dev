@@ -29,6 +29,13 @@ voiceRoutes.put("/voice-defaults", async (c) => {
   return c.json(prefsBody());
 });
 
+// Probetext je Sprache: mehrere Sätze, damit man hört, ob die Stimme über einen Absatz stabil bleibt
+const PREVIEW_TEXT: Record<string, string> = {
+  de: "Willkommen bei PageMentor. So klingt dein Hörbuch. Der Text geht bewusst über mehrere Sätze, damit Sie einschätzen können, wie die Stimme über einen längeren Absatz hinweg klingt. Gerade bei einem Hörbuch kommt es darauf an, dass die Aussprache stabil bleibt und der Klangcharakter sich nicht mitten im Absatz verändert.",
+  en: "Welcome to PageMentor. This is how your audiobook will sound. The text deliberately spans several sentences so you can judge how this voice sounds across a longer passage. Audiobook listening depends on the voice staying stable without shifting character mid-paragraph.",
+  es: "Bienvenido a PageMentor. Así suena tu audiolibro. El texto tiene varias frases a propósito, para que puedas valorar cómo suena esta voz a lo largo de un párrafo. En un audiolibro es importante que la pronunciación sea estable y que la voz no cambie de carácter a mitad del texto.",
+};
+
 // Kurze Hörprobe der Stimme
 // Optional text und instruct für den Preset-Tester, dann ohne Cache
 voiceRoutes.get("/preview", async (c) => {
@@ -51,11 +58,7 @@ voiceRoutes.get("/preview", async (c) => {
     repPenOverride !== undefined;
 
   // Längerer Probetext: Qwen driftet erst nach ~5 s, wie im Hörbuch
-  const sample = textOverride
-    ? textOverride
-    : voice.language === "de"
-    ? "Willkommen bei PageMentor. So klingt dein Hörbuch. Der Text geht bewusst über mehrere Sätze, damit Sie einschätzen können, wie die Stimme über einen längeren Absatz hinweg klingt. Gerade bei einem Hörbuch kommt es darauf an, dass die Aussprache stabil bleibt und der Klangcharakter sich nicht mitten im Absatz verändert."
-    : "Welcome to PageMentor. This is how your audiobook will sound. The text deliberately spans several sentences so you can judge how this voice sounds across a longer passage. Audiobook listening depends on the voice staying stable without shifting character mid-paragraph.";
+  const sample = textOverride || PREVIEW_TEXT[voice.language] || PREVIEW_TEXT.en;
 
   const parseOptFloat = (s: string | undefined): number | undefined => {
     if (s === undefined || s === "") return undefined;

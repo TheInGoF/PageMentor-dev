@@ -3,6 +3,15 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.36.0 – 2026-10-31
+### New
+- Eigene Stimmen: jede Stimmprobe lässt sich mit jeder Engine anhören, die sie klonen kann (▶ F5, ▶ Qwen, ▶ TADA), zum direkten Vergleich.
+- Stimmproben und Qwen-Designs gibt es jetzt auch auf Spanisch, mit spanischem Probetext.
+### Change
+- Eigene Stimmen: Ausblenden, Bearbeiten, Löschen und Originalaufnahme liegen im ⋯-Menü.
+### Fix
+- Beim Hochladen einer Stimmprobe lässt sich die Sprache wählen; bisher wurde jede als Deutsch angelegt.
+
 ## 1.35.0 – 2026-10-31
 ### New
 - Formeln aus der Texterkennung werden repariert: fehlende Gleichheitszeichen aus der PDF-Textebene, zerlegte Ziffern und Wörter; Unsicheres wird als „[Formel unsicher erkannt]“ markiert.

@@ -39,6 +39,9 @@ function defaultPreviewText(language: string): string {
   if (language === "de") {
     return "Hallo, dies ist eine Sprachprobe dieser Stimme. So klingt sie beim Vorlesen eines Textes.";
   }
+  if (language === "es") {
+    return "Hola, esta es una muestra de esta voz. Así suena cuando lee un texto en voz alta.";
+  }
   return "Hello, this is a voice sample. This is how it sounds when reading a book.";
 }
 
@@ -59,7 +62,7 @@ voiceRoutes.post("/design/preview", async (c) => {
     return c.json({ error: "description too short (at least 10 characters)" }, 400);
   }
   const gender: Gender = body.gender === "male" ? "male" : "female";
-  const language = body.language === "en" ? "en" : "de";
+  const language = body.language === "en" || body.language === "es" ? body.language : "de";
   const seed =
     body.seed && Number.isFinite(body.seed) && body.seed > 0
       ? Math.floor(body.seed)

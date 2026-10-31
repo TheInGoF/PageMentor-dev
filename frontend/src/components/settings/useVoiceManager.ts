@@ -4,6 +4,7 @@ import {
   api,
   type CustomVoiceMeta,
   type PresetVisibility,
+  type Voice,
   type VoiceDesignMeta,
 } from "../../lib/api";
 import { t } from "../../lib/i18n";
@@ -28,9 +29,12 @@ export function useVoiceManager(core: SettingsCore) {
   const [voiceDraft, setVoiceDraft] = useState<{
     label: string;
     gender: "female" | "male";
+    language: "de" | "en" | "es";
     refText: string;
     file: File | null;
-  }>({ label: "", gender: "female", refText: "", file: null });
+  }>({ label: "", gender: "female", language: "de", refText: "", file: null });
+  // Alle Engine-Stimmen samt ausgeblendeter: jede Probe zeigt, mit welchen Engines sie sich anhören lässt
+  const [engineVoices, setEngineVoices] = useState<Voice[]>([]);
   const [voiceDesigns, setVoiceDesigns] = useState<VoiceDesignMeta[]>([]);
   const [presetVisibility, setPresetVisibility] = useState<PresetVisibility[]>(
     []
@@ -87,6 +91,21 @@ export function useVoiceManager(core: SettingsCore) {
 
 
   useEffect(() => {
+    api.audio
+      .voices(true)
+      .then((r) => setEngineVoices(r.voices))
+      .catch(() => setEngineVoices([]));
+  }, [customVoices, voiceDesigns]);
+
+  // Dieselbe Probe über eine bestimmte Engine anhören (F5, Qwen, TADA …)
+  function playEngineVoice(voiceId: string) {
+    stopActivePreview();
+    const audio = new Audio(api.audio.previewUrl(voiceId));
+    activePreviewRef.current = audio;
+    audio.play().catch(() => toast.show(t("settings.voices.previewFailed"), "error"));
+  }
+
+  useEffect(() => {
     return () => {
       if (designPreviewUrl) URL.revokeObjectURL(designPreviewUrl);
     };
@@ -105,12 +124,13 @@ export function useVoiceManager(core: SettingsCore) {
       await api.customVoices.upload({
         label: voiceDraft.label.trim(),
         gender: voiceDraft.gender,
+        language: voiceDraft.language,
         refText: voiceDraft.refText.trim() || undefined,
         file: voiceDraft.file,
       });
       const r = await api.customVoices.list();
       setCustomVoices(r.voices);
-      setVoiceDraft({ label: "", gender: "female", refText: "", file: null });
+      setVoiceDraft({ label: "", gender: "female", language: voiceDraft.language, refText: "", file: null });
       notifyVoicesChanged();
       toast.show(t("settings.voices.uploaded"), "success");
     } catch (err) {
@@ -401,9 +421,11 @@ export function useVoiceManager(core: SettingsCore) {
     editBusy,
     editDesign,
     editSample,
+    engineVoices,
     openDesignEdit,
     openSampleEdit,
     playDesignPreview,
+    playEngineVoice,
     playVoicePreview,
     presetVisibility,
     previewDesign,

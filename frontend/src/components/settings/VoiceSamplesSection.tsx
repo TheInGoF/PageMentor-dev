@@ -1,31 +1,25 @@
-// Eigene Stimmen: Aufnahmen (klonen Qwen, F5, TADA) und Beschreibungen (nur Qwen) in einer Liste
-import { useState, type ReactNode } from "react";
+// Eigene Stimmen: Aufnahmen und Beschreibungen in einer Liste; jede gilt für alle Engines, die sie klonen können
+import { useState } from "react";
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { t } from "../../lib/i18n";
 import type { SettingsState } from "./state";
 import { Card, Notice } from "./parts";
+import { Menu, type MenuItem } from "../ui/Menu";
+import type { Voice } from "../../lib/api";
 
 type Form = null | "sample" | "design";
 
-function IconButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: string }) {
-  return (
-    <Button variant="ghost" className="!px-2 w-10 flex-none" onClick={onClick} disabled={disabled} title={label} aria-label={label}>
-      {children}
-    </Button>
-  );
-}
-
+// Eine Probe, mehrere Engines: je Engine ein Knopf zum Anhören, damit man vergleichen kann, welche am besten klingt.
+// Weitere Aktionen hinter ⋯ (Styleguide)
 function VoiceRow(props: {
   gender: string;
   label: string;
   meta: string;
   hidden: boolean;
-  onPlay: () => void;
-  onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  extra?: ReactNode;
+  engines: Voice[];
+  onPlayEngine: (voiceId: string) => void;
+  menu: MenuItem[];
 }) {
   return (
     <li className="flex items-center gap-2 py-2">
@@ -36,27 +30,27 @@ function VoiceRow(props: {
         <div className="text-sm truncate">{props.label}</div>
         <div className="text-xs text-neutral-500 truncate">{props.meta}</div>
       </div>
-      <IconButton label={t("settings.voices.preview")} onClick={props.onPlay}>
-        ▶
-      </IconButton>
-      <IconButton label={t(props.hidden ? "settings.voices.unhide" : "settings.voices.hide")} onClick={props.onToggle}>
-        {props.hidden ? "🙈" : "👁"}
-      </IconButton>
-      {/* Platz für ↻ auch ohne, damit die Knöpfe untereinander stehen */}
-      {props.extra ?? <span className="w-10 flex-none" aria-hidden />}
-      <IconButton label={t("common.edit")} onClick={props.onEdit}>
-        ✏️
-      </IconButton>
-      <IconButton label={t("common.delete")} onClick={props.onDelete}>
-        🗑
-      </IconButton>
+      <div className="flex flex-wrap justify-end gap-2">
+        {props.engines.map((v) => (
+          <button key={v.id} type="button" className="chip" title={t("voices.own.playWith", { engine: t(`audiobook.engine.${v.engine}`) })} onClick={() => props.onPlayEngine(v.id)}>
+            ▶ {t(`audiobook.engine.${v.engine}`)}
+          </button>
+        ))}
+      </div>
+      <Menu label={t("voices.own.actions")} items={props.menu} />
     </li>
   );
 }
 
+// Engine-Stimmen einer Probe oder eines Designs: IDs enden auf "custom:<id>" bzw. "design:<id>"
+function enginesFor(voices: Voice[], kind: "custom" | "design", id: string): Voice[] {
+  const seen = new Set<string>();
+  return voices.filter((v) => v.id.endsWith(`${kind}:${id}`) && !seen.has(v.engine) && !!seen.add(v.engine));
+}
+
 export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: SettingsState; qwenOn: boolean; cloneOn: boolean; onEngines: () => void }) {
   const {
-    customVoices, deleteVoiceSample, openSampleEdit, playVoicePreview, setVoiceDraft, toggleCustomVisibility, uploadVoiceSample, voiceDraft, voiceUploadBusy,
+    customVoices, deleteVoiceSample, engineVoices, openSampleEdit, playEngineVoice, playVoicePreview, setVoiceDraft, toggleCustomVisibility, uploadVoiceSample, voiceDraft, voiceUploadBusy,
     deleteDesign, designBusy, designDraft, designPreviewSeed, designPreviewUrl, openDesignEdit, playDesignPreview, previewDesign, regenerateDesignReference, saveDesign, setDesignDraft, toggleDesignVisibility, voiceDesigns,
   } = st;
   const [form, setForm] = useState<Form>(null);
@@ -80,10 +74,14 @@ export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: Se
               label={v.label}
               meta={[t("voices.own.kindSample"), v.language, v.refTextPresent ? t("settings.voices.withTranscript") : t("voices.own.noTranscript")].join(" · ")}
               hidden={v.showInAudiobook === false}
-              onPlay={() => playVoicePreview(v.id)}
-              onToggle={() => toggleCustomVisibility(v.id, !(v.showInAudiobook ?? true))}
-              onEdit={() => openSampleEdit(v)}
-              onDelete={() => deleteVoiceSample(v.id, v.label)}
+              engines={enginesFor(engineVoices, "custom", v.id)}
+              onPlayEngine={playEngineVoice}
+              menu={[
+                { label: t("voices.own.playRecording"), onClick: () => playVoicePreview(v.id) },
+                { label: t(v.showInAudiobook === false ? "settings.voices.unhide" : "settings.voices.hide"), onClick: () => toggleCustomVisibility(v.id, !(v.showInAudiobook ?? true)) },
+                { label: t("common.edit"), onClick: () => openSampleEdit(v) },
+                { label: t("common.delete"), onClick: () => deleteVoiceSample(v.id, v.label), danger: true },
+              ]}
             />
           ))}
           {voiceDesigns.map((v) => (
@@ -93,15 +91,15 @@ export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: Se
               label={v.label}
               meta={[t("voices.own.kindDesign"), v.language, v.description].join(" · ")}
               hidden={v.showInAudiobook === false}
-              onPlay={() => playDesignPreview(v.id)}
-              onToggle={() => toggleDesignVisibility(v.id, !(v.showInAudiobook ?? true))}
-              onEdit={() => openDesignEdit(v)}
-              onDelete={() => deleteDesign(v.id, v.label)}
-              extra={
-                <IconButton label={t("settings.design.regenRef")} onClick={() => regenerateDesignReference(v.id, v.label)} disabled={designBusy || !qwenOn}>
-                  ↻
-                </IconButton>
-              }
+              engines={enginesFor(engineVoices, "design", v.id)}
+              onPlayEngine={playEngineVoice}
+              menu={[
+                { label: t("voices.own.playDesign"), onClick: () => playDesignPreview(v.id) },
+                { label: t("settings.design.regenRef"), onClick: () => regenerateDesignReference(v.id, v.label), disabled: designBusy || !qwenOn },
+                { label: t(v.showInAudiobook === false ? "settings.voices.unhide" : "settings.voices.hide"), onClick: () => toggleDesignVisibility(v.id, !(v.showInAudiobook ?? true)) },
+                { label: t("common.edit"), onClick: () => openDesignEdit(v) },
+                { label: t("common.delete"), onClick: () => deleteDesign(v.id, v.label), danger: true },
+              ]}
             />
           ))}
         </ul>
@@ -125,6 +123,14 @@ export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: Se
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4">
             <Input label={t("settings.voices.label")} value={voiceDraft.label} onChange={(e) => setVoiceDraft({ ...voiceDraft, label: e.target.value })} placeholder={t("settings.voices.labelPlaceholder")} />
             <GenderSelect value={voiceDraft.gender} onChange={(g) => setVoiceDraft({ ...voiceDraft, gender: g })} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs text-neutral-400">{t("settings.design.language")}</label>
+            <select className="input" value={voiceDraft.language} onChange={(e) => setVoiceDraft({ ...voiceDraft, language: e.target.value as "de" | "en" | "es" })}>
+              <option value="de">Deutsch</option>
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
           </div>
           <Input label={t("voices.own.transcript")} value={voiceDraft.refText} onChange={(e) => setVoiceDraft({ ...voiceDraft, refText: e.target.value })} placeholder={t("settings.voices.refTextPlaceholder")} />
           <div className="flex flex-col gap-2">
