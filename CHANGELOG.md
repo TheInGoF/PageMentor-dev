@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.42.0 – 2026-10-31
+### Change
+- Tutor: jedes Modell hat ein eigenes Budget; das kleine Modell antwortet mit 64k Kontext, bis zu 30 Quellen und 12 Gesprächsrunden, Gemma 26B mit 20 Quellen, Qwen 3.6 mit 14.
+- Engine → Sprachmodelle zeigt beim Tutor-Modell, wie viel Kontext und wie viele Quellen es fasst.
+
 ## 1.41.0 – 2026-10-31
 ### New
 - Engine → Sprachmodelle: Gemma 4 26B und Qwen 3.6 27B zum Dazuladen; Abwählen löscht sie wieder von der Festplatte.
