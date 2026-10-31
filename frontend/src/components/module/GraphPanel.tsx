@@ -4,6 +4,7 @@ import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
 import { cn } from "../../lib/cn";
+import { ConceptList } from "./ConceptList";
 
 interface Node { id: string; title: string; documentId: string; documentTitle: string; page: number }
 interface Edge { a: string; b: string; weight: number; terms?: string[] }
@@ -86,7 +87,7 @@ export function graphExport(moduleName: string, data: GraphData) {
 export function GraphPanel({ moduleId, moduleName, onOpenDocument }: { moduleId: string; moduleName: string; onOpenDocument: (id: string) => void }) {
   const [data, setData] = useState<GraphData | null>(null);
   const [copied, setCopied] = useState(false);
-  const [view, setView] = useState<"topics" | "graph">("topics");
+  const [view, setView] = useState<"topics" | "concepts" | "graph">("topics");
   const [hover, setHover] = useState<string | null>(null);
   useEffect(() => {
     void request<GraphData>(`/api/study/graph/${moduleId}`).then(setData);
@@ -122,14 +123,16 @@ export function GraphPanel({ moduleId, moduleName, onOpenDocument }: { moduleId:
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        {(["topics", "graph"] as const).map((v) => (
+        {(["topics", "concepts", "graph"] as const).map((v) => (
           <button key={v} type="button" className={cn("chip", view === v && "chip-active")} onClick={() => setView(v)}>
             {t(`graph.view.${v}`)}
           </button>
         ))}
       </div>
-      <p className="text-xs text-neutral-500">{t(view === "topics" ? "graph.topicsHint" : "graph.hint")}</p>
-      {view === "topics" ? (
+      <p className="text-xs text-neutral-500">{t(view === "topics" ? "graph.topicsHint" : view === "concepts" ? "concepts.hint" : "graph.hint")}</p>
+      {view === "concepts" ? (
+        <ConceptList moduleId={moduleId} moduleName={moduleName} onOpenDocument={onOpenDocument} />
+      ) : view === "topics" ? (
         <TopicList topics={data.topics ?? []} byId={byId} color={color} onOpenDocument={onOpenDocument} />
       ) : (
         <>

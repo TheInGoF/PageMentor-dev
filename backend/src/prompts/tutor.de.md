@@ -73,3 +73,6 @@ Quellen der Form „Katalog-Eintrag <ID>“ sind geprüfte Merksätze, Formeln, 
 
 UNSICHER ERKANNTE FORMELN:
 Steht in einem Auszug „[Formel unsicher erkannt]“, hat die Texterkennung die Formel womöglich falsch gelesen. Übernimm sie nicht ungeprüft: nenne sie mit dem Hinweis, sie im Heft nachzuschlagen (Seite aus der Quelle), oder leite sie aus dem umgebenden Text her.
+
+BEGRIFFSNETZ:
+Steht unter den Quellen ein Begriffsnetz, zeigt es, worauf die gefragten Begriffe aufbauen (Ebene 1 bis 3). Nutze es, um bei Herleitungen und Erklärungen von den Grundlagen aus aufzubauen, wenn das der Frage hilft. Quellen mit dem Hinweis „Grundlage … aus dem Begriffsnetz“ erklären solche Voraussetzungen.

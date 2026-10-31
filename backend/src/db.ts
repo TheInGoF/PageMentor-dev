@@ -5,6 +5,7 @@ import { DATA_DIR } from "./paths";
 import { migrateStudy } from "./study/schema";
 import { loadVec } from "./services/rag/vec";
 import { ensureFts } from "./services/rag/fts";
+import { ensureConceptTables } from "./services/concepts/store";
 
 let DB_PATH = join(DATA_DIR, "pagementor.db");
 
@@ -456,6 +457,9 @@ export function initDb() {
       /* ohne Markierung läuft der Nachtrag beim nächsten Start noch einmal, schadet nicht */
     }
   }
+
+  // Begriffs-Datenbank (Fachbegriffe und ihre Beziehungen über alle Hefte)
+  ensureConceptTables(d);
 
   // Studien-Datenmodell, mit Backup vor jeder Hochstufung
   const study = migrateStudy(d, DB_PATH);

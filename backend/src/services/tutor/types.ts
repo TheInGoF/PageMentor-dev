@@ -21,6 +21,8 @@ export interface TutorSource {
   grepId?: string | null;
   // Über die Zusammenhänge gefunden (verwandtes Kapitel eines anderen Hefts), nicht direkt über die Suche
   related?: boolean;
+  // Über das Begriffsnetz als Grundlage gefunden: Name des Begriffs
+  concept?: string;
 }
 
 export interface TutorAnswer {

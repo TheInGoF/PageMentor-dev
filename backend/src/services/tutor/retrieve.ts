@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { hybridSearch } from "../rag/hybrid";
 import { rerank } from "../rag/rerank";
 import { associatedChunks, relatedChapters } from "../rag/associate";
+import { activate, conceptNetText, prerequisiteChapters } from "../concepts/activate";
 import { TOP_K, MAX_CHUNK_CHARS, type TutorSource } from "./types";
 
 
@@ -20,19 +21,42 @@ export interface ChunkRow {
   chapter_title: string | null;
 }
 
-export async function retrieveChunks(
-  question: string,
-  moduleId: string | null
-): Promise<TutorSource[]> {
+export interface Retrieved {
+  sources: TutorSource[];
+  // Begriffskette aus dem Begriffsnetz (leer, solange keine Begriffe erfasst sind)
+  conceptNet: string;
+}
+
+export async function retrieveChunks(question: string, moduleId: string | null): Promise<Retrieved> {
   // Volltext und Vektoren gemeinsam (ohne Embedder bleibt die Volltextsuche), dann sortiert der Reranker
   // die Kandidaten nach echter Relevanz und nur die besten gehen an Gemma
   const { rowids: found, query } = await hybridSearch(question, moduleId, RERANK_CANDIDATES);
-  if (!found.length) return [];
+  if (!found.length) return { sources: [], conceptNet: "" };
+  const d = db();
+  const seedRows = found.slice(0, ASSOCIATION_SEEDS);
+  const seedChapters = (
+    d.prepare(`SELECT DISTINCT chapter_id FROM chunks WHERE chapter_id IS NOT NULL AND rowid IN (${seedRows.map(() => "?").join(",")})`).all(...seedRows) as Array<{ chapter_id: string }>
+  ).map((r) => r.chapter_id);
+  const allowed = moduleId
+    ? new Set((d.prepare("SELECT id FROM documents WHERE module_id = ?").all(moduleId) as Array<{ id: string }>).map((r) => r.id))
+    : undefined;
+
   // Zusammenhänge als Gedächtnis: die besten Treffer holen passende Abschnitte verwandter Kapitel dazu
-  const associated = query ? associate(found.slice(0, ASSOCIATION_SEEDS), query, moduleId).filter((r) => !found.includes(r)) : [];
+  const associated = query ? associatedChunks(query, relatedChapters(seedChapters, 2, 0.75, allowed), 2).filter((r) => !found.includes(r)) : [];
   const viaGraph = new Set(associated);
-  const candidates = [...found, ...associated];
-  const rows = db()
+
+  // Begriffsnetz: Voraussetzungen bis Ebene 3, je Grundlage der passendste Abschnitt des erklärenden Kapitels
+  const active = activate(query, seedChapters);
+  const prereq = prerequisiteChapters(active, allowed);
+  const viaConcept = new Map<number, string>();
+  for (const p of prereq) {
+    const rid = query ? associatedChunks(query, [p.chapterId], 1)[0] : undefined;
+    const name = active.find((a) => a.id === p.conceptId)?.name;
+    if (rid !== undefined && name && !found.includes(rid) && !viaGraph.has(rid)) viaConcept.set(rid, name);
+  }
+
+  const candidates = [...found, ...associated, ...viaConcept.keys()];
+  const rows = d
     .prepare(
       `SELECT ch.rowid AS rid, ch.id, ch.document_id, ch.chapter_id, ch.chunk_index, ch.text,
               ch.start_page, ch.end_page,
@@ -49,8 +73,11 @@ export async function retrieveChunks(
   const byRid = new Map(rows.map((r) => [r.rid, r]));
   const ordered = candidates.map((rid) => byRid.get(rid)).filter((r): r is NonNullable<typeof r> => !!r);
   const order = await rerank(question, ordered.map((r) => r.text.slice(0, 2000)));
-  const rowids = (order ? order.map((i) => ordered[i]) : ordered).slice(0, TOP_K).map((r) => r.rid);
-  return rowids
+  const ranked = (order ? order.map((i) => ordered[i]) : ordered).map((r) => r.rid);
+  // Grundlagen treffen die Frage oft nicht wörtlich: zwei Plätze bleiben für sie reserviert
+  const reserved = [...viaConcept.keys()].filter((rid) => !ranked.slice(0, TOP_K - PREREQ_SLOTS).includes(rid)).slice(0, PREREQ_SLOTS);
+  const rowids = [...ranked.filter((rid) => !reserved.includes(rid)).slice(0, TOP_K - reserved.length), ...reserved];
+  const sources = rowids
     .map((rid) => byRid.get(rid))
     .filter((r): r is NonNullable<typeof r> => !!r)
     .map((row, i) => ({
@@ -62,26 +89,19 @@ export async function retrieveChunks(
       chapterNumber: row.chapter_number,
       chapterTitle: row.chapter_title,
       related: viaGraph.has(row.rid) || undefined,
+      concept: viaConcept.get(row.rid),
       startPage: row.start_page,
       endPage: row.end_page,
       // Die besten Treffer mit ihren Nachbarabschnitten: Definitionen und Herleitungen reißen sonst an der Abschnittsgrenze ab
       snippet: i < NEIGHBOR_HITS ? withNeighbors(row.document_id, row.chunk_index, row.text) : truncate(row.text, MAX_CHUNK_CHARS),
     }));
+  return { sources, conceptNet: conceptNetText(active) };
 }
 
 const NEIGHBOR_HITS = 4;
 const ASSOCIATION_SEEDS = 5;
+const PREREQ_SLOTS = 2;
 
-function associate(seedRowids: number[], query: Float32Array, moduleId: string | null): number[] {
-  const d = db();
-  const seeds = d
-    .prepare(`SELECT DISTINCT chapter_id FROM chunks WHERE chapter_id IS NOT NULL AND rowid IN (${seedRowids.map(() => "?").join(",")})`)
-    .all(...seedRowids) as Array<{ chapter_id: string }>;
-  const allowed = moduleId
-    ? new Set((d.prepare("SELECT id FROM documents WHERE module_id = ?").all(moduleId) as Array<{ id: string }>).map((r) => r.id))
-    : undefined;
-  return associatedChunks(query, relatedChapters(seeds.map((r) => r.chapter_id), 2, 0.75, allowed), 2);
-}
 const RERANK_CANDIDATES = 30;
 const NEIGHBOR_CHARS = 600;
 
@@ -115,7 +135,7 @@ export function formatSourcesForPrompt(sources: TutorSource[]): string {
         s.startPage === s.endPage
           ? `, Seite ${s.startPage}`
           : `, Seiten ${s.startPage}–${s.endPage}`;
-      const via = s.related ? " (verwandtes Kapitel aus den Zusammenhängen)" : "";
+      const via = s.concept ? ` (Grundlage „${s.concept}“ aus dem Begriffsnetz)` : s.related ? " (verwandtes Kapitel aus den Zusammenhängen)" : "";
       return `[Quelle ${s.n}] ${heft}${kapitel}${pages}${via}\n${s.snippet}`;
     })
     .join("\n\n---\n\n");

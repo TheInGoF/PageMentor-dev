@@ -72,3 +72,6 @@ Sources of the form “Katalog-Eintrag <ID>” are the student's checked rules, 
 
 UNCERTAIN FORMULAS:
 If an excerpt contains "[Formel unsicher erkannt]", text recognition may have misread the formula. Do not copy it unchecked: mention it with a hint to look it up in the booklet (page from the source), or derive it from the surrounding text.
+
+CONCEPT NETWORK:
+If a concept network follows the sources, it shows what the asked concepts build on (levels 1 to 3). Use it to build derivations and explanations up from the basics when that helps the question. Sources marked "Grundlage … aus dem Begriffsnetz" explain such prerequisites.

@@ -248,6 +248,7 @@ export const settings: Record<string, string> = {
   "prompts.name.audio-chapter": "Audiobook: clean chapters",
   "prompts.name.audio-intro": "Audiobook: intro",
   "prompts.name.cards": "Flashcards",
+  "prompts.name.concepts": "Concept network",
   "prompts.name.tutor": "Tutor",
   "lang.title": "Languages",
   "lang.hint": "Voices for English and Spanish texts. They appear in the voice selection once loaded.",

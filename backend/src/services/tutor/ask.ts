@@ -17,7 +17,8 @@ function buildPrompt(
   history: ChatMessageRow[],
   question: string,
   sources: TutorSource[],
-  language: "de" | "en"
+  language: "de" | "en",
+  conceptNet = ""
 ): string {
   const sourcesBlock = formatSourcesForPrompt(sources);
   const lines: string[] = [];
@@ -52,6 +53,12 @@ function buildPrompt(
   lines.push("");
   lines.push(sourcesBlock);
   lines.push("");
+  // Begriffsnetz: welche Grundlagen die gefragten Begriffe brauchen, zum Herleiten von unten
+  if (conceptNet) {
+    lines.push(language === "en" ? "Concept network (prerequisites up to three levels):" : "Begriffsnetz (Voraussetzungen bis drei Ebenen):");
+    lines.push(conceptNet);
+    lines.push("");
+  }
   lines.push(`${tutorLabel}:`);
 
   return lines.join("\n");
@@ -160,8 +167,9 @@ async function askImpl(params: {
   const searchQuery = prevQuestion && question.split(/\s+/).length < 12 ? `${prevQuestion}\n${question}` : question;
   const hits = retrieveMaterial(searchQuery, session.module_id);
   let chunks: TutorSource[] = [];
+  let conceptNet = "";
   try {
-    chunks = await retrieveChunks(searchQuery, session.module_id);
+    ({ sources: chunks, conceptNet } = await retrieveChunks(searchQuery, session.module_id));
   } catch (err) {
     if (!hits.length) throw err;
   }
@@ -177,7 +185,7 @@ async function askImpl(params: {
     getPrompt(language === "en" ? "tutor.en" : "tutor.de");
   const systemPrompt = `${baseSystem}\n\n${cleanupHints(language)}`;
 
-  const prompt = buildPrompt(history, question, sources, language);
+  const prompt = buildPrompt(history, question, sources, language, conceptNet);
   const result = await generate({
     prompt,
     system: systemPrompt,

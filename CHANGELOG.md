@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.39.0 – 2026-10-31
+### New
+- Begriffsnetz: Gemma erfasst je Kapitel die Fachbegriffe, ihre Erklärung und worauf sie aufbauen; gleiche Begriffe aus verschiedenen Heften sind ein Eintrag.
+- Bibliothek: „Begriffe erfassen“ im ⋯-Menü; läuft im Hintergrund und wartet, solange Umwandlung oder Hörbuch die Grafikkarte brauchen.
+- Gemma-Anweisung „Begriffsnetz“ lässt sich in den Einstellungen anpassen.
+- Tutor folgt dem Begriffsnetz bis zur dritten Ebene: Grundlagen der gefragten Begriffe kommen als Quellen („Grundlage: …“) und als Begriffskette mit, damit Gemma von unten herleiten kann.
+- Zusammenhänge: Ansicht „Begriffe“ mit Erklärung, Fundstellen (★ erklärt), „Baut auf“ und „Gebraucht für“, Suche und JSON-Export.
+
 ## 1.38.0 – 2026-10-31
 ### New
 - Tutor nutzt die Zusammenhänge wie ein Gedächtnis: die besten Treffer holen passende Stellen aus verwandten Kapiteln anderer Hefte dazu, der Reranker entscheidet; solche Quellen tragen den Hinweis „über Zusammenhang“.

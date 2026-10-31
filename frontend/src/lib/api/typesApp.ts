@@ -266,6 +266,8 @@ export interface TutorSource {
   grepId?: string | null;
   // Über die Zusammenhänge gefunden (verwandtes Kapitel)
   related?: boolean;
+  // Als Grundlage über das Begriffsnetz gefunden
+  concept?: string;
 }
 
 export interface TutorAnswer {

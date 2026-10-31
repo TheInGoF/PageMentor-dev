@@ -248,6 +248,7 @@ export const settings: Record<string, string> = {
   "prompts.name.audio-chapter": "Hörbuch: Kapitel bereinigen",
   "prompts.name.audio-intro": "Hörbuch: Intro",
   "prompts.name.cards": "Lernkarten",
+  "prompts.name.concepts": "Begriffsnetz",
   "prompts.name.tutor": "Tutor",
   "lang.title": "Sprachen",
   "lang.hint": "Stimmen für englische und spanische Texte. Sie erscheinen in der Stimmenauswahl, sobald sie geladen sind.",

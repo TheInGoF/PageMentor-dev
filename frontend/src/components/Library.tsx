@@ -8,6 +8,7 @@ import {
   type ProgressEvent,
 } from "../lib/api";
 import { t, useLocale } from "../lib/i18n";
+import { getSettings } from "../lib/settings";
 import { DocumentRow } from "./library/DocumentRow";
 import { UploadModal } from "./UploadModal";
 import { BatchImport } from "./library/BatchImport";
@@ -17,6 +18,7 @@ import { DocumentEditModal } from "./DocumentEditModal";
 import { ModuleSectionHeader, EmptyState } from "./library/LibraryParts";
 import { groupBySemester } from "../lib/modules";
 import { Menu, type MenuItem } from "./ui/Menu";
+import { request } from "../lib/api/request";
 import { AudiobookBatchDialog } from "./library/AudiobookBatchDialog";
 import { AssignModuleDialog } from "./library/AssignModuleDialog";
 
@@ -300,6 +302,16 @@ export function Library({
     }
   }
 
+  // Begriffsnetz für die gewählten Hefte im Hintergrund erfassen (Gemma, wartet auf freie Grafikkarte)
+  async function captureConcepts(ids: string[]) {
+    try {
+      await request("/api/concepts/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ docIds: ids, model: getSettings().defaultOllamaModel || undefined }) });
+      toast.show(t("concepts.started", { n: ids.length }), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+  }
+
   // Gleiche Aktionen für eine Zeile und für die Auswahl
   function actionsFor(ids: string[]): MenuItem[] {
     const single = ids.length === 1 ? (docs ?? []).find((d) => d.id === ids[0]) : null;
@@ -311,6 +323,7 @@ export function Library({
           ]
         : []),
       { label: t("batch.audio.menu"), onClick: () => setAudioFor(ids) },
+      { label: t("concepts.start"), onClick: () => void captureConcepts(ids) },
       { label: t("library.reprocess"), onClick: () => void reprocess(ids) },
       ...(modules.length ? [{ label: t("library.assign.menu"), onClick: () => setAssignFor(ids) }] : []),
       { label: t("library.delete"), onClick: () => void removeDocs(ids), danger: true },
