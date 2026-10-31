@@ -7,6 +7,9 @@ import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
 import { Card, SettingRow } from "../settings/parts";
 
+// "Gemma 4 26B · 24k Kontext · 20 Quellen": was in den Kontext des Modells passt
+const budgetLabel = (name: string, b: { ctx: number; hits: number }) => `${name} · ${t("llmModels.budget", { ctx: Math.round(b.ctx / 1024), hits: b.hits })}`;
+
 export function LlmModelsPanel() {
   const toast = useToast();
   const [info, setInfo] = useState<LlmModelsInfo | null>(null);
@@ -68,10 +71,10 @@ export function LlmModelsPanel() {
       ))}
       <SettingRow label={t("llmModels.tutor")} hint={t("llmModels.tutorHint")}>
         <select className="input w-full" value={tutor} onChange={(e) => setTutor(e.target.value)}>
-          <option value="">{info.defaultModel}</option>
+          <option value="">{budgetLabel(info.defaultModel, info.defaultBudget)}</option>
           {enabled.map((id) => (
             <option key={id} value={id}>
-              {info.models[id]?.title ?? id}
+              {info.models[id] ? budgetLabel(info.models[id].title, info.models[id]) : id}
             </option>
           ))}
         </select>

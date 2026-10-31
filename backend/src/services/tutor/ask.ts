@@ -13,7 +13,7 @@ import { materialSources, retrieveMaterial } from "./material";
 import { runJob } from "../../log/jobs";
 import { withGemmaLock } from "../gemmaLock";
 import { getLlmConfig } from "../llmConfig";
-import { EXTRA_LLMS } from "../../engine/config";
+import { DEFAULT_LLM_BUDGET, EXTRA_LLMS, type LlmBudget } from "../../engine/config";
 import { installedModels, isInstalled } from "../../engine/llmExtras";
 import { anyProcessing } from "../pipeline";
 import { releaseDoclingNow } from "../docling/release";
@@ -24,7 +24,8 @@ function buildPrompt(
   question: string,
   sources: TutorSource[],
   language: "de" | "en",
-  conceptNet = ""
+  conceptNet = "",
+  turns = MAX_HISTORY_TURNS
 ): string {
   const sourcesBlock = formatSourcesForPrompt(sources);
   const lines: string[] = [];
@@ -36,7 +37,7 @@ function buildPrompt(
       : "Relevante Ausschnitte aus den Lernheften:";
 
   // Letzte Runden als Klartext, Antworten ohne JSON-Hülle
-  const recent = history.slice(-MAX_HISTORY_TURNS * 2);
+  const recent = history.slice(-turns * 2);
   for (const m of recent) {
     if (m.role === "user") {
       lines.push(`${studentLabel}: ${m.content}`);
@@ -160,15 +161,16 @@ function detectQuestionLanguage(question: string): "de" | "en" {
 // Großes Tutor-Modell aus den Einstellungen, wenn geladen und die Grafikkarte frei ist. Läuft gerade eine
 // Umwandlung (Docling belegt bis 14 GB), antwortet das kleine Modell, statt den Speicher zu überfüllen.
 // Ein laufendes Hörbuch wird nicht abgebrochen: der Arbiter pausiert die Stimme für die Dauer der Antwort
-async function tutorModel(): Promise<{ model?: string; ctx: number; note?: string }> {
+async function tutorModel(): Promise<LlmBudget & { model?: string; note?: string }> {
   const wanted = getLlmConfig().tutorModel;
-  const fallback = { ctx: 32768 };
+  const fallback = { ...DEFAULT_LLM_BUDGET };
   if (!wanted || !(wanted in EXTRA_LLMS)) return fallback;
   const installed = await installedModels();
   if (!installed || !isInstalled(installed, wanted)) return { ...fallback, note: `${wanted} noch nicht geladen` };
   if (anyProcessing()) return { ...fallback, note: "Grafikkarte durch Umwandlung belegt" };
   await releaseDoclingNow();
-  return { model: wanted, ctx: EXTRA_LLMS[wanted].ctx };
+  const { ctx, hits, turns } = EXTRA_LLMS[wanted];
+  return { model: wanted, ctx, hits, turns };
 }
 
 async function askImpl(params: {
@@ -185,11 +187,13 @@ async function askImpl(params: {
   // Kurze Nachfragen („und wie berechnet man die?“) allein finden nichts: die vorige Frage mitsuchen
   const prevQuestion = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
   const searchQuery = prevQuestion && question.split(/\s+/).length < 12 ? `${prevQuestion}\n${question}` : question;
+  // Modell zuerst: es bestimmt, wie viele Quellen und Gesprächsrunden in den Kontext passen
+  const pick = await tutorModel();
   const hits = retrieveMaterial(searchQuery, session.module_id);
   let chunks: TutorSource[] = [];
   let conceptNet = "";
   try {
-    ({ sources: chunks, conceptNet } = await retrieveChunks(searchQuery, session.module_id));
+    ({ sources: chunks, conceptNet } = await retrieveChunks(searchQuery, session.module_id, pick.hits));
   } catch (err) {
     if (!hits.length) throw err;
   }
@@ -205,8 +209,7 @@ async function askImpl(params: {
     getPrompt(language === "en" ? "tutor.en" : "tutor.de");
   const systemPrompt = `${baseSystem}\n\n${cleanupHints(language)}`;
 
-  const prompt = buildPrompt(history, question, sources, language, conceptNet);
-  const pick = await tutorModel();
+  const prompt = buildPrompt(history, question, sources, language, conceptNet, pick.turns);
   // Eine Antwort zur Zeit auf der Grafikkarte: Hörbuch-Aufbereitung und Begriffsnetz warten, bis der Tutor fertig ist
   const result = await withGemmaLock("tutor", () =>
     generate({

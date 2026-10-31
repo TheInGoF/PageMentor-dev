@@ -1,7 +1,7 @@
 // Engine: Status, Selbsttest, Reparaturen, Dienst-Logs
 import { Hono } from "hono";
 import { enabledLlmExtras, installedModels, isInstalled, setLlmExtras } from "../engine/llmExtras";
-import { DEFAULT_LLM_MODEL, EXTRA_LLMS } from "../engine/config";
+import { DEFAULT_LLM_BUDGET, DEFAULT_LLM_MODEL, EXTRA_LLMS } from "../engine/config";
 import { baseUrl } from "../tts/engines/qwen/config";
 import { IS_WINDOWS } from "../paths";
 import type { RepairId } from "../engine/checks";
@@ -60,6 +60,7 @@ engineRoutes.get("/llm-models", async (c) => {
   const installed = await installedModels();
   return c.json({
     defaultModel: effective("ollamaModel", "PM_OLLAMA_MODEL") || DEFAULT_LLM_MODEL,
+    defaultBudget: DEFAULT_LLM_BUDGET,
     models: EXTRA_LLMS,
     enabled: enabledLlmExtras(),
     installed: installed ? Object.keys(EXTRA_LLMS).filter((m) => isInstalled(installed, m)) : null,

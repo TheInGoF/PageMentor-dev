@@ -27,10 +27,10 @@ export interface Retrieved {
   conceptNet: string;
 }
 
-export async function retrieveChunks(question: string, moduleId: string | null): Promise<Retrieved> {
+export async function retrieveChunks(question: string, moduleId: string | null, maxHits = MAX_HITS): Promise<Retrieved> {
   // Volltext und Vektoren gemeinsam (ohne Embedder bleibt die Volltextsuche), dann sortiert der Reranker
   // die Kandidaten nach echter Relevanz und nur die besten gehen an Gemma
-  const { rowids: found, query } = await hybridSearch(question, moduleId, RERANK_CANDIDATES);
+  const { rowids: found, query } = await hybridSearch(question, moduleId, Math.max(RERANK_CANDIDATES, maxHits * 2));
   if (!found.length) return { sources: [], conceptNet: "" };
   const d = db();
   const seedRows = found.slice(0, ASSOCIATION_SEEDS);
@@ -73,14 +73,14 @@ export async function retrieveChunks(question: string, moduleId: string | null):
   const byRid = new Map(rows.map((r) => [r.rid, r]));
   const ordered = candidates.map((rid) => byRid.get(rid)).filter((r): r is NonNullable<typeof r> => !!r);
   const order = await rerank(question, ordered.map((r) => r.text.slice(0, 2000)));
-  // Mit Reranker entscheidet die Bewertung, wie viele Stellen mitgehen: bis zu 20 bei breiten Fragen,
+  // Mit Reranker entscheidet die Bewertung, wie viele Stellen mitgehen: bis zum Budget des Modells (20 bzw. 30),
   // mindestens 8; was weit unter dem besten Treffer liegt, bleibt draußen. Ohne Reranker feste Zahl
   const score = new Map<number, number>();
   let keep = TOP_K;
   if (order) {
     const top = order[0].score;
     order.forEach((o) => score.set(ordered[o.index].rid, top > 0 ? o.score / top : 0));
-    keep = Math.min(MAX_HITS, Math.max(MIN_HITS, order.filter((o) => top > 0 && o.score / top >= KEEP_RATIO).length));
+    keep = Math.min(maxHits, Math.max(MIN_HITS, order.filter((o) => top > 0 && o.score / top >= KEEP_RATIO).length));
   }
   const ranked = (order ? order.map((o) => ordered[o.index]) : ordered).map((r) => r.rid);
   // Grundlagen treffen die Frage oft nicht wörtlich: zwei Plätze bleiben für sie reserviert

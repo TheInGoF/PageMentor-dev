@@ -41,7 +41,8 @@ export interface KokoroPack {
 // Zusätzliche Sprachmodelle für den Tutor; installed null = Ollama nicht erreichbar
 export interface LlmModelsInfo {
   defaultModel: string;
-  models: Record<string, { title: string; sizeGb: number; ctx: number }>;
+  defaultBudget: { ctx: number; hits: number; turns: number };
+  models: Record<string, { title: string; sizeGb: number; ctx: number; hits: number; turns: number }>;
   enabled: string[];
   installed: string[] | null;
   tutorModel: string;
