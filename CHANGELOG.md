@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.47.0 – 2026-10-31
+### New
+- Wissenspflege im Hintergrund, Teil 1: prüft jede Minute, ob alle Hefte Embeddings und Begriffsnetz haben, kündigt sich mit einer Minute Countdown an und holt Fehlendes Heft für Heft nach; wartet, solange Umwandlung, Hörbuch oder Lernhörbuch laufen. Abbrechen lässt sie zwei Stunden ruhen.
+### Fix
+- Begriffsnetz: antwortet Gemma nicht, bleibt das Kapitel offen statt leer als fertig markiert; nach drei Fehlschlägen in Folge hält der Lauf an.
+
 ## 1.46.0 – 2026-10-31
 ### New
 - Hörbuch-Tab: Karte „Lernhörbuch“ mit Art (Sprachkurs oder Fachheft), Zielsprache, Probe der ersten Einheit und ganzem Heft, Fortschritt und Abbrechen.

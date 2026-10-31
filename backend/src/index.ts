@@ -35,6 +35,8 @@ import { moduleRoutes } from "./routes/modules";
 import { ragRoutes } from "./routes/rag";
 import { conceptRoutes } from "./routes/concepts";
 import { learnbookRoutes } from "./routes/learnbook";
+import { maintenanceRoutes } from "./routes/maintenance";
+import { startMaintenance } from "./services/maintenance";
 import { voiceRoutes } from "./routes/voices";
 import { adminRoutes } from "./routes/admin";
 import { ensureReady as ensureSearchReady } from "./services/search";
@@ -95,6 +97,7 @@ app.route("/api/modules", moduleRoutes);
 app.route("/api/rag", ragRoutes);
 app.route("/api/concepts", conceptRoutes);
 app.route("/api/learnbook", learnbookRoutes);
+app.route("/api/maintenance", maintenanceRoutes);
 app.route("/api/voices", voiceRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/tutor", tutorRoutes);
@@ -156,6 +159,8 @@ export default {
 startupNote(`API läuft auf http://${HOST}:${PORT}, Version ${APP_VERSION}`);
 startupDone();
 openUi(APP_URL);
+// Wissenspflege: prüft im Hintergrund, ob alle Hefte Embeddings und Begriffsnetz haben
+startMaintenance();
 
 // Engine im Hintergrund prüfen und starten, blockiert die App nicht
 void autoStart().catch((err) => console.error("[engine] Autostart fehlgeschlagen", err));

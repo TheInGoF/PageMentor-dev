@@ -16,6 +16,7 @@ const server = Bun.spawn(cmd, {
     ...process.env,
     PORT: String(PORT),
     PM_ENGINE_AUTOSTART: "0",
+    PM_MAINTENANCE: "0",
     PM_UI: "none",
     PM_DATA_DIR: dataDir,
     MEILI_URL: "http://127.0.0.1:1",

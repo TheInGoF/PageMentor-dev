@@ -98,6 +98,8 @@ async function extractChapter(ch: { id: string; document_id: string; title: stri
     });
     if (r) lists.push(parseConcepts(r.response));
   }
+  // Kein einziges Stück beantwortet (Gemma nicht erreichbar): ohne Stempel lassen, damit es später nachgeholt wird
+  if (!lists.length) throw new Error("Gemma hat kein Stück beantwortet");
   const items = mergeConcepts(lists);
   saveChapterConcepts(ch.id, ch.document_id, items, conceptsStamp());
   return items.length;
@@ -135,6 +137,8 @@ export interface ConceptRunState {
   done: number;
   total: number;
   current?: string;
+  // Heft des aktuellen Kapitels
+  doc?: string;
 }
 
 const state: ConceptRunState = { running: false, done: 0, total: 0 };
@@ -162,6 +166,7 @@ async function run(model?: string): Promise<void> {
   state.running = true;
   cancel = false;
   state.done = 0;
+  let failures = 0;
   try {
     await runJob("concepts", "concepts", {}, async () => {
       while (queue.size && !cancel) {
@@ -174,10 +179,19 @@ async function run(model?: string): Promise<void> {
           while (!cancel && (anyProcessing() || anyGenerating())) await sleep(5000);
           if (cancel) break;
           state.current = ch.title;
+          state.doc = (db().prepare("SELECT title FROM documents WHERE id = ?").get(ch.document_id) as { title: string } | undefined)?.title;
           const n = await extractChapter(ch, model).catch((err) => {
             emitLog("warn", "concepts", `Begriffe für „${ch.title}“ fehlgeschlagen`, { err });
-            return 0;
+            failures++;
+            return -1;
           });
+          if (n >= 0) failures = 0;
+          // Drei Fehlschläge in Folge: Gemma ist weg, nicht das ganze Heft durchprobieren
+          if (failures >= 3) {
+            emitLog("warn", "concepts", "Begriffsnetz angehalten: Gemma antwortet nicht");
+            cancel = true;
+            break;
+          }
           console.log(`[concepts] ${ch.title}: ${n} Begriffe`);
           state.done++;
         }
@@ -188,5 +202,6 @@ async function run(model?: string): Promise<void> {
   } finally {
     state.running = false;
     state.current = undefined;
+    state.doc = undefined;
   }
 }
