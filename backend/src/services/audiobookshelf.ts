@@ -12,6 +12,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
+import { learnAuthor, learnTitle, type LearnKindName } from "./learnbook/meta";
 import { basename, join } from "node:path";
 import { db } from "../db";
 import { absEnabled, effective } from "./llmConfig";
@@ -135,7 +136,7 @@ interface DocumentMeta {
 /** Uploads a finished M4B (plus cover) into the configured library
  *  and afterwards sets the metadata cleanly via PATCH. Returns the
  *  new library-item ID. */
-export async function uploadBook(docId: string): Promise<UploadResult> {
+export async function uploadBook(docId: string, variant?: LearnKindName): Promise<UploadResult> {
   // Pre-load doc.language so error messages can be localised.
   const langRow = db()
     .prepare("SELECT language FROM documents WHERE id = ?")
@@ -159,7 +160,9 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
     .get(docId) as DocumentMeta | undefined;
   if (!doc) throw new Error(`Document ${docId} not found`);
 
-  const m4bPath = join(DATA_DIR, "audio", docId, "book.m4b");
+  // Lernhörbuch: eigene Datei, eigener Titel und Autor, eigener Eintrag in Audiobookshelf
+  const m4bPath = join(DATA_DIR, "audio", docId, variant ? "learn.m4b" : "book.m4b");
+  const itemCol = variant ? "abs_learn_item_id" : "abs_item_id";
   if (!existsSync(m4bPath)) {
     throw new Error(tLang(lang, "err.absM4bMissing"));
   }
@@ -169,8 +172,9 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   // leer ist. Frueher umgekehrt — fuehrte dazu dass ABS einen Titel
   // aus den PDF-Metadaten zeigte den der User in PageMentor nicht
   // einstellen konnte.
-  const bookTitle = doc.title?.trim() || doc.doc_title?.trim() || "";
-  const authorName = doc.author?.trim() || "Unknown";
+  const baseTitle = doc.title?.trim() || doc.doc_title?.trim() || "";
+  const bookTitle = variant ? learnTitle(baseTitle, variant) : baseTitle;
+  const authorName = variant ? learnAuthor(doc.author) : doc.author?.trim() || "Unknown";
   const seriesName = doc.module_name?.trim() || "";
 
   // Render the cover lazily if missing — so the upload always
@@ -235,7 +239,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
   const folderId = folders[0].id;
 
   // Neue Fassung ersetzt die alte: vorhandenen Eintrag samt Dateien löschen, dann neu hochladen
-  await removePreviousUpload(url, libraryId, docId, bookTitle, authorName);
+  await removePreviousUpload(url, libraryId, docId, bookTitle, authorName, itemCol);
 
   const form = new FormData();
   form.append("library", libraryId);
@@ -354,7 +358,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
     }
   }
 
-  if (uploadData.libraryItemId) db().prepare("UPDATE documents SET abs_item_id = ? WHERE id = ?").run(uploadData.libraryItemId, docId);
+  if (uploadData.libraryItemId) db().prepare(`UPDATE documents SET ${itemCol} = ? WHERE id = ?`).run(uploadData.libraryItemId, docId);
 
   // === Metadata PATCH ===
   // ABS /api/upload creates the LibraryItem from upload metadata and
@@ -383,7 +387,7 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
                 },
               ]
             : undefined,
-          genres: ["Audiobook"],
+          genres: variant ? ["Audiobook", "Lernhörbuch"] : ["Audiobook"],
           language: doc.language || "de",
         },
       };
@@ -425,8 +429,15 @@ export async function uploadBook(docId: string): Promise<UploadResult> {
 
 // Früheren Upload dieses Buchs finden (gemerkte ID, sonst gleicher Titel und Autor) und mit Dateien löschen.
 // Hörfortschritt in Audiobookshelf hängt am Eintrag und beginnt danach von vorn.
-async function removePreviousUpload(url: string, libraryId: string, docId: string, title: string, author: string): Promise<void> {
-  const stored = (db().prepare("SELECT abs_item_id FROM documents WHERE id = ?").get(docId) as { abs_item_id: string | null } | undefined)?.abs_item_id;
+async function removePreviousUpload(
+  url: string,
+  libraryId: string,
+  docId: string,
+  title: string,
+  author: string,
+  itemCol: "abs_item_id" | "abs_learn_item_id" = "abs_item_id"
+): Promise<void> {
+  const stored = (db().prepare(`SELECT ${itemCol} AS id FROM documents WHERE id = ?`).get(docId) as { id: string | null } | undefined)?.id;
   let itemId: string | null = null;
   if (stored) {
     const r = await fetch(`${url}/api/items/${stored}`, { headers: absHeaders(), signal: AbortSignal.timeout(8_000) }).catch(() => null);
@@ -454,7 +465,7 @@ async function removePreviousUpload(url: string, libraryId: string, docId: strin
   const del = await fetch(`${url}/api/items/${itemId}?hard=1`, { method: "DELETE", headers: absHeaders(), signal: AbortSignal.timeout(30_000) });
   if (!del.ok) throw new Error(`ABS: alte Fassung nicht gelöscht (${del.status})`);
   console.log(`[abs] previous upload ${itemId} removed, uploading new version`);
-  db().prepare("UPDATE documents SET abs_item_id = NULL WHERE id = ?").run(docId);
+  db().prepare(`UPDATE documents SET ${itemCol} = NULL WHERE id = ?`).run(docId);
   // ABS braucht einen Moment, bis der Ordner weg ist
   await new Promise((r) => setTimeout(r, 2000));
 }

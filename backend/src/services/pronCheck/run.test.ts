@@ -35,13 +35,13 @@ describe("Ausspracheprüfung: Lauf", () => {
     const { startPronCheck, pronRunState } = await import("./run");
     const { listIssues, setIssueStatus } = await import("./store");
     startPronCheck("d1", ["c1"]);
-    for (let i = 0; i < 50 && pronRunState()?.running; i++) await new Promise((r) => setTimeout(r, 20));
+    for (let i = 0; i < 250 && pronRunState()?.running; i++) await new Promise((r) => setTimeout(r, 20));
     const issues = listIssues("d1");
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({ kind: "different", expected: "Workflow", heard: "Wörkflo", status: "open", chapter_title: "Abläufe" });
     setIssueStatus(issues[0].id, "resolved", "Workflow → Wörkflou");
     startPronCheck("d1", ["c1"]);
-    for (let i = 0; i < 50 && pronRunState()?.running; i++) await new Promise((r) => setTimeout(r, 20));
+    for (let i = 0; i < 250 && pronRunState()?.running; i++) await new Promise((r) => setTimeout(r, 20));
     const after = listIssues("d1");
     expect(after).toHaveLength(1);
     expect(after[0]).toMatchObject({ status: "resolved", note: "Workflow → Wörkflou" });

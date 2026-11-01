@@ -3,7 +3,10 @@ import { existsSync } from "node:fs";
 import { Hono } from "hono";
 import { db } from "../db";
 import { learnSettings, listUnits } from "../services/learnbook/store";
-import { cancelLearnbook, learnState, startLearnbook } from "../services/learnbook/run";
+import { cancelLearnbook, learnState, startLearnbook, uploadLearnbook } from "../services/learnbook/run";
+import { learnBookPath } from "../services/learnbook/speak";
+import { absEnabled } from "../services/llmConfig";
+import { absReady } from "../services/audiobookshelf";
 import { learnModel } from "../services/learnbook/script";
 
 export const learnbookRoutes = new Hono();
@@ -23,7 +26,14 @@ learnbookRoutes.get("/:docId", async (c) => {
     hasAudio: !!u.audio_path,
     durationMs: u.duration_ms,
   }));
-  return c.json({ ...settings, model: (await learnModel(settings.kind)).model ?? null, units, state: learnState(docId) });
+  return c.json({
+    ...settings,
+    model: (await learnModel(settings.kind)).model ?? null,
+    units,
+    state: learnState(docId),
+    hasBook: existsSync(learnBookPath(docId)),
+    abs: absEnabled() && absReady(),
+  });
 });
 
 learnbookRoutes.put("/:docId", async (c) => {
@@ -41,6 +51,15 @@ learnbookRoutes.post("/:docId/start", async (c) => {
 learnbookRoutes.post("/:docId/cancel", (c) => {
   cancelLearnbook(c.req.param("docId"));
   return c.json(learnState(c.req.param("docId")));
+});
+
+// Fertiges Lernhörbuch nachträglich zu Audiobookshelf (eigener Eintrag neben dem Original)
+learnbookRoutes.post("/:docId/abs", async (c) => {
+  try {
+    return c.json(await uploadLearnbook(c.req.param("docId")));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
 });
 
 // Audio einer Einheit zum Anhören in der App

@@ -3,6 +3,18 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.60.0 – 2026-11-01
+### New
+- Fertige Lernhörbücher lassen sich nachträglich mit einem Knopf zu Audiobookshelf hochladen.
+- Lernhörbücher bekommen ein gesprochenes Intro: Titel, nach wessen Buch, Umfang und wie man damit lernt.
+- Lernhörbücher gehen mit eingeschaltetem Audiobookshelf automatisch dorthin, als eigener Eintrag neben dem Original.
+
+### Change
+- Lernhörbücher heißen „… – Lernhörbuch“ bzw. „… – Sprachlern-Hörbuch“, als Autor steht „nach dem Buch von …“.
+
+### Fix
+- Tests der Ausspracheprüfung warten unter Last lang genug.
+
 ## 1.59.0 – 2026-10-31
 ### New
 - Gemma lernt aus gelösten Aussprache-Befunden: Nur beim grünen Haken leitet sie einen allgemeinen Hinweis ab und hängt ihn an den Hörbuch-Prompt an. Bestehender Text bleibt immer erhalten.

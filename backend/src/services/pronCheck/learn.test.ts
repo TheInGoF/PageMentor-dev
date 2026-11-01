@@ -41,7 +41,7 @@ beforeAll(async () => {
 
 const settle = async () => {
   const { learnQueue } = await import("./learn");
-  for (let i = 0; i < 100 && (learnQueue().pending || learnQueue().current); i++) await new Promise((r) => setTimeout(r, 10));
+  for (let i = 0; i < 500 && (learnQueue().pending || learnQueue().current); i++) await new Promise((r) => setTimeout(r, 10));
 };
 
 describe("Gemma lernt aus Befunden", () => {

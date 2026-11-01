@@ -10,7 +10,11 @@ import { anyGenerating } from "../audiobook";
 import { releaseDoclingNow } from "../docling/release";
 import { learnModel, reviewPoints, scriptStamp, unitsFor, writeUnit } from "./script";
 import { learnSettings, listUnits, saveAudio, saveScript, syncUnits } from "./store";
-import { audioStamp, buildLearnBook, speakUnit } from "./speak";
+import { audioStamp, buildLearnBook, learnIntroPath, speakUnit } from "./speak";
+import { introText } from "./meta";
+import { absEnabled } from "../llmConfig";
+import { absReady, uploadBook } from "../audiobookshelf";
+import { readFileSync, writeFileSync } from "node:fs";
 import { defaultVoiceFor, findVoice } from "../../tts/voices";
 import type { Voice } from "../../tts/engines/base";
 import { existsSync } from "node:fs";
@@ -18,7 +22,7 @@ import { existsSync } from "node:fs";
 export interface LearnRunState {
   docId: string;
   running: boolean;
-  phase: "wait" | "script" | "audio" | "book" | "done" | "failed" | "canceled";
+  phase: "wait" | "script" | "audio" | "book" | "abs" | "done" | "failed" | "canceled";
   done: number;
   total: number;
   current?: string;
@@ -27,6 +31,9 @@ export interface LearnRunState {
   model?: string;
   // Fertiges M4B im Hörbücher-Ordner (nur beim ganzen Heft)
   bookPath?: string;
+  // Audiobookshelf: hochgeladen oder Fehlermeldung (das M4B ist trotzdem fertig)
+  absUrl?: string;
+  absError?: string;
   // Wartet gerade auf die Grafikkarte (Umwandlung oder Hörbuch läuft)
   waiting?: boolean;
   // Innerhalb der aktuellen Einheit: Schritt, Start (ms) und beim Sprechen gesprochene Stücke
@@ -184,7 +191,46 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
     st.done++;
   }
   if (probe || cancelDoc === docId) return;
+  // Intro vorneweg: was es ist, nach wessen Buch, wie man damit lernt; nur neu sprechen, wenn sich etwas geändert hat
+  const intro = await gpuSlot(docId, () => speakIntro(docId, kind, lang, main, rate, units.length));
+  if (cancelDoc === docId) return;
   Object.assign(st, { phase: "book", current: undefined });
-  st.bookPath = await buildLearnBook(docId);
+  st.bookPath = await buildLearnBook(docId, intro ?? null);
   emitLog("info", "learnbook", `Lernhörbuch abgelegt: ${st.bookPath}`, { ctx: { docId } });
+  // Wie beim Original-Hörbuch: mit eingeschaltetem Audiobookshelf gleich hochladen, als eigener Eintrag
+  if (absEnabled() && absReady()) {
+    st.phase = "abs";
+    try {
+      st.absUrl = (await uploadBook(docId, kind)).url;
+    } catch (err) {
+      st.absError = err instanceof Error ? err.message : String(err);
+      emitLog("warn", "learnbook", "Lernhörbuch nicht zu Audiobookshelf hochgeladen", { err, ctx: { docId } });
+    }
+  }
+}
+
+async function speakIntro(docId: string, kind: "language" | "subject", lang: string, main: Voice, rate: string, units: number): Promise<{ path: string; durationMs: number } | null> {
+  const doc = db().prepare("SELECT title, doc_title, author FROM documents WHERE id = ?").get(docId) as { title: string; doc_title: string | null; author: string | null };
+  const text = introText({ kind, lang, title: doc.doc_title || doc.title, author: doc.author, units });
+  const stamp = audioStamp(text, [main], rate);
+  const path = learnIntroPath(docId);
+  const meta = `${path}.json`;
+  try {
+    const m = JSON.parse(readFileSync(meta, "utf8")) as { stamp: string; durationMs: number };
+    if (m.stamp === stamp && existsSync(path)) return { path, durationMs: m.durationMs };
+  } catch {
+    // noch kein Intro
+  }
+  const r = await speakUnit({ docId, idx: -1, title: "Einleitung", album: doc.doc_title || doc.title, script: text, main, second: null, rate, isCanceled: () => cancelDoc === docId });
+  // speakUnit legt Einheit 0 (idx -1) als unit-000.mp3 ab; als intro.mp3 merken
+  const { renameSync } = await import("node:fs");
+  renameSync(r.path, path);
+  writeFileSync(meta, JSON.stringify({ stamp, durationMs: r.durationMs }));
+  return { path, durationMs: r.durationMs };
+}
+
+// Fertiges Lernhörbuch (nachträglich) zu Audiobookshelf
+export async function uploadLearnbook(docId: string): Promise<{ url?: string }> {
+  const { kind } = learnSettings(docId);
+  return { url: (await uploadBook(docId, kind)).url };
 }

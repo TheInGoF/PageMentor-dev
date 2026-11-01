@@ -57,6 +57,7 @@ export const common: Record<string, string> = {
   "activity.step.learnbook.wait": "in der Warteschlange",
   "activity.step.learnbook.script": "schreibt",
   "activity.step.learnbook.audio": "spricht",
+  "activity.step.learnbook.abs": "l\u00e4dt hoch",
   "activity.step.learnbook.book": "baut M4B",
   "activity.step.batch.paused": "pausiert",
   "activity.step.maintenance.countdown": "startet gleich",

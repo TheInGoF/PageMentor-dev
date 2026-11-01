@@ -48,6 +48,8 @@ export function ensureLearnTables(d: Database): void {
   // Art des Lernhörbuchs und Zielsprache (Sprachkurs); leer = aus dem Heft geschätzt
   if (!cols.some((c) => c.name === "learn_kind")) d.exec("ALTER TABLE documents ADD COLUMN learn_kind TEXT");
   if (!cols.some((c) => c.name === "learn_lang")) d.exec("ALTER TABLE documents ADD COLUMN learn_lang TEXT");
+  // Eigener Eintrag des Lernhörbuchs in Audiobookshelf (das Original hat abs_item_id)
+  if (!cols.some((c) => c.name === "abs_learn_item_id")) d.exec("ALTER TABLE documents ADD COLUMN abs_learn_item_id TEXT");
 }
 
 export function listUnits(docId: string): LearnUnit[] {

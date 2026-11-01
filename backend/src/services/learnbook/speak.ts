@@ -14,7 +14,8 @@ import { applyPronunciation } from "../pronunciation";
 import { ensureSentenceEnd, splitLanguageRuns } from "../audiobook/synthChapter";
 import { coverPathFor } from "../audiobook/files";
 import { bookFileName } from "../audiobook/export";
-import { listUnits } from "./store";
+import { learnSettings, listUnits } from "./store";
+import { learnAuthor, learnFileSuffix, learnTitle } from "./meta";
 
 export type ScriptPart = { kind: "speech"; lang: string | null; text: string } | { kind: "pause"; ms: number };
 
@@ -118,26 +119,37 @@ export function learnBookPath(docId: string): string {
   return resolve(DATA_DIR, "audio", docId, "learn.m4b");
 }
 
-// Alle Einheiten mit Audio zu einem M4B mit Kapiteln; Kopie in den Hörbücher-Ordner, neben dem normalen Hörbuch
-export async function buildLearnBook(docId: string): Promise<string> {
+// Intro als eigene Datei neben den Einheiten
+export function learnIntroPath(docId: string): string {
+  return resolve(DATA_DIR, "audio", docId, "learn", "intro.mp3");
+}
+
+// Alle Einheiten mit Audio zu einem M4B mit Kapiteln (Intro vorneweg, wenn da); Kopie in den Hörbücher-Ordner,
+// neben dem normalen Hörbuch. Titel und Autor mit Zusatz, damit es vom Original unterscheidbar ist
+export async function buildLearnBook(docId: string, intro?: { path: string; durationMs: number } | null): Promise<string> {
   const units = listUnits(docId);
   if (!units.length || units.some((u) => !u.audio_path || !existsSync(u.audio_path))) throw new Error("Nicht alle Einheiten haben schon Audio");
   const doc = db()
     .prepare("SELECT d.title, d.doc_title, d.author, d.short_code, m.name AS module_name FROM documents d LEFT JOIN modules m ON m.id = d.module_id WHERE d.id = ?")
     .get(docId) as { title: string; doc_title: string | null; author: string | null; short_code: string | null; module_name: string | null };
+  const { kind } = learnSettings(docId);
   const out = learnBookPath(docId);
+  const withIntro = intro && existsSync(intro.path) ? intro : null;
   await buildM4B({
-    inputs: units.map((u) => u.audio_path!),
-    chapters: units.map((u) => ({ title: u.title ?? `Einheit ${u.idx + 1}`, durationMs: u.duration_ms ?? 0 })),
+    inputs: [...(withIntro ? [withIntro.path] : []), ...units.map((u) => u.audio_path!)],
+    chapters: [
+      ...(withIntro ? [{ title: "Einleitung", durationMs: withIntro.durationMs }] : []),
+      ...units.map((u) => ({ title: u.title ?? `Einheit ${u.idx + 1}`, durationMs: u.duration_ms ?? 0 })),
+    ],
     output: out,
-    title: `${doc.doc_title || doc.title} – Lernhörbuch`,
-    artist: doc.author ?? undefined,
+    title: learnTitle(doc.doc_title || doc.title, kind),
+    artist: learnAuthor(doc.author),
     shortCode: doc.short_code ?? undefined,
     series: doc.module_name ?? undefined,
     coverPath: coverPathFor(docId),
   });
   mkdirSync(AUDIOBOOK_EXPORT_DIR, { recursive: true });
-  const dest = join(AUDIOBOOK_EXPORT_DIR, bookFileName(docId).replace(/\.m4b$/i, " - Lernhoerbuch.m4b"));
+  const dest = join(AUDIOBOOK_EXPORT_DIR, bookFileName(docId).replace(/\.m4b$/i, `${learnFileSuffix(kind)}.m4b`));
   copyFileSync(out, dest);
   return dest;
 }

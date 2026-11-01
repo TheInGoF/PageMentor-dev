@@ -6,6 +6,7 @@ import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { Menu } from "../ui/Menu";
+import { useToast } from "../ui/Toast";
 import { Notice, SettingRow } from "../settings/parts";
 
 interface Unit {
@@ -22,13 +23,15 @@ interface Unit {
 }
 interface RunState {
   running: boolean;
-  phase: "wait" | "script" | "audio" | "book" | "done" | "failed" | "canceled";
+  phase: "wait" | "script" | "audio" | "book" | "abs" | "done" | "failed" | "canceled";
   done: number;
   total: number;
   current?: string;
   error?: string;
   probe: boolean;
   bookPath?: string;
+  absUrl?: string;
+  absError?: string;
   waiting?: boolean;
   step?: "write" | "check" | "revise" | "speak";
   unitStartedAt?: number;
@@ -41,6 +44,8 @@ interface Info {
   model: string | null;
   units: Unit[];
   state: RunState | null;
+  hasBook?: boolean;
+  abs?: boolean;
 }
 
 const LANGS = ["es", "en", "fr", "it", "pt"];
@@ -50,6 +55,8 @@ export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: str
   const [info, setInfo] = useState<Info | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
+  const toast = useToast();
+  const [absBusy, setAbsBusy] = useState(false);
   const base = `/api/learnbook/${docId}`;
 
   const load = () => request<Info>(base).then(setInfo).catch(() => undefined);
@@ -152,6 +159,29 @@ export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: str
       )}
       {st?.phase === "failed" && <Notice kind="error">{st.error}</Notice>}
       {st?.phase === "done" && st.bookPath && <Notice>{t("learn.saved", { path: st.bookPath })}</Notice>}
+      {st?.phase === "done" && st.absUrl && <Notice>{t("learn.absDone")}</Notice>}
+      {st?.phase === "done" && st.absError && <Notice kind="warn">{t("learn.absFailed", { error: st.absError })}</Notice>}
+      {!other && info.hasBook && info.abs && !running && (
+        <div>
+          <Button
+            variant="outline"
+            disabled={absBusy}
+            onClick={async () => {
+              setAbsBusy(true);
+              try {
+                await request(`${base}/abs`, { method: "POST" });
+                toast.show(t("learn.absDone"), "success");
+              } catch (err) {
+                toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+              } finally {
+                setAbsBusy(false);
+              }
+            }}
+          >
+            {absBusy ? t("learn.absUploading") : t("learn.absUpload")}
+          </Button>
+        </div>
+      )}
 
       {!other && info.units.length > 0 && (
         <ul className="flex flex-col divide-y divide-border">
