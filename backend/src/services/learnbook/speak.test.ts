@@ -29,6 +29,19 @@ describe("Lernhörbuch-Skript sprechen", () => {
     expect(parts.filter((p) => p.kind === "pause").map((p) => p.ms)).toEqual([2000, 6000, 2000, 4000, 1000, 8000]);
   });
 
+  test("[langsam] gilt für die Stücke darin, auch über eine Pause hinweg und bei falscher Verschachtelung", () => {
+    const parts = parseScript("Hör zu.\n[langsam][es]Uno.[/es]\n[PAUSE 2]\n[es]Dos.[/es][/langsam]\n[es][langsam]Tres.[/langsam][/es] Normal: [es]Cuatro.[/es]");
+    expect(parts).toEqual([
+      { kind: "speech", lang: null, text: "Hör zu." },
+      { kind: "speech", lang: "es", text: "Uno.", slow: true },
+      { kind: "pause", ms: 2000 },
+      { kind: "speech", lang: "es", text: "Dos.", slow: true },
+      { kind: "speech", lang: "es", text: "Tres.", slow: true },
+      { kind: "speech", lang: null, text: "Normal:" },
+      { kind: "speech", lang: "es", text: "Cuatro." },
+    ]);
+  });
+
   test("leere Stücke zwischen Pausen fallen weg", () => {
     expect(parseScript("[PAUSE 2]\n\n[PAUSE 2]").every((p) => p.kind === "pause")).toBe(true);
   });

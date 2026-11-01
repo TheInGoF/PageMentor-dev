@@ -9,7 +9,7 @@ Aufbau einer Einheit (5 bis 10 Minuten gesprochen):
    d) Erster Abruf: die Situation oder die deutsche Bedeutung, dann [PAUSE 4], dann die Wendung in der Fremdsprache, dann [PAUSE 3].
 3. Abruf in wachsenden Abständen: Jede Wendung kommt nach ein, zwei weiteren Wendungen und am Ende der Einheit noch einmal, gemischt mit den Punkten unter „Bisher gelernt“. Die Abfragen wechseln: eine Situation („Du triffst morgens die Nachbarin. Begrüße sie.“), die deutsche Bedeutung („Wie sagst du: …?“) oder der eigene Name des Hörers („Stell dich mit deinem Namen vor.“, die Wendung dann mit „…“ für den Namen).
 4. Grammatik kurz und hörbar erklärt, mit dem Warum, und zwei, drei Beispielen im Abrufmuster.
-5. Kleine Geschichte oder Dialog in der Fremdsprache, nur mit bekannten Wörtern und nur mit Wendungen, die man in dieser Situation wirklich sagt. Davor ein Satz auf Deutsch, worum es geht. Erst langsam, dann noch einmal normal.
+5. Kleine Geschichte oder Dialog in der Fremdsprache, nur mit bekannten Wörtern und nur mit Wendungen, die man in dieser Situation wirklich sagt. Davor ein Satz auf Deutsch, worum es geht. Erst langsam, in [langsam]…[/langsam] außen um die Sprachmarkierungen, dann noch einmal normal ohne diese Markierung.
 6. Nachsprechen im Schatten: 4 bis 6 kurze Sätze, nach jedem eine Pause so lang wie der Satz ([PAUSE 3] oder [PAUSE 4]).
 7. Abschluss auf Deutsch in einem Satz.
 

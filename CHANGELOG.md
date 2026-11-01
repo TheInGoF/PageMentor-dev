@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.84.0 – 2026-11-01
+### New
+- Sprachlern-Hörbuch: Der Dialog kommt erst wirklich langsam (80 % Tempo, gleiche Tonhöhe), dann normal. Im Skript steht die langsame Fassung in [langsam]…[/langsam].
+
 ## 1.83.0 – 2026-11-01
 ### Fix
 - Sprachausgabe: Ein Fehler im Sprach-Dienst steht mit Grund im Log statt nur als „Internal Server Error“.

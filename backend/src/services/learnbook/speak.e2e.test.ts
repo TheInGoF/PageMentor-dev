@@ -37,6 +37,16 @@ describe("Einheit sprechen", () => {
     expect(r.durationMs).toBeLessThan(8200);
   }, 30000);
 
+  test("langsame Fassung dauert länger, Stimme bleibt die Zweitstimme", async () => {
+    calls.length = 0;
+    const slow = await speakUnit({ docId: DOC, idx: 3, title: "x", album: "Test", script: "[langsam][es]un café[/es][/langsam]", main: de, second: es, rate: "+0%", isCanceled: () => false });
+    const normal = await speakUnit({ docId: DOC, idx: 4, title: "x", album: "Test", script: "[es]un café[/es]", main: de, second: es, rate: "+0%", isCanceled: () => false });
+    // 1 s Ton bei 80 % Tempo sind 1,25 s
+    expect(slow.durationMs - normal.durationMs).toBeGreaterThan(150);
+    expect(slow.durationMs - normal.durationMs).toBeLessThan(400);
+    expect(calls.map((c) => c.voice)).toEqual(["f5:es", "f5:es"]);
+  }, 30000);
+
   test("deutsche Zahlwort-Fehler werden vor dem Sprechen repariert", async () => {
     calls.length = 0;
     await speakUnit({ docId: DOC, idx: 2, title: "Zip", album: "Test", script: "Es blieben achtzigvier Prozent übrig.", main: de, second: null, rate: "+0%", isCanceled: () => false });

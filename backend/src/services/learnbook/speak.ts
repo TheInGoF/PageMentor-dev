@@ -1,8 +1,8 @@
 // Lernhörbuch, Schritt Sprache: Skript in Sprechstücke und Pausen zerlegen, Deutsch und Fremdsprache mit
-// eigener Stimme, echte Stille für [PAUSE n], je Einheit eine MP3, am Ende ein M4B mit Kapiteln
+// eigener Stimme, echte Stille für [PAUSE n], [langsam]…[/langsam] gebremst, je Einheit eine MP3, am Ende ein M4B
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { db } from "../../db";
 import { AUDIOBOOK_EXPORT_DIR, DATA_DIR } from "../../paths";
 import { segmentText } from "../../tts/segment";
@@ -18,27 +18,36 @@ import { bookFileName } from "../audiobook/export";
 import { learnSettings, listUnits } from "./store";
 import { learnAuthor, learnFileSuffix, learnTitle } from "./meta";
 
-export type ScriptPart = { kind: "speech"; lang: string | null; text: string } | { kind: "pause"; ms: number };
+export type ScriptPart = { kind: "speech"; lang: string | null; text: string; slow?: boolean } | { kind: "pause"; ms: number };
+
+// Langsame Fassung: Tempo der Stücke in [langsam]…[/langsam], die Tonhöhe bleibt
+export const SLOW_TEMPO = 0.8;
 
 // Pausen zwischen Sprechstücken: kurz innerhalb einer Sprache, etwas länger beim Wechsel
 const GAP_MS = 250;
 const SWITCH_MS = 450;
 
-// "[PAUSE 4]" wird zu vier Sekunden Stille (0,5 bis 10 s), [es]…[/es] zur zweiten Stimme
+// "[PAUSE 4]" wird zu vier Sekunden Stille (0,5 bis 10 s), [es]…[/es] zur zweiten Stimme, [langsam]…[/langsam]
+// (auch über Pausen hinweg) zu gebremsten Stücken
 export function parseScript(script: string): ScriptPart[] {
   const parts: ScriptPart[] = [];
-  const re = /\[PAUSE\s+(\d+(?:[.,]\d+)?)\s*s?\]/gi;
+  // Das Modell setzt [langsam] manchmal innerhalb der Sprachmarkierung: nach außen ziehen
+  const text = script.replace(/\[([a-z]{2})\]\s*\[langsam\]/gi, "[langsam][$1]").replace(/\[\/langsam\]\s*\[\/([a-z]{2})\]/gi, "[/$1][/langsam]");
+  const re = /\[PAUSE\s+(\d+(?:[.,]\d+)?)\s*s?\]|\[(\/?)langsam\]/gi;
   let last = 0;
-  const speech = (text: string) => {
-    for (const r of splitLanguageRuns(text)) parts.push({ kind: "speech", lang: r.lang, text: r.text.trim() });
+  let slow = false;
+  const speech = (t: string) => {
+    for (const r of splitLanguageRuns(t)) parts.push({ kind: "speech", lang: r.lang, text: r.text.trim(), ...(slow ? { slow: true } : {}) });
   };
-  for (let m = re.exec(script); m; m = re.exec(script)) {
-    speech(script.slice(last, m.index));
-    const sec = Math.min(10, Math.max(0.5, parseFloat(m[1].replace(",", "."))));
-    parts.push({ kind: "pause", ms: Math.round(sec * 1000) });
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    speech(text.slice(last, m.index));
+    if (m[1] !== undefined) {
+      const sec = Math.min(10, Math.max(0.5, parseFloat(m[1].replace(",", "."))));
+      parts.push({ kind: "pause", ms: Math.round(sec * 1000) });
+    } else slow = m[2] !== "/";
     last = m.index + m[0].length;
   }
-  speech(script.slice(last));
+  speech(text.slice(last));
   return thinkTime(parts);
 }
 
@@ -61,6 +70,15 @@ export function audioStamp(script: string, voices: Voice[], rate: string): strin
 }
 
 const hash = (s: string) => createHash("sha1").update(s).digest("hex").slice(0, 12);
+
+// Langsame Fassung eines Stücks: Tempo auf 80 %, Tonhöhe bleibt (atempo); liegt neben dem Original
+async function slowed(file: string): Promise<string> {
+  const out = join(resolve(file, ".."), `${basename(file, ".mp3")}-slow.mp3`);
+  if (!existsSync(out) || statSync(out).size === 0) {
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", file, "-filter:a", `atempo=${SLOW_TEMPO}`, "-c:a", "libmp3lame", "-b:a", "96k", out]);
+  }
+  return out;
+}
 
 // Stille mit der Abtastrate der Stimme: die Stücke werden ohne Neukodierung aneinandergehängt
 async function silence(dir: string, ms: number, sr: number): Promise<string> {
@@ -113,7 +131,7 @@ export async function speakUnit(p: {
       if (!existsSync(out) || statSync(out).size === 0) {
         await synthesizeChunk({ segment: { paragraphs: [text] }, text, voice, locale: voice.locale, rate: p.rate, outPath: out });
       }
-      plan.push({ file: out });
+      plan.push({ file: part.slow ? await slowed(out) : out });
     }
     prevLang = part.lang;
     p.onProgress?.(++spoken, speech);
