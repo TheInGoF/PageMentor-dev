@@ -32,6 +32,10 @@ describe("Begriffe", () => {
     expect(m).toHaveLength(1);
     expect(m[0]).toMatchObject({ explains: true, definition: "Mittlerer Informationsgehalt einer Quelle", needs: ["Wahrscheinlichkeit", "Informationsgehalt"] });
     expect(parseConcepts("kaputt")).toEqual([]);
+    // Mehr als acht Begriffe oder mehr als drei Voraussetzungen werden abgeschnitten
+    const many = parseConcepts(JSON.stringify({ begriffe: Array.from({ length: 12 }, (_, i) => ({ name: `Begriff ${i}`, erklaerung: "", erklaert: true, baut_auf: ["Eins", "Zwei", "Drei", "Vier"] })) }));
+    expect(many).toHaveLength(8);
+    expect(many[0].needs).toEqual(["Eins", "Zwei", "Drei"]);
   });
 });
 

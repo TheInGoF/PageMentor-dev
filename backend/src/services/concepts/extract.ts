@@ -15,10 +15,13 @@ import { anyProcessing } from "../pipeline";
 import { anyGenerating } from "../audiobook";
 import { normalizeConcept, saveChapterConcepts, type ExtractedConcept } from "./store";
 
-const VERSION = 1;
+const VERSION = 2;
 // Längere Kapitel in Stücken; mehr als sechs Stücke bringen kaum neue Begriffe
 const PIECE_CHARS = 8000;
 const MAX_PIECES = 6;
+// Je Stück höchstens so viele Begriffe und je Begriff so viele Voraussetzungen, wie der Prompt verlangt
+const MAX_PER_PIECE = 8;
+const MAX_NEEDS = 3;
 
 const SCHEMA = {
   type: "object",
@@ -53,11 +56,12 @@ export function parseConcepts(raw: string): ExtractedConcept[] {
     };
     return (data.begriffe ?? [])
       .filter((b) => typeof b.name === "string" && b.name.trim().length >= 3 && b.name.length <= 60)
+      .slice(0, MAX_PER_PIECE)
       .map((b) => ({
         name: b.name!.trim(),
         definition: (b.erklaerung ?? "").trim().slice(0, 400),
         explains: !!b.erklaert,
-        needs: (b.baut_auf ?? []).filter((n) => typeof n === "string" && n.trim().length >= 3).map((n) => n.trim()).slice(0, 4),
+        needs: (b.baut_auf ?? []).filter((n) => typeof n === "string" && n.trim().length >= 3).map((n) => n.trim()).slice(0, MAX_NEEDS),
       }));
   } catch {
     return [];
