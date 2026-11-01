@@ -1,6 +1,15 @@
 // Kräfte-Layout fürs Begriffsnetz: ohne Ränder rechnen, am Ende ins Bild einpassen (sonst kleben Punkte an der Kante).
-// Deterministisch: Startpunkte auf einer Spirale, gleiche Daten ergeben dasselbe Bild
-export function brainLayout(ids: string[], edges: Array<{ a: string; b: string }>, W: number, H: number, margin = 60): Map<string, { x: number; y: number }> {
+// Deterministisch: Startpunkte auf einer Spirale, gleiche Daten ergeben dasselbe Bild.
+// Mit Gruppen (Heimat-Heft je Begriff) zieht jeden Punkt sein Gruppenanker statt der Mitte: Hefte werden zu Wolken,
+// Brückenbegriffe liegen dazwischen, weil ihre Verbindungen in beide Wolken ziehen
+export function brainLayout(
+  ids: string[],
+  edges: Array<{ a: string; b: string }>,
+  W: number,
+  H: number,
+  margin = 60,
+  groups?: { of: Map<string, string>; order: string[] }
+): Map<string, { x: number; y: number }> {
   const n = Math.max(1, ids.length);
   const pos = ids.map((_, i) => {
     const a = i * 2.39996;
@@ -9,6 +18,9 @@ export function brainLayout(ids: string[], edges: Array<{ a: string; b: string }
   });
   const idx = new Map(ids.map((id, i) => [id, i]));
   const links = edges.map((e) => [idx.get(e.a), idx.get(e.b)] as const).filter((l): l is readonly [number, number] => l[0] !== undefined && l[1] !== undefined && l[0] !== l[1]);
+  // Anker der Gruppen auf einem Kreis, in der gegebenen Reihenfolge (gleiche Module nebeneinander)
+  const anchors = groupAnchors(n, groups?.order ?? []);
+  const anchorOf = ids.map((id) => anchors.get(groups?.of.get(id) ?? "") ?? { x: 0, y: 0 });
   const k = 30;
   // Große Netze: weniger Schritte, sonst steht die Seite
   const steps = n > 600 ? 100 : n > 200 ? 200 : 300;
@@ -31,9 +43,9 @@ export function brainLayout(ids: string[], edges: Array<{ a: string; b: string }
       dx[b] += x * f; dy[b] += y * f;
     }
     for (let i = 0; i < n; i++) {
-      // Schwerkraft zur Mitte: einzelne Begriffe und getrennte Gruppen bleiben nah
-      dx[i] -= pos[i].x * 0.6;
-      dy[i] -= pos[i].y * 0.6;
+      // Schwerkraft zum Anker (ohne Gruppen die Mitte): einzelne Begriffe und getrennte Gruppen bleiben nah
+      dx[i] -= (pos[i].x - anchorOf[i].x) * 0.6;
+      dy[i] -= (pos[i].y - anchorOf[i].y) * 0.6;
       const l = Math.max(1e-6, Math.hypot(dx[i], dy[i]));
       const m = Math.min(l, temp);
       pos[i].x += (dx[i] / l) * m;
@@ -45,4 +57,16 @@ export function brainLayout(ids: string[], edges: Array<{ a: string; b: string }
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
   const sx = (W - 2 * margin) / Math.max(1, maxX - minX), sy = (H - 2 * margin) / Math.max(1, maxY - minY);
   return new Map(ids.map((id, i) => [id, { x: margin + (pos[i].x - minX) * sx, y: margin + (pos[i].y - minY) * sy }]));
+}
+
+// Gruppenanker: ab zwei Gruppen auf einem Kreis, dessen Radius mit der Netzgröße wächst
+export function groupAnchors(n: number, order: string[]): Map<string, { x: number; y: number }> {
+  const out = new Map<string, { x: number; y: number }>();
+  if (order.length < 2) return out;
+  const r = 12 * Math.sqrt(n) + 40;
+  order.forEach((g, i) => {
+    const a = (i / order.length) * 2 * Math.PI - Math.PI / 2;
+    out.set(g, { x: Math.cos(a) * r, y: Math.sin(a) * r });
+  });
+  return out;
 }

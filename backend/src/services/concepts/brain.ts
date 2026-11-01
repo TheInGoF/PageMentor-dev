@@ -1,14 +1,18 @@
-// Gehirn-Ansicht: das globale Begriffsnetz als Graph. Begriffe sind Punkte (Größe = wie oft sie vorkommen,
-// Farbe = Modul mit den meisten Fundstellen), Linien sind „baut auf“-Verbindungen aus den Kapiteln
+// Gehirn-Ansicht: das globale Begriffsnetz als Graph. Begriffe sind Punkte (Größe = wie oft sie vorkommen),
+// Linien sind „baut auf“-Verbindungen aus den Kapiteln. Jeder Begriff hat ein Heimat-Heft (meiste Fundstellen),
+// danach gruppiert die Ansicht und beschriftet herausgezoomt mit Heft und Modul als Thema
 import { db } from "../../db";
 import { linkKey, linkStatus } from "./links";
+import { normalizeConcept } from "./store";
 
 export interface BrainNode {
   id: string;
   name: string;
   mentions: number;
-  // Modul mit den meisten Fundstellen, für die Farbe
+  // Modul mit den meisten Fundstellen
   moduleId: string | null;
+  // Heft mit den meisten Fundstellen, bei Gleichstand das, das den Begriff erklärt
+  docId: string | null;
   // Anzahl Module, in denen der Begriff vorkommt (Brückenbegriffe > 1)
   modules: number;
   explained: boolean;
@@ -24,32 +28,40 @@ export interface BrainGraph {
   nodes: BrainNode[];
   edges: BrainEdge[];
   modules: Array<{ id: string; name: string; icon: string | null }>;
+  // Hefte mit Begriffen, nach Modul und Titel geordnet: Nachbarn im Bild
+  docs: Array<{ id: string; title: string; moduleId: string | null }>;
   total: { concepts: number; links: number };
 }
 
 const MAX_LIMIT = 5000;
 
-// Knoten zu den Begriff-IDs (Fundstellen optional auf ein Modul beschränkt)
+// Knoten zu den Begriff-IDs: Fundstellen je Heft, daraus Heimat-Heft und Modul mit den meisten Fundstellen
 function nodesFor(ids: string[]): BrainNode[] {
   if (!ids.length) return [];
   const rows = db()
     .prepare(
-      `SELECT k.id, k.name, d.module_id, COUNT(*) AS n, MAX(m.role = 'explains') AS ex
+      `SELECT k.id, k.name, d.id AS doc_id, d.module_id, COUNT(*) AS n, MAX(m.role = 'explains') AS ex
          FROM concepts k JOIN concept_mentions m ON m.concept_id = k.id JOIN documents d ON d.id = m.document_id
         WHERE k.id IN (${ids.map(() => "?").join(",")})
-        GROUP BY k.id, d.module_id`
+        GROUP BY k.id, d.id`
     )
-    .all(...ids) as Array<{ id: string; name: string; module_id: string | null; n: number; ex: number }>;
-  const byId = new Map<string, BrainNode & { best: number }>();
+    .all(...ids) as Array<{ id: string; name: string; doc_id: string; module_id: string | null; n: number; ex: number }>;
+  const byId = new Map<string, BrainNode & { best: number; perModule: Map<string | null, number> }>();
   for (const r of rows) {
-    const cur = byId.get(r.id) ?? { id: r.id, name: r.name, mentions: 0, moduleId: null, modules: 0, explained: false, best: -1 };
+    const cur = byId.get(r.id) ?? { id: r.id, name: r.name, mentions: 0, moduleId: null, docId: null, modules: 0, explained: false, best: -1, perModule: new Map() };
     cur.mentions += r.n;
-    cur.modules += 1;
     cur.explained ||= !!r.ex;
-    if (r.n > cur.best) Object.assign(cur, { best: r.n, moduleId: r.module_id });
+    cur.perModule.set(r.module_id, (cur.perModule.get(r.module_id) ?? 0) + r.n);
+    // Erklärt zählt wie eine halbe Fundstelle mehr: bei Gleichstand gewinnt das Heft, das den Begriff erklärt
+    const score = r.n + (r.ex ? 0.5 : 0);
+    if (score > cur.best) Object.assign(cur, { best: score, docId: r.doc_id });
     byId.set(r.id, cur);
   }
-  return [...byId.values()].map(({ best: _b, ...n }) => n);
+  return [...byId.values()].map(({ best: _b, perModule, ...n }) => ({
+    ...n,
+    modules: perModule.size,
+    moduleId: [...perModule.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+  }));
 }
 
 // Verbindungen zwischen den gezeigten Begriffen; Gewicht = in wie vielen Kapiteln sie verknüpft sind
@@ -78,11 +90,33 @@ export function brainGraph(opts: { moduleId?: string; limit?: number } = {}): Br
   const modules = d
     .prepare("SELECT id, name, icon FROM modules WHERE id IN (SELECT DISTINCT d.module_id FROM concept_mentions m JOIN documents d ON d.id = m.document_id) ORDER BY name COLLATE NOCASE")
     .all() as BrainGraph["modules"];
+  const docs = d
+    .prepare(
+      `SELECT d.id, COALESCE(NULLIF(TRIM(d.doc_title), ''), d.title) AS title, d.module_id AS moduleId FROM documents d LEFT JOIN modules mo ON mo.id = d.module_id
+        WHERE d.id IN (SELECT DISTINCT document_id FROM concept_mentions) ORDER BY mo.name COLLATE NOCASE, title COLLATE NOCASE`
+    )
+    .all() as BrainGraph["docs"];
   const total = {
     concepts: (d.prepare("SELECT COUNT(*) AS n FROM concepts").get() as { n: number }).n,
     links: (d.prepare("SELECT COUNT(*) AS n FROM (SELECT DISTINCT concept_id, needs_id FROM concept_links)").get() as { n: number }).n,
   };
-  return { nodes: nodesFor(ids), edges: edgesFor(new Set(ids)), modules, total };
+  return { nodes: nodesFor(ids), edges: edgesFor(new Set(ids)), modules, docs, total };
+}
+
+// Schlagwortsuche: Name, Schreibweise oder Erklärung enthält das Wort
+export function searchConcepts(q: string, limit = 300): string[] {
+  const word = q.trim();
+  if (word.length < 2) return [];
+  const like = `%${word.toLowerCase()}%`;
+  const norm = `%${normalizeConcept(word)}%`;
+  return (
+    db()
+      .prepare(
+        `SELECT DISTINCT k.id FROM concepts k LEFT JOIN concept_mentions m ON m.concept_id = k.id
+          WHERE lower(k.name) LIKE ? OR k.norm LIKE ? OR lower(k.definition) LIKE ? OR lower(m.definition) LIKE ? LIMIT ?`
+      )
+      .all(like, norm, like, like, limit) as Array<{ id: string }>
+  ).map((r) => r.id);
 }
 
 // Zusätzliche Knoten und Kanten für Begriffe, die eine Aktivierung erreicht hat, aber nicht im Bild sind

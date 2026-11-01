@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters } from "../services/concepts/extract";
-import { brainExtend, brainGraph, conceptDetail } from "../services/concepts/brain";
+import { brainExtend, brainGraph, conceptDetail, searchConcepts } from "../services/concepts/brain";
 import { activate } from "../services/concepts/activate";
 import { brainExport } from "../services/concepts/export";
 import { embedText, resolveEmbedder } from "../services/embeddings";
@@ -69,6 +69,9 @@ conceptRoutes.get("/brain", (c) => {
 });
 
 // Export zur Prüfung durch ein großes Modell (Markdown zum Herunterladen)
+// Schlagwortsuche fürs Gehirn: Treffer-IDs
+conceptRoutes.get("/brain/search", (c) => c.json({ hits: searchConcepts(c.req.query("q") ?? "") }));
+
 conceptRoutes.get("/brain/export", (c) => {
   const excerpt = c.req.query("excerpt");
   const r = brainExport({ moduleId: c.req.query("moduleId") || undefined, excerpt: excerpt === undefined ? undefined : Number(excerpt) || 0 });

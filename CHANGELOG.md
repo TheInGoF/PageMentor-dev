@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.90.0 – 2026-11-01
+### New
+- Gehirn: Schlagwortsuche. Beim Tippen werden Treffer grün, ihre Nachbarn hellgrün, die Treffer stehen rechts zum Anklicken.
+### Change
+- Gehirn: Begriffe hängen an ihrem Heimat-Heft. Herausgezoomt stehen Module und Hefte als Themen über den Wolken, hineingezoomt die Begriffe.
+- Gehirn: Keine Modulfarben mehr, alle Punkte grau; Pfeile zur Grundlage sind immer sichtbar, ungesicherte Verbindungen gestrichelt.
+
 ## 1.89.0 – 2026-11-01
 ### Change
 - Tutor: Grundlagen-Begriffe und ihre Kapitel kommen nur noch über gesicherte Verbindungen des Begriffsnetzes in die Antwort.

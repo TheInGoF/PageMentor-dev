@@ -30,7 +30,20 @@ describe("Gehirn", () => {
     // Grundlagen zählen nicht als Fundstelle: Wahrscheinlichkeit steht nur in Mathe
     expect(byName.get("Wahrscheinlichkeit")).toMatchObject({ modules: 1, moduleId: "m2" });
     expect(g.edges.length).toBe(2);
+    expect(g.edges.every((e) => e.sure)).toBe(true);
     expect(g.modules.map((m) => m.name)).toEqual(["Informatik", "Mathe"]);
+    // Heimat-Heft: Entropie kommt zweimal in Info vor, Wahrscheinlichkeit nur in Stochastik
+    expect(byName.get("Entropie")!.docId).toBe("d1");
+    expect(byName.get("Wahrscheinlichkeit")!.docId).toBe("d2");
+    expect(g.docs.map((d) => d.title)).toEqual(["Info", "Stochastik"]);
+  });
+
+  test("Schlagwortsuche über Name, Schreibweise und Erklärung", async () => {
+    const { searchConcepts, brainGraph } = await import("./brain");
+    const byName = new Map(brainGraph().nodes.map((n) => [n.name, n.id]));
+    expect(searchConcepts("entropien")).toEqual([byName.get("Entropie")!]);
+    expect(searchConcepts("info")).toEqual([byName.get("Entropie")!]);
+    expect(searchConcepts("x")).toEqual([]);
   });
 
   test("ein Modul und Grenze", async () => {
