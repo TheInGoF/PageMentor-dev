@@ -11,7 +11,8 @@ beforeAll(async () => {
   dbm.useDatabaseFile(join(mkdtempSync(join(tmpdir(), "pm-brain-")), "t.db"));
   dbm.initDb();
   const d = dbm.db();
-  d.prepare("INSERT INTO modules (id, name) VALUES ('m1', 'Informatik'), ('m2', 'Mathe')").run();
+  // m3 hat keine Begriffe und taucht in der Modulliste des Gehirns nicht auf
+  d.prepare("INSERT INTO modules (id, name) VALUES ('m1', 'Informatik'), ('m2', 'Mathe'), ('m3', 'Leer')").run();
   d.prepare("INSERT INTO documents (id, title, filename, stored_path, module_id) VALUES ('d1', 'Info', 'a.pdf', '', 'm1'), ('d2', 'Stochastik', 'b.pdf', '', 'm2')").run();
   d.prepare("INSERT INTO chapters (id, document_id, number, title, kind, text) VALUES ('c1', 'd1', 1, 'Kanäle', 'content', 'x'), ('c2', 'd1', 2, 'Codes', 'content', 'x'), ('c3', 'd2', 1, 'Wahrscheinlichkeit', 'content', 'y')").run();
   const { saveChapterConcepts } = await import("./store");
@@ -36,6 +37,7 @@ describe("Gehirn", () => {
     const { brainGraph } = await import("./brain");
     expect(brainGraph({ moduleId: "m2" }).nodes.map((n) => n.name)).toEqual(["Wahrscheinlichkeit"]);
     expect(brainGraph({ limit: 10 }).nodes.length).toBe(3);
+    expect(brainGraph({ limit: 0 }).nodes.length).toBe(3);
   });
 
   test("Nachladen und Einzelansicht", async () => {

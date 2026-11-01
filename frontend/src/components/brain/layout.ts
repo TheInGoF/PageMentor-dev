@@ -10,7 +10,8 @@ export function brainLayout(ids: string[], edges: Array<{ a: string; b: string }
   const idx = new Map(ids.map((id, i) => [id, i]));
   const links = edges.map((e) => [idx.get(e.a), idx.get(e.b)] as const).filter((l): l is readonly [number, number] => l[0] !== undefined && l[1] !== undefined && l[0] !== l[1]);
   const k = 30;
-  const steps = n > 200 ? 200 : 300;
+  // Große Netze: weniger Schritte, sonst steht die Seite
+  const steps = n > 600 ? 100 : n > 200 ? 200 : 300;
   for (let s = 0; s < steps; s++) {
     const temp = 12 * (1 - s / steps) + 0.5;
     const dx = new Float64Array(n), dy = new Float64Array(n);

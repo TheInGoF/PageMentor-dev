@@ -24,7 +24,7 @@ export interface BrainGraph {
   total: { concepts: number; links: number };
 }
 
-const MAX_LIMIT = 400;
+const MAX_LIMIT = 5000;
 
 // Knoten zu den Begriff-IDs (Fundstellen optional auf ein Modul beschränkt)
 function nodesFor(ids: string[]): BrainNode[] {
@@ -58,7 +58,8 @@ function edgesFor(ids: Set<string>): BrainEdge[] {
 // Die wichtigsten Begriffe: viele Fundstellen und viele Verbindungen; optional nur ein Modul
 export function brainGraph(opts: { moduleId?: string; limit?: number } = {}): BrainGraph {
   const d = db();
-  const limit = Math.min(MAX_LIMIT, Math.max(10, opts.limit ?? 150));
+  // 0 = alle Begriffe (bis zur Obergrenze)
+  const limit = opts.limit === 0 ? MAX_LIMIT : Math.min(MAX_LIMIT, Math.max(10, opts.limit ?? 150));
   const filter = opts.moduleId ? "WHERE d.module_id = ?" : "";
   const ranked = d
     .prepare(
@@ -69,7 +70,10 @@ export function brainGraph(opts: { moduleId?: string; limit?: number } = {}): Br
     )
     .all(...(opts.moduleId ? [opts.moduleId, limit] : [limit])) as Array<{ id: string }>;
   const ids = ranked.map((r) => r.id);
-  const modules = d.prepare("SELECT id, name, icon FROM modules ORDER BY name COLLATE NOCASE").all() as BrainGraph["modules"];
+  // Nur Module mit Begriffen: Die Farbe hängt an der Position in dieser Liste und bleibt so stabil
+  const modules = d
+    .prepare("SELECT id, name, icon FROM modules WHERE id IN (SELECT DISTINCT d.module_id FROM concept_mentions m JOIN documents d ON d.id = m.document_id) ORDER BY name COLLATE NOCASE")
+    .all() as BrainGraph["modules"];
   const total = {
     concepts: (d.prepare("SELECT COUNT(*) AS n FROM concepts").get() as { n: number }).n,
     links: (d.prepare("SELECT COUNT(*) AS n FROM (SELECT DISTINCT concept_id, needs_id FROM concept_links)").get() as { n: number }).n,

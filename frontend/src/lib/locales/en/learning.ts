@@ -10,6 +10,7 @@ export const learning: Record<string, string> = {
   "brain.zoomOut": "Zoom out",
   "brain.zoomReset": "Whole network",
   "brain.scope": "Scope",
+  "brain.sizeAll": "All",
   "brain.size": "{n} concepts",
   "brain.askPlaceholder": "Ask a question and watch what lights up …",
   "brain.activate": "Activate",

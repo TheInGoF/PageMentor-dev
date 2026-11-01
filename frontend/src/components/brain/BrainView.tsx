@@ -24,7 +24,8 @@ interface Detail {
 
 const W = 1000;
 const H = 640;
-const SIZES = [80, 150, 300];
+// 0 = alle Begriffe
+const SIZES = [80, 150, 300, 0];
 const LABELS = 30;
 const MAX_ZOOM = 12;
 type View = { x: number; y: number; w: number; h: number };
@@ -99,7 +100,7 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
 
   useEffect(() => {
     setActive(null);
-    void request<Graph>(`/api/concepts/brain?limit=${limit}${moduleId ? `&moduleId=${moduleId}` : ""}`).then(setGraph).catch(() => undefined);
+    void request<Graph>(`/api/concepts/brain?limit=${limit || "all"}${moduleId ? `&moduleId=${moduleId}` : ""}`).then(setGraph).catch(() => undefined);
   }, [moduleId, limit]);
   useEffect(() => {
     if (!selected) return setDetail(null);
@@ -171,7 +172,7 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
             <div className="flex gap-1">
               {SIZES.map((s) => (
                 <button key={s} type="button" className={cn("chip", limit === s && "chip-active")} onClick={() => setLimit(s)}>
-                  {t("brain.size", { n: s })}
+                  {s ? t("brain.size", { n: s }) : t("brain.sizeAll")}
                 </button>
               ))}
             </div>

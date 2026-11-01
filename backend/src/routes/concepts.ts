@@ -63,7 +63,8 @@ conceptRoutes.get("/module/:id", (c) => {
 
 // Gehirn: das ganze Begriffsnetz (oder ein Modul) als Graph
 conceptRoutes.get("/brain", (c) => {
-  const limit = Number(c.req.query("limit")) || undefined;
+  const q = c.req.query("limit");
+  const limit = q === "all" ? 0 : Number(q) || undefined;
   return c.json(brainGraph({ moduleId: c.req.query("moduleId") || undefined, limit }));
 });
 

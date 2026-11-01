@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.86.0 – 2026-11-01
+### New
+- Gehirn: Knopf „Alle“ zeigt das ganze Begriffsnetz statt höchstens 300 Begriffe.
+### Fix
+- Gehirn: Modulfarben zählen nur Module mit Begriffen. Vorher bekam ein Modul die Farbe seiner Position in der Liste aller Module, auch leerer.
+
 ## 1.85.0 – 2026-11-01
 ### New
 - Lernhörbuch: Jede Einheit nennt am Anfang zwei, drei Lernziele („Nach dieser Einheit können Sie …“), die Zusammenfassung geht sie durch.
