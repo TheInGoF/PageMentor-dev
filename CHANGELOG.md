@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.85.0 – 2026-11-01
+### New
+- Lernhörbuch: Jede Einheit nennt am Anfang zwei, drei Lernziele („Nach dieser Einheit können Sie …“), die Zusammenfassung geht sie durch.
+
 ## 1.84.0 – 2026-11-01
 ### New
 - Sprachlern-Hörbuch: Der Dialog kommt erst wirklich langsam (80 % Tempo, gleiche Tonhöhe), dann normal. Im Skript steht die langsame Fassung in [langsam]…[/langsam].
