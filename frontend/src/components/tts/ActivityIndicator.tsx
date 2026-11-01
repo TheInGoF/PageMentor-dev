@@ -1,10 +1,14 @@
 // Warteschlange im Kopf: was gerade läuft (Lernhörbuch, Umwandlung, Hörbuch, Stimm-Engine lädt …) und was wartet.
-// Die Pille nennt das Laufende und wie viel wartet; Klick klappt die ganze Liste auf. Stapel und Wissenspflege
-// haben eigene Pillen mit Steuerung, sie stehen nur in der Liste
+// Die Pille nennt das Laufende und wie viel wartet; Klick klappt die ganze Liste auf. Einträge der Hauptwarteschlange
+// lassen sich mit ↑ ↓ verschieben und über ⋯ entfernen (auch laufende, dann wird abgebrochen). Stapel und
+// Wissenspflege haben eigene Pillen mit Steuerung, sie stehen nur in der Liste
 import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
+import { move } from "../../lib/move";
+import { Button } from "../ui/Button";
+import { Menu } from "../ui/Menu";
 
 export interface ActivityItem {
   kind: "docling" | "import" | "learnbook" | "audiobook" | "batch" | "maintenance" | "concepts" | "tts" | "proncheck";
@@ -17,6 +21,8 @@ export interface ActivityItem {
   docId?: string;
   sub?: string;
   learnKind?: "subject" | "language";
+  ticket?: string;
+  movable?: boolean;
 }
 
 const ENGINE: Record<string, string> = { f5: "F5", qwen: "Qwen", kokoro: "Kokoro", tada: "TADA" };
@@ -67,6 +73,17 @@ export function ActivityIndicator() {
 
   const own = items.filter((i) => !OWN_PILL.has(i.kind));
   if (!own.length) return null;
+  // Hauptwarteschlange steuern: neue Reihenfolge bzw. Eintrag entfernen, Antwort ist die frische Liste
+  const post = (path: string, body: unknown) =>
+    void request<{ items: ActivityItem[] }>(`/api/activity/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => setItems(r.items))
+      .catch(() => undefined);
+  const order = items.filter((i) => i.ticket).map((i) => i.ticket!);
+  const shift = (ticket: string, dir: -1 | 1) => post("reorder", { ids: move(order, order.indexOf(ticket), dir) });
+  const remove = (a: ActivityItem) => {
+    const what = `${activityLabel(a)}${a.title ? ` · ${a.title}` : ""}`;
+    if (confirm(t(a.status === "running" ? "activity.removeRunningConfirm" : "activity.removeConfirm", { what }))) post("remove", { id: a.ticket });
+  };
   const first = own[0];
   const waiting = items.filter((i) => i.status === "waiting").length;
   const pill = `${activityLabel(first)}${count(first) ? ` · ${count(first)}` : ""}${waiting && first.status === "running" ? ` · ${t("activity.waitingCount", { n: waiting })}` : ""}`;
@@ -89,8 +106,12 @@ export function ActivityIndicator() {
           <div className="text-base font-semibold">{t("activity.title")}</div>
           <p className="text-xs text-neutral-500">{t("activity.hint")}</p>
           <ol className="flex flex-col gap-2">
-            {items.map((a, i) => (
-              <li key={i} className="flex gap-3 items-start">
+            {items.map((a, i) => {
+              const pos = a.ticket ? order.indexOf(a.ticket) : -1;
+              // Nach oben nur hinter dem Eintrag, der die Grafikkarte hält
+              const prev = pos > 0 ? items.find((x) => x.ticket === order[pos - 1]) : undefined;
+              return (
+              <li key={a.ticket ?? i} className="flex gap-3 items-start">
                 <span className={cn("mt-1 inline-block w-2 h-2 rounded-full shrink-0", a.status === "running" ? "bg-accent" : "bg-amber-500")} aria-hidden />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm">
@@ -114,8 +135,24 @@ export function ActivityIndicator() {
                     </div>
                   ) : null}
                 </div>
+                {a.ticket && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {a.movable && (
+                      <>
+                        <Button variant="ghost" className="!px-2 !py-1" onClick={() => shift(a.ticket!, -1)} disabled={pos <= 0 || !prev?.movable} aria-label={t("batch.audio.up")} title={t("batch.audio.up")}>
+                          ↑
+                        </Button>
+                        <Button variant="ghost" className="!px-2 !py-1" onClick={() => shift(a.ticket!, 1)} disabled={pos >= order.length - 1} aria-label={t("batch.audio.down")} title={t("batch.audio.down")}>
+                          ↓
+                        </Button>
+                      </>
+                    )}
+                    <Menu label={t("activity.actions")} items={[{ label: t("activity.remove"), onClick: () => remove(a) }]} />
+                  </div>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ol>
         </div>
       )}

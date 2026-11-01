@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.92.0 – 2026-11-01
+### New
+- Warteschlange: ⋯ entfernt einen Eintrag, auch einen laufenden; der Auftrag wird abgebrochen, Fertiges bleibt.
+- Warteschlange: Umwandlung, Hörbuch und Lernhörbuch stehen in einer echten Reihenfolge, wartende Einträge lassen sich mit ↑ ↓ verschieben. Das Lernhörbuch gibt die Grafikkarte zwischen zwei Einheiten frei, ein vorgezogener Auftrag kommt dazwischen.
+### Fix
+- Umwandlung entlädt ein geladenes Sprachmodell, bevor Docling startet, wie die Wissenspflege. Vorher lag Docling neben Qwen oder Gemma im Grafikspeicher und kam nicht voran.
+
 ## 1.91.0 – 2026-11-01
 ### New
 - Gehirn: Kapitel wählen, dann leuchten seine Begriffe und ihre Grundlagen bis Ebene 3; die Liste steht rechts.

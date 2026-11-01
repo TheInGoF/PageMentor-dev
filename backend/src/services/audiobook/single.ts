@@ -6,7 +6,8 @@ import { DATA_DIR } from "../../paths";
 import { findVoice } from "../../tts/voices";
 import { emit } from "../events";
 import { pickLang, tLang, chapterLabel } from "../../lib/i18n";
-import { running, type Chapter } from "./state";
+import { AudiobookCanceled, running, type Chapter } from "./state";
+import { acquire, enqueueTicket, removeTicket } from "../queue";
 import { chapterFile, deleteAudioForChapter, relPath, upsertAudio } from "./files";
 import { synthesizeChapter } from "./synthChapter";
 import { runJob } from "../../log/jobs";
@@ -74,6 +75,17 @@ async function generateSingleChapterAudioImpl(params: {
       chunkTotal: 0,
       chapterChars: [effectiveText.length],
     });
+  }
+  // Hauptwarteschlange, außer der Buch-Lauf hält sie schon
+  const ticket = alreadyRunning ? null : enqueueTicket("audiobook", row.document_id, { single: true, chapterId: row.id });
+  if (ticket) {
+    try {
+      await acquire(ticket.id, abortController.signal);
+    } catch {
+      running.delete(row.document_id);
+      removeTicket(ticket.id);
+      throw new AudiobookCanceled();
+    }
   }
 
   const chapterForSynth: Chapter = {
@@ -161,6 +173,7 @@ async function generateSingleChapterAudioImpl(params: {
     throw err;
   } finally {
     if (!alreadyRunning) running.delete(row.document_id);
+    if (ticket) removeTicket(ticket.id);
   }
 }
 
@@ -229,6 +242,16 @@ async function generateIntroAudioImpl(params: {
       chapterChars: [params.text.length],
     });
   }
+  const ticket = alreadyRunning ? null : enqueueTicket("audiobook", params.docId, { single: true, intro: true });
+  if (ticket) {
+    try {
+      await acquire(ticket.id, abortController.signal);
+    } catch {
+      running.delete(params.docId);
+      removeTicket(ticket.id);
+      throw new AudiobookCanceled();
+    }
+  }
   params.text = introSpeechText(params.text);
   // Leerer Titel: keine Ansage "Intro." vorweg
   const synth: Chapter = {
@@ -288,6 +311,7 @@ async function generateIntroAudioImpl(params: {
   } finally {
     // Sicherheitshalber nochmal
     if (!alreadyRunning) running.delete(params.docId);
+    if (ticket) removeTicket(ticket.id);
   }
 }
 

@@ -27,6 +27,7 @@ import {
 import { chapterFile, deleteAudioForChapter, relPath, upsertAudio } from "./files";
 import { synthesizeChapter } from "./synthChapter";
 import { runJob } from "../../log/jobs";
+import { acquire, enqueueTicket, removeTicket } from "../queue";
 import { exportBook } from "./export";
 
 async function generateAudiobookImpl(params: {
@@ -118,6 +119,17 @@ async function generateAudiobookImpl(params: {
   // Für GET /api/audio/progress nach Reload
   runState.totalChapters = chapters.length;
   runState.chapterChars = chapters.map((c) => c.text?.length ?? 0);
+
+  // Hauptwarteschlange: Intro, Bereinigung und Sprachausgabe erst, wenn dieser Auftrag vorn steht
+  const ticket = enqueueTicket("audiobook", doc.id, { voiceId: params.voiceId ?? "", rate, model: params.model ?? "" });
+  try {
+    await acquire(ticket.id, signal);
+  } catch {
+    running.delete(params.docId);
+    removeTicket(ticket.id);
+    emit({ phase: "audiobook.canceled", docId: doc.id, message: "aborted by user" });
+    return { regenerated: 0 };
+  }
 
   emit({
     phase: "audiobook.start",
@@ -458,6 +470,7 @@ async function generateAudiobookImpl(params: {
     }
   } finally {
     running.delete(params.docId);
+    removeTicket(ticket.id);
   }
   return { regenerated };
 }

@@ -1,12 +1,11 @@
-// Lernhörbuch-Lauf im Hintergrund, ein Heft nach dem anderen: Skripte, dann Sprache, dann M4B. Probe = nur die erste Einheit, ohne M4B.
-// Wartet, solange Umwandlung oder Hörbuch laufen, und gibt vor dem großen Modell den Docling-Speicher frei
-import { setTimeout as sleep } from "node:timers/promises";
+// Lernhörbuch-Lauf im Hintergrund: Skripte, dann Sprache, dann M4B. Probe = nur die erste Einheit, ohne M4B.
+// Jeder Lauf hat einen Eintrag in der Hauptwarteschlange und holt sich die Grafikkarte je Einheit; dazwischen darf
+// ein vorgezogener Auftrag ran. Vor dem großen Modell wird der Docling-Speicher freigegeben
 import { db } from "../../db";
 import { emitLog } from "../../log/logger";
 import { runJob } from "../../log/jobs";
 import { withGemmaLock } from "../gemmaLock";
-import { anyProcessing } from "../pipeline";
-import { anyGenerating } from "../audiobook";
+import { acquire, enqueueTicket, release, removeTicket } from "../queue";
 import { releaseDoclingNow } from "../docling/release";
 import { learnModel, reviewPoints, scriptStamp, SkipUnit, unitsFor, writeUnit } from "./script";
 import { learnSettings, listUnits, saveAudio, saveScript, skipUnit, syncUnits } from "./store";
@@ -46,9 +45,15 @@ export interface LearnRunState {
 
 const states = new Map<string, LearnRunState>();
 // introOnly: nur das Intro neu sprechen und das M4B neu bauen, Einheiten bleiben
-const queue: Array<{ docId: string; probe: boolean; rate: string; introOnly?: boolean }> = [];
-let worker: Promise<void> | null = null;
-let cancelDoc: string | null = null;
+interface Job {
+  docId: string;
+  probe: boolean;
+  rate: string;
+  introOnly?: boolean;
+}
+// Eintrag in der Hauptwarteschlange je laufendem Heft
+const tickets = new Map<string, string>();
+const canceled = new Set<string>();
 
 export function learnState(docId: string): LearnRunState | null {
   return states.get(docId) ?? null;
@@ -64,21 +69,31 @@ let unitActive = false;
 export function learnUnitActive(): boolean {
   return unitActive;
 }
-// Warten, bis Umwandlung und Hörbuch fertig sind, dann sofort (ohne await dazwischen) die Karte belegen:
-// so sieht eine gleichzeitig startende Umwandlung den Platz besetzt und wartet ihrerseits
+// Die Karte über die Hauptwarteschlange holen, eine Einheit lang behalten, dann zurückgeben
 async function gpuSlot<T>(docId: string, fn: () => Promise<T>): Promise<T | undefined> {
   const st = states.get(docId);
-  while (cancelDoc !== docId && (anyProcessing() || anyGenerating())) {
-    if (st) st.waiting = true;
-    await sleep(5000);
+  const ticket = tickets.get(docId);
+  if (!ticket || canceled.has(docId)) return undefined;
+  if (st) st.waiting = true;
+  try {
+    await acquire(ticket);
+  } catch {
+    // Eintrag entfernt: Lauf abgebrochen
+    canceled.add(docId);
+    return undefined;
+  } finally {
+    if (st) st.waiting = false;
   }
-  if (st) st.waiting = false;
-  if (cancelDoc === docId) return undefined;
+  if (canceled.has(docId)) {
+    release(ticket);
+    return undefined;
+  }
   unitActive = true;
   try {
     return await fn();
   } finally {
     unitActive = false;
+    release(ticket);
   }
 }
 
@@ -91,9 +106,15 @@ export function startLearnbook(docId: string, probe: boolean, rate = "+0%"): Lea
   if (cur?.running) return cur;
   const st: LearnRunState = { docId, running: true, phase: "wait", done: 0, total: 0, probe };
   states.set(docId, st);
-  queue.push({ docId, probe, rate });
-  if (!worker) worker = drain().finally(() => (worker = null));
+  launch({ docId, probe, rate });
   return st;
+}
+
+// Eintrag in die Hauptwarteschlange, eigener Lauf; die Reihenfolge regelt die Warteschlange
+function launch(job: Job): void {
+  canceled.delete(job.docId);
+  tickets.set(job.docId, enqueueTicket("learnbook", job.docId, { probe: job.probe, rate: job.rate, introOnly: !!job.introOnly }).id);
+  void runOne(job);
 }
 
 // Intro nach einer Änderung einzeln neu sprechen; das M4B wird danach mit den vorhandenen Einheiten neu gebaut
@@ -102,35 +123,35 @@ export function startLearnIntro(docId: string, rate = "+0%"): LearnRunState {
   if (cur?.running) return cur;
   const st: LearnRunState = { docId, running: true, phase: "wait", done: 0, total: 1, probe: false };
   states.set(docId, st);
-  queue.push({ docId, probe: false, rate, introOnly: true });
-  if (!worker) worker = drain().finally(() => (worker = null));
+  launch({ docId, probe: false, rate, introOnly: true });
   return st;
 }
 
+// Abbrechen, auch mitten im Lauf: der Eintrag verschwindet aus der Warteschlange, der Lauf endet nach dem Stück
 export function cancelLearnbook(docId: string): void {
-  const i = queue.findIndex((q) => q.docId === docId);
-  if (i >= 0) queue.splice(i, 1);
-  cancelDoc = docId;
+  canceled.add(docId);
+  const ticket = tickets.get(docId);
+  if (ticket) removeTicket(ticket);
   const st = states.get(docId);
   if (st?.running && st.phase === "wait") Object.assign(st, { running: false, phase: "canceled" });
 }
 
-async function drain(): Promise<void> {
-  for (let job = queue.shift(); job; job = queue.shift()) {
-    const st = states.get(job.docId)!;
-    if (!st.running) continue;
-    cancelDoc = null;
-    try {
-      await runJob("learnbook", "learnbook", { docId: job.docId }, async () => {
-        if (job!.introOnly) return await introAndBook(job!.docId, job!.rate, st);
-        await scripts(job!.docId, job!.probe, st);
-        if (cancelDoc !== job!.docId) await audio(job!.docId, job!.probe, job!.rate, st);
-      });
-      Object.assign(st, { running: false, phase: cancelDoc === job.docId ? "canceled" : "done", current: undefined });
-    } catch (err) {
-      Object.assign(st, { running: false, phase: "failed", error: err instanceof Error ? err.message : String(err) });
-      emitLog("warn", "learnbook", "Lernhörbuch fehlgeschlagen", { err, ctx: { docId: job.docId } });
-    }
+async function runOne(job: Job): Promise<void> {
+  const st = states.get(job.docId)!;
+  try {
+    await runJob("learnbook", "learnbook", { docId: job.docId }, async () => {
+      if (job.introOnly) return await introAndBook(job.docId, job.rate, st);
+      await scripts(job.docId, job.probe, st);
+      if (!canceled.has(job.docId)) await audio(job.docId, job.probe, job.rate, st);
+    });
+    Object.assign(st, { running: false, phase: canceled.has(job.docId) ? "canceled" : "done", current: undefined });
+  } catch (err) {
+    Object.assign(st, { running: false, phase: "failed", error: err instanceof Error ? err.message : String(err) });
+    emitLog("warn", "learnbook", "Lernhörbuch fehlgeschlagen", { err, ctx: { docId: job.docId } });
+  } finally {
+    const ticket = tickets.get(job.docId);
+    if (ticket) removeTicket(ticket);
+    tickets.delete(job.docId);
   }
 }
 
@@ -146,7 +167,7 @@ async function scripts(docId: string, probe: boolean, st: LearnRunState): Promis
   Object.assign(st, { total: probe ? 1 : total, phase: "script" });
 
   for (let idx = 0; idx < total; idx++) {
-    if (cancelDoc === docId) return;
+    if (canceled.has(docId)) return;
     // Nie zwei Dinge gleichzeitig auf der Grafikkarte: Umwandlung und Hörbuch laufen zu Ende
     await gpuSlot(docId, async () => {
       const units = listUnits(docId);
@@ -172,7 +193,7 @@ async function scripts(docId: string, probe: boolean, st: LearnRunState): Promis
       saveScript(docId, idx, { ...out, model: pick.model ?? "default", stamp });
       console.log(`[learnbook] ${doc.title} Einheit ${idx + 1}/${total}: „${out.title}“ (${out.script.length} Zeichen${out.checkNote ? `, ${out.checkNote.split("\n")[0]}` : ""})`);
     });
-    if (cancelDoc === docId) return;
+    if (canceled.has(docId)) return;
     if (probe) {
       if (listUnits(docId).find((u) => u.idx === idx)?.script) {
         st.done = 1;
@@ -202,7 +223,7 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
   const units = listUnits(docId).filter((u) => u.script).slice(0, probe ? 1 : undefined);
   Object.assign(st, { phase: "audio", done: 0, total: units.length });
   for (const u of units) {
-    if (cancelDoc === docId) return;
+    if (canceled.has(docId)) return;
     await gpuSlot(docId, async () => {
       st.current = u.title ?? `Einheit ${u.idx + 1}`;
       const stamp = audioStamp(u.script!, second ? [main, second] : [main], rate);
@@ -210,16 +231,16 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
         Object.assign(st, { step: "speak", unitStartedAt: Date.now(), partsDone: 0, partsTotal: undefined });
         const r = await speakUnit({
           docId, idx: u.idx, title: st.current, album, script: u.script!, main, second, rate,
-          isCanceled: () => cancelDoc === docId,
+          isCanceled: () => canceled.has(docId),
           onProgress: (done, total) => Object.assign(st, { partsDone: done, partsTotal: total }),
         });
         saveAudio(docId, u.idx, r.path, stamp, r.durationMs);
       }
     });
-    if (cancelDoc === docId) return;
+    if (canceled.has(docId)) return;
     st.done++;
   }
-  if (probe || cancelDoc === docId) return;
+  if (probe || canceled.has(docId)) return;
   await finishBook(docId, kind, lang, main, rate, st, units.length);
 }
 
@@ -237,7 +258,7 @@ async function finishBook(docId: string, kind: "language" | "subject", lang: str
   // Intro vorneweg: was es ist, nach wessen Buch, wie man damit lernt; nur neu sprechen, wenn sich etwas geändert hat
   st.phase = "intro";
   const intro = await gpuSlot(docId, () => speakIntro(docId, kind, main, rate));
-  if (cancelDoc === docId) return;
+  if (canceled.has(docId)) return;
   // M4B nur, wenn alle Einheiten mit Inhalt Audio haben (sonst fehlt nach „Intro neu“ noch ein Lauf)
   const ready = listUnits(docId).filter((u) => u.script && !u.skip_reason).every((u) => u.audio_path && existsSync(u.audio_path));
   if (!ready) return;
@@ -277,7 +298,7 @@ async function speakIntro(docId: string, kind: "language" | "subject", main: Voi
   } catch {
     // noch kein Intro
   }
-  const r = await speakUnit({ docId, idx: -1, title: "Einleitung", album: doc.doc_title || doc.title, script: text, main, second: null, rate, isCanceled: () => cancelDoc === docId });
+  const r = await speakUnit({ docId, idx: -1, title: "Einleitung", album: doc.doc_title || doc.title, script: text, main, second: null, rate, isCanceled: () => canceled.has(docId) });
   // speakUnit legt Einheit 0 (idx -1) als unit-000.mp3 ab; als intro.mp3 merken
   const { renameSync } = await import("node:fs");
   renameSync(r.path, path);

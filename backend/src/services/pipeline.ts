@@ -27,13 +27,22 @@ import {
 import { pickLang, tLang } from "../lib/i18n";
 import { DATA_DIR, fromDataPath } from "../paths";
 import { runJob } from "../log/jobs";
-import { setTimeout as sleep } from "node:timers/promises";
-import { learnUnitActive } from "./learnbook/run";
+import { acquire, enqueueTicket, removeTicket } from "./queue";
+import { pickProvider } from "./llm";
+import { unloadOllamaModels } from "./llm/ollama";
 
 
 const running = new Map<string, AbortController>();
 // Stand je Heft für die Warteschlangen-Anzeige: wartet auf die Grafikkarte, Docling, Nacharbeit
 const stage = new Map<string, "wait" | "docling" | "post">();
+
+// Ein noch geladenes Sprachmodell entladen (wie die Wissenspflege), damit Docling allein im Grafikspeicher liegt
+async function freeLlm(docId: string): Promise<void> {
+  const p = await pickProvider().catch(() => null);
+  if (p?.type !== "ollama" || !p.url) return;
+  const names = await unloadOllamaModels(p.url);
+  if (names.length) emitLog("info", "pipeline", `Vor Docling entladen: ${names.join(", ")}`, { ctx: { docId } });
+}
 
 export function pipelineStages(): Array<{ docId: string; stage: "wait" | "docling" | "post" }> {
   return [...running.keys()].map((docId) => ({ docId, stage: stage.get(docId) ?? "post" }));
@@ -97,31 +106,36 @@ async function processDocumentImpl(docId: string): Promise<void> {
       extraction = extractionFromMarkdown(adopted, pages);
       emit({ phase: "pipeline.extraction", docId, message: "Docling-Markdown übernommen" });
     } else {
-      // Nie zwei Dinge auf der Grafikkarte: eine laufende Lernhörbuch-Einheit erst fertig werden lassen.
-      // Das Lernhörbuch pausiert danach, solange hier etwas läuft (anyProcessing)
-      if (learnUnitActive()) {
+      // Hauptwarteschlange: Docling erst, wenn dieser Auftrag vorn steht und die Karte frei ist. Davor ein noch
+      // geladenes Sprachmodell entladen, sonst liegt Docling neben Gemma oder Qwen im Grafikspeicher und kriecht
+      const ticket = enqueueTicket("docling", docId);
+      try {
         stage.set(docId, "wait");
         emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.waitGpu") });
-        while (!signal.aborted && learnUnitActive()) await sleep(3000);
-      }
-      stage.set(docId, "docling");
-      emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
-      // Wartet einen laufenden Docling-Neustart (Grafikspeicher freigeben) ab
-      extraction = await withDocling(async () => {
-        if (!(await doclingAlive())) {
-          throw new Error(tLang(lang, "err.doclingUnreachable"));
-        }
+        await acquire(ticket.id, signal);
+        await freeLlm(docId);
+        stage.set(docId, "docling");
+        emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingChecking") });
+        // Wartet einen laufenden Docling-Neustart (Grafikspeicher freigeben) ab
+        extraction = await withDocling(async () => {
+          if (!(await doclingAlive())) {
+            throw new Error(tLang(lang, "err.doclingUnreachable"));
+          }
 
-        emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingUploading") });
-        return extractPdfViaDocling({
-          pdfPath: fullPath,
-          language: doc.language,
-          forceOcr: doc.force_ocr === 1,
-          signal,
-          onProgress: (message, fraction) =>
-            emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
+          emit({ phase: "pipeline.extraction", docId, message: tLang(lang, "msg.doclingUploading") });
+          return extractPdfViaDocling({
+            pdfPath: fullPath,
+            language: doc.language,
+            forceOcr: doc.force_ocr === 1,
+            signal,
+            onProgress: (message, fraction) =>
+              emit({ phase: "pipeline.extraction", docId, message, current: fraction }),
+          });
         });
-      });
+      } finally {
+        // Nacharbeit (Kapitel, Suche, Embeddings) braucht die Karte nicht mehr: der Nächste darf
+        removeTicket(ticket.id);
+      }
     }
 
     stage.set(docId, "post");
