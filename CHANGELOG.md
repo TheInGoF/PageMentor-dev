@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.101.0 – 2026-11-01
+### Fix
+- Lernhörbuch-Intro: Jede Leerzeile im Text wird zu einer Sekunde Pause. Vorher lagen nur 0,3 Sekunden zwischen Titelblock und Autor.
+
 ## 1.100.0 – 2026-11-01
 ### Fix
 - Intro: Versionsziffern im Modellnamen stehen als Zahlwort, „Qwen drei Punkt sechs“ und „Gemma vier“, damit die Stimme nicht über „3.6“ stolpert.

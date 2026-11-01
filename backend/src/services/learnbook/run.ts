@@ -9,7 +9,7 @@ import { acquire, enqueueTicket, release, removeTicket } from "../queue";
 import { releaseDoclingNow } from "../docling/release";
 import { learnModel, reviewPoints, scriptStamp, SkipUnit, unitsFor, writeUnit } from "./script";
 import { learnSettings, listUnits, saveAudio, saveScript, skipUnit, syncUnits } from "./store";
-import { audioStamp, buildLearnBook, learnIntroPath, speakUnit } from "./speak";
+import { audioStamp, buildLearnBook, introScript, learnIntroPath, speakUnit } from "./speak";
 import { introTtsText } from "../audiobook/intro";
 import { getIntro, introAudioUrl } from "../audiobook/introStore";
 import { absEnabled } from "../llmConfig";
@@ -287,8 +287,9 @@ export function learnIntroInfo(docId: string): { text: string | null; template: 
 // Wie beim Original: gesprochen wird Gemmas Sprachfassung (gecacht), ohne Gemma der ausgeschriebene Text
 async function speakIntro(docId: string, kind: "language" | "subject", main: Voice, rate: string): Promise<{ path: string; durationMs: number } | null> {
   const doc = db().prepare("SELECT title, doc_title FROM documents WHERE id = ?").get(docId) as { title: string; doc_title: string | null };
-  const text = await introTtsText(docId, undefined, kind);
-  if (!text) return null;
+  const spoken = await introTtsText(docId, undefined, kind);
+  if (!spoken) return null;
+  const text = introScript(spoken);
   const stamp = audioStamp(text, [main], rate);
   const path = learnIntroPath(docId);
   const meta = `${path}.json`;

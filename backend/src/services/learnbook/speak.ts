@@ -65,6 +65,11 @@ export function thinkTime(parts: ScriptPart[]): ScriptPart[] {
   });
 }
 
+// Intro-Text als Skript: Jede Leerzeile wird zu einer Sekunde Pause, die Stimme macht aus Leerzeilen sonst nichts
+export function introScript(text: string): string {
+  return text.trim().replace(/[ \t]*\n(?:[ \t]*\n)+/g, "\n[PAUSE 1]\n");
+}
+
 export function audioStamp(script: string, voices: Voice[], rate: string): string {
   return createHash("sha1").update(`${script}|${voices.map((v) => v.id).join("+")}|${rate}`).digest("hex").slice(0, 16);
 }

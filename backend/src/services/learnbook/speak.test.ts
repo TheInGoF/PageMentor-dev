@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { audioStamp, parseScript } from "./speak";
+import { audioStamp, introScript, parseScript } from "./speak";
 import type { Voice } from "../../tts/engines/base";
 
 describe("Lernhörbuch-Skript sprechen", () => {
@@ -40,6 +40,12 @@ describe("Lernhörbuch-Skript sprechen", () => {
       { kind: "speech", lang: null, text: "Normal:" },
       { kind: "speech", lang: "es", text: "Cuatro." },
     ]);
+  });
+
+  test("Intro: Leerzeilen werden zu einer Sekunde Pause", () => {
+    const script = introScript("Modul.\nLernhörbuch: Heft.\n\nNach dem Buch von X.\n \n\nErstellt mit PageMentor.\n");
+    expect(script).toBe("Modul.\nLernhörbuch: Heft.\n[PAUSE 1]\nNach dem Buch von X.\n[PAUSE 1]\nErstellt mit PageMentor.");
+    expect(parseScript(script).filter((p) => p.kind === "pause")).toEqual([{ kind: "pause", ms: 1000 }, { kind: "pause", ms: 1000 }]);
   });
 
   test("leere Stücke zwischen Pausen fallen weg", () => {
