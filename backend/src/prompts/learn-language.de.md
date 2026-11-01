@@ -1,11 +1,15 @@
-Du schreibst ein Hörskript für einen Sprachkurs zum Anhören, zum Beispiel beim Autofahren. Grundlage ist ein Abschnitt aus einem Sprachlehrbuch; du übernimmst dessen Wortschatz, Wendungen und Grammatik, gestaltest den Ablauf aber neu nach heutigen Lernmethoden. Der Hörer hat kein Buch vor sich.
+Du schreibst ein Hörskript für einen Sprachkurs zum Anhören, zum Beispiel beim Autofahren. Grundlage ist ein Abschnitt aus einem Sprachlehrbuch; du übernimmst dessen Wortschatz, Wendungen und Grammatik, gestaltest den Ablauf aber neu nach heutigen Lernmethoden. Der Hörer hat kein Buch vor sich. Abgefragt wird nur, was er vorher gehört und nachgesprochen hat.
 
 Aufbau einer Einheit (5 bis 10 Minuten gesprochen):
 1. Einstieg auf Deutsch: in zwei Sätzen, worum es geht und was man danach sagen kann.
-2. Neue Wendungen im Abrufmuster, immer ganze Wendungen statt Einzelwörter: deutsche Frage („Wie sagst du: …?“), dann [PAUSE 4], dann die Antwort in der Fremdsprache, dann [PAUSE 3] zum Nachsprechen. 6 bis 12 Wendungen.
-3. Grammatik kurz und hörbar erklärt, mit zwei, drei Beispielen im selben Abrufmuster.
-4. Wiederholung: Baue die Punkte unter „Bisher gelernt“ im selben Abrufmuster ein, gemischt mit dem Neuen.
-5. Kleine Geschichte oder Dialog in der Fremdsprache, nur mit bekannten Wörtern, erst langsam, dann noch einmal normal. Davor ein Satz auf Deutsch, worum es geht.
+2. Neue Wendungen, 4 bis 7 aus der Vorlage, immer ganze Wendungen statt Einzelwörter. Hat die Vorlage mehr, nimm die nützlichsten. Je Wendung in dieser Reihenfolge:
+   a) Vorstellen: ein deutscher Satz, was man damit sagt und in welcher Situation, dann die Wendung in der Fremdsprache, dann [PAUSE 3] zum Nachsprechen.
+   b) Erklären in ein, zwei Sätzen: die wörtliche Bedeutung, ein Hinweis zur Aussprache, wenn sie vom Deutschen abweicht, und wenn nötig ein Wort zur Grammatik.
+   c) Längere Wendungen von hinten aufbauen: das letzte Wort, dann die letzten zwei, dann die ganze Wendung, jeweils mit [PAUSE 2] zum Nachsprechen.
+   d) Erster Abruf: die Situation oder die deutsche Bedeutung, dann [PAUSE 4], dann die Wendung in der Fremdsprache, dann [PAUSE 3].
+3. Abruf in wachsenden Abständen: Jede Wendung kommt nach ein, zwei weiteren Wendungen und am Ende der Einheit noch einmal, gemischt mit den Punkten unter „Bisher gelernt“. Die Abfragen wechseln: eine Situation („Du triffst morgens die Nachbarin. Begrüße sie.“), die deutsche Bedeutung („Wie sagst du: …?“) oder der eigene Name des Hörers („Stell dich mit deinem Namen vor.“, die Wendung dann mit „…“ für den Namen).
+4. Grammatik kurz und hörbar erklärt, mit dem Warum, und zwei, drei Beispielen im Abrufmuster.
+5. Kleine Geschichte oder Dialog in der Fremdsprache, nur mit bekannten Wörtern und nur mit Wendungen, die man in dieser Situation wirklich sagt. Davor ein Satz auf Deutsch, worum es geht. Erst langsam, dann noch einmal normal.
 6. Nachsprechen im Schatten: 4 bis 6 kurze Sätze, nach jedem eine Pause so lang wie der Satz ([PAUSE 3] oder [PAUSE 4]).
 7. Abschluss auf Deutsch in einem Satz.
 
@@ -13,6 +17,7 @@ Regeln für das Skript:
 - Jeder fremdsprachige Text steht in Markierungen der Sprache, z. B. [es]¿Qué tal?[/es]. Alles andere ist Deutsch.
 - Pausen schreibst du als [PAUSE n] mit n Sekunden (1 bis 8), jeweils auf eigener Zeile.
 - Keine Aufzählungszeichen, keine Überschriften, keine Tabellen, keine Seitenangaben: nur Text, der so vorgelesen wird.
+- Keine Reihen aus derselben Wendung mit verschiedenen Namen („Ich heiße Pedro“, „Ich heiße María“ …): Das ist eine Wendung. Lieber Bekanntes neu kombinieren.
 - Übungen zum Ankreuzen, Einsendeaufgaben und Lösungsschlüssel des Buchs lässt du weg.
 
 Antworte ausschließlich mit JSON:

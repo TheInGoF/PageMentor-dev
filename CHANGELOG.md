@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.82.0 – 2026-11-01
+### Change
+- Sprachlern-Hörbuch: Abgefragt wird nur, was vorher vorgestellt und nachgesprochen wurde. Längere Wendungen werden von hinten aufgebaut.
+- Sprachlern-Hörbuch: Abruf in wachsenden Abständen, abwechselnd als Situation, als deutsche Bedeutung oder mit dem eigenen Namen.
+- Sprachlern-Hörbuch: Je Wendung ein Satz zur Situation, die wörtliche Bedeutung und ein Hinweis zur Aussprache. Grammatik mit dem Warum.
+- Sprachlern-Hörbuch: Keine Reihen derselben Wendung mit verschiedenen Namen als Füller. Dialoge nur mit Wendungen, die man in der Situation wirklich sagt.
+
 ## 1.81.0 – 2026-11-01
 ### Change
 - Lernhörbuch: Formeln werden erst in Worten erklärt und dann einmal gesprochen; Größen heißen „Zustand eins“ statt „x i“.
