@@ -19,6 +19,7 @@ import { pronRunState } from "./pronCheck/run";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters, resolveConceptModel } from "./concepts/extract";
 import { sttAvailable } from "./pronCheck/stt";
 import { verifyOpenEntries } from "./pronCheck/verify";
+import { collectFromCleanup, unscannedChapters } from "./pronCheck/candidates";
 import { pronunciationList } from "./pronunciation";
 
 const COUNTDOWN_MS = 60_000;
@@ -100,7 +101,7 @@ async function scanOpen(): Promise<MaintenanceOpen> {
     await resolveConceptModel();
     chapters = openChapters();
   }
-  const words = sttAvailable() ? pronunciationList().entries.filter((e) => !e.checked).length : 0;
+  const words = sttAvailable() ? pronunciationList().entries.filter((e) => !e.checked).length + unscannedChapters().length : 0;
   return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size, words };
 }
 
@@ -227,10 +228,15 @@ async function extract(): Promise<void> {
 // Arbiter, darum zählt die Arbeit als eigene
 async function words(): Promise<void> {
   if (!sttAvailable()) return;
+  ownAt = Date.now();
+  // Erst Kandidaten aus der Bereinigung holen (Gemma bestätigt), dann alle offenen Einträge abhören
+  if (unscannedChapters().length && (await llmAvailable().catch(() => false))) {
+    Object.assign(state, { phase: "pron", doc: undefined, detail: "Lautschriften aus der Bereinigung sammeln", done: 0, total: 0 });
+    await collectFromCleanup().catch((err) => emitLog("warn", "maintenance", "Kandidaten aus der Bereinigung fehlgeschlagen", { err }));
+  }
   const open = pronunciationList().entries.filter((e) => !e.checked).length;
   if (!open) return;
   Object.assign(state, { phase: "pron", doc: undefined, detail: undefined, done: 0, total: open });
-  ownAt = Date.now();
   try {
     const r = await verifyOpenEntries({ busy: () => anyProcessing() || anyGenerating() || learnBusy(), onProgress: (done, total) => Object.assign(state, { done, total }) });
     if (r) state.open.words = r.open;

@@ -76,3 +76,26 @@ export async function retrySpelling(items: Array<{ from: string; tried: string[]
   }
   return out;
 }
+
+// Aus der Bereinigung: nur die Paare behalten, bei denen die rechte Seite eine Lautschrift der linken ist
+export async function confirmRespellings(pairs: Array<{ from: string; to: string }>, model?: string): Promise<PronunciationEntry[]> {
+  if (!pairs.length) return [];
+  const prompt =
+    "Diese Wortpaare stammen aus dem Vergleich eines Hefttexts mit seiner Fassung für die Sprachausgabe (links Original, rechts Fassung). Gib nur die Paare zurück, bei denen rechts eine Lautschrift steht, also das Wort so geschrieben, wie die deutsche Stimme es richtig ausspricht. Keine Übersetzungen, keine ausgeschriebenen Abkürzungen wie Professor oder Doktor, keine Umformulierungen.\n\n" +
+    pairs.map((p) => `${p.from} → ${p.to}`).join("\n");
+  const r = await withGemmaLock("pronunciation", () =>
+    generate({ prompt, system: SYSTEM, model, think: false, format: SCHEMA, options: { temperature: 0.1, num_ctx: 8192, num_predict: 2048 } })
+  );
+  try {
+    const wanted = new Map(pairs.map((p) => [p.from.toLowerCase(), p]));
+    const out: PronunciationEntry[] = [];
+    const seen = new Set<string>();
+    for (const e of (JSON.parse(r.response ?? "{}") as { items?: PronunciationEntry[] }).items ?? []) {
+      const p = wanted.get(String(e.from ?? "").trim().toLowerCase());
+      if (p && !seen.has(p.from) && seen.add(p.from)) out.push({ from: p.from, to: p.to });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}

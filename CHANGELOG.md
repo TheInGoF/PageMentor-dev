@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.104.0 – 2026-11-01
+### New
+- Wortprüfung: Lautschriften, die Gemma bei der Bereinigung in den Kapiteltext geschrieben hat, werden aus dem Vergleich mit dem Original herausgelesen, von Gemma bestätigt und als offene Einträge in die Ausspracheliste gestellt. Die Wortprüfung hört sie danach ab. Je Lauf bis zu 20 Kapitel, durchgesehene Kapitel werden gemerkt.
+
 ## 1.103.0 – 2026-11-01
 ### New
 - Wortprüfung: Die Wissenspflege spricht offene Einträge der Ausspracheliste mit der deutschen Standardstimme im Satz „Das Wort heißt: …“, hört sie mit Whisper ab und vergleicht. Hört Whisper das Originalwort, ist der Eintrag erledigt; sonst schlägt Gemma eine andere Schreibweise vor, bis zu drei Runden. Was offen bleibt, zeigt in der Liste, was Whisper gehört hat. Läuft nach dem Begriffsnetz, nur mit Whisper.
