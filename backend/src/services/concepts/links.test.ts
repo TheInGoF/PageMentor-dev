@@ -60,4 +60,16 @@ describe("Aufräumen", () => {
     expect((db().prepare("SELECT name FROM concepts ORDER BY name").all() as Array<{ name: string }>).map((c) => c.name)).toEqual(["Codierung"]);
     expect(linkStatus().size).toBe(0);
   });
+
+  test("Tutor folgt nur gesicherten Verbindungen", async () => {
+    const { saveChapterConcepts } = await import("./store");
+    const { activate } = await import("./activate");
+    const { db } = await import("../../db");
+    saveChapterConcepts("c1", "d1", [{ name: "Codierung", definition: "Darstellung", explains: true, needs: ["Kanal"] }], "s");
+    // Kanal wird nirgends erklärt: ungesichert, keine Ausbreitung
+    expect(activate(null, ["c1"]).map((a) => a.name)).toEqual(["Codierung"]);
+    db().prepare("INSERT INTO chapters (id, document_id, number, title, kind, text) VALUES ('c0', 'd1', 0, 'Grundlagen', 'content', 'x')").run();
+    saveChapterConcepts("c0", "d1", [{ name: "Kanal", definition: "Weg", explains: true, needs: [] }], "s");
+    expect(activate(null, ["c1"]).map((a) => `${a.name}:${a.depth}`)).toEqual(["Codierung:0", "Kanal:1"]);
+  });
 });

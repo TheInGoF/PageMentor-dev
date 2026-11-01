@@ -3,6 +3,7 @@
 // Ergebnis: die Begriffskette für Gemma und die Kapitel, die die Grundlagen erklären
 import { db } from "../../db";
 import { cosineSim, embeddingFromBuffer } from "../embeddings";
+import { linkKey, linkStatus } from "./links";
 
 const DECAY = 0.5;
 const MAX_DEPTH = 3;
@@ -72,7 +73,9 @@ function seedConcepts(query: Float32Array | null, chapterIds: string[]): Map<str
 export function activate(query: Float32Array | null, chapterIds: string[]): ActiveConcept[] {
   const seeds = seedConcepts(query, chapterIds);
   if (!seeds.size) return [];
-  const links = db().prepare("SELECT DISTINCT concept_id AS 'from', needs_id AS 'to' FROM concept_links").all() as Link[];
+  // Nur gesicherte Verbindungen: ungesicherte würden falsche Grundlagen-Kapitel in die Antwort ziehen
+  const sure = linkStatus();
+  const links = (db().prepare("SELECT DISTINCT concept_id AS 'from', needs_id AS 'to' FROM concept_links").all() as Link[]).filter((l) => sure.has(linkKey(l.from, l.to)));
   const active = [...spread(seeds, links)].sort((a, b) => b[1].strength - a[1].strength).slice(0, MAX_ACTIVE);
   const info = db().prepare("SELECT name, definition FROM concepts WHERE id = ?");
   return active.map(([id, a]) => {

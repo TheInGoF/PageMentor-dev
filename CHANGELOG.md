@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.89.0 – 2026-11-01
+### Change
+- Tutor: Grundlagen-Begriffe und ihre Kapitel kommen nur noch über gesicherte Verbindungen des Begriffsnetzes in die Antwort.
+
 ## 1.88.0 – 2026-11-01
 ### New
 - Begriffsnetz: Eine Verbindung gilt als gesichert, wenn sie in zwei Kapiteln vorkommt, die Grundlage im Heft vorher erklärt wird oder aus einem anderen Heft stammt. Gegenseitige Paare behalten nur die Richtung zur früher erklärten Grundlage. Ungesicherte Verbindungen sind im Gehirn gestrichelt.
