@@ -19,6 +19,11 @@ export function PronunciationSection() {
   const [asking, setAsking] = useState<number | "doc" | null>(null);
   const [docs, setDocs] = useState<Document[]>([]);
   const [docId, setDocId] = useState("");
+  // Beide Gruppen anfangs eingeklappt
+  const [showOpen, setShowOpen] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+  // Gruppe je Zeile, fest bis zum Speichern: sonst springt eine Zeile beim Tippen (Haken fällt weg) in die andere Gruppe
+  const [doneAt, setDoneAt] = useState<boolean[]>([]);
   const audio = useRef<HTMLAudioElement | null>(null);
   const toast = useToast();
 
@@ -36,6 +41,7 @@ export function PronunciationSection() {
 
   const apply = (r: { entries: PronunciationEntry[]; custom: boolean }) => {
     setRows(r.entries);
+    setDoneAt(r.entries.map((e) => !!e.checked));
     setSaved(JSON.stringify(r.entries));
     setCustom(r.custom);
   };
@@ -84,6 +90,8 @@ export function PronunciationSection() {
       const known = new Set(rows.map((r) => r.from.toLowerCase()));
       const fresh = items.filter((e) => !known.has(e.from.toLowerCase())).map((e) => ({ ...e, checked: false }));
       setRows((cur) => [...cur, ...fresh]);
+      setDoneAt((cur) => [...cur, ...fresh.map(() => false)]);
+      if (fresh.length) setShowOpen(true);
       toast.show(t("pron.scanned", { n: fresh.length }), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
@@ -111,32 +119,63 @@ export function PronunciationSection() {
           </select>
         </SettingRow>
       )}
-      <ul className="flex flex-col gap-2">
-        {rows.map((r, i) => (
-          <li key={i} className="grid grid-cols-[auto_1fr_auto_1fr_auto_auto_auto] items-center gap-2">
-            {/* Ganze Kästchen-Spalte klickbar (docs/STYLEGUIDE.md) */}
-            <label className="self-stretch px-2 flex items-center cursor-pointer" title={t("pron.checked")}>
-              <input type="checkbox" className="w-5 h-5 cursor-pointer" checked={!!r.checked} onChange={(e) => set(i, { checked: e.target.checked })} aria-label={t("pron.checked")} />
-            </label>
-            <input className="input" value={r.from} placeholder={t("pron.from")} onChange={(e) => set(i, { from: e.target.value, checked: false })} aria-label={t("pron.from")} />
-            <span className="text-neutral-500" aria-hidden>
-              →
-            </span>
-            <input className="input" value={r.to} placeholder={t("pron.to")} onChange={(e) => set(i, { to: e.target.value, checked: false })} aria-label={t("pron.to")} />
-            <Button variant="ghost" className="!px-2" onClick={() => void suggestRow(i)} disabled={!r.from.trim() || asking !== null} aria-label={t("pron.suggest")} title={t("pron.suggest")}>
-              {asking === i ? "…" : "✨"}
-            </Button>
-            <Button variant="ghost" className="!px-2" onClick={() => play(i)} disabled={!voiceId || !r.to.trim() || playing === i} aria-label={t("pron.play")} title={t("pron.play")}>
-              {playing === i ? "…" : "▶"}
-            </Button>
-            <Button variant="ghost" className="!px-2" onClick={() => setRows((cur) => cur.filter((_, j) => j !== i))} aria-label={t("common.delete")} title={t("common.delete")}>
-              ✕
-            </Button>
-          </li>
-        ))}
-      </ul>
+      {/* Offen und erledigt (abgehakt) getrennt, beide eingeklappt; Zeilen wandern beim Abhaken in die andere Gruppe */}
+      {(["open", "done"] as const).map((group) => {
+        const items = rows.map((r, i) => ({ r, i })).filter(({ i }) => (group === "done") === !!doneAt[i]);
+        const isOpen = group === "open" ? showOpen : showDone;
+        return (
+          <div key={group} className="flex flex-col gap-2 rounded-md border border-border">
+            <button
+              type="button"
+              className="flex items-center gap-2 px-3 min-h-[44px] text-left"
+              onClick={() => (group === "open" ? setShowOpen(!showOpen) : setShowDone(!showDone))}
+              aria-expanded={isOpen}
+            >
+              <span className="text-sm font-medium flex-1">{t(`pron.group.${group}`, { n: items.length })}</span>
+              <span className="text-sm text-neutral-500">{isOpen ? "▴" : "▾"}</span>
+            </button>
+            {isOpen && (
+              <ul className="flex flex-col gap-2 px-2 pb-2">
+                {items.length === 0 && <li className="text-xs text-neutral-500 px-2">{t(`pron.group.${group}Empty`)}</li>}
+                {items.map(({ r, i }) => (
+                <li key={i} className="grid grid-cols-[auto_1fr_auto_1fr_auto_auto_auto] items-center gap-2">
+                  {/* Ganze Kästchen-Spalte klickbar (docs/STYLEGUIDE.md) */}
+                  <label className="self-stretch px-2 flex items-center cursor-pointer" title={t("pron.checked")}>
+                    <input type="checkbox" className="w-5 h-5 cursor-pointer" checked={!!r.checked} onChange={(e) => set(i, { checked: e.target.checked })} aria-label={t("pron.checked")} />
+                  </label>
+                  <input className="input" value={r.from} placeholder={t("pron.from")} onChange={(e) => set(i, { from: e.target.value, checked: false })} aria-label={t("pron.from")} />
+                  <span className="text-neutral-500" aria-hidden>
+                    →
+                  </span>
+                  <input className="input" value={r.to} placeholder={t("pron.to")} onChange={(e) => set(i, { to: e.target.value, checked: false })} aria-label={t("pron.to")} />
+                  <Button variant="ghost" className="!px-2" onClick={() => void suggestRow(i)} disabled={!r.from.trim() || asking !== null} aria-label={t("pron.suggest")} title={t("pron.suggest")}>
+                    {asking === i ? "…" : "✨"}
+                  </Button>
+                  <Button variant="ghost" className="!px-2" onClick={() => play(i)} disabled={!voiceId || !r.to.trim() || playing === i} aria-label={t("pron.play")} title={t("pron.play")}>
+                    {playing === i ? "…" : "▶"}
+                  </Button>
+                  <Button variant="ghost" className="!px-2" onClick={() => {
+                  setRows((cur) => cur.filter((_, j) => j !== i));
+                  setDoneAt((cur) => cur.filter((_, j) => j !== i));
+                }} aria-label={t("common.delete")} title={t("common.delete")}>
+                    ✕
+                  </Button>
+                </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => setRows((cur) => [...cur, { from: "", to: "" }])}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setRows((cur) => [...cur, { from: "", to: "" }]);
+            setDoneAt((cur) => [...cur, false]);
+            setShowOpen(true);
+          }}
+        >
           + {t("pron.add")}
         </Button>
         <Button
