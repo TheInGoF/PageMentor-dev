@@ -147,7 +147,10 @@ export function PronunciationSection() {
                   <span className="text-neutral-500" aria-hidden>
                     →
                   </span>
-                  <input className="input" value={r.to} placeholder={t("pron.to")} onChange={(e) => set(i, { to: e.target.value, checked: false })} aria-label={t("pron.to")} />
+                  <div className="flex flex-col min-w-0">
+                    <input className="input" value={r.to} placeholder={t("pron.to")} onChange={(e) => set(i, { to: e.target.value, checked: false, heard: undefined })} aria-label={t("pron.to")} />
+                    {!r.checked && r.heard && <span className="text-xs text-neutral-500 truncate px-1">{t("pron.heard", { heard: r.heard })}</span>}
+                  </div>
                   <Button variant="ghost" className="!px-2" onClick={() => void suggestRow(i)} disabled={!r.from.trim() || asking !== null} aria-label={t("pron.suggest")} title={t("pron.suggest")}>
                     {asking === i ? "…" : "✨"}
                   </Button>

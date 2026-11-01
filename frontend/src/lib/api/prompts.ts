@@ -22,6 +22,8 @@ export interface PronunciationEntry {
   from: string;
   to: string;
   checked?: boolean;
+  // Wortprüfung: was Whisper zuletzt gehört hat, solange der Eintrag offen ist
+  heard?: string;
 }
 type PronunciationRes = { entries: PronunciationEntry[]; custom: boolean; defaults: PronunciationEntry[] };
 

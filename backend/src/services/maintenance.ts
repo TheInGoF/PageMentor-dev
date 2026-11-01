@@ -17,6 +17,9 @@ import { batchStatus } from "./batch/audiobooks";
 import { gpuIdleSeconds } from "./ttsActivity";
 import { pronRunState } from "./pronCheck/run";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters, resolveConceptModel } from "./concepts/extract";
+import { sttAvailable } from "./pronCheck/stt";
+import { verifyOpenEntries } from "./pronCheck/verify";
+import { pronunciationList } from "./pronunciation";
 
 const COUNTDOWN_MS = 60_000;
 const SNOOZE_MS = 2 * 3600_000;
@@ -31,6 +34,8 @@ export interface MaintenanceOpen {
   // Kapitel ohne aktuelles Begriffsnetz, in so vielen Heften
   chapters: number;
   chapterDocs: number;
+  // Offene Einträge der Ausspracheliste (Wortprüfung), 0 ohne Whisper
+  words: number;
 }
 
 export interface MaintenanceState {
@@ -38,14 +43,14 @@ export interface MaintenanceState {
   // Countdown-Ende bzw. Ende der Ruhe (ms seit 1970)
   until?: number;
   open: MaintenanceOpen;
-  phase?: "docling" | "embeddings" | "concepts";
+  phase?: "docling" | "embeddings" | "concepts" | "pron";
   doc?: string;
   detail?: string;
   done: number;
   total: number;
 }
 
-const state: MaintenanceState = { status: "idle", open: { extract: 0, chunks: 0, chunkDocs: 0, chapters: 0, chapterDocs: 0 }, done: 0, total: 0 };
+const state: MaintenanceState = { status: "idle", open: { extract: 0, chunks: 0, chunkDocs: 0, chapters: 0, chapterDocs: 0, words: 0 }, done: 0, total: 0 };
 let cancel = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -95,10 +100,11 @@ async function scanOpen(): Promise<MaintenanceOpen> {
     await resolveConceptModel();
     chapters = openChapters();
   }
-  return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size };
+  const words = sttAvailable() ? pronunciationList().entries.filter((e) => !e.checked).length : 0;
+  return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size, words };
 }
 
-const hasWork = (o: MaintenanceOpen) => o.extract > 0 || o.chunks > 0 || o.chapters > 0;
+const hasWork = (o: MaintenanceOpen) => o.extract > 0 || o.chunks > 0 || o.chapters > 0 || o.words > 0;
 
 // Regelmäßig prüfen; die Entscheidung selbst ist eine reine Funktion (testbar)
 export function decide(s: Pick<MaintenanceState, "status" | "until">, now: number, work: boolean, isBusy: boolean): { status: MaintenanceState["status"]; until?: number; start: boolean } {
@@ -163,6 +169,7 @@ async function runNow(): Promise<void> {
     if (state.phase === "docling") await releaseDoclingNow().catch(() => undefined);
     if (!cancel) await embeddings();
     if (!cancel) await concepts();
+    if (!cancel) await words();
     if (!cancel) {
       emitLog("info", "maintenance", "Wissenspflege fertig: alle Hefte erschlossen");
       Object.assign(state, { status: "idle", phase: undefined, doc: undefined, detail: undefined });
@@ -213,6 +220,24 @@ async function extract(): Promise<void> {
       ownAt = Date.now();
     }
     state.done++;
+  }
+}
+
+// Wortprüfung: offene Einträge der Ausspracheliste mit Stimme, Whisper und Gemma; Stimme und Whisper laufen über den
+// Arbiter, darum zählt die Arbeit als eigene
+async function words(): Promise<void> {
+  if (!sttAvailable()) return;
+  const open = pronunciationList().entries.filter((e) => !e.checked).length;
+  if (!open) return;
+  Object.assign(state, { phase: "pron", doc: undefined, detail: undefined, done: 0, total: open });
+  ownAt = Date.now();
+  try {
+    const r = await verifyOpenEntries({ busy: () => anyProcessing() || anyGenerating() || learnBusy(), onProgress: (done, total) => Object.assign(state, { done, total }) });
+    if (r) state.open.words = r.open;
+  } catch (err) {
+    emitLog("warn", "maintenance", "Wortprüfung fehlgeschlagen", { err });
+  } finally {
+    ownAt = Date.now();
   }
 }
 

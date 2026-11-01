@@ -398,6 +398,7 @@ export const settings: Record<string, string> = {
   "pron.default": "Standardliste",
   "pron.hint": "Für deutsche Stimmen: so wird ein Wort gesprochen. Anhören (▶), passende Einträge abhaken: Gemma lernt aus den geprüften und schreibt neue Wörter nach demselben Muster. Kapitel mit geänderten Wörtern erneuert der nächste Hörbuch-Lauf von selbst.",
   "pron.from": "Wort",
+  "pron.heard": "Whisper hörte: {heard}",
   "pron.to": "gesprochen als",
   "pron.add": "Eintrag",
   "pron.saved": "Aussprache gespeichert",

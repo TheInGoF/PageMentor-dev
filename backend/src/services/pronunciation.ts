@@ -10,6 +10,8 @@ export interface PronunciationEntry {
   to: string;
   // Angehört und für gut befunden; geprüfte Einträge lernt Gemma als Beispiele
   checked?: boolean;
+  // Wortprüfung: was Whisper zuletzt gehört hat, solange der Eintrag offen ist
+  heard?: string;
 }
 
 export const DEFAULT_PRONUNCIATION: PronunciationEntry[] = [
@@ -46,7 +48,7 @@ export function pronunciationList(): { entries: PronunciationEntry[]; custom: bo
 }
 
 export function savePronunciation(entries: PronunciationEntry[]): void {
-  const clean = entries.map((e) => ({ from: e.from.trim(), to: e.to.trim(), ...(e.checked ? { checked: true } : {}) })).filter((e) => e.from && e.to);
+  const clean = entries.map((e) => ({ from: e.from.trim(), to: e.to.trim(), ...(e.checked ? { checked: true } : {}), ...(!e.checked && e.heard ? { heard: e.heard } : {}) })).filter((e) => e.from && e.to);
   writeFileSync(FILE, JSON.stringify(clean, null, 2));
   cache = null;
 }

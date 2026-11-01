@@ -398,6 +398,7 @@ export const settings: Record<string, string> = {
   "pron.default": "default list",
   "pron.hint": "For German voices: how a word is spoken, e.g. anglicisms and product names in German phonetic spelling. Applies to chapters, titles and intro; the next audiobook run renews changed chapters by itself.",
   "pron.from": "Word",
+  "pron.heard": "Whisper heard: {heard}",
   "pron.to": "spoken as",
   "pron.add": "Entry",
   "pron.saved": "Pronunciation saved",

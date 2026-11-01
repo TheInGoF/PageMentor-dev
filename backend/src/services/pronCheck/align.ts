@@ -41,7 +41,7 @@ function similar(a: string, b: string): boolean {
   return editDistance(a, b) <= Math.floor(Math.max(a.length, b.length) / 8);
 }
 
-function editDistance(a: string, b: string): number {
+export function editDistance(a: string, b: string): number {
   const dp = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {
     let prev = dp[0];

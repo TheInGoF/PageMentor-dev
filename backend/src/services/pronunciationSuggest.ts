@@ -50,3 +50,29 @@ export function suggestFromDocument(docId: string, model?: string): Promise<Pron
   if (!sample.trim()) return Promise.resolve([]);
   return ask(`Finde in diesem Text englische Wörter, Produktnamen und Abkürzungen, die eine deutsche Stimme falsch aussprechen würde, höchstens 30:\n\n${sample}`, model);
 }
+
+// Wortprüfung: Die Stimme sprach die bisherigen Schreibweisen, Whisper hörte etwas anderes. Je Wort eine neue,
+// andere Lautschrift, näher am Original; Wörter aus der Liste sind hier erlaubt
+export async function retrySpelling(items: Array<{ from: string; tried: string[]; heard: string }>, model?: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (!items.length) return out;
+  const prompt =
+    "Die deutsche Stimme hat diese Schreibweisen gesprochen, Whisper hat etwas anderes gehört. Schreibe je Wort eine neue, andere Lautschrift mit deutschen Buchstaben, die näher am Original klingt. Nutze keine der bisherigen Schreibweisen noch einmal.\n\n" +
+    items.map((i) => `Wort: ${i.from}\nBisher: ${i.tried.join(", ")}\nGehört: ${i.heard || "(nichts)"}`).join("\n\n");
+  const ex = examplesBlock();
+  const r = await withGemmaLock("pronunciation", () =>
+    generate({ prompt, system: ex ? `${SYSTEM}\n\n${ex}` : SYSTEM, model, think: false, format: SCHEMA, options: { temperature: 0.4, num_ctx: 8192, num_predict: 2048 } })
+  );
+  try {
+    const wanted = new Map(items.map((i) => [i.from.toLowerCase(), i]));
+    for (const e of (JSON.parse(r.response ?? "{}") as { items?: PronunciationEntry[] }).items ?? []) {
+      const from = String(e.from ?? "").trim();
+      const to = String(e.to ?? "").trim();
+      const item = wanted.get(from.toLowerCase());
+      if (item && to && !item.tried.some((t) => t.toLowerCase() === to.toLowerCase()) && to.toLowerCase() !== item.from.toLowerCase()) out.set(item.from, to);
+    }
+  } catch {
+    /* kaputte Antwort: keine neuen Vorschläge */
+  }
+  return out;
+}
