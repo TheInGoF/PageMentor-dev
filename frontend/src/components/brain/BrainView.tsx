@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
+import { Menu } from "../ui/Menu";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/Button";
 import { DARK, LIGHT } from "../module/GraphPanel";
@@ -85,6 +86,14 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
     }
   }
 
+  // Begriffsnetz als Markdown herunterladen (gewählter Bereich), z. B. zum Prüfen durch ein großes Modell
+  const exportBrain = (excerpt: number) => {
+    const a = document.createElement("a");
+    a.href = `/api/concepts/brain/export?excerpt=${excerpt}${moduleId ? `&moduleId=${moduleId}` : ""}`;
+    a.download = "";
+    a.click();
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
       <div className="flex flex-col gap-3 min-w-0">
@@ -105,6 +114,13 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
                 </button>
               ))}
             </div>
+            <Menu
+              label={t("brain.actions")}
+              items={[
+                { label: t("brain.exportWithText"), onClick: () => exportBrain(800) },
+                { label: t("brain.exportPlain"), onClick: () => exportBrain(0) },
+              ]}
+            />
           </div>
           <form onSubmit={ask} className="flex gap-2">
             <input className="input flex-1" value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t("brain.askPlaceholder")} />

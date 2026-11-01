@@ -4,6 +4,7 @@ import { db } from "../db";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters } from "../services/concepts/extract";
 import { brainExtend, brainGraph, conceptDetail } from "../services/concepts/brain";
 import { activate } from "../services/concepts/activate";
+import { brainExport } from "../services/concepts/export";
 import { embedText, resolveEmbedder } from "../services/embeddings";
 
 export const conceptRoutes = new Hono();
@@ -64,6 +65,20 @@ conceptRoutes.get("/module/:id", (c) => {
 conceptRoutes.get("/brain", (c) => {
   const limit = Number(c.req.query("limit")) || undefined;
   return c.json(brainGraph({ moduleId: c.req.query("moduleId") || undefined, limit }));
+});
+
+// Export zur Prüfung durch ein großes Modell (Markdown zum Herunterladen)
+conceptRoutes.get("/brain/export", (c) => {
+  const excerpt = c.req.query("excerpt");
+  const r = brainExport({ moduleId: c.req.query("moduleId") || undefined, excerpt: excerpt === undefined ? undefined : Number(excerpt) || 0 });
+  const date = new Date().toISOString().slice(0, 10);
+  return new Response(r.markdown, {
+    headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      "Content-Disposition": `attachment; filename="gehirn-export-${date}.md"`,
+      "Cache-Control": "no-store",
+    },
+  });
 });
 
 // Eine Frage durchs Netz schicken wie im Tutor: welche Begriffe leuchten auf, über welche Ebenen

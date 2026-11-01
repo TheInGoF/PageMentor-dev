@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.74.0 – 2026-11-01
+### New
+- Gehirn-Export: Begriffsnetz des gewählten Bereichs als Markdown, je Kapitel Begriffe mit Rolle, Erklärung und Grundlagen, wahlweise mit Textauszug.
+
 ## 1.73.0 – 2026-11-01
 ### Change
 - Lernhörbuch und Sprachlern-Hörbuch nutzen den Intro-Editor des Original-Hörbuchs: Text, Gemma-Sprachfassung, Audio einzeln anhören und löschen.

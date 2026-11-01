@@ -51,4 +51,18 @@ describe("Gehirn", () => {
     expect(det.needs).toHaveLength(1);
     expect(det.neededBy).toHaveLength(1);
   });
+
+  test("Export: Kapitel mit Begriffen, Rolle, Erklärung, Grundlagen und Auszug", async () => {
+    const { brainExport } = await import("./export");
+    const all = brainExport({ excerpt: 50 });
+    expect(all.chapters).toBe(3);
+    expect(all.markdown).toContain("### Informatik › Info");
+    expect(all.markdown).toContain("- **Entropie** (erklärt): Info — baut auf: Wahrscheinlichkeit");
+    expect(all.markdown).toContain("- **Huffman-Code** (erklärt): – — baut auf: Entropie");
+    expect(all.markdown).toContain("> x");
+    const mathe = brainExport({ moduleId: "m2", excerpt: 0 });
+    expect(mathe.markdown).toContain("Modul „Mathe“");
+    expect(mathe.markdown).not.toContain("Entropie");
+    expect(mathe.markdown).not.toContain("> y");
+  });
 });
