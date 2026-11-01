@@ -103,9 +103,29 @@ export async function learnModel(kind: LearnKind): Promise<{ model?: string; ctx
 
 const SCRIPT_SCHEMA = {
   type: "object",
-  properties: { titel: { type: "string" }, skript: { type: "string" }, merkpunkte: { type: "array", items: { type: "string" } } },
-  required: ["titel", "skript", "merkpunkte"],
+  properties: {
+    ueberspringen: { type: "boolean" },
+    titel: { type: "string" },
+    skript: { type: "string" },
+    merkpunkte: { type: "array", items: { type: "string" } },
+  },
+  required: ["ueberspringen", "titel", "skript", "merkpunkte"],
 };
+
+// Hängt an jede Lernhörbuch-Anweisung (auch an eigene Fassungen): Einheiten ohne Lerninhalt markieren statt erfinden
+const SKIP_HINT =
+  "\n\nWenn die Vorlage keinen lernbaren Inhalt hat (nur Überschriften, Seitenzahlen, Impressum, Inhaltsverzeichnis, leere Übungsköpfe), " +
+  'setze "ueberspringen": true und lass "skript" leer. Sonst ist "ueberspringen" false.';
+
+// Lernbarer Text in der Vorlage: ohne Überschriften-Zeichen, Seitenzahlen und Leerraum
+export function learnableChars(source: string): number {
+  return source
+    .split("\n")
+    .filter((l) => !/^\s*(#+\s|\d+\s*$)/.test(l))
+    .join(" ")
+    .replace(/[^\p{L}\p{N}]+/gu, "").length;
+}
+export const MIN_LEARNABLE = 120;
 const CHECK_SCHEMA = {
   type: "object",
   properties: {
@@ -138,6 +158,17 @@ export interface WrittenUnit {
   checkNote: string | null;
 }
 
+// Gehört nicht ins Hörbuch: kein Inhalt (final, nicht wieder versuchen) oder das Modell lieferte trotz Wiederholung nichts
+export class SkipUnit extends Error {
+  constructor(
+    message: string,
+    readonly final: boolean
+  ) {
+    super(message);
+    this.name = "SkipUnit";
+  }
+}
+
 // Eine Einheit schreiben (und bei Fachheften prüfen und korrigieren). Der Aufrufer sorgt für die Gemma-Sperre
 export async function writeUnit(p: {
   kind: LearnKind;
@@ -152,8 +183,10 @@ export async function writeUnit(p: {
   // Zwischenschritt für die Anzeige: schreiben, gegen das Heft prüfen, überarbeiten
   onStep?: (step: "write" | "check" | "revise") => void;
 }): Promise<WrittenUnit> {
-  const system = getPrompt(p.kind === "language" ? "learn-language.de" : "learn-subject.de");
-  const think = p.model?.startsWith("qwen") ? false : undefined;
+  if (learnableChars(p.unit.source) < MIN_LEARNABLE) throw new SkipUnit("kein lernbarer Inhalt in der Vorlage", true);
+  const system = getPrompt(p.kind === "language" ? "learn-language.de" : "learn-subject.de") + SKIP_HINT;
+  // Ohne Denkmodus: sonst verbraucht Gemma 4 oder Qwen das ganze Token-Budget mit Nachdenken und liefert kein Skript
+  const think = false;
   const options = { temperature: 0.4, num_ctx: p.ctx, num_predict: 6000 };
   const head = [
     `Einheit ${p.idx + 1} von ${p.total} · Heft „${p.docTitle}“ · Seiten ${p.unit.start_page}–${p.unit.end_page}`,
@@ -164,11 +197,28 @@ export async function writeUnit(p: {
     .join("\n\n");
   const prompt = `${head}\n\nVorlage:\n\n${p.unit.source}`;
 
-  const write = async (extra = "") => {
+  const writeOnce = async (extra = "") => {
     const r = await generate({ prompt: prompt + extra, system, model: p.model, think, format: SCRIPT_SCHEMA, options });
-    const j = parseJson<{ titel?: string; skript?: string; merkpunkte?: string[] }>(r.response);
+    const j = parseJson<{ ueberspringen?: boolean; titel?: string; skript?: string; merkpunkte?: string[] }>(r.response);
+    if (j?.ueberspringen && !(j.skript ?? "").trim()) throw new SkipUnit("laut Modell kein lernbarer Inhalt", true);
     if (!j?.skript || j.skript.trim().length < 200) throw new Error(`Skript zu kurz oder unlesbar (${r.response.length} Zeichen, ${r.doneReason ?? "?"})`);
     return { title: (j.titel ?? "").trim() || `Einheit ${p.idx + 1}`, script: j.skript.trim(), points: (j.merkpunkte ?? []).filter((x) => typeof x === "string").slice(0, 8) };
+  };
+  // Ein zweiter Versuch bei leerer oder kaputter Antwort; danach wird die Einheit markiert, der Lauf geht weiter.
+  // Fehler der Verbindung (Ollama weg) laufen durch und halten den Lauf an
+  const write = async (extra = "") => {
+    let last = "";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await writeOnce(extra);
+      } catch (err) {
+        if (err instanceof SkipUnit) throw err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.startsWith("Skript zu kurz")) throw err;
+        last = msg;
+      }
+    }
+    throw new SkipUnit(`kein Skript bekommen (${last})`, false);
   };
 
   p.onStep?.("write");

@@ -39,20 +39,27 @@ export async function generate(params: {
   if (p.type === "ollama" && p.url) {
     model = await resolveOllamaModel(p.url, model);
     // 15 min Timeout: sonst hängt ein Hörbuch-Lauf ewig
-    const res = await fetch(`${p.url}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        prompt: params.prompt,
-        system: params.system,
-        stream: false,
-        ...(params.format ? { format: params.format } : {}),
-        ...(params.think !== undefined ? { think: params.think } : {}),
-        options: { temperature: 0.3, top_p: 0.9, ...params.options },
-      }),
-      signal: AbortSignal.timeout(15 * 60 * 1000),
-    });
+    const call = (think: boolean | undefined) =>
+      fetch(`${p.url}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          prompt: params.prompt,
+          system: params.system,
+          stream: false,
+          ...(params.format ? { format: params.format } : {}),
+          ...(think !== undefined ? { think } : {}),
+          options: { temperature: 0.3, top_p: 0.9, ...params.options },
+        }),
+        signal: AbortSignal.timeout(15 * 60 * 1000),
+      });
+    let res = await call(params.think);
+    // Modell ohne Denkmodus lehnt die Angabe ab: ohne wiederholen
+    if (res.status === 400 && params.think !== undefined) {
+      const txt = await res.clone().text().catch(() => "");
+      if (/think/i.test(txt)) res = await call(undefined);
+    }
     if (!res.ok) {
       const txt = await res.text().catch(() => res.statusText);
       throw new Error(`Ollama ${res.status}: ${txt.slice(0, 200)}`);

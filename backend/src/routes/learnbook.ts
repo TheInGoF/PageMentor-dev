@@ -3,7 +3,9 @@ import { existsSync } from "node:fs";
 import { Hono } from "hono";
 import { db } from "../db";
 import { learnSettings, listUnits } from "../services/learnbook/store";
-import { cancelLearnbook, learnState, startLearnbook, uploadLearnbook } from "../services/learnbook/run";
+import { cancelLearnbook, learnIntroInfo, learnState, startLearnbook, startLearnIntro, uploadLearnbook } from "../services/learnbook/run";
+import { setLearnIntroOverride } from "../services/learnbook/store";
+import { learnIntroPath } from "../services/learnbook/speak";
 import { learnBookPath } from "../services/learnbook/speak";
 import { learnFileSuffix } from "../services/learnbook/meta";
 import { bookFileName } from "../services/audiobook/export";
@@ -22,6 +24,7 @@ learnbookRoutes.get("/:docId", async (c) => {
     startPage: u.start_page,
     endPage: u.end_page,
     script: u.script,
+    skipReason: u.skip_reason,
     points: u.points ? (JSON.parse(u.points) as string[]) : [],
     checkNote: u.check_note,
     model: u.model,
@@ -34,6 +37,7 @@ learnbookRoutes.get("/:docId", async (c) => {
     units,
     state: learnState(docId),
     hasBook: existsSync(learnBookPath(docId)),
+    intro: learnIntroInfo(docId),
     abs: absEnabled() && absReady(),
   });
 });
@@ -53,6 +57,23 @@ learnbookRoutes.post("/:docId/start", async (c) => {
 learnbookRoutes.post("/:docId/cancel", (c) => {
   cancelLearnbook(c.req.param("docId"));
   return c.json(learnState(c.req.param("docId")));
+});
+
+// Intro: eigenen Text speichern (leer = Vorlage) und einzeln neu sprechen; danach wird das M4B neu gebaut
+learnbookRoutes.put("/:docId/intro", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { text?: string | null };
+  const docId = c.req.param("docId");
+  setLearnIntroOverride(docId, learnSettings(docId).kind, body.text ?? null);
+  return c.json(learnIntroInfo(docId));
+});
+learnbookRoutes.post("/:docId/intro", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { rate?: string };
+  return c.json(startLearnIntro(c.req.param("docId"), body.rate || "+0%"));
+});
+learnbookRoutes.get("/:docId/intro/audio", (c) => {
+  const path = learnIntroPath(c.req.param("docId"));
+  if (!existsSync(path)) return c.json({ error: "Noch kein Intro" }, 404);
+  return new Response(Bun.file(path), { headers: { "Content-Type": "audio/mpeg" } });
 });
 
 // Fertiges Lernhörbuch herunterladen, Dateiname mit Zusatz wie im Hörbücher-Ordner

@@ -127,7 +127,8 @@ export function learnIntroPath(docId: string): string {
 // Alle Einheiten mit Audio zu einem M4B mit Kapiteln (Intro vorneweg, wenn da); Kopie in den Hörbücher-Ordner,
 // neben dem normalen Hörbuch. Titel und Autor mit Zusatz, damit es vom Original unterscheidbar ist
 export async function buildLearnBook(docId: string, intro?: { path: string; durationMs: number } | null): Promise<string> {
-  const units = listUnits(docId);
+  // Übersprungene Einheiten (kein Inhalt) gehören nicht hinein
+  const units = listUnits(docId).filter((u) => u.script && !u.skip_reason);
   if (!units.length || units.some((u) => !u.audio_path || !existsSync(u.audio_path))) throw new Error("Nicht alle Einheiten haben schon Audio");
   const doc = db()
     .prepare("SELECT d.title, d.doc_title, d.author, d.short_code, m.name AS module_name FROM documents d LEFT JOIN modules m ON m.id = d.module_id WHERE d.id = ?")

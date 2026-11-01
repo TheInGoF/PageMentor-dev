@@ -8,8 +8,8 @@ import { withGemmaLock } from "../gemmaLock";
 import { anyProcessing } from "../pipeline";
 import { anyGenerating } from "../audiobook";
 import { releaseDoclingNow } from "../docling/release";
-import { learnModel, reviewPoints, scriptStamp, unitsFor, writeUnit } from "./script";
-import { learnSettings, listUnits, saveAudio, saveScript, syncUnits } from "./store";
+import { learnModel, reviewPoints, scriptStamp, SkipUnit, unitsFor, writeUnit } from "./script";
+import { learnIntroOverride, learnSettings, listUnits, saveAudio, saveScript, skipUnit, syncUnits } from "./store";
 import { audioStamp, buildLearnBook, learnIntroPath, speakUnit } from "./speak";
 import { introText } from "./meta";
 import { absEnabled } from "../llmConfig";
@@ -22,7 +22,7 @@ import { existsSync } from "node:fs";
 export interface LearnRunState {
   docId: string;
   running: boolean;
-  phase: "wait" | "script" | "audio" | "book" | "abs" | "done" | "failed" | "canceled";
+  phase: "wait" | "script" | "audio" | "intro" | "book" | "abs" | "done" | "failed" | "canceled";
   done: number;
   total: number;
   current?: string;
@@ -44,7 +44,8 @@ export interface LearnRunState {
 }
 
 const states = new Map<string, LearnRunState>();
-const queue: Array<{ docId: string; probe: boolean; rate: string }> = [];
+// introOnly: nur das Intro neu sprechen und das M4B neu bauen, Einheiten bleiben
+const queue: Array<{ docId: string; probe: boolean; rate: string; introOnly?: boolean }> = [];
 let worker: Promise<void> | null = null;
 let cancelDoc: string | null = null;
 
@@ -94,6 +95,17 @@ export function startLearnbook(docId: string, probe: boolean, rate = "+0%"): Lea
   return st;
 }
 
+// Intro nach einer Änderung einzeln neu sprechen; das M4B wird danach mit den vorhandenen Einheiten neu gebaut
+export function startLearnIntro(docId: string, rate = "+0%"): LearnRunState {
+  const cur = states.get(docId);
+  if (cur?.running) return cur;
+  const st: LearnRunState = { docId, running: true, phase: "wait", done: 0, total: 1, probe: false };
+  states.set(docId, st);
+  queue.push({ docId, probe: false, rate, introOnly: true });
+  if (!worker) worker = drain().finally(() => (worker = null));
+  return st;
+}
+
 export function cancelLearnbook(docId: string): void {
   const i = queue.findIndex((q) => q.docId === docId);
   if (i >= 0) queue.splice(i, 1);
@@ -109,6 +121,7 @@ async function drain(): Promise<void> {
     cancelDoc = null;
     try {
       await runJob("learnbook", "learnbook", { docId: job.docId }, async () => {
+        if (job!.introOnly) return await introAndBook(job!.docId, job!.rate, st);
         await scripts(job!.docId, job!.probe, st);
         if (cancelDoc !== job!.docId) await audio(job!.docId, job!.probe, job!.rate, st);
       });
@@ -127,8 +140,9 @@ async function scripts(docId: string, probe: boolean, st: LearnRunState): Promis
   const plan = unitsFor(docId, kind);
   if (!plan.length) throw new Error("Kein Text für ein Lernhörbuch (erst umwandeln)");
   syncUnits(docId, plan);
-  const total = probe ? 1 : plan.length;
-  Object.assign(st, { total, phase: "script" });
+  // Probe: bis zur ersten Einheit mit Inhalt (leere Einheiten am Anfang werden übersprungen)
+  const total = plan.length;
+  Object.assign(st, { total: probe ? 1 : total, phase: "script" });
 
   for (let idx = 0; idx < total; idx++) {
     if (cancelDoc === docId) return;
@@ -141,16 +155,30 @@ async function scripts(docId: string, probe: boolean, st: LearnRunState): Promis
       const review = reviewPoints(units, idx);
       const stamp = scriptStamp(kind, lang, pick.model ?? "default", unit.source, review);
       st.current = unit.title ?? `Einheit ${idx + 1}`;
-      if (unit.script && unit.script_stamp === stamp) return;
+      if ((unit.script || unit.skip_reason) && unit.script_stamp === stamp) return;
       Object.assign(st, { step: "write", unitStartedAt: Date.now(), partsDone: undefined, partsTotal: undefined });
       if (pick.model) await releaseDoclingNow();
+      // Keine Inhalte oder kein Skript: Einheit markieren, sie fehlt im Hörbuch; der Lauf geht weiter
       const out = await withGemmaLock(`learnbook ${idx + 1}/${total}`, () =>
         writeUnit({ kind, lang, docTitle: doc.doc_title || doc.title, idx, total: plan.length, unit, review, model: pick.model, ctx: pick.ctx, onStep: (step) => (st.step = step) })
-      );
+      ).catch((err) => {
+        if (!(err instanceof SkipUnit)) throw err;
+        skipUnit(docId, idx, err.message, err.final ? stamp : null);
+        emitLog("warn", "learnbook", `Einheit ${idx + 1} übersprungen: ${err.message}`, { ctx: { docId } });
+        return null;
+      });
+      if (!out) return;
       saveScript(docId, idx, { ...out, model: pick.model ?? "default", stamp });
       console.log(`[learnbook] ${doc.title} Einheit ${idx + 1}/${total}: „${out.title}“ (${out.script.length} Zeichen${out.checkNote ? `, ${out.checkNote.split("\n")[0]}` : ""})`);
     });
     if (cancelDoc === docId) return;
+    if (probe) {
+      if (listUnits(docId).find((u) => u.idx === idx)?.script) {
+        st.done = 1;
+        return;
+      }
+      continue;
+    }
     st.done = idx + 1;
   }
 }
@@ -191,9 +219,27 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
     st.done++;
   }
   if (probe || cancelDoc === docId) return;
+  await finishBook(docId, kind, lang, main, rate, st, units.length);
+}
+
+// Nur Intro und M4B: nach einer Änderung am Intro, ohne Einheiten anzufassen
+async function introAndBook(docId: string, rate: string, st: LearnRunState): Promise<void> {
+  const { kind, lang } = learnSettings(docId);
+  const { main } = voicesFor(docId, kind, lang);
+  const units = listUnits(docId).filter((u) => u.script && !u.skip_reason);
+  if (!units.length) throw new Error("Noch keine Einheiten mit Skript");
+  st.current = "Einleitung";
+  await finishBook(docId, kind, lang, main, rate, st, units.length);
+}
+
+async function finishBook(docId: string, kind: "language" | "subject", lang: string, main: Voice, rate: string, st: LearnRunState, unitCount: number): Promise<void> {
   // Intro vorneweg: was es ist, nach wessen Buch, wie man damit lernt; nur neu sprechen, wenn sich etwas geändert hat
-  const intro = await gpuSlot(docId, () => speakIntro(docId, kind, lang, main, rate, units.length));
+  st.phase = "intro";
+  const intro = await gpuSlot(docId, () => speakIntro(docId, kind, lang, main, rate, unitCount));
   if (cancelDoc === docId) return;
+  // M4B nur, wenn alle Einheiten mit Inhalt Audio haben (sonst fehlt nach „Intro neu“ noch ein Lauf)
+  const ready = listUnits(docId).filter((u) => u.script && !u.skip_reason).every((u) => u.audio_path && existsSync(u.audio_path));
+  if (!ready) return;
   Object.assign(st, { phase: "book", current: undefined });
   st.bookPath = await buildLearnBook(docId, intro ?? null);
   emitLog("info", "learnbook", `Lernhörbuch abgelegt: ${st.bookPath}`, { ctx: { docId } });
@@ -209,9 +255,19 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
   }
 }
 
+// Aktueller Intro-Text: eigene Fassung oder Vorlage
+export function learnIntroInfo(docId: string): { text: string; template: string; custom: boolean; hasAudio: boolean } {
+  const { kind, lang } = learnSettings(docId);
+  const doc = db().prepare("SELECT title, doc_title, author FROM documents WHERE id = ?").get(docId) as { title: string; doc_title: string | null; author: string | null };
+  const units = listUnits(docId).filter((u) => !u.skip_reason).length;
+  const template = introText({ kind, lang, title: doc.doc_title || doc.title, author: doc.author, units });
+  const custom = learnIntroOverride(docId, kind);
+  return { text: custom ?? template, template, custom: !!custom, hasAudio: existsSync(learnIntroPath(docId)) };
+}
+
 async function speakIntro(docId: string, kind: "language" | "subject", lang: string, main: Voice, rate: string, units: number): Promise<{ path: string; durationMs: number } | null> {
   const doc = db().prepare("SELECT title, doc_title, author FROM documents WHERE id = ?").get(docId) as { title: string; doc_title: string | null; author: string | null };
-  const text = introText({ kind, lang, title: doc.doc_title || doc.title, author: doc.author, units });
+  const text = learnIntroOverride(docId, kind) ?? introText({ kind, lang, title: doc.doc_title || doc.title, author: doc.author, units });
   const stamp = audioStamp(text, [main], rate);
   const path = learnIntroPath(docId);
   const meta = `${path}.json`;

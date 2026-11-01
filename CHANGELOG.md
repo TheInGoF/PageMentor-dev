@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.62.0 – 2026-11-01
+### New
+- Lernhörbuch-Intro lässt sich bearbeiten, auf die Vorlage zurücksetzen und einzeln neu sprechen. Danach wird nur das Hörbuch neu gebaut.
+
+### Fix
+- Einheiten ohne lernbaren Inhalt werden markiert und übersprungen, statt den Lauf abzubrechen. Sie fehlen im M4B.
+- Gemma und Qwen schreiben Lernhörbücher ohne Denkmodus. Zuvor kamen leere Skripte („0 Zeichen, length“).
+- Liefert das Modell zweimal kein Skript, wird die Einheit markiert und beim nächsten Lauf erneut versucht. Der Lauf geht weiter.
+- Probe nimmt die erste Einheit mit Inhalt.
+
 ## 1.61.0 – 2026-11-01
 ### New
 - Lernhörbücher lassen sich über das ⋯-Menü herunterladen, mit Zusatz im Dateinamen.

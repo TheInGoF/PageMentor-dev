@@ -22,6 +22,8 @@ export interface LearnUnit {
   audio_path: string | null;
   audio_stamp: string | null;
   duration_ms: number | null;
+  // Gehört nicht ins Hörbuch (kein lernbarer Inhalt oder kein Skript bekommen), mit Grund
+  skip_reason: string | null;
 }
 
 export function ensureLearnTables(d: Database): void {
@@ -48,6 +50,11 @@ export function ensureLearnTables(d: Database): void {
   // Art des Lernhörbuchs und Zielsprache (Sprachkurs); leer = aus dem Heft geschätzt
   if (!cols.some((c) => c.name === "learn_kind")) d.exec("ALTER TABLE documents ADD COLUMN learn_kind TEXT");
   if (!cols.some((c) => c.name === "learn_lang")) d.exec("ALTER TABLE documents ADD COLUMN learn_lang TEXT");
+  const ucols = d.prepare("PRAGMA table_info(learn_units)").all() as Array<{ name: string }>;
+  if (!ucols.some((c) => c.name === "skip_reason")) d.exec("ALTER TABLE learn_units ADD COLUMN skip_reason TEXT");
+  // Eigener Intro-Text je Art (leer = Vorlage der App)
+  if (!cols.some((c) => c.name === "learn_intro_subject")) d.exec("ALTER TABLE documents ADD COLUMN learn_intro_subject TEXT");
+  if (!cols.some((c) => c.name === "learn_intro_language")) d.exec("ALTER TABLE documents ADD COLUMN learn_intro_language TEXT");
   // Eigener Eintrag des Lernhörbuchs in Audiobookshelf (das Original hat abs_item_id)
   if (!cols.some((c) => c.name === "abs_learn_item_id")) d.exec("ALTER TABLE documents ADD COLUMN abs_learn_item_id TEXT");
 }
@@ -74,8 +81,28 @@ export function syncUnits(docId: string, units: Array<{ source: string; start_pa
 
 export function saveScript(docId: string, idx: number, r: { title: string; script: string; points: string[]; checkNote: string | null; model: string; stamp: string }): void {
   db()
-    .prepare("UPDATE learn_units SET title = ?, script = ?, points = ?, check_note = ?, model = ?, script_stamp = ? WHERE document_id = ? AND idx = ?")
+    .prepare(
+      "UPDATE learn_units SET title = ?, script = ?, points = ?, check_note = ?, model = ?, script_stamp = ?, skip_reason = NULL WHERE document_id = ? AND idx = ?"
+    )
     .run(r.title, r.script, JSON.stringify(r.points), r.checkNote, r.model, r.stamp, docId, idx);
+}
+
+// Einheit gehört nicht ins Hörbuch. stamp gesetzt = endgültig (kein Inhalt); ohne stamp versucht der nächste Lauf es wieder
+export function skipUnit(docId: string, idx: number, reason: string, stamp: string | null): void {
+  db()
+    .prepare(
+      "UPDATE learn_units SET script = NULL, points = NULL, check_note = NULL, audio_path = NULL, audio_stamp = NULL, duration_ms = NULL, skip_reason = ?, script_stamp = ? WHERE document_id = ? AND idx = ?"
+    )
+    .run(reason, stamp, docId, idx);
+}
+
+// Eigener Intro-Text je Art; null setzt auf die Vorlage zurück
+export function learnIntroOverride(docId: string, kind: LearnKind): string | null {
+  const r = db().prepare(`SELECT learn_intro_${kind} AS t FROM documents WHERE id = ?`).get(docId) as { t: string | null } | undefined;
+  return r?.t?.trim() || null;
+}
+export function setLearnIntroOverride(docId: string, kind: LearnKind, text: string | null): void {
+  db().prepare(`UPDATE documents SET learn_intro_${kind} = ? WHERE id = ?`).run(text?.trim() || null, docId);
 }
 
 export function learnSettings(docId: string): { kind: LearnKind; lang: string } {
