@@ -8,7 +8,7 @@ import { emitLog } from "../log/logger";
 import { embedText, embeddingToBuffer, resolveEmbedder } from "./embeddings";
 import { syncVectors } from "./rag/vec";
 import { isAvailable as llmAvailable } from "./llm";
-import { anyProcessing } from "./pipeline";
+import { anyProcessing, cancelProcessing, processDocument } from "./pipeline";
 import { anyGenerating } from "./audiobook";
 import { learnBusy } from "./learnbook/run";
 import { batchStatus } from "./batch/audiobooks";
@@ -20,6 +20,8 @@ const SNOOZE_MS = 2 * 3600_000;
 const TICK_MS = 60_000;
 
 export interface MaintenanceOpen {
+  // Hochgeladene Hefte mit bearbeiteten Metadaten, die noch auf Docling warten
+  extract: number;
   // Abschnitte ohne passendes Embedding, in so vielen Heften
   chunks: number;
   chunkDocs: number;
@@ -33,14 +35,14 @@ export interface MaintenanceState {
   // Countdown-Ende bzw. Ende der Ruhe (ms seit 1970)
   until?: number;
   open: MaintenanceOpen;
-  phase?: "embeddings" | "concepts";
+  phase?: "docling" | "embeddings" | "concepts";
   doc?: string;
   detail?: string;
   done: number;
   total: number;
 }
 
-const state: MaintenanceState = { status: "idle", open: { chunks: 0, chunkDocs: 0, chapters: 0, chapterDocs: 0 }, done: 0, total: 0 };
+const state: MaintenanceState = { status: "idle", open: { extract: 0, chunks: 0, chunkDocs: 0, chapters: 0, chapterDocs: 0 }, done: 0, total: 0 };
 let cancel = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -53,6 +55,13 @@ function busy(): boolean {
   return anyProcessing() || anyGenerating() || learnBusy() || !!pronRunState()?.running || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
 }
 
+// Wartende Hefte, deren Metadaten schon bearbeitet sind; älteste zuerst
+function extractQueue(): Array<{ id: string; title: string }> {
+  return db()
+    .prepare("SELECT id, title FROM documents WHERE ocr_status = 'awaiting-extraction' AND meta_edited_at IS NOT NULL ORDER BY created_at")
+    .all() as Array<{ id: string; title: string }>;
+}
+
 async function scanOpen(): Promise<MaintenanceOpen> {
   const embedder = await resolveEmbedder().catch(() => null);
   const emb = embedder
@@ -62,10 +71,10 @@ async function scanOpen(): Promise<MaintenanceOpen> {
     : { n: 0, d: 0 };
   // Begriffe nur zählen, wenn Gemma erreichbar ist: sonst würde der Lauf sofort scheitern
   const chapters = (await llmAvailable().catch(() => false)) ? openChapters() : [];
-  return { chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size };
+  return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size };
 }
 
-const hasWork = (o: MaintenanceOpen) => o.chunks > 0 || o.chapters > 0;
+const hasWork = (o: MaintenanceOpen) => o.extract > 0 || o.chunks > 0 || o.chapters > 0;
 
 // Regelmäßig prüfen; die Entscheidung selbst ist eine reine Funktion (testbar)
 export function decide(s: Pick<MaintenanceState, "status" | "until">, now: number, work: boolean, isBusy: boolean): { status: MaintenanceState["status"]; until?: number; start: boolean } {
@@ -114,6 +123,7 @@ export function cancelMaintenance(): MaintenanceState {
   if (state.status === "running") {
     cancel = true;
     cancelConceptRun();
+    if (extracting) cancelProcessing(extracting);
   }
   Object.assign(state, { status: "snoozed", until: Date.now() + SNOOZE_MS, phase: undefined, doc: undefined, detail: undefined });
   return maintenanceState();
@@ -123,7 +133,9 @@ async function runNow(): Promise<void> {
   cancel = false;
   Object.assign(state, { status: "running", until: undefined, done: 0, total: 0 });
   try {
-    await embeddings();
+    // Erst umwandeln (das bringt neue Kapitel und Abschnitte), dann Embeddings und Begriffe
+    await extract();
+    if (!cancel) await embeddings();
     if (!cancel) await concepts();
     if (!cancel) {
       emitLog("info", "maintenance", "Wissenspflege fertig: alle Hefte erschlossen");
@@ -136,6 +148,30 @@ async function runNow(): Promise<void> {
   state.open = await scanOpen().catch(() => state.open);
   // Bleibt nach einem vollen Lauf etwas offen (z. B. Gemma antwortete nicht), nicht gleich wieder anfangen
   if (state.status === "idle" && hasWork(state.open)) Object.assign(state, { status: "snoozed", until: Date.now() + SNOOZE_MS });
+}
+
+// Docling für wartende Hefte mit bearbeiteten Metadaten, eines nach dem anderen. Die Umwandlung selbst wartet,
+// bis eine laufende Lernhörbuch-Einheit fertig ist; Hörbuch und Umwandlung von Hand gehen vor
+let extracting: string | null = null;
+async function extract(): Promise<void> {
+  const docs = extractQueue();
+  if (!docs.length) return;
+  Object.assign(state, { phase: "docling", done: 0, total: docs.length });
+  for (const d of docs) {
+    if (cancel) return;
+    while (!cancel && (anyProcessing() || anyGenerating())) await sleep(5000);
+    if (cancel) return;
+    Object.assign(state, { doc: d.title, detail: undefined });
+    extracting = d.id;
+    try {
+      await processDocument(d.id);
+    } catch (err) {
+      emitLog("warn", "maintenance", `Umwandlung von „${d.title}“ fehlgeschlagen`, { err });
+    } finally {
+      extracting = null;
+    }
+    state.done++;
+  }
 }
 
 // Fehlende Embeddings Heft für Heft; danach den Vektorindex nachziehen

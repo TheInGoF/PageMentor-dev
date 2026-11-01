@@ -230,6 +230,8 @@ export function initDb() {
   if (!stampCols.some((c) => c.name === "audio_intro_stamp")) d.exec("ALTER TABLE documents ADD COLUMN audio_intro_stamp TEXT");
   // Eintrag in Audiobookshelf zum Buch: neue Fassungen ersetzen ihn statt ein zweites Buch anzulegen
   if (!stampCols.some((c) => c.name === "abs_item_id")) d.exec("ALTER TABLE documents ADD COLUMN abs_item_id TEXT");
+  // Metadaten von Hand bearbeitet (Voraussetzung für die Umwandlung durch die Wissenspflege)
+  if (!stampCols.some((c) => c.name === "meta_edited_at")) d.exec("ALTER TABLE documents ADD COLUMN meta_edited_at INTEGER");
   // Zweite Sprache im Buch (z. B. "es" bei Spanisch-Lehrbüchern) und die Stimme dafür
   if (!stampCols.some((c) => c.name === "second_language")) {
     d.exec("ALTER TABLE documents ADD COLUMN second_language TEXT");

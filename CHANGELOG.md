@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.66.0 – 2026-11-01
+### New
+- Wissenspflege wandelt in Leerlaufpausen hochgeladene Hefte mit Docling um, sobald ihre Metadaten bearbeitet sind. So bekommen Suche und Tutor Futter.
+
+### Fix
+- Ergänzungsstrich am Zeilenende bleibt erhalten: „Signal- und Informationsverarbeitung“ statt „Signalund“.
+
 ## 1.65.0 – 2026-11-01
 ### Change
 - Ausspracheliste in zwei aufklappbaren Gruppen „Offen“ und „Erledigt“, beide anfangs eingeklappt. Zeilen wechseln die Gruppe erst beim Speichern.

@@ -10,6 +10,15 @@ mock.module("./embeddings", () => ({
   resolveEmbedder: async () => ({ url: "http://x", model: "tei:test" }),
   embedText: async () => new Float32Array([1, 0, 0, 0]),
 }));
+const extracted: string[] = [];
+const actualPipe = await import("./pipeline");
+mock.module("./pipeline", () => ({
+  ...actualPipe,
+  processDocument: async (id: string) => {
+    extracted.push(id);
+    dbm.db().prepare("UPDATE documents SET ocr_status = 'done' WHERE id = ?").run(id);
+  },
+}));
 const actualLlm = await import("./llm");
 mock.module("./llm", () => ({ ...actualLlm, isAvailable: async () => false }));
 
@@ -20,6 +29,9 @@ beforeAll(async () => {
   dbm.initDb();
   const d = dbm.db();
   d.prepare("INSERT INTO documents (id, title, filename, stored_path) VALUES ('d1', 'Heft A', 'a.pdf', '')").run();
+  // Wartet auf Docling: nur das Heft mit bearbeiteten Metadaten wandelt die Wissenspflege um
+  d.prepare("INSERT INTO documents (id, title, filename, stored_path, ocr_status, meta_edited_at) VALUES ('d2', 'Neu bearbeitet', 'b.pdf', '', 'awaiting-extraction', 1)").run();
+  d.prepare("INSERT INTO documents (id, title, filename, stored_path, ocr_status) VALUES ('d3', 'Neu roh', 'c.pdf', '', 'awaiting-extraction')").run();
   d.prepare("INSERT INTO chapters (id, document_id, number, title, kind, text) VALUES ('c1', 'd1', 1, 'K1', 'content', 'x')").run();
   const ins = d.prepare("INSERT INTO chunks (id, document_id, chapter_id, chunk_index, text, embedding, embedding_model) VALUES (?, 'd1', 'c1', ?, ?, ?, ?)");
   ins.run("k1", 0, "eins", null, null);
@@ -32,8 +44,11 @@ describe("Wissenspflege-Lauf", () => {
     const m = await import("./maintenance");
     const before = await m.startNow();
     expect(before.open.chunks).toBe(2);
+    expect(before.open.extract).toBe(1);
     for (let i = 0; i < 50 && m.maintenanceState().status === "running"; i++) await new Promise((r) => setTimeout(r, 20));
     const after = m.maintenanceState();
+    expect(extracted).toEqual(["d2"]);
+    expect(after.open.extract).toBe(0);
     expect(after.status).toBe("idle");
     expect(after.open.chunks).toBe(0);
     const rows = dbm.db().prepare("SELECT embedding_model FROM chunks ORDER BY chunk_index").all() as Array<{ embedding_model: string }>;

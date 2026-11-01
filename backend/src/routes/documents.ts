@@ -300,6 +300,10 @@ documentRoutes.patch("/:id", async (c) => {
     | { id: string; page_count: number }
     | undefined;
   if (!doc) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+  // Metadaten bestätigt: ab jetzt darf die Wissenspflege das Heft in Leerlaufpausen umwandeln
+  if (["title", "author", "short_code", "series_sequence", "type", "module_id"].some((k) => k in body)) {
+    db().prepare("UPDATE documents SET meta_edited_at = ? WHERE id = ?").run(Date.now(), id);
+  }
 
   if (body.title !== undefined) {
     db().prepare("UPDATE documents SET title = ? WHERE id = ?").run(body.title, id);

@@ -9,8 +9,8 @@ import { Button } from "../ui/Button";
 interface State {
   status: "idle" | "countdown" | "running" | "snoozed";
   until?: number;
-  open: { chunks: number; chunkDocs: number; chapters: number; chapterDocs: number };
-  phase?: "embeddings" | "concepts";
+  open: { extract?: number; chunks: number; chunkDocs: number; chapters: number; chapterDocs: number };
+  phase?: "docling" | "embeddings" | "concepts";
   doc?: string;
   detail?: string;
   done: number;
@@ -71,6 +71,7 @@ export function MaintenanceIndicator() {
             <>
               <p className="text-sm">{secs > 0 ? t("maintenance.countdownHint", { s: secs }) : t("maintenance.waitingHint")}</p>
               <ul className="text-xs text-neutral-500 flex flex-col gap-1">
+                {!!st.open.extract && <li>{t("maintenance.openExtract", { n: st.open.extract })}</li>}
                 {st.open.chunks > 0 && <li>{t("maintenance.openChunks", { docs: st.open.chunkDocs, n: st.open.chunks })}</li>}
                 {st.open.chapters > 0 && <li>{t("maintenance.openChapters", { docs: st.open.chapterDocs, n: st.open.chapters })}</li>}
               </ul>

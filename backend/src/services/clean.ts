@@ -168,14 +168,16 @@ export function cleanForReading(raw: string): string {
   // PDF layout — appear with or without spaces before/after
   // ("Verän- derung", "Verän -derung", "Verän - derung"), followed
   // by a line break.
-  t = t.replace(/([a-zäöüß])\s*-\s*\n\s*([a-zäöüß])/g, "$1$2");
+  // Ausnahme Ergänzungsstrich: „Signal-⏎und Informations…“ bleibt „Signal- und“, sonst entsteht „Signalund“
+  t = t.replace(/([a-zäöüß])\s*-\s*\n\s*(?!(?:und|oder|bis|sowie|bzw|als|wie|noch|beziehungsweise)\b)([a-zäöüß])/g, "$1$2");
+  t = t.replace(/([a-zäöüß])\s*-\s*\n\s*(und|oder|bis|sowie|bzw|als|wie|noch|beziehungsweise)\b/g, "$1- $2");
   // Some extractors replace the line break with a space upfront.
   // Typical hyphenation patterns with lowercase on both sides are
   // almost always real hyphenations (dashes between full words would
   // typographically be "–", which normalizeUnicode does NOT fold to
   // ASCII — that's why the two lookarounds aren't enough without a
   // filter for sufficiently long word fragments).
-  t = t.replace(/([a-zäöüß]{2,})\s-\s([a-zäöüß]{2,})/g, "$1$2");
+  t = t.replace(/([a-zäöüß]{2,})\s-\s(?!(?:und|oder|bis|sowie|bzw|als|wie|noch|beziehungsweise)\b)([a-zäöüß]{2,})/g, "$1$2");
 
   // Paragraph repair: when a line ends with lowercase / comma and
   // the next line starts with lowercase, this is almost certainly
