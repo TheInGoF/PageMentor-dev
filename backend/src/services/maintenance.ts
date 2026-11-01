@@ -55,10 +55,13 @@ function busy(): boolean {
   return anyProcessing() || anyGenerating() || learnBusy() || !!pronRunState()?.running || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
 }
 
+// Metadaten gepflegt: im Bearbeiten-Dialog gespeichert, oder (für Hefte von vor dieser Markierung) Autor bzw. Kürzel eingetragen
+export const META_DONE = "(meta_edited_at IS NOT NULL OR COALESCE(TRIM(author), '') <> '' OR COALESCE(TRIM(short_code), '') <> '')";
+
 // Wartende Hefte, deren Metadaten schon bearbeitet sind; älteste zuerst
 function extractQueue(): Array<{ id: string; title: string }> {
   return db()
-    .prepare("SELECT id, title FROM documents WHERE ocr_status = 'awaiting-extraction' AND meta_edited_at IS NOT NULL ORDER BY created_at")
+    .prepare(`SELECT id, title FROM documents WHERE ocr_status = 'awaiting-extraction' AND ${META_DONE} ORDER BY created_at`)
     .all() as Array<{ id: string; title: string }>;
 }
 

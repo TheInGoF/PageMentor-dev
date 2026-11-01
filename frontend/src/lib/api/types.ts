@@ -3,6 +3,8 @@ export type DocType = "studienheft" | "script" | "klausur" | "uebung" | "literat
 
 export interface Document {
   id: string;
+  // Metadaten gepflegt (1): die Wissenspflege wandelt das Heft in einer Leerlaufpause um
+  meta_done?: number;
   title: string;
   filename: string;
   stored_path: string;

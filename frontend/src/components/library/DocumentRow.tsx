@@ -89,7 +89,14 @@ export function DocumentRow({ doc, liveEvent, selected, onSelect, onOpen, action
             {describeLive(liveEvent)}
           </span>
         ) : (
-          doc.ocr_status !== "done" && <span className={cn("tag shrink-0", statusColor[doc.ocr_status] ?? statusColor.pending)}>{t(`ocr.${doc.ocr_status}`)}</span>
+          doc.ocr_status !== "done" && (
+            <span
+              className={cn("tag shrink-0", statusColor[doc.ocr_status] ?? statusColor.pending)}
+              title={doc.ocr_status === "awaiting-extraction" ? t(doc.meta_done ? "ocr.awaitingAutoHint" : "ocr.awaitingMetaHint") : undefined}
+            >
+              {doc.ocr_status === "awaiting-extraction" ? t(doc.meta_done ? "ocr.awaitingAuto" : "ocr.awaitingMeta") : t(`ocr.${doc.ocr_status}`)}
+            </span>
+          )
         )}
         <Menu items={actions} label={t("library.actions")} />
       </div>

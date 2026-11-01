@@ -32,6 +32,8 @@ beforeAll(async () => {
   // Wartet auf Docling: nur das Heft mit bearbeiteten Metadaten wandelt die Wissenspflege um
   d.prepare("INSERT INTO documents (id, title, filename, stored_path, ocr_status, meta_edited_at) VALUES ('d2', 'Neu bearbeitet', 'b.pdf', '', 'awaiting-extraction', 1)").run();
   d.prepare("INSERT INTO documents (id, title, filename, stored_path, ocr_status) VALUES ('d3', 'Neu roh', 'c.pdf', '', 'awaiting-extraction')").run();
+  // Von vor der Markierung: Autor eingetragen, gilt als gepflegt
+  d.prepare("INSERT INTO documents (id, title, filename, stored_path, ocr_status, author) VALUES ('d4', 'Alt gepflegt', 'd.pdf', '', 'awaiting-extraction', 'Max Muster')").run();
   d.prepare("INSERT INTO chapters (id, document_id, number, title, kind, text) VALUES ('c1', 'd1', 1, 'K1', 'content', 'x')").run();
   const ins = d.prepare("INSERT INTO chunks (id, document_id, chapter_id, chunk_index, text, embedding, embedding_model) VALUES (?, 'd1', 'c1', ?, ?, ?, ?)");
   ins.run("k1", 0, "eins", null, null);
@@ -44,10 +46,10 @@ describe("Wissenspflege-Lauf", () => {
     const m = await import("./maintenance");
     const before = await m.startNow();
     expect(before.open.chunks).toBe(2);
-    expect(before.open.extract).toBe(1);
+    expect(before.open.extract).toBe(2);
     for (let i = 0; i < 50 && m.maintenanceState().status === "running"; i++) await new Promise((r) => setTimeout(r, 20));
     const after = m.maintenanceState();
-    expect(extracted).toEqual(["d2"]);
+    expect(extracted.sort()).toEqual(["d2", "d4"]);
     expect(after.open.extract).toBe(0);
     expect(after.status).toBe("idle");
     expect(after.open.chunks).toBe(0);

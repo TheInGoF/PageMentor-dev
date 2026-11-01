@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.71.0 – 2026-11-01
+### Change
+- Bibliothek zeigt bei wartenden Heften „Wartet auf Leerlauf“ oder „Metadaten fehlen“.
+
+### Fix
+- Wissenspflege wandelt auch Hefte um, deren Metadaten vor v1.66 gepflegt wurden (Autor oder Kürzel eingetragen).
+
 ## 1.70.0 – 2026-11-01
 ### Change
 - Engine-Seite einheitlich: Klangstufen und Download-Bremse werden wie alles andere erst mit „Übernehmen“ gespeichert.

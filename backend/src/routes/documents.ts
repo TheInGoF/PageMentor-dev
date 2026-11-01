@@ -1,4 +1,5 @@
 import { syncVectors } from "../services/rag/vec";
+import { META_DONE } from "../services/maintenance";
 import { Hono } from "hono";
 import { db } from "../db";
 import { createHash, randomUUID } from "crypto";
@@ -33,7 +34,7 @@ documentRoutes.get("/", (c) => {
 
   const rows = db()
     .prepare(
-      `SELECT d.*,
+      `SELECT d.*, ${META_DONE.replaceAll("meta_edited_at", "d.meta_edited_at").replaceAll("author", "d.author").replaceAll("short_code", "d.short_code")} AS meta_done,
               GROUP_CONCAT(DISTINCT t.label) as tag_labels,
               (SELECT code FROM modules m WHERE m.id = d.assign_module_id) as assign_code,
               (SELECT name FROM modules m WHERE m.id = d.assign_module_id) as assign_name,
