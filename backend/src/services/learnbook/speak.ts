@@ -39,7 +39,21 @@ export function parseScript(script: string): ScriptPart[] {
     last = m.index + m[0].length;
   }
   speech(script.slice(last));
-  return parts;
+  return thinkTime(parts);
+}
+
+// Denkzeit: Die Pause zwischen einer Frage an den Hörer und ihrer Antwort („Antwort: …“) dauert mindestens
+// sechs Sekunden. Rhetorische Fragen im Fließtext haben keine eigene Pause und bleiben, wie sie sind
+export const THINK_MS = 6000;
+export function thinkTime(parts: ScriptPart[]): ScriptPart[] {
+  return parts.map((p, i) => {
+    if (p.kind !== "pause" || p.ms >= THINK_MS) return p;
+    const prev = parts[i - 1];
+    const next = parts[i + 1];
+    const question = prev?.kind === "speech" && /\?$/.test(prev.text);
+    const answer = next?.kind === "speech" && /^Antwort\b/i.test(next.text);
+    return question && answer ? { kind: "pause", ms: THINK_MS } : p;
+  });
 }
 
 export function audioStamp(script: string, voices: Voice[], rate: string): string {

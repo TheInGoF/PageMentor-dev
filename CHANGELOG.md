@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.80.0 – 2026-11-01
+### Change
+- Lernhörbuch: Pausen nach ihrer Aufgabe: eine Sekunde zwischen Absätzen, zwei vor einem neuen Abschnitt, sechs nach einer Frage an den Hörer, acht bei einer Rechnung. Rhetorische Fragen bekommen keine Pause.
+### Fix
+- Lernhörbuch: Die Pause zwischen einer Frage und ihrer Antwort dauert beim Sprechen mindestens sechs Sekunden, auch wenn das Skript weniger vorgibt.
+
 ## 1.79.0 – 2026-11-01
 ### Change
 - Lernhörbuch: Jede Einheit beginnt mit einer Vorab-Frage, die die Zusammenfassung am Ende ausdrücklich beantwortet.

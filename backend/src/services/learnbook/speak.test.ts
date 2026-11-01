@@ -22,6 +22,13 @@ describe("Lernhörbuch-Skript sprechen", () => {
     ]);
   });
 
+  test("Denkzeit: Pause zwischen Frage und „Antwort:“ dauert mindestens sechs Sekunden", () => {
+    const parts = parseScript(
+      "Was bedeutet das? Es heißt viel.\n[PAUSE 2]\nFrage eins: Warum sinkt die Entropie?\n[PAUSE 3]\nAntwort: Weil das Gedächtnis die Unsicherheit verringert.\n[PAUSE 2]\nWie sagst du: Kaffee?\n[PAUSE 4]\n[es]café[/es]\n[PAUSE 1]\nNoch eine Rechenfrage?\n[PAUSE 8]\nAntwort: ja."
+    );
+    expect(parts.filter((p) => p.kind === "pause").map((p) => p.ms)).toEqual([2000, 6000, 2000, 4000, 1000, 8000]);
+  });
+
   test("leere Stücke zwischen Pausen fallen weg", () => {
     expect(parseScript("[PAUSE 2]\n\n[PAUSE 2]").every((p) => p.kind === "pause")).toBe(true);
   });
