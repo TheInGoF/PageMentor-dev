@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.83.0 – 2026-11-01
+### Fix
+- Sprachausgabe: Ein Fehler im Sprach-Dienst steht mit Grund im Log statt nur als „Internal Server Error“.
+- TADA: Der Aligner einer weiteren Sprache (etwa Spanisch für die Zweitstimme) wird nach dem ersten Start nachgeladen statt mit Fehler 500 zu scheitern.
+
 ## 1.82.0 – 2026-11-01
 ### Change
 - Sprachlern-Hörbuch: Abgefragt wird nur, was vorher vorgestellt und nachgesprochen wurde. Längere Wendungen werden von hinten aufgebaut.

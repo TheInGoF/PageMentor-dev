@@ -157,8 +157,15 @@ def create_app(engine: Engine) -> FastAPI:
                 raise HTTPException(status_code=400, detail="ref_audio_b64 fehlt, diese Engine klont nur")
             ref = decode_ref(req.ref_audio_b64, (req.ref_text or "").strip() or None, engine.sample_rate)
         t0 = time.time()
-        with synth_lock:
-            samples = normalize(engine.synth(req.input, ref, req))
+        try:
+            with synth_lock:
+                samples = normalize(engine.synth(req.input, ref, req))
+        except HTTPException:
+            raise
+        except Exception as e:  # noqa: BLE001
+            # Grund in die Antwort: die App zeigt ihn im Log statt „Internal Server Error“
+            log.exception("%s synth failed (%d chars)", engine.name, len(req.input))
+            raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}"[:600]) from e
         dur = samples.size / engine.sample_rate
         log.info(
             "%s: %d chars → %.1fs audio in %.1fs (seed %d)",

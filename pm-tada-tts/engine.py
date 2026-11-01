@@ -66,11 +66,25 @@ class TadaEngine:
                 try:
                     enc = Encoder.from_pretrained(CODEC, subfolder="encoder", language=code)
                 except Exception:  # noqa: BLE001
-                    # Nach dem ersten Start ist der Hub offline; der Aligner dieser Sprache fehlt noch: einmal laden
-                    _set_offline(False)
+                    # Nach dem ersten Start ist der Hub offline und der Aligner dieser Sprache fehlt noch. transformers
+                    # liest den Offline-Schalter nur beim Import, darum die Dateien erst per huggingface_hub holen
+                    # und dann offline aus dem Cache öffnen
+                    self._fetch_aligner(code)
                     enc = Encoder.from_pretrained(CODEC, subfolder="encoder", language=code)
                 self._encoders[code] = enc.to("cuda")
         return self._encoders[code]
+
+    @staticmethod
+    def _fetch_aligner(code: str | None) -> None:
+        from huggingface_hub import snapshot_download
+
+        folder = f"aligner-{code}" if code else "aligner"
+        _set_offline(False)
+        try:
+            # Encoder mit dazu: Beide Ordner stehen dann im selben Stand des Repos
+            snapshot_download(CODEC, allow_patterns=[f"{folder}/*", "encoder/*"])
+        finally:
+            _set_offline(True)
 
     def _prompt(self, ref: Ref, language: str):
         import torch
