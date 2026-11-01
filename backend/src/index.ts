@@ -34,6 +34,7 @@ import { tutorRoutes } from "./routes/tutor";
 import { moduleRoutes } from "./routes/modules";
 import { ragRoutes } from "./routes/rag";
 import { conceptRoutes } from "./routes/concepts";
+import { cleanupConcepts } from "./services/concepts/links";
 import { learnbookRoutes } from "./routes/learnbook";
 import { maintenanceRoutes } from "./routes/maintenance";
 import { activityRoutes } from "./routes/activity";
@@ -127,6 +128,11 @@ app.use("/*", serveStatic({ path: join(PUBLIC_DIR, "index.html") }));
 
 await startupStep("Datenbank öffnen", () => initDb());
 migrateTtsEngines();
+// Begriffsnetz: Aufgabenfetzen und Sprachhefte raus, ohne Modell
+await startupStep("Begriffsnetz aufräumen", () => {
+  const r = cleanupConcepts();
+  if (r.chapters) startupNote(`Begriffsnetz: ${r.chapters} Kapitel ohne Fachinhalt entfernt, ${r.concepts} Begriffe dazu`);
+});
 await startupStep("Suchindex prüfen", () => ensureSearchReady());
 startupNote(vecState.available ? `Vektorsuche: sqlite-vec (${vecState.path})` : `Vektorsuche: langsamer Weg in JS (${vecState.error})`);
 // Vektorindex einmalig nachziehen, ohne den Start zu blockieren

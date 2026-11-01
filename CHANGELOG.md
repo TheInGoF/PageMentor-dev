@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.88.0 – 2026-11-01
+### New
+- Begriffsnetz: Eine Verbindung gilt als gesichert, wenn sie in zwei Kapiteln vorkommt, die Grundlage im Heft vorher erklärt wird oder aus einem anderen Heft stammt. Gegenseitige Paare behalten nur die Richtung zur früher erklärten Grundlage. Ungesicherte Verbindungen sind im Gehirn gestrichelt.
+### Change
+- Begriffsnetz: Kapitel ohne Wort im Titel (Aufgabenfetzen) und Sprachhefte werden nicht mehr ausgewertet; vorhandene Einträge daraus werden beim Start entfernt.
+
 ## 1.87.0 – 2026-11-01
 ### Change
 - Begriffsnetz: Gemma liefert je Abschnitt höchstens acht Fachbegriffe, jede Erklärung muss den Begriff definieren, „baut auf“ nur für echte Voraussetzungen (höchstens drei). Keine Allerweltswörter und keine Wortvarianten. Die Wissenspflege baut das Netz damit neu.

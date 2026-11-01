@@ -14,6 +14,7 @@ import { embeddingToBuffer, embedText, resolveEmbedder } from "../embeddings";
 import { anyProcessing } from "../pipeline";
 import { anyGenerating } from "../audiobook";
 import { normalizeConcept, saveChapterConcepts, type ExtractedConcept } from "./store";
+import { cleanupConcepts, LANGUAGE_DOC, wordTitle } from "./links";
 
 const VERSION = 2;
 // Längere Kapitel in Stücken; mehr als sechs Stücke bringen kaum neue Begriffe
@@ -124,16 +125,18 @@ async function embedNewConcepts(): Promise<void> {
   }
 }
 
-// Offene Kapitel: Lerninhalt mit genug Text, noch ohne aktuellen Stempel
+// Offene Kapitel: Lerninhalt mit genug Text und Wort-Titel, kein Sprachheft, noch ohne aktuellen Stempel
 export function openChapters(docIds?: string[]): Array<{ id: string; document_id: string; title: string; text: string }> {
   const filter = docIds?.length ? ` AND c.document_id IN (${docIds.map(() => "?").join(",")})` : "";
-  return db()
+  const rows = db()
     .prepare(
-      `SELECT c.id, c.document_id, c.title, c.text FROM chapters c
-        WHERE c.kind IN ('content', 'summary') AND length(c.text) >= 200 AND (c.concepts_stamp IS NULL OR c.concepts_stamp != ?)${filter}
+      `SELECT c.id, c.document_id, c.title, c.text FROM chapters c JOIN documents d ON d.id = c.document_id
+        WHERE c.kind IN ('content', 'summary') AND length(c.text) >= 200 AND NOT (${LANGUAGE_DOC})
+          AND (c.concepts_stamp IS NULL OR c.concepts_stamp != ?)${filter}
         ORDER BY c.document_id, c.sort_order, c.number`
     )
     .all(conceptsStamp(), ...(docIds ?? [])) as Array<{ id: string; document_id: string; title: string; text: string }>;
+  return rows.filter((c) => wordTitle(c.title));
 }
 
 export interface ConceptRunState {
@@ -171,6 +174,7 @@ async function run(model?: string): Promise<void> {
   cancel = false;
   state.done = 0;
   let failures = 0;
+  cleanupConcepts();
   try {
     await runJob("concepts", "concepts", {}, async () => {
       while (queue.size && !cancel) {

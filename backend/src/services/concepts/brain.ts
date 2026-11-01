@@ -1,6 +1,7 @@
 // Gehirn-Ansicht: das globale Begriffsnetz als Graph. Begriffe sind Punkte (Größe = wie oft sie vorkommen,
 // Farbe = Modul mit den meisten Fundstellen), Linien sind „baut auf“-Verbindungen aus den Kapiteln
 import { db } from "../../db";
+import { linkKey, linkStatus } from "./links";
 
 export interface BrainNode {
   id: string;
@@ -16,6 +17,8 @@ export interface BrainEdge {
   a: string;
   b: string;
   weight: number;
+  // Gesichert: in zwei Kapiteln gefunden oder die Grundlage wird vorher erklärt
+  sure: boolean;
 }
 export interface BrainGraph {
   nodes: BrainNode[];
@@ -51,8 +54,9 @@ function nodesFor(ids: string[]): BrainNode[] {
 
 // Verbindungen zwischen den gezeigten Begriffen; Gewicht = in wie vielen Kapiteln sie verknüpft sind
 function edgesFor(ids: Set<string>): BrainEdge[] {
+  const sure = linkStatus();
   const rows = db().prepare("SELECT concept_id AS a, needs_id AS b, COUNT(*) AS w FROM concept_links GROUP BY concept_id, needs_id").all() as Array<{ a: string; b: string; w: number }>;
-  return rows.filter((r) => r.a !== r.b && ids.has(r.a) && ids.has(r.b)).map((r) => ({ a: r.a, b: r.b, weight: r.w }));
+  return rows.filter((r) => r.a !== r.b && ids.has(r.a) && ids.has(r.b)).map((r) => ({ a: r.a, b: r.b, weight: r.w, sure: sure.has(linkKey(r.a, r.b)) }));
 }
 
 // Die wichtigsten Begriffe: viele Fundstellen und viele Verbindungen; optional nur ein Modul

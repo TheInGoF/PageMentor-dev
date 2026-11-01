@@ -10,7 +10,7 @@ import { DARK, LIGHT } from "../module/GraphPanel";
 import { brainLayout } from "./layout";
 
 interface BrainNode { id: string; name: string; mentions: number; moduleId: string | null; modules: number; explained: boolean }
-interface BrainEdge { a: string; b: string; weight: number }
+interface BrainEdge { a: string; b: string; weight: number; sure: boolean }
 interface Graph { nodes: BrainNode[]; edges: BrainEdge[]; modules: Array<{ id: string; name: string; icon: string | null }>; total: { concepts: number; links: number } }
 interface Active { id: string; name: string; depth: number; strength: number; via?: string }
 interface Detail {
@@ -244,8 +244,9 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
                   y2={pb.y}
                   className={lit ? "text-accent" : "text-neutral-500"}
                   stroke="currentColor"
-                  strokeOpacity={lit ? 0.9 : active || focus ? 0.08 : 0.25}
+                  strokeOpacity={(lit ? 0.9 : active || focus ? 0.08 : 0.25) * (e.sure ? 1 : 0.6)}
                   strokeWidth={(lit ? 1.6 : 0.8) / k}
+                  strokeDasharray={e.sure ? undefined : `${3 / k} ${3 / k}`}
                   markerEnd={lit ? "url(#brain-arrow)" : undefined}
                 />
               );

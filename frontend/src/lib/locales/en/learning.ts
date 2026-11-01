@@ -17,7 +17,7 @@ export const learning: Record<string, string> = {
   "brain.reset": "Reset",
   "brain.stats": "{shown} of {total} concepts · {links} links",
   "brain.noEmbeddings": "Embeddings unreachable, nothing activated",
-  "brain.legend": "Size = mentions · dashed ring = in several modules · arrow = builds on",
+  "brain.legend": "Size = mentions · dashed ring = in several modules · arrow = builds on · dashed line = unconfirmed",
   "brain.activeTitle": "Lights up",
   "brain.nothingActive": "No concept matches the question.",
   "brain.direct": "direct",
