@@ -8,6 +8,16 @@ import { Button } from "../ui/Button";
 // Ausgeschriebener Name der Engine für den gesprochenen Text
 const ENGINE_NAMES: Record<string, string> = { qwen: "Qwen3-TTS", kokoro: "Kokoro", f5: "F5-TTS", tada: "TADA" };
 
+// Modellkennung als sprechbarer Name, wie im Backend: „qwen3.6:27b“ → „Qwen 3.6“
+function spokenModel(id: string): string {
+  const base = id.split(":")[0].trim();
+  if (!base || base === "default") return "KI";
+  const m = base.match(/^([a-z]+)[-_]?(\d+(?:\.\d+)?)?/i);
+  if (!m) return base;
+  const name = m[1][0].toUpperCase() + m[1].slice(1);
+  return m[2] ? `${name} ${m[2]}` : name;
+}
+
 // Standard-Intro als lesbarer Text, Namen in normaler Schreibweise
 // Die phonetische Umschrift macht Gemma direkt vor der Synthese
 function buildIntroDefault(
@@ -37,7 +47,7 @@ function buildIntroDefault(
       lines.push(`Von ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Aufbereitet durch ${model}.`);
+      lines.push(`Aufbereitet durch ${spokenModel(model)}.`);
     }
     if (voice) {
       lines.push(
@@ -52,7 +62,7 @@ function buildIntroDefault(
       lines.push(`By ${meta.author}.`);
     }
     if (model) {
-      lines.push(`Prepared with ${model}.`);
+      lines.push(`Prepared with ${spokenModel(model)}.`);
     }
     if (voice) {
       lines.push(

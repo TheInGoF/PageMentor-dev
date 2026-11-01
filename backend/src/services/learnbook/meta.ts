@@ -1,6 +1,7 @@
 // Name und Autor der Lernhörbücher: eigener Zusatz je Art, damit sie neben dem Original-Hörbuch erkennbar sind
 // („Heft – Sprachlern-Hörbuch“, Autor „nach dem Buch von …“)
 import { spokenAuthors } from "../../lib/authors";
+import { spokenModel } from "../../lib/spokenModel";
 
 export type LearnKindName = "subject" | "language";
 
@@ -34,13 +35,12 @@ export function introText(p: { kind: LearnKindName; lang: string; title: string;
     const a = learnAuthor(p.author);
     lines.push(`${a[0].toUpperCase()}${a.slice(1)}.`);
   }
-  lines.push(`Zum Lernen aufbereitet durch ${p.model?.trim() || "KI"}.`);
+  lines.push(`Zum Lernen aufbereitet durch ${spokenModel(p.model)}.`);
   if (p.kind === "language") {
     lines.push(`Du lernst ${LANG_NAMES[p.lang] ?? p.lang} in ${p.units} Einheiten.`);
     lines.push("Wenn eine Pause kommt, sprich laut nach oder antworte selbst, bevor die Lösung kommt.");
   } else {
     lines.push(`${p.units} Einheiten erklären das Heft Schritt für Schritt, mit Beispielen und Denkfragen.`);
-    lines.push("Wenn eine Frage kommt, halte kurz an und überlege selbst, bevor die Antwort folgt.");
   }
   lines.push("Erstellt mit PageMentor.");
   return lines.join("\n");

@@ -20,6 +20,8 @@ describe("Lernhörbuch: Name, Autor, Intro", () => {
     expect(de).toContain("Du lernst Spanisch in 12 Einheiten");
     expect(de).toEndWith("Erstellt mit PageMentor.");
     expect(introText({ kind: "subject", lang: "es", title: "IT", author: null, units: 3 })).toStartWith("Lernhörbuch: IT.\n\nZum Lernen aufbereitet durch KI.\n3 Einheiten");
-    expect(introText({ kind: "subject", lang: "es", title: "IT", author: null, units: 3, module: "Informatik", model: "qwen3.6:27b" })).toStartWith("Informatik.\nLernhörbuch: IT.\n\nZum Lernen aufbereitet durch qwen3.6:27b.");
+    const it = introText({ kind: "subject", lang: "es", title: "IT", author: null, units: 3, module: "Informatik", model: "qwen3.6:27b" });
+    expect(it).toStartWith("Informatik.\nLernhörbuch: IT.\n\nZum Lernen aufbereitet durch Qwen 3.6.");
+    expect(it).not.toContain("halte kurz an");
   });
 });

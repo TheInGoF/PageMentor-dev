@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.97.0 – 2026-11-01
+### Change
+- Intro: Das Modell heißt sprechbar „Qwen 3.6“ oder „Gemma 4“ statt „qwen3.6:27b“; die Ausspracheliste macht daraus „Kwenn“ und „Dschemma“.
+- Lernhörbuch-Intro ohne den Satz „Wenn eine Frage kommt, halte kurz an …“.
+
 ## 1.96.0 – 2026-11-01
 ### Change
 - Intro-Vorlage neu gegliedert: Modul als eigene Zeile, dann „Hörbuch: Titel“ bzw. „Lernhörbuch: Titel“ oder „Sprachlern-Hörbuch: Titel“, dann Autor. Die Lernhörbücher nennen dazu „Zum Lernen aufbereitet durch …“ mit dem Modell, das die Einheiten geschrieben hat, sonst „KI“.

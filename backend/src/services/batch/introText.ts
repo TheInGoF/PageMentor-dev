@@ -1,6 +1,7 @@
 // Standard-Intro aus den Metadaten, wie im Hörbuch-Tab (IntroEditor): Titel, Autor, Modell, Engine und Stimme
 import type { Voice } from "../../tts/engines/base";
 import { spokenAuthors } from "../../lib/authors";
+import { spokenModel } from "../../lib/spokenModel";
 
 const ENGINE_NAMES: Record<string, string> = { qwen: "Qwen3-TTS", kokoro: "Kokoro", f5: "F5-TTS", tada: "TADA" };
 
@@ -16,7 +17,7 @@ export function defaultIntroText(meta: { title: string; author: string | null; l
   // Mehrere Autoren zum Vorlesen mit „und“ verbunden
   const by = spokenAuthors(meta.author, meta.language);
   if (by) lines.push(de ? `Von ${by}.` : `By ${by}.`);
-  if (model) lines.push(de ? `Aufbereitet durch ${model}.` : `Prepared with ${model}.`);
+  if (model) lines.push(de ? `Aufbereitet durch ${spokenModel(model)}.` : `Prepared with ${spokenModel(model)}.`);
   if (voice) lines.push(de ? `Gesprochen durch ${engine}, mit der Stimme ${voiceLabel}.` : `Narrated by ${engine}, with the voice ${voiceLabel}.`);
   lines.push(de ? "Erstellt mit PageMentor." : "Created with PageMentor.");
   return lines.join("\n");

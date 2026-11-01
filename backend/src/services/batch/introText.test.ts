@@ -13,6 +13,7 @@ describe("Intro aus den Metadaten", () => {
     const text = defaultIntroText({ title: "Gleichstrom", author: "Prof. X", language: "de" }, voice, "gemma4:e4b");
     expect(text).toContain("Hörbuch: Gleichstrom.");
     expect(text).toContain("Von Prof. X.");
+    expect(text).toContain("Aufbereitet durch Gemma 4.");
     expect(text).toContain("Gesprochen durch F5-TTS, mit der Stimme Thorsten.");
   });
   test("Modulname vor dem Hefttitel", () => {
