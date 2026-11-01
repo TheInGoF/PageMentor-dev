@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { db } from "../db";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters } from "../services/concepts/extract";
 import { brainExtend, brainGraph, conceptDetail, searchConcepts } from "../services/concepts/brain";
+import { chapterActivation } from "../services/concepts/activate";
 import { activate } from "../services/concepts/activate";
 import { brainExport } from "../services/concepts/export";
 import { embedText, resolveEmbedder } from "../services/embeddings";
@@ -69,6 +70,14 @@ conceptRoutes.get("/brain", (c) => {
 });
 
 // Export zur Prüfung durch ein großes Modell (Markdown zum Herunterladen)
+// Kapitel hervorheben: seine Begriffe und ihre Grundlagen, fehlende Knoten fürs Bild dazu
+conceptRoutes.post("/brain/chapter", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { chapterId?: string; have?: string[] };
+  const active = body.chapterId ? chapterActivation(body.chapterId) : [];
+  const ext = brainExtend(Array.isArray(body.have) ? body.have : [], active.map((a) => a.id));
+  return c.json({ active, ...ext });
+});
+
 // Schlagwortsuche fürs Gehirn: Treffer-IDs
 conceptRoutes.get("/brain/search", (c) => c.json({ hits: searchConcepts(c.req.query("q") ?? "") }));
 

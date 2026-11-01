@@ -30,6 +30,8 @@ export interface BrainGraph {
   modules: Array<{ id: string; name: string; icon: string | null }>;
   // Hefte mit Begriffen, nach Modul und Titel geordnet: Nachbarn im Bild
   docs: Array<{ id: string; title: string; moduleId: string | null }>;
+  // Kapitel mit Begriffen, in Heftreihenfolge, zum Hervorheben
+  chapters: Array<{ id: string; title: string; docId: string }>;
   total: { concepts: number; links: number };
 }
 
@@ -96,11 +98,18 @@ export function brainGraph(opts: { moduleId?: string; limit?: number } = {}): Br
         WHERE d.id IN (SELECT DISTINCT document_id FROM concept_mentions) ORDER BY mo.name COLLATE NOCASE, title COLLATE NOCASE`
     )
     .all() as BrainGraph["docs"];
+  const chapters = d
+    .prepare(
+      `SELECT ch.id, ch.title, ch.document_id AS docId FROM chapters ch JOIN documents d ON d.id = ch.document_id LEFT JOIN modules mo ON mo.id = d.module_id
+        WHERE ch.id IN (SELECT DISTINCT chapter_id FROM concept_mentions)
+        ORDER BY mo.name COLLATE NOCASE, COALESCE(NULLIF(TRIM(d.doc_title), ''), d.title) COLLATE NOCASE, ch.sort_order, ch.number`
+    )
+    .all() as BrainGraph["chapters"];
   const total = {
     concepts: (d.prepare("SELECT COUNT(*) AS n FROM concepts").get() as { n: number }).n,
     links: (d.prepare("SELECT COUNT(*) AS n FROM (SELECT DISTINCT concept_id, needs_id FROM concept_links)").get() as { n: number }).n,
   };
-  return { nodes: nodesFor(ids), edges: edgesFor(new Set(ids)), modules, docs, total };
+  return { nodes: nodesFor(ids), edges: edgesFor(new Set(ids)), modules, docs, chapters, total };
 }
 
 // Schlagwortsuche: Name, Schreibweise oder Erklärung enthält das Wort

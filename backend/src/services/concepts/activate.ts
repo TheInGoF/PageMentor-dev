@@ -8,6 +8,8 @@ import { linkKey, linkStatus } from "./links";
 const DECAY = 0.5;
 const MAX_DEPTH = 3;
 const MAX_ACTIVE = 15;
+// Kapitel-Hervorhebung im Gehirn: alle Begriffe des Kapitels samt Grundlagen
+const MAX_CHAPTER = 60;
 const QUERY_MATCH = 0.55;
 
 export interface ActiveConcept {
@@ -74,14 +76,29 @@ export function activate(query: Float32Array | null, chapterIds: string[]): Acti
   const seeds = seedConcepts(query, chapterIds);
   if (!seeds.size) return [];
   // Nur gesicherte Verbindungen: ungesicherte würden falsche Grundlagen-Kapitel in die Antwort ziehen
+  return withInfo([...spread(seeds, sureLinks())].sort((a, b) => b[1].strength - a[1].strength).slice(0, MAX_ACTIVE));
+}
+
+// Gesicherte Verbindungen als Kantenliste
+function sureLinks(): Link[] {
   const sure = linkStatus();
-  const links = (db().prepare("SELECT DISTINCT concept_id AS 'from', needs_id AS 'to' FROM concept_links").all() as Link[]).filter((l) => sure.has(linkKey(l.from, l.to)));
-  const active = [...spread(seeds, links)].sort((a, b) => b[1].strength - a[1].strength).slice(0, MAX_ACTIVE);
+  return (db().prepare("SELECT DISTINCT concept_id AS 'from', needs_id AS 'to' FROM concept_links").all() as Link[]).filter((l) => sure.has(linkKey(l.from, l.to)));
+}
+
+function withInfo(active: Array<[string, { depth: number; strength: number; via?: string }]>): ActiveConcept[] {
   const info = db().prepare("SELECT name, definition FROM concepts WHERE id = ?");
   return active.map(([id, a]) => {
     const c = info.get(id) as { name: string; definition: string | null } | undefined;
     return { id, name: c?.name ?? "?", definition: c?.definition ?? null, depth: a.depth, strength: a.strength, via: a.via };
   });
+}
+
+// Ein Kapitel hervorheben: erklärte Begriffe voll, benutzte schwächer, dazu die Grundlagen über gesicherte Verbindungen
+export function chapterActivation(chapterId: string): ActiveConcept[] {
+  const rows = db().prepare("SELECT concept_id, role FROM concept_mentions WHERE chapter_id = ?").all(chapterId) as Array<{ concept_id: string; role: string }>;
+  const seeds = new Map(rows.map((r) => [r.concept_id, r.role === "explains" ? 1 : 0.6]));
+  if (!seeds.size) return [];
+  return withInfo([...spread(seeds, sureLinks())].sort((a, b) => b[1].strength - a[1].strength).slice(0, MAX_CHAPTER));
 }
 
 // Kapitel, die die Voraussetzungen (Ebene 1 bis 3) erklären; je Begriff das erste passende

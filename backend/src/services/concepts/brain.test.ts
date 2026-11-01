@@ -36,6 +36,7 @@ describe("Gehirn", () => {
     expect(byName.get("Entropie")!.docId).toBe("d1");
     expect(byName.get("Wahrscheinlichkeit")!.docId).toBe("d2");
     expect(g.docs.map((d) => d.title)).toEqual(["Info", "Stochastik"]);
+    expect(g.chapters.map((c) => c.title)).toEqual(["Kanäle", "Codes", "Wahrscheinlichkeit"]);
   });
 
   test("Schlagwortsuche über Name, Schreibweise und Erklärung", async () => {

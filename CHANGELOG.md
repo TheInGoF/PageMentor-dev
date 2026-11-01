@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.91.0 – 2026-11-01
+### New
+- Gehirn: Kapitel wählen, dann leuchten seine Begriffe und ihre Grundlagen bis Ebene 3; die Liste steht rechts.
+- Gehirn: Schalter „nur erklärte“ blendet Begriffe aus, die nur benutzt werden.
+
 ## 1.90.0 – 2026-11-01
 ### New
 - Gehirn: Schlagwortsuche. Beim Tippen werden Treffer grün, ihre Nachbarn hellgrün, die Treffer stehen rechts zum Anklicken.

@@ -72,4 +72,10 @@ describe("Aufräumen", () => {
     saveChapterConcepts("c0", "d1", [{ name: "Kanal", definition: "Weg", explains: true, needs: [] }], "s");
     expect(activate(null, ["c1"]).map((a) => `${a.name}:${a.depth}`)).toEqual(["Codierung:0", "Kanal:1"]);
   });
+
+  test("Kapitel hervorheben: Begriffe des Kapitels und Grundlagen", async () => {
+    const { chapterActivation } = await import("./activate");
+    expect(chapterActivation("c1").map((a) => `${a.name}:${a.depth}:${a.strength}`)).toEqual(["Codierung:0:1", "Kanal:1:0.5"]);
+    expect(chapterActivation("nirgends")).toEqual([]);
+  });
 });

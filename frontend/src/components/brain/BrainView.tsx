@@ -17,6 +17,7 @@ interface Graph {
   edges: BrainEdge[];
   modules: Array<{ id: string; name: string; icon: string | null }>;
   docs: Array<{ id: string; title: string; moduleId: string | null }>;
+  chapters: Array<{ id: string; title: string; docId: string }>;
   total: { concepts: number; links: number };
 }
 interface Active { id: string; name: string; depth: number; strength: number; via?: string }
@@ -79,7 +80,9 @@ function topicsOf(graph: Graph, pos: Map<string, { x: number; y: number }>) {
 export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page: number) => void }) {
   const [moduleId, setModuleId] = useState("");
   const [limit, setLimit] = useState(150);
-  const [graph, setGraph] = useState<Graph | null>(null);
+  const [explainedOnly, setExplainedOnly] = useState(false);
+  const [chapterId, setChapterId] = useState("");
+  const [full, setFull] = useState<Graph | null>(null);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Set<string> | null>(null);
   const [active, setActive] = useState<Active[] | null>(null);
@@ -133,8 +136,34 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
 
   useEffect(() => {
     setActive(null);
-    void request<Graph>(`/api/concepts/brain?limit=${limit || "all"}${moduleId ? `&moduleId=${moduleId}` : ""}`).then(setGraph).catch(() => undefined);
+    setChapterId("");
+    void request<Graph>(`/api/concepts/brain?limit=${limit || "all"}${moduleId ? `&moduleId=${moduleId}` : ""}`).then(setFull).catch(() => undefined);
   }, [moduleId, limit]);
+  // Nur erklärte Begriffe: benutzte Begriffe und ihre Verbindungen fallen aus dem Bild
+  const graph = useMemo(() => {
+    if (!full || !explainedOnly) return full;
+    const nodes = full.nodes.filter((n) => n.explained);
+    const ids = new Set(nodes.map((n) => n.id));
+    return { ...full, nodes, edges: full.edges.filter((e) => ids.has(e.a) && ids.has(e.b)) };
+  }, [full, explainedOnly]);
+  const setGraph = (g: Graph) => setFull((cur) => (cur ? { ...cur, nodes: [...cur.nodes, ...g.nodes.filter((n) => !cur.nodes.some((x) => x.id === n.id))], edges: [...cur.edges, ...g.edges] } : g));
+  // Kapitel wählen: seine Begriffe leuchten, Grundlagen dazu
+  useEffect(() => {
+    if (!chapterId || !full) return;
+    void request<{ active: Active[]; nodes: BrainNode[]; edges: BrainEdge[] }>("/api/concepts/brain/chapter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chapterId, have: full.nodes.map((n) => n.id) }),
+    })
+      .then((r) => {
+        if (r.nodes.length) setGraph({ ...full, nodes: r.nodes, edges: r.edges });
+        setHits(null);
+        setQuery("");
+        setActive(r.active);
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapterId]);
   useEffect(() => {
     if (!selected) return setDetail(null);
     void request<Detail>(`/api/concepts/${selected}`).then(setDetail).catch(() => setDetail(null));
@@ -191,8 +220,9 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
         body: JSON.stringify({ question: query, have: graph.nodes.map((n) => n.id) }),
       });
       setNoEmbeddings(!r.embeddings);
-      if (r.nodes.length) setGraph({ ...graph, nodes: [...graph.nodes, ...r.nodes], edges: [...graph.edges, ...r.edges] });
+      if (r.nodes.length) setGraph({ ...graph, nodes: r.nodes, edges: r.edges });
       setHits(null);
+      setChapterId("");
       setActive(r.active);
       setSelected(r.active[0]?.id ?? null);
     } finally {
@@ -203,6 +233,7 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
     setQuery("");
     setHits(null);
     setActive(null);
+    setChapterId("");
   };
 
   // Begriffsnetz als Markdown herunterladen (gewählter Bereich), z. B. zum Prüfen durch ein großes Modell
@@ -226,13 +257,25 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
                 </option>
               ))}
             </select>
-            <div className="flex gap-1">
-              {SIZES.map((s) => (
-                <button key={s} type="button" className={cn("chip", limit === s && "chip-active")} onClick={() => setLimit(s)}>
-                  {s ? t("brain.size", { n: s }) : t("brain.sizeAll")}
-                </button>
+            <select
+              className="input flex-1 min-w-[200px]"
+              value={chapterId}
+              onChange={(e) => (e.target.value ? setChapterId(e.target.value) : reset())}
+              aria-label={t("brain.chapter")}
+            >
+              <option value="">{t("brain.chapterAll")}</option>
+              {graph.docs.map((d) => (
+                <optgroup key={d.id} label={d.title}>
+                  {graph.chapters
+                    .filter((c) => c.docId === d.id)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))}
+                </optgroup>
               ))}
-            </div>
+            </select>
             <Menu
               label={t("brain.actions")}
               items={[
@@ -240,6 +283,16 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
                 { label: t("brain.exportPlain"), onClick: () => exportBrain(0) },
               ]}
             />
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {SIZES.map((s) => (
+              <button key={s} type="button" className={cn("chip", limit === s && "chip-active")} onClick={() => setLimit(s)}>
+                {s ? t("brain.size", { n: s }) : t("brain.sizeAll")}
+              </button>
+            ))}
+            <button type="button" className={cn("chip", explainedOnly && "chip-active")} onClick={() => setExplainedOnly((v) => !v)}>
+              {t("brain.explainedOnly")}
+            </button>
           </div>
           <form onSubmit={(e) => e.preventDefault()} className="flex gap-2">
             <input className="input flex-1" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("brain.searchPlaceholder")} />
@@ -381,7 +434,7 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
         )}
         {active && (
           <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-semibold">{t("brain.activeTitle")}</h3>
+            <h3 className="text-sm font-semibold">{chapterId ? t("brain.chapterActive") : t("brain.activeTitle")}</h3>
             {active.length === 0 && <p className="text-xs text-neutral-500">{t("brain.nothingActive")}</p>}
             {active.map((a) => (
               <button
