@@ -1,6 +1,7 @@
 // Lernhörbuch: Einstellungen am Heft, Einheiten mit Skripten, Lauf starten (Probe oder ganzes Heft) und abbrechen
 import { existsSync } from "node:fs";
 import { Hono } from "hono";
+import { serveFileWithRange } from "./audio/files";
 import { db } from "../db";
 import { learnSettings, listUnits } from "../services/learnbook/store";
 import { cancelLearnbook, learnIntroInfo, learnState, startLearnbook, uploadLearnbook } from "../services/learnbook/run";
@@ -83,5 +84,6 @@ learnbookRoutes.post("/:docId/abs", async (c) => {
 learnbookRoutes.get("/:docId/unit/:idx/audio", (c) => {
   const u = listUnits(c.req.param("docId")).find((x) => x.idx === Number(c.req.param("idx")));
   if (!u?.audio_path || !existsSync(u.audio_path)) return c.json({ error: "Noch kein Audio" }, 404);
-  return new Response(Bun.file(u.audio_path), { headers: { "Content-Type": "audio/mpeg" } });
+  // Mit HTTP Range: im Abspieler spulen und pausieren
+  return serveFileWithRange(c, u.audio_path, "audio/mpeg");
 });

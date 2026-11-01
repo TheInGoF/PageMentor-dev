@@ -12,7 +12,7 @@ import { describeDuplicate, findTextDuplicate, markdownPlainText, textMinhash } 
 import { writeKnowledgeFolder } from "./batch/knowledgeFolder";
 import type { DoclingExtraction } from "./docling/types";
 import { extractPdf } from "./pdf";
-import { withDocling } from "./docling/release";
+import { killDocling, withDocling } from "./docling/release";
 import { cleanForReading } from "./clean";
 import { cleanStudyMarkdown } from "./studyClean";
 import { emit } from "./events";
@@ -50,7 +50,10 @@ export function anyProcessing(): boolean {
 export function cancelProcessing(docId: string): boolean {
   const ctrl = running.get(docId);
   if (!ctrl) return false;
+  // Lief Docling gerade für dieses Heft (und für kein anderes), den Auftrag auf dem Server mit beenden
+  const inDocling = stage.get(docId) === "docling" && ![...stage.entries()].some(([id, s]) => id !== docId && s === "docling");
   ctrl.abort();
+  if (inDocling) void killDocling();
   return true;
 }
 

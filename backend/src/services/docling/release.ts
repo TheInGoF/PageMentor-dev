@@ -66,3 +66,17 @@ export async function releaseDoclingNow(): Promise<void> {
     .finally(() => (restarting = null));
   return restarting;
 }
+
+// Abbruch einer Umwandlung: Docling rechnet einen angenommenen Auftrag sonst auf dem Server weiter (Grafikkarte belegt).
+// Der Neustart beendet ihn; der nächste Auftrag wartet über withDocling, bis Docling wieder antwortet
+export function killDocling(): Promise<void> {
+  if (timer) clearTimeout(timer);
+  timer = null;
+  if (restarting) return restarting;
+  if (!managed()) return Promise.resolve();
+  emitLog("info", "docling", "Umwandlung abgebrochen, Docling wird neu gestartet");
+  restarting = release()
+    .catch((err) => emitLog("warn", "docling", "Docling-Neustart fehlgeschlagen", { err }))
+    .finally(() => (restarting = null));
+  return restarting;
+}

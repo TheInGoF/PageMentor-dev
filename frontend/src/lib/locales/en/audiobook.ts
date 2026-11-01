@@ -200,6 +200,7 @@ export const audiobook: Record<string, string> = {
   "learn.phase.book": "Building the audiobook …",
   "learn.phase.script": "Writing unit {done} of {total} · {current}",
   "learn.phase.wait": "Waiting for the GPU …",
+  "learn.stop": "Close",
   "learn.play": "Play",
   "learn.points": "Key points",
   "learn.probe": "Sample: first unit",

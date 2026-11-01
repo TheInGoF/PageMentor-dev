@@ -1,6 +1,6 @@
 // Lernhörbuch und Sprachlern-Hörbuch: Zustand und Aktionen als Hook (für den gemeinsamen Bedien-Kopf im Hörbuch-Reiter),
 // darunter die eigene Ansicht mit Zielsprache, Modell, Meldungen und Einheiten (Skript, Merkpunkte, Prüfnotiz hinter ⋯)
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
@@ -150,15 +150,11 @@ export function LearnbookProgress({ ctl }: { ctl: LearnbookCtl }) {
 // Ansicht unter dem Kopf: Zielsprache, Modell, Meldungen, Einheiten
 export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKind }) {
   const [open, setOpen] = useState<number | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
-  useEffect(() => () => audio.current?.pause(), []);
+  // Abspieler mit Bedienleiste unter der Einheit (Pause, Spulen); immer nur einer
+  const [playing, setPlaying] = useState<{ idx: number; t: number } | null>(null);
   const { info, other, running, st } = ctl;
   if (!info) return null;
-  const play = (idx: number) => {
-    audio.current?.pause();
-    audio.current = new Audio(`${ctl.base}/unit/${idx}/audio?t=${Date.now()}`);
-    void audio.current.play();
-  };
+  const play = (idx: number) => setPlaying(playing?.idx === idx ? null : { idx, t: Date.now() });
   const totalMs = info.units.reduce((a, u) => a + (u.durationMs ?? 0), 0);
 
   return (
@@ -206,8 +202,8 @@ export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKin
                   </div>
                 </div>
                 {u.hasAudio && (
-                  <button type="button" className="chip" onClick={() => play(u.idx)}>
-                    ▶ {t("learn.play")}
+                  <button type="button" className={cn("chip", playing?.idx === u.idx && "chip-active")} onClick={() => play(u.idx)}>
+                    {playing?.idx === u.idx ? `■ ${t("learn.stop")}` : `▶ ${t("learn.play")}`}
                   </button>
                 )}
                 <Menu
@@ -215,6 +211,15 @@ export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKin
                   items={[{ label: t(open === u.idx ? "learn.hideScript" : "learn.showScript"), onClick: () => setOpen(open === u.idx ? null : u.idx), disabled: !u.script }]}
                 />
               </div>
+              {playing?.idx === u.idx && (
+                <audio
+                  controls
+                  autoPlay
+                  preload="none"
+                  src={`${ctl.base}/unit/${u.idx}/audio?t=${playing.t}`}
+                  className="w-full accent-accent [color-scheme:dark]"
+                />
+              )}
               {open === u.idx && u.script && (
                 <div className="flex flex-col gap-2 rounded-md border border-border p-2">
                   {u.checkNote && <Notice kind={/korrigiert|keine Abweichung/.test(u.checkNote) ? "info" : "warn"}><span className="whitespace-pre-wrap">{u.checkNote}</span></Notice>}
