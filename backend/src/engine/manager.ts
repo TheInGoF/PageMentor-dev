@@ -9,6 +9,7 @@ import { logEngine } from "./exec";
 import { cleanupUnusedEngines } from "./engineCleanup";
 import { ensureSparse, repairTitle, runRepairAction } from "./repairs";
 import { applyThrottle } from "./throttle";
+import { ensureMemoryReclaim } from "./memory";
 
 export interface RunningTask {
   repair: RepairId;
@@ -94,6 +95,8 @@ export async function autoStart(): Promise<void> {
   state.autoStart = "läuft";
   // Einmalig für bestehende Installationen, bevor die Engine hochfährt
   await ensureSparse().catch(() => {});
+  // WSL soll ungenutzten Arbeitsspeicher an Windows zurückgeben
+  ensureMemoryReclaim();
   // Download-Bremse gilt nur bis zum Neustart von WSL: bei jedem Start neu setzen
   let throttled = false;
   for (let round = 0; round < AUTO_REPAIRS.length + 1; round++) {

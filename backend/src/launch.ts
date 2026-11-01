@@ -2,6 +2,8 @@
 import { spawn } from "child_process";
 import { IS_COMPILED, IS_WINDOWS } from "./paths";
 import { emitLog } from "./log/logger";
+import { releaseEngineOnExit } from "./engine/memory";
+import { stopKeepAlive } from "./engine/manager";
 import type { WindowEvent, WindowStart } from "./desktop/window";
 
 // PM_UI: window (eigenes Fenster), browser, none. Standard: Fenster in der Exe
@@ -105,5 +107,10 @@ export function openUi(url: string): void {
 // Kurz verzögert, damit die Antwort noch rausgeht
 export function quitApp(reason: string): void {
   emitLog("info", "startup", `Beende PageMentor: ${reason}`);
-  setTimeout(() => process.exit(0), 300);
+  setTimeout(() => {
+    // Arbeitsspeicher der Engine freigeben (Fenster ist schon zu, das Warten merkt niemand)
+    stopKeepAlive();
+    releaseEngineOnExit();
+    process.exit(0);
+  }, 300);
 }

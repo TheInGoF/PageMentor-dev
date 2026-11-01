@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.64.0 – 2026-11-01
+### New
+- Beim Beenden fährt PageMentor seine Engine-Umgebung herunter: WSL gibt den Arbeitsspeicher (vmmemWSL) wieder ganz frei.
+- WSL gibt ungenutzten Arbeitsspeicher während des Betriebs schrittweise an Windows zurück (.wslconfig, eigene Einstellungen bleiben).
+
 ## 1.63.0 – 2026-11-01
 ### New
 - Im M4B stehen mehrere Autoren mit Komma getrennt.
