@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.68.0 – 2026-11-01
+### Change
+- Der früher angehängte Abschnitt „Gelernte Hinweise“ wird einmalig aus dem Hörbuch-Prompt entfernt.
+- Gemma lernt aus gelösten Aussprache-Befunden jetzt in die Ausspracheliste: Der Vorschlag kommt als offener Eintrag zum Anhören und Abhaken. Der Hörbuch-Prompt bleibt unverändert.
+
 ## 1.67.0 – 2026-11-01
 ### New
 - Ausspracheprüfung: „Rest ignorieren“ räumt die offenen Befunde eines Kapitels mit einem Klick weg.

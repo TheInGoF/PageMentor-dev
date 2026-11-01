@@ -37,6 +37,8 @@ export function ensurePronTables(d: Database): void {
   // Was Gemma aus dem gelösten Befund gelernt hat: Hinweis, "-" = nichts Neues, NULL = noch nicht gefragt
   const cols = d.prepare("PRAGMA table_info(pron_issues)").all() as Array<{ name: string }>;
   if (!cols.some((c) => c.name === "learned")) d.exec("ALTER TABLE pron_issues ADD COLUMN learned TEXT");
+  // Früher angehängte Hinweise aus dem Hörbuch-Prompt nehmen (Gemma lernt jetzt in die Ausspracheliste)
+  void import("./learn").then((m) => m.removeLearnedSections()).catch(() => undefined);
 }
 
 // Neuer Lauf für ein Kapitel ersetzt dessen offene Befunde; gelöste und ignorierte bleiben als Verlauf
