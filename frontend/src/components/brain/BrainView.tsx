@@ -1,6 +1,6 @@
 // Gehirn: das globale Begriffsnetz, über alle Module. Punkte sind Begriffe (Größe = Fundstellen, Farbe = Modul),
 // Linien „baut auf“. Eine Frage lässt die Begriffe aufleuchten, die der Tutor dafür nutzen würde, mit Ebenen 1–3
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as RPointerEvent } from "react";
 import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
 import { Menu } from "../ui/Menu";
@@ -26,6 +26,22 @@ const W = 1000;
 const H = 640;
 const SIZES = [80, 150, 300];
 const LABELS = 30;
+const MAX_ZOOM = 12;
+type View = { x: number; y: number; w: number; h: number };
+const FULL: View = { x: 0, y: 0, w: W, h: H };
+
+// Ausschnitt um einen Punkt (Bildkoordinaten) skalieren; der Punkt bleibt unter dem Mauszeiger stehen
+function zoomAt(v: View, px: number, py: number, factor: number): View {
+  const w = Math.min(W, Math.max(W / MAX_ZOOM, v.w / factor));
+  const f = v.w / w;
+  const h = (H / W) * w;
+  return clampView({ x: px - (px - v.x) / f, y: py - (py - v.y) / f, w, h });
+}
+
+// Nicht aus dem Bild herausschieben
+function clampView(v: View): View {
+  return { ...v, x: Math.min(W - v.w, Math.max(0, v.x)), y: Math.min(H - v.h, Math.max(0, v.y)) };
+}
 
 export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page: number) => void }) {
   const [moduleId, setModuleId] = useState("");
@@ -38,6 +54,48 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [noEmbeddings, setNoEmbeddings] = useState(false);
+  // Zoom mit dem Mausrad an der Mausposition, Verschieben durch Ziehen auf freier Fläche
+  const [view, setView] = useState<View>(FULL);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const drag = useRef<{ x: number; y: number; v: View; moved: boolean } | null>(null);
+  const toSvg = (clientX: number, clientY: number, v: View) => {
+    const r = svgRef.current!.getBoundingClientRect();
+    return { x: v.x + ((clientX - r.left) / r.width) * v.w, y: v.y + ((clientY - r.top) / r.height) * v.h };
+  };
+  useEffect(() => setView(FULL), [moduleId, limit]);
+  // Eigener Listener: Reacts onWheel ist passiv und könnte das Scrollen der Seite nicht verhindern
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setView((v) => {
+        const p = toSvg(e.clientX, e.clientY, v);
+        return zoomAt(v, p.x, p.y, Math.exp(-e.deltaY * 0.0015));
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
+  const onPointerDown = (e: RPointerEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return;
+    drag.current = { x: e.clientX, y: e.clientY, v: view, moved: false };
+  };
+  const onPointerMove = (e: RPointerEvent<SVGSVGElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (!d.moved) svgRef.current?.setPointerCapture(e.pointerId);
+    d.moved = true;
+    const r = svgRef.current!.getBoundingClientRect();
+    setView(clampView({ ...d.v, x: d.v.x - (dx / r.width) * d.v.w, y: d.v.y - (dy / r.height) * d.v.h }));
+  };
+  const onPointerUp = () => {
+    // Nach dem Ziehen kein Klick (würde die Auswahl aufheben)
+    setTimeout(() => (drag.current = null), 0);
+  };
+  const zoomBy = (factor: number) => setView((v) => zoomAt(v, v.x + v.w / 2, v.y + v.h / 2, factor));
 
   useEffect(() => {
     setActive(null);
@@ -63,7 +121,10 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
   const focus = hover ?? selected;
   const near = new Set(graph.edges.filter((e) => e.a === focus || e.b === focus).flatMap((e) => [e.a, e.b]));
   const top = new Set([...graph.nodes].sort((a, b) => b.mentions - a.mentions).slice(0, LABELS).map((n) => n.id));
-  const radius = (n: BrainNode) => Math.min(14, 3 + Math.sqrt(n.mentions) * 2);
+  // Hineingezoomt: Punkte und Schrift behalten ihre Bildschirmgröße, dafür stehen mehr Namen da
+  const k = W / view.w;
+  const radius = (n: BrainNode) => Math.min(14, 3 + Math.sqrt(n.mentions) * 2) / Math.sqrt(k);
+  const zoomLabels = k >= 2;
   const dim = (id: string) => (active ? !activeById.has(id) : focus ? !near.has(id) && id !== focus : false);
   const shownModules = graph.modules.filter((m) => graph.nodes.some((n) => n.moduleId === m.id));
 
@@ -139,8 +200,31 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
           </p>
         </div>
 
-        <div className="card p-2 overflow-x-auto">
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[560px] h-auto" role="img" aria-label={t("brain.title")} onClick={() => setSelected(null)}>
+        <div className="card p-2 overflow-x-auto relative">
+          <div className="absolute right-3 top-3 z-10 flex gap-1">
+            <button type="button" className="chip min-w-[36px] justify-center" onClick={() => zoomBy(1.5)} aria-label={t("brain.zoomIn")}>
+              +
+            </button>
+            <button type="button" className="chip min-w-[36px] justify-center" onClick={() => zoomBy(1 / 1.5)} aria-label={t("brain.zoomOut")} disabled={view.w >= W}>
+              −
+            </button>
+            {view.w < W && (
+              <button type="button" className="chip" onClick={() => setView(FULL)}>
+                {t("brain.zoomReset")}
+              </button>
+            )}
+          </div>
+          <svg
+            ref={svgRef}
+            viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+            className={cn("w-full min-w-[560px] h-auto touch-none select-none", view.w < W && "cursor-grab active:cursor-grabbing")}
+            role="img"
+            aria-label={t("brain.title")}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onClick={() => !drag.current?.moved && setSelected(null)}
+          >
             <defs>
               <marker id="brain-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
@@ -160,7 +244,7 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
                   className={lit ? "text-accent" : "text-neutral-500"}
                   stroke="currentColor"
                   strokeOpacity={lit ? 0.9 : active || focus ? 0.08 : 0.25}
-                  strokeWidth={lit ? 1.6 : 0.8}
+                  strokeWidth={(lit ? 1.6 : 0.8) / k}
                   markerEnd={lit ? "url(#brain-arrow)" : undefined}
                 />
               );
@@ -178,16 +262,16 @@ export function BrainView({ onOpenSource }: { onOpenSource: (docId: string, page
                   onMouseLeave={() => setHover(null)}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelected(n.id);
+                    if (!drag.current?.moved) setSelected(n.id);
                   }}
                   opacity={dim(n.id) ? 0.15 : a ? Math.max(0.45, a.strength > 1 ? 1 : a.strength + 0.3) : 1}
                 >
                   {/* Große Trefferfläche, auch für kleine Punkte */}
-                  <circle cx={p.x} cy={p.y} r={Math.max(r, 10)} fill="transparent" />
-                  <circle cx={p.x} cy={p.y} r={r} fill={color(n.moduleId)} stroke={selected === n.id || a?.depth === 0 ? "currentColor" : "none"} strokeWidth={2} />
-                  {n.modules > 1 && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke={color(n.moduleId)} strokeOpacity={0.6} strokeDasharray="2 2" />}
-                  {(top.has(n.id) || a || near.has(n.id) || selected === n.id) && (
-                    <text x={p.x} y={p.y - r - 4} textAnchor="middle" className="fill-current text-[11px]" style={{ paintOrder: "stroke", stroke: "rgb(var(--bg, 255 255 255))", strokeWidth: 3 }}>
+                  <circle cx={p.x} cy={p.y} r={Math.max(r, 10 / k)} fill="transparent" />
+                  <circle cx={p.x} cy={p.y} r={r} fill={color(n.moduleId)} stroke={selected === n.id || a?.depth === 0 ? "currentColor" : "none"} strokeWidth={2 / k} />
+                  {n.modules > 1 && <circle cx={p.x} cy={p.y} r={r + 3 / k} fill="none" stroke={color(n.moduleId)} strokeOpacity={0.6} strokeWidth={1 / k} strokeDasharray={`${2 / k} ${2 / k}`} />}
+                  {(zoomLabels || top.has(n.id) || a || near.has(n.id) || selected === n.id) && (
+                    <text x={p.x} y={p.y - r - 4 / k} textAnchor="middle" className="fill-current" fontSize={11 / k} style={{ paintOrder: "stroke", stroke: "rgb(var(--bg, 255 255 255))", strokeWidth: 3 / k }}>
                       {a && a.depth > 0 ? `${n.name} · ${a.depth}` : n.name}
                     </text>
                   )}

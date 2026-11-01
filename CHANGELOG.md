@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.77.0 – 2026-11-01
+### New
+- Gehirn lässt sich mit dem Mausrad an der Mausposition zoomen, durch Ziehen verschieben und über +, − und „Ganzes Netz“ steuern.
+
 ## 1.76.0 – 2026-11-01
 ### Fix
 - Abbrechen einer Umwandlung beendet auch den Docling-Auftrag auf dem Server, die Grafikkarte wird frei.
