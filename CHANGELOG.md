@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.100.0 – 2026-11-01
+### Fix
+- Intro: Versionsziffern im Modellnamen stehen als Zahlwort, „Qwen drei Punkt sechs“ und „Gemma vier“, damit die Stimme nicht über „3.6“ stolpert.
+
 ## 1.99.0 – 2026-11-01
 ### Change
 - Begriffsnetz: Die Wissenspflege nimmt Qwen 3.6, wenn es geladen ist, sonst Gemma 4 26B, sonst das Standardmodell. Das Modell steht im Stempel der Kapitel: Mit einem anderen Modell gelten sie als offen, das Netz entsteht aus einem Guss.
