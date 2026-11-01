@@ -1,5 +1,7 @@
 // Name und Autor der Lernhörbücher: eigener Zusatz je Art, damit sie neben dem Original-Hörbuch erkennbar sind
 // („Heft – Sprachlern-Hörbuch“, Autor „nach dem Buch von …“)
+import { spokenAuthors } from "../../lib/authors";
+
 export type LearnKindName = "subject" | "language";
 
 export const LEARN_SUFFIX: Record<LearnKindName, string> = { subject: "Lernhörbuch", language: "Sprachlern-Hörbuch" };
@@ -8,8 +10,9 @@ export function learnTitle(base: string, kind: LearnKindName): string {
   return `${base} – ${LEARN_SUFFIX[kind]}`;
 }
 
+// Mehrere Autoren mit „und“ verbunden: „nach dem Buch von Ana Babiloni und Hildegard Ritter“
 export function learnAuthor(author: string | null | undefined): string {
-  const a = author?.trim();
+  const a = spokenAuthors(author);
   return a ? `nach dem Buch von ${a}` : "PageMentor";
 }
 

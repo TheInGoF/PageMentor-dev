@@ -1,5 +1,6 @@
 // Ganzes Hörbuch: alle gewählten Kapitel, danach M4B
 import { existsSync, mkdirSync } from "fs";
+import { splitAuthors } from "../../lib/authors";
 import { join } from "path";
 import { db } from "../../db";
 import { DATA_DIR } from "../../paths";
@@ -396,7 +397,7 @@ async function generateAudiobookImpl(params: {
             chapters: m4bChapters,
             output: bookPath,
             title: doc.title || doc.doc_title || "",
-            artist: doc.author ?? undefined,
+            artist: splitAuthors(doc.author).join(", ") || undefined,
             shortCode: doc.short_code ?? undefined,
             series: doc.module_name ?? undefined,
             seriesSequence: doc.series_sequence ?? undefined,

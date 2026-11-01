@@ -13,6 +13,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { learnAuthor, learnTitle, type LearnKindName } from "./learnbook/meta";
+import { splitAuthors } from "../lib/authors";
 import { basename, join } from "node:path";
 import { db } from "../db";
 import { absEnabled, effective } from "./llmConfig";
@@ -174,7 +175,9 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
   // einstellen konnte.
   const baseTitle = doc.title?.trim() || doc.doc_title?.trim() || "";
   const bookTitle = variant ? learnTitle(baseTitle, variant) : baseTitle;
-  const authorName = variant ? learnAuthor(doc.author) : doc.author?.trim() || "Unknown";
+  // Mehrere Autoren („A; B“, „A und B“) als Liste; Audiobookshelf zeigt sie mit Komma
+  const authorList = variant ? [learnAuthor(doc.author)] : splitAuthors(doc.author);
+  const authorName = authorList.join(", ") || "Unknown";
   const seriesName = doc.module_name?.trim() || "";
 
   // Render the cover lazily if missing — so the upload always
@@ -376,7 +379,7 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
           title: bookTitle,
           subtitle: doc.short_code?.trim() || "",
           description: "",
-          authors: authorName ? [{ name: authorName }] : undefined,
+          authors: authorList.length ? authorList.map((name) => ({ name })) : undefined,
           series: seriesName
             ? [
                 {

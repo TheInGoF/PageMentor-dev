@@ -1,5 +1,6 @@
 // M4B neu bauen aus vorhandenen Kapitel-MP3s
 import { existsSync, mkdirSync } from "fs";
+import { splitAuthors } from "../../lib/authors";
 import { join } from "path";
 import { db } from "../../db";
 import { DATA_DIR, fromDataPath } from "../../paths";
@@ -89,7 +90,7 @@ async function rebuildM4BImpl(docId: string): Promise<{
     chapters: m4bChapters,
     output: bookPath,
     title: doc.title || doc.doc_title || "",
-    artist: doc.author ?? undefined,
+    artist: splitAuthors(doc.author).join(", ") || undefined,
     shortCode: doc.short_code ?? undefined,
     series: doc.module_name ?? undefined,
     seriesSequence: doc.series_sequence ?? undefined,

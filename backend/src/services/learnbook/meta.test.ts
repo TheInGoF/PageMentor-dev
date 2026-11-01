@@ -11,6 +11,7 @@ describe("Lernhörbuch: Name, Autor, Intro", () => {
   test("Autor mit „nach dem Buch von“", () => {
     expect(learnAuthor("Max Muster")).toBe("nach dem Buch von Max Muster");
     expect(learnAuthor("  ")).toBe("PageMentor");
+    expect(learnAuthor("Ana Babiloni; Hildegard Ritter")).toBe("nach dem Buch von Ana Babiloni und Hildegard Ritter");
   });
 
   test("Intro nennt Titel, Autor, Umfang und Lernweise", () => {

@@ -260,7 +260,7 @@ export const library: Record<string, string> = {
   "module.modal.icon": "Icon (Emoji)",
   "module.modal.iconPlaceholder": "📘",
   "doc.field.author": "Autor",
-  "doc.field.authorPlaceholder": "z. B. Vorname Nachname",
+  "doc.field.authorPlaceholder": "z. B. Ana Babiloni; Hildegard Ritter (mehrere mit ; trennen)",
   "doc.field.shortCode": "Untertitel",
   "doc.field.shortCodePlaceholder": "SE12k / 1 / Band II",
   "doc.field.seriesSequence": "# in Serie",
