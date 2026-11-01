@@ -18,7 +18,7 @@ export interface GenerateResult {
   promptTokens?: number;
 }
 
-export async function generate(params: {
+async function generateImpl(params: {
   prompt: string;
   system?: string;
   model?: string;
@@ -151,7 +151,7 @@ export async function generate(params: {
   throw new Error("No LLM provider available");
 }
 
-export async function generateStream(params: {
+async function generateStreamImpl(params: {
   prompt: string;
   system?: string;
   model?: string;
@@ -278,4 +278,33 @@ export async function generateStream(params: {
   }
 
   throw new Error("No LLM provider available");
+}
+
+// Laufende Sprachmodell-Aufrufe und der letzte: die Wissenspflege startet Docling erst, wenn Gemma eine Weile ruht
+let inflight = 0;
+let lastAt = 0;
+async function tracked<T>(fn: () => Promise<T>): Promise<T> {
+  inflight++;
+  try {
+    return await fn();
+  } finally {
+    inflight--;
+    lastAt = Date.now();
+  }
+}
+
+export function llmActive(): boolean {
+  return inflight > 0;
+}
+
+export function llmLastUsedAt(): number {
+  return inflight > 0 ? Date.now() : lastAt;
+}
+
+export function generate(params: Parameters<typeof generateImpl>[0]): Promise<GenerateResult> {
+  return tracked(() => generateImpl(params));
+}
+
+export function generateStream(params: Parameters<typeof generateStreamImpl>[0]): ReturnType<typeof generateStreamImpl> {
+  return tracked(() => generateStreamImpl(params));
 }

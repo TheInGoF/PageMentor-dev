@@ -111,3 +111,24 @@ async function tryPullOllamaModel(url: string, name: string): Promise<boolean> {
     return false;
   }
 }
+
+// Geladene Modelle aus dem Grafikspeicher nehmen (keep_alive 0), bevor Docling die Karte braucht
+export async function unloadOllamaModels(url: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${url}/api/ps`, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { models?: Array<{ name: string }> };
+    const names = (data.models ?? []).map((m) => m.name);
+    for (const model of names) {
+      await fetch(`${url}/api/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, prompt: "", keep_alive: 0 }),
+        signal: AbortSignal.timeout(60_000),
+      }).catch(() => undefined);
+    }
+    return names;
+  } catch {
+    return [];
+  }
+}

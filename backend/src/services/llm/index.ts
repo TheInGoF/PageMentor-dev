@@ -8,4 +8,4 @@ export {
   llmStatus,
 } from "./providers";
 export { listModels } from "./providers";
-export { type GenerateResult, generate, generateStream } from "./generate";
+export { type GenerateResult, generate, generateStream, llmActive, llmLastUsedAt } from "./generate";

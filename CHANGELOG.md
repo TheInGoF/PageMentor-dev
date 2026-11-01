@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.72.0 – 2026-11-01
+### Fix
+- Leerlauf-Umwandlung entlädt Gemma vor Docling und gibt Docling danach frei, bevor die Begriffe beginnen.
+- Leerlauf-Umwandlung wartet vor jedem Heft, bis Gemma drei Minuten ruht und kein Lernhörbuch, Stapel oder Hörbuch läuft.
+
 ## 1.71.0 – 2026-11-01
 ### Change
 - Bibliothek zeigt bei wartenden Heften „Wartet auf Leerlauf“ oder „Metadaten fehlen“.

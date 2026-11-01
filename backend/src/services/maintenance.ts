@@ -7,7 +7,9 @@ import { db } from "../db";
 import { emitLog } from "../log/logger";
 import { embedText, embeddingToBuffer, resolveEmbedder } from "./embeddings";
 import { syncVectors } from "./rag/vec";
-import { isAvailable as llmAvailable } from "./llm";
+import { isAvailable as llmAvailable, llmLastUsedAt, pickProvider } from "./llm";
+import { unloadOllamaModels } from "./llm/ollama";
+import { releaseDoclingNow } from "./docling/release";
 import { anyProcessing, cancelProcessing, processDocument } from "./pipeline";
 import { anyGenerating } from "./audiobook";
 import { learnBusy } from "./learnbook/run";
@@ -50,9 +52,13 @@ export function maintenanceState(): MaintenanceState {
   return { ...state, open: { ...state.open } };
 }
 
-// Andere Arbeit auf der Grafikkarte oder an Gemma: Umwandlung, Hörbuch, Stapel, Lernhörbuch, Begriffe von Hand
+// Gemma ruht erst, wenn so lange kein Aufruf kam (Tutor, Begriffe, Lernhörbuch zwischen zwei Einheiten)
+export const LLM_QUIET_MS = 3 * 60_000;
+const llmBusy = () => Date.now() - llmLastUsedAt() < LLM_QUIET_MS;
+
+// Andere Arbeit auf der Grafikkarte oder an Gemma: Umwandlung, Hörbuch, Stapel, Lernhörbuch, Sprachmodell, Begriffe von Hand
 function busy(): boolean {
-  return anyProcessing() || anyGenerating() || learnBusy() || !!pronRunState()?.running || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
+  return llmBusy() || anyProcessing() || anyGenerating() || learnBusy() || !!pronRunState()?.running || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
 }
 
 // Metadaten gepflegt: im Bearbeiten-Dialog gespeichert, oder (für Hefte von vor dieser Markierung) Autor bzw. Kürzel eingetragen
@@ -138,6 +144,8 @@ async function runNow(): Promise<void> {
   try {
     // Erst umwandeln (das bringt neue Kapitel und Abschnitte), dann Embeddings und Begriffe
     await extract();
+    // Docling behält sonst noch Minuten lang seinen Grafikspeicher; Gemma soll ihn für die Begriffe haben
+    if (state.phase === "docling") await releaseDoclingNow().catch(() => undefined);
     if (!cancel) await embeddings();
     if (!cancel) await concepts();
     if (!cancel) {
@@ -153,6 +161,14 @@ async function runNow(): Promise<void> {
   if (state.status === "idle" && hasWork(state.open)) Object.assign(state, { status: "snoozed", until: Date.now() + SNOOZE_MS });
 }
 
+// Ein noch geladenes Sprachmodell entladen, damit Docling nicht neben Gemma im Grafikspeicher landet
+async function freeLlm(): Promise<void> {
+  const p = await pickProvider().catch(() => null);
+  if (p?.type !== "ollama" || !p.url) return;
+  const names = await unloadOllamaModels(p.url);
+  if (names.length) emitLog("info", "maintenance", `Vor Docling entladen: ${names.join(", ")}`);
+}
+
 // Docling für wartende Hefte mit bearbeiteten Metadaten, eines nach dem anderen. Die Umwandlung selbst wartet,
 // bis eine laufende Lernhörbuch-Einheit fertig ist; Hörbuch und Umwandlung von Hand gehen vor
 let extracting: string | null = null;
@@ -162,9 +178,15 @@ async function extract(): Promise<void> {
   Object.assign(state, { phase: "docling", done: 0, total: docs.length });
   for (const d of docs) {
     if (cancel) return;
-    while (!cancel && (anyProcessing() || anyGenerating())) await sleep(5000);
-    if (cancel) return;
+    // Vor jedem Heft neu prüfen: Gemma, Lernhörbuch, Stapel oder Hörbuch gehen vor, Docling nie gleichzeitig
     Object.assign(state, { doc: d.title, detail: undefined });
+    while (!cancel && busy()) {
+      state.detail = "Wartet, bis die Grafikkarte frei ist";
+      await sleep(5000);
+    }
+    if (cancel) return;
+    state.detail = undefined;
+    await freeLlm();
     extracting = d.id;
     try {
       await processDocument(d.id);
