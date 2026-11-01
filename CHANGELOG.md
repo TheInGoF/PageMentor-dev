@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.69.0 – 2026-11-01
+### New
+- Klangstufen für F5 (Schnell 16, Standard 32, Beste 64 Schritte) unter Engine → Stimm-Engines.
+- Klangstufen für TADA (Schnell, Ruhig, Beste) unter Engine → Stimm-Engines. Ruhig ist neuer Standard: weniger Rauschen, mehr Rechenschritte.
+- Stimmproben zeigen ihre Länge und warnen, wenn sie für F5 zu lang sind (über 12 s schneidet F5 ab, der Text passt dann nicht mehr).
+- TADA spricht jetzt auch Englisch, Spanisch, Französisch, Italienisch und Portugiesisch. Der Aligner der Sprache lädt beim ersten Satz.
+
+### Change
+- Stimm-Extraktor empfiehlt 5 bis 11 s und markiert längere Ausschnitte gelb.
+
 ## 1.68.0 – 2026-11-01
 ### Change
 - Der früher angehängte Abschnitt „Gelernte Hinweise“ wird einmalig aus dem Hörbuch-Prompt entfernt.

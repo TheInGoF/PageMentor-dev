@@ -57,6 +57,30 @@ export function TtsEnginesPanel() {
           </label>
         </SettingRow>
       ))}
+      {(["f5", "tada"] as const)
+        .filter((e) => enabled.includes(e) && info.enabled.includes(e))
+        .map((e) => {
+          const q = info.quality?.[e] ?? "calm";
+          return (
+            <SettingRow key={e} label={t(`ttsEngines.quality.${e}`)} hint={t(`ttsEngines.quality.${e}.${q}Hint`)}>
+              <select
+                className="input w-full"
+                value={q}
+                onChange={async (ev) => {
+                  await api.engine.setQuality(e, ev.target.value);
+                  setInfo({ ...info, quality: { tada: "calm", f5: "calm", ...info.quality, [e]: ev.target.value as "fast" | "calm" | "best" } });
+                  toast.show(t("ttsEngines.saved"), "success");
+                }}
+              >
+                {(["fast", "calm", "best"] as const).map((x) => (
+                  <option key={x} value={x}>
+                    {t(`ttsEngines.quality.${e}.${x}`)}
+                  </option>
+                ))}
+              </select>
+            </SettingRow>
+          );
+        })}
       {enabled.includes("tada") && (
         <div className="flex flex-col gap-2">
           <label className="text-xs text-neutral-400">

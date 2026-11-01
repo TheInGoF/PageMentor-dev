@@ -351,7 +351,7 @@ export function VoiceExtractor({ file, onExtract, onClose }: { file: File; onExt
                 <Button variant="ghost" onClick={() => setView([0, dur])}>
                   {t("voiceExtract.zoomAll")}
                 </Button>
-                <span className={cn("text-xs tabular-nums", len && (len < 3 || len > 30) ? "text-amber-600" : "text-neutral-500")}>
+                <span className={cn("text-xs tabular-nums", len && (len < 3 || len > 11) ? "text-amber-600" : "text-neutral-500")}>
                   {sel ? t("voiceExtract.length", { s: len.toFixed(2) }) : t("voiceExtract.noSel")}
                 </span>
               </div>

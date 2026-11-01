@@ -31,6 +31,15 @@ engineRoutes.post("/repair/:id", (c) => {
   return c.json({ started: true });
 });
 
+// Klangstufe je Engine (TADA, F5): gilt ab dem nächsten Satz, ohne Neustart
+engineRoutes.put("/quality/:engine", async (c) => {
+  const engine = c.req.param("engine");
+  const body = (await c.req.json().catch(() => ({}))) as { quality?: string };
+  if (!["tada", "f5"].includes(engine) || !["fast", "calm", "best"].includes(body.quality ?? "")) return c.json({ error: "ungültig" }, 400);
+  setLlmConfig(engine === "tada" ? { tadaQuality: body.quality } : { f5Quality: body.quality });
+  return c.json({ engine, quality: body.quality });
+});
+
 // Download-Bremse: Stand, Anteil ändern, neu messen
 engineRoutes.get("/throttle", (c) => c.json({ ...throttleStatus(), windows: IS_WINDOWS }));
 engineRoutes.put("/throttle", async (c) => {
@@ -51,7 +60,7 @@ engineRoutes.get("/logs/:service", async (c) => {
 // Zusätzliche Stimmen-Engines: Auswahl und HF-Token
 engineRoutes.get("/tts-engines", async (c) => {
   await refreshExtraStatus();
-  return c.json({ engines: EXTRA_SERVICES, enabled: enabledExtras(), hfTokenPresent: !!getLlmConfig().hfToken, arbiter: extraStatus() });
+  return c.json({ engines: EXTRA_SERVICES, enabled: enabledExtras(), hfTokenPresent: !!getLlmConfig().hfToken, arbiter: extraStatus(), quality: { tada: getLlmConfig().tadaQuality || "calm", f5: getLlmConfig().f5Quality || "calm" } });
 });
 
 engineRoutes.post("/tts-engines", async (c) => {

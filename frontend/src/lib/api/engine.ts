@@ -28,6 +28,7 @@ export interface TtsEnginesInfo {
   enabled: string[];
   hfTokenPresent: boolean;
   arbiter: Record<string, { container: string; gpu: boolean }>;
+  quality?: { tada: "fast" | "calm" | "best"; f5: "fast" | "calm" | "best" };
 }
 
 export interface KokoroPack {
@@ -58,6 +59,8 @@ export const engineApi = {
     quitApp: () => request<{ ok: boolean }>("/api/app/quit", { method: "POST" }),
     repair: (id: string) => request<{ started: boolean }>(`/api/engine/repair/${id}`, { method: "POST" }),
     ttsEngines: () => request<TtsEnginesInfo>("/api/engine/tts-engines"),
+    setQuality: (engine: "tada" | "f5", quality: string) =>
+      request<{ engine: string; quality: string }>(`/api/engine/quality/${engine}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quality }) }),
     kokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack"),
     installKokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack", { method: "POST" }),
     throttle: () => request<ThrottleInfo>("/api/engine/throttle"),

@@ -100,6 +100,8 @@ export interface CustomVoiceMeta {
   seed: number;
   createdAt: string;
   showInAudiobook?: boolean;
+  // Länge der Probe in ms (0 = unbekannt); F5 nutzt höchstens 12 s
+  durationMs?: number;
 }
 
 export interface VoiceDesignMeta {

@@ -1,6 +1,7 @@
 // Engines Kokoro, F5 und TADA: gleicher HTTP-Vertrag, Weg über den Arbiter
 // F5 und TADA klonen aus Stimmproben und Qwen-Designs, Kokoro hat Martin und Kerstin
 import { readFileSync } from "fs";
+import { getLlmConfig } from "../../../services/llmConfig";
 import { unlink, writeFile } from "fs/promises";
 import { getVoiceSample, listVoiceSamples, readVoiceRefBytes } from "../../../services/voiceSamples";
 import { getVoiceDesign, listVoiceDesigns } from "../../../services/voiceDesigns";
@@ -41,8 +42,8 @@ function listFor(id: ExtraId): Voice[] {
       });
     return [...de, ...pack];
   }
-  // TADA nur Deutsch; F5 hat je ein Modell für Deutsch, Spanisch und Englisch und wechselt je Sprache
-  const langs = id === "f5" ? ["de", "es", "en"] : ["de"];
+  // F5 hat je ein Modell für Deutsch, Spanisch und Englisch; TADA lädt je Sprache einen eigenen Aligner nach
+  const langs = id === "f5" ? ["de", "es", "en"] : ["de", "es", "en", "fr", "it", "pt"];
   const firstOfLang = new Set<string>();
   const samples = listVoiceSamples()
     .filter((s) => langs.includes(s.language))
@@ -105,6 +106,8 @@ async function speak(id: ExtraId, voice: Voice, text: string, speed: number, tim
       ref_text: ref?.text ?? undefined,
       language: qwenLanguageFor(voice.language),
       seed: ref?.seed ?? 0,
+      // Klangstufe aus den Engine-Einstellungen (TADA, F5)
+      ...(id === "tada" ? { quality: getLlmConfig().tadaQuality || "calm" } : id === "f5" ? { quality: getLlmConfig().f5Quality || "calm" } : {}),
     }),
     timeoutMs,
     signal,

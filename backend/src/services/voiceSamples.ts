@@ -11,6 +11,7 @@
  */
 
 import { randomUUID, randomInt } from "node:crypto";
+import { probeDurationMs } from "../tts/ffmpeg";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -358,7 +359,8 @@ export async function createVoiceSample(
       input.refText?.trim() || null,
       seed,
       cleanedBytes.byteLength,
-      0 // We don't determine duration — would be an ffprobe subprocess per upload
+      // Länge merken: F5 nutzt höchstens 12 s der Probe, die Oberfläche warnt bei längeren
+      await probeDurationMs(refPath).catch(() => 0)
     );
 
   const sample = getVoiceSample(id);
@@ -420,4 +422,13 @@ export function recordChunkTiming(
       "UPDATE voice_samples SET ms_per_char = ?, samples_count = samples_count + 1 WHERE id = ?"
     )
     .run(next, voiceId);
+}
+
+// Ältere Proben ohne bekannte Länge nachmessen (einmalig je Probe)
+export async function fillMissingDurations(): Promise<void> {
+  const rows = db().prepare("SELECT id, ref_path FROM voice_samples WHERE duration_ms IS NULL OR duration_ms = 0").all() as Array<{ id: string; ref_path: string }>;
+  for (const r of rows) {
+    const ms = await probeDurationMs(fromDataPath(r.ref_path)).catch(() => 0);
+    if (ms) db().prepare("UPDATE voice_samples SET duration_ms = ? WHERE id = ?").run(ms, r.id);
+  }
 }

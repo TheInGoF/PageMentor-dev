@@ -35,6 +35,11 @@ MODELS = {
     "English": (EN_REPO, EN_CKPT, "F5TTS_v1_Base/vocab.txt", "F5TTS_v1_Base"),
 }
 NFE_STEPS = int(os.environ.get("F5_NFE_STEPS", "32"))
+# Klangstufen: Rechenschritte je Satz. 32 ist der F5-Standard; 64 klingt sauberer (weniger Rauschen und
+# Metallklang), dauert etwa doppelt so lange; 16 ist schnell, aber rauer
+QUALITY_STEPS = {"fast": 16, "calm": NFE_STEPS, "best": 64}
+# F5 schneidet Referenzen über 12 s ab; das Transkript passt dann nicht mehr und es kommen Aussetzer
+MAX_REF_S = 12.0
 # F5 schätzt die Länge aus Referenz und Text; knapp geschätzt verschluckt es Anfang oder Ende.
 # Darum etwas Luft: Faktor auf die geschätzte Sprechzeit plus feste Sekunden
 DURATION_MARGIN = float(os.environ.get("F5_DURATION_MARGIN", "1.15"))
@@ -104,12 +109,14 @@ class F5Engine:
         if not ref.text:
             # Ohne Transkript lädt F5 Whisper nach, das kostet Zeit und VRAM
             log.warning("ref_text fehlt, F5 transkribiert die Referenz selbst")
+        elif len(ref.samples) / ref.sr > MAX_REF_S:
+            log.warning("Referenz %.1f s: F5 schneidet auf 12 s, der Text passt dann nicht mehr (Probe auf 5–11 s kürzen)", len(ref.samples) / ref.sr)
         tts = self._model(req.language)
         wav, sr, _ = tts.infer(
             self._ref_file(ref),
             ref.text or "",
             text,
-            nfe_step=NFE_STEPS,
+            nfe_step=QUALITY_STEPS.get(req.quality or "calm", NFE_STEPS),
             speed=req.speed,
             fix_duration=self._duration(ref, text, req.speed),
             seed=req.seed,

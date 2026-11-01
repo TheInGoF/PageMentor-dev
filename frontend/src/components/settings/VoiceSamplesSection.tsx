@@ -76,7 +76,16 @@ export function VoiceSamplesSection({ st, qwenOn, cloneOn, onEngines }: { st: Se
               key={v.id}
               gender={v.gender}
               label={v.label}
-              meta={[t("voices.own.kindSample"), v.language, v.refTextPresent ? t("settings.voices.withTranscript") : t("voices.own.noTranscript")].join(" · ")}
+              meta={[
+                t("voices.own.kindSample"),
+                v.language,
+                v.refTextPresent ? t("settings.voices.withTranscript") : t("voices.own.noTranscript"),
+                v.durationMs ? `${(v.durationMs / 1000).toFixed(1)} s` : "",
+                // F5 schneidet über 12 s ab; dann passt der Text nicht mehr
+                v.durationMs && v.durationMs > 12_000 ? t("voices.own.tooLongF5") : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
               hidden={v.showInAudiobook === false}
               engines={enginesFor(engineVoices, "custom", v.id)}
               onPlayEngine={playEngineVoice}

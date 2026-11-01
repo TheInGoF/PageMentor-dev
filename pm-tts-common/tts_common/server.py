@@ -38,6 +38,8 @@ class SpeechRequest(BaseModel):
     ref_text: Optional[str] = None
     language: str = "German"
     seed: int = 0
+    # Qualitätsstufe, nur von Engines mit Stufen ausgewertet (TADA: fast/calm/best)
+    quality: Optional[str] = None
 
 
 class Engine(Protocol):

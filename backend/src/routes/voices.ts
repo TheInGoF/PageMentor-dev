@@ -13,6 +13,7 @@ import {
   type VoiceSamplePatch,
 } from "../services/voiceSamples";
 import { cut, dropSource, peaks, saveSource } from "../services/voiceExtract";
+import { fillMissingDurations } from "../services/voiceSamples";
 import {
   createVoiceDesign,
   deleteVoiceDesign,
@@ -299,7 +300,8 @@ voiceRoutes.delete("/extract/:id", (c) => {
   return c.json({ ok: true });
 });
 
-voiceRoutes.get("/custom", (c) => {
+voiceRoutes.get("/custom", async (c) => {
+  await fillMissingDurations().catch(() => undefined);
   return c.json({
     voices: listVoiceSamples().map((v) => ({
       id: v.id,
@@ -315,6 +317,7 @@ voiceRoutes.get("/custom", (c) => {
       msPerChar: v.msPerChar,
       samplesCount: v.samplesCount,
       showInAudiobook: v.showInAudiobook,
+      durationMs: v.durationMs,
     })),
   });
 });
