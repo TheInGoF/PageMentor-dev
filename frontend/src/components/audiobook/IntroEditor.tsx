@@ -73,6 +73,7 @@ export function IntroEditor({
   onDeleteAudio,
   onPreprocess,
   onEditTts,
+  defaultText: defaultOverride,
 }: {
   intro: {
     text: string | null;
@@ -92,6 +93,8 @@ export function IntroEditor({
   onDeleteAudio: () => void;
   onPreprocess: (force: boolean) => void;
   onEditTts: () => void;
+  // Lernhörbücher: Vorlage aus den Metadaten kommt vom Server (Titel mit Zusatz, „Nach dem Buch von …“)
+  defaultText?: string | null;
 }) {
   const [draft, setDraft] = useState<string>("");
   const [open, setOpen] = useState<boolean>(false);
@@ -102,8 +105,8 @@ export function IntroEditor({
   }, [intro.text]);
 
   const defaultText = useMemo(
-    () => buildIntroDefault(intro.docMeta, voice, modelName),
-    [intro.docMeta, voice, modelName]
+    () => defaultOverride ?? buildIntroDefault(intro.docMeta, voice, modelName),
+    [defaultOverride, intro.docMeta, voice, modelName]
   );
 
   const dirty = (intro.text ?? "") !== draft;

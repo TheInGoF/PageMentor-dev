@@ -2,7 +2,8 @@
 // "Qwen3-TTS" → "Kwenn drei T T S", Cache in audio_intro_text_tts
 // Eigener kurzer Prompt: der Kapitel-Prompt kippt Gemma in Kommentar-Modus
 
-import { db } from "../../db";
+import { createHash } from "node:crypto";
+import { getIntro, setIntroTts, type IntroVariant } from "../audiobook/introStore";
 import { generate } from "../llm";
 import { withGemmaLock } from "../gemmaLock";
 import { introSystemFor } from "./prompts";
@@ -22,44 +23,25 @@ async function preprocessIntroForAudioImpl(params: {
   docId: string;
   model?: string;
   force?: boolean;
+  variant?: IntroVariant;
 }): Promise<IntroPreprocessResult> {
-  const d = db();
-  const row = d
-    .prepare(
-      "SELECT id, language, audio_intro_text, audio_intro_text_tts, audio_intro_text_tts_model, audio_intro_text_tts_stamp FROM documents WHERE id = ?"
-    )
-    .get(params.docId) as
-    | {
-        id: string;
-        language: string;
-        audio_intro_text: string | null;
-        audio_intro_text_tts: string | null;
-        audio_intro_text_tts_model: string | null;
-        audio_intro_text_tts_stamp: string | null;
-      }
-    | undefined;
-  if (!row) throw new Error(`Document ${params.docId} not found`);
+  const variant = params.variant ?? "original";
+  const intro = getIntro(params.docId, variant);
+  if (!intro) throw new Error(`Document ${params.docId} not found`);
+  const row = { language: intro.language, audio_intro_text: intro.text };
   // Gecacht nur, wenn von Hand bearbeitet oder mit der aktuellen Anweisung entstanden
-  const stamp = gemmaStamp("intro", row.language);
-  const fresh = row.audio_intro_text_tts_model === "manual-edit" || row.audio_intro_text_tts_stamp === stamp;
-  if (!row.audio_intro_text || row.audio_intro_text.trim().length === 0) {
+  // Lernhörbücher: die Vorlage ändert sich mit dem Heft (Einheiten, Autor), darum gehört der Text in den Stempel
+  const stamp = variant === "original" ? gemmaStamp("intro", intro.language) : `${gemmaStamp("intro", intro.language)}:${createHash("sha1").update(intro.text ?? "").digest("hex").slice(0, 10)}`;
+  const fresh = intro.ttsModel === "manual-edit" || intro.ttsStamp === stamp;
+  if (!intro.text || intro.text.trim().length === 0) {
     throw new Error("Intro text is empty");
   }
 
-  if (
-    !params.force &&
-    fresh &&
-    row.audio_intro_text_tts &&
-    row.audio_intro_text_tts.trim().length > 0
-  ) {
-    return {
-      text: row.audio_intro_text_tts,
-      model: row.audio_intro_text_tts_model ?? "cached",
-      cached: true,
-    };
+  if (!params.force && fresh && intro.tts && intro.tts.trim().length > 0) {
+    return { text: intro.tts, model: intro.ttsModel ?? "cached", cached: true };
   }
 
-  const introLabel = `intro ${params.docId.slice(0, 8)}`;
+  const introLabel = `intro ${variant === "original" ? "" : `${variant} `}${params.docId.slice(0, 8)}`;
   return withGemmaLock(introLabel, async () => {
     const tStart = Date.now();
     // Deterministischer Pre-Pass wie bei Kapiteln: Titel und Abkürzungen ausschreiben
@@ -95,9 +77,7 @@ async function preprocessIntroForAudioImpl(params: {
       );
     }
 
-    d.prepare(
-      "UPDATE documents SET audio_intro_text_tts = ?, audio_intro_text_tts_model = ?, audio_intro_text_tts_stamp = ? WHERE id = ?"
-    ).run(piece, result.model, stamp, params.docId);
+    setIntroTts(params.docId, variant, piece, result.model, stamp);
 
     console.log(
       `[audio-preprocess] ${introLabel} DONE in ${((Date.now() - tStart) / 1000).toFixed(1)}s ` +
@@ -109,12 +89,8 @@ async function preprocessIntroForAudioImpl(params: {
 }
 
 // Nach Bearbeiten des Intro-Texts: nächster Lauf fragt Gemma neu
-export function clearAudioIntroTtsCache(docId: string): void {
-  db()
-    .prepare(
-      "UPDATE documents SET audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?"
-    )
-    .run(docId);
+export function clearAudioIntroTtsCache(docId: string, variant: IntroVariant = "original"): void {
+  setIntroTts(docId, variant, null, null, null);
 }
 
 export function preprocessIntroForAudio(...args: Parameters<typeof preprocessIntroForAudioImpl>): ReturnType<typeof preprocessIntroForAudioImpl> {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type PreprocessedIntro } from "../lib/api";
+import type { IntroVariant } from "../lib/api/audio";
 import { Modal } from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
@@ -21,11 +22,13 @@ import { t } from "../lib/i18n";
 
 interface Props {
   docId: string;
+  // Original-Hörbuch oder eines der Lernhörbücher
+  variant?: IntroVariant;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function IntroTextEditModal({ docId, onClose, onSaved }: Props) {
+export function IntroTextEditModal({ docId, variant, onClose, onSaved }: Props) {
   const [data, setData] = useState<PreprocessedIntro | null>(null);
   const [draft, setDraft] = useState<string>("");
   const [busy, setBusy] = useState(false);
@@ -35,7 +38,7 @@ export function IntroTextEditModal({ docId, onClose, onSaved }: Props) {
   useEffect(() => {
     setLoading(true);
     api.audio
-      .getPreprocessedIntro(docId)
+      .getPreprocessedIntro(docId, variant)
       .then((d) => {
         setData(d);
         setDraft(d.audioText ?? d.originalText);
@@ -46,13 +49,13 @@ export function IntroTextEditModal({ docId, onClose, onSaved }: Props) {
       })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docId]);
+  }, [docId, variant]);
 
   async function save() {
     if (!draft.trim()) return;
     setBusy(true);
     try {
-      await api.audio.savePreprocessedIntro(docId, draft);
+      await api.audio.savePreprocessedIntro(docId, draft, variant);
       toast.show(t("audiobook.edit.saved"), "success");
       onSaved();
     } catch (err) {
@@ -66,7 +69,7 @@ export function IntroTextEditModal({ docId, onClose, onSaved }: Props) {
     if (!confirm(t("audiobook.edit.resetConfirm"))) return;
     setBusy(true);
     try {
-      await api.audio.savePreprocessedIntro(docId, null);
+      await api.audio.savePreprocessedIntro(docId, null, variant);
       toast.show(t("audiobook.edit.reset"), "success");
       onSaved();
     } catch (err) {

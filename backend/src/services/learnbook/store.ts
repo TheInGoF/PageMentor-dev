@@ -55,6 +55,13 @@ export function ensureLearnTables(d: Database): void {
   // Eigener Intro-Text je Art (leer = Vorlage der App)
   if (!cols.some((c) => c.name === "learn_intro_subject")) d.exec("ALTER TABLE documents ADD COLUMN learn_intro_subject TEXT");
   if (!cols.some((c) => c.name === "learn_intro_language")) d.exec("ALTER TABLE documents ADD COLUMN learn_intro_language TEXT");
+  // Sprachfassung des Intros von Gemma je Art (wie audio_intro_text_tts beim Original)
+  for (const k of ["subject", "language"]) {
+    for (const suffix of ["tts", "tts_model", "tts_stamp"]) {
+      const name = `learn_intro_${k}_${suffix}`;
+      if (!cols.some((c) => c.name === name)) d.exec(`ALTER TABLE documents ADD COLUMN ${name} TEXT`);
+    }
+  }
   // Eigener Eintrag des Lernhörbuchs in Audiobookshelf (das Original hat abs_item_id)
   if (!cols.some((c) => c.name === "abs_learn_item_id")) d.exec("ALTER TABLE documents ADD COLUMN abs_learn_item_id TEXT");
 }
@@ -94,15 +101,6 @@ export function skipUnit(docId: string, idx: number, reason: string, stamp: stri
       "UPDATE learn_units SET script = NULL, points = NULL, check_note = NULL, audio_path = NULL, audio_stamp = NULL, duration_ms = NULL, skip_reason = ?, script_stamp = ? WHERE document_id = ? AND idx = ?"
     )
     .run(reason, stamp, docId, idx);
-}
-
-// Eigener Intro-Text je Art; null setzt auf die Vorlage zurück
-export function learnIntroOverride(docId: string, kind: LearnKind): string | null {
-  const r = db().prepare(`SELECT learn_intro_${kind} AS t FROM documents WHERE id = ?`).get(docId) as { t: string | null } | undefined;
-  return r?.t?.trim() || null;
-}
-export function setLearnIntroOverride(docId: string, kind: LearnKind, text: string | null): void {
-  db().prepare(`UPDATE documents SET learn_intro_${kind} = ? WHERE id = ?`).run(text?.trim() || null, docId);
 }
 
 export function learnSettings(docId: string): { kind: LearnKind; lang: string } {

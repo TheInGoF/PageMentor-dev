@@ -14,7 +14,7 @@ import { ChapterWorkbench } from "./audiobook/ChapterWorkbench";
 import { BookProgressPanel } from "./audiobook/BookProgressPanel";
 import { IntroEditor } from "./audiobook/IntroEditor";
 import { SecondVoice } from "./audiobook/SecondVoice";
-import { LearnbookBody, LearnbookProgress, useLearnbook } from "./audiobook/LearnbookPanel";
+import { LearnbookBody, LearnbookProgress, LearnIntro, useLearnbook } from "./audiobook/LearnbookPanel";
 import { KindFilterBar } from "./audiobook/KindFilterBar";
 import { Menu, type MenuItem } from "./ui/Menu";
 import { cn } from "../lib/cn";
@@ -417,7 +417,12 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         </>
       )}
 
-      {mode !== "original" && <LearnbookBody ctl={learn} kind={mode} />}
+      {mode !== "original" && (
+        <>
+          <LearnIntro ctl={learn} kind={mode} docId={docId} rate={rate} />
+          <LearnbookBody ctl={learn} kind={mode} />
+        </>
+      )}
 
       {editChapterId && (
         <AudioTextEditModal

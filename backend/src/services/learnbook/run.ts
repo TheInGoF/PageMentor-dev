@@ -9,9 +9,10 @@ import { anyProcessing } from "../pipeline";
 import { anyGenerating } from "../audiobook";
 import { releaseDoclingNow } from "../docling/release";
 import { learnModel, reviewPoints, scriptStamp, SkipUnit, unitsFor, writeUnit } from "./script";
-import { learnIntroOverride, learnSettings, listUnits, saveAudio, saveScript, skipUnit, syncUnits } from "./store";
+import { learnSettings, listUnits, saveAudio, saveScript, skipUnit, syncUnits } from "./store";
 import { audioStamp, buildLearnBook, learnIntroPath, speakUnit } from "./speak";
-import { introText } from "./meta";
+import { introTtsText } from "../audiobook/intro";
+import { getIntro, introAudioUrl } from "../audiobook/introStore";
 import { absEnabled } from "../llmConfig";
 import { absReady, uploadBook } from "../audiobookshelf";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -235,7 +236,7 @@ async function introAndBook(docId: string, rate: string, st: LearnRunState): Pro
 async function finishBook(docId: string, kind: "language" | "subject", lang: string, main: Voice, rate: string, st: LearnRunState, unitCount: number): Promise<void> {
   // Intro vorneweg: was es ist, nach wessen Buch, wie man damit lernt; nur neu sprechen, wenn sich etwas geändert hat
   st.phase = "intro";
-  const intro = await gpuSlot(docId, () => speakIntro(docId, kind, lang, main, rate, unitCount));
+  const intro = await gpuSlot(docId, () => speakIntro(docId, kind, main, rate));
   if (cancelDoc === docId) return;
   // M4B nur, wenn alle Einheiten mit Inhalt Audio haben (sonst fehlt nach „Intro neu“ noch ein Lauf)
   const ready = listUnits(docId).filter((u) => u.script && !u.skip_reason).every((u) => u.audio_path && existsSync(u.audio_path));
@@ -255,19 +256,18 @@ async function finishBook(docId: string, kind: "language" | "subject", lang: str
   }
 }
 
-// Aktueller Intro-Text: eigene Fassung oder Vorlage
-export function learnIntroInfo(docId: string): { text: string; template: string; custom: boolean; hasAudio: boolean } {
-  const { kind, lang } = learnSettings(docId);
-  const doc = db().prepare("SELECT title, doc_title, author FROM documents WHERE id = ?").get(docId) as { title: string; doc_title: string | null; author: string | null };
-  const units = listUnits(docId).filter((u) => !u.skip_reason).length;
-  const template = introText({ kind, lang, title: doc.doc_title || doc.title, author: doc.author, units });
-  const custom = learnIntroOverride(docId, kind);
-  return { text: custom ?? template, template, custom: !!custom, hasAudio: existsSync(learnIntroPath(docId)) };
+// Intro für den Editor im Hörbuch-Reiter (gleicher wie beim Original): Text, Vorlage, Audio
+export function learnIntroInfo(docId: string): { text: string | null; template: string | null; custom: boolean; audioUrl: string | null } {
+  const { kind } = learnSettings(docId);
+  const intro = getIntro(docId, kind);
+  return { text: intro?.text ?? null, template: intro?.template ?? null, custom: !!intro?.custom, audioUrl: introAudioUrl(docId, kind) };
 }
 
-async function speakIntro(docId: string, kind: "language" | "subject", lang: string, main: Voice, rate: string, units: number): Promise<{ path: string; durationMs: number } | null> {
-  const doc = db().prepare("SELECT title, doc_title, author FROM documents WHERE id = ?").get(docId) as { title: string; doc_title: string | null; author: string | null };
-  const text = learnIntroOverride(docId, kind) ?? introText({ kind, lang, title: doc.doc_title || doc.title, author: doc.author, units });
+// Wie beim Original: gesprochen wird Gemmas Sprachfassung (gecacht), ohne Gemma der ausgeschriebene Text
+async function speakIntro(docId: string, kind: "language" | "subject", main: Voice, rate: string): Promise<{ path: string; durationMs: number } | null> {
+  const doc = db().prepare("SELECT title, doc_title FROM documents WHERE id = ?").get(docId) as { title: string; doc_title: string | null };
+  const text = await introTtsText(docId, undefined, kind);
+  if (!text) return null;
   const stamp = audioStamp(text, [main], rate);
   const path = learnIntroPath(docId);
   const meta = `${path}.json`;

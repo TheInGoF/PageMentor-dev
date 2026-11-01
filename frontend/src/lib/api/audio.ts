@@ -8,6 +8,9 @@ import type {
   ChapterStatusResponse,
 } from "./types";
 
+export type IntroVariant = "original" | "subject" | "language";
+const vq = (v?: IntroVariant) => (v && v !== "original" ? `?v=${v}` : "");
+
 export interface CompareItem {
   engine: string;
   voiceId: string;
@@ -153,46 +156,28 @@ export const audioApi = {
         `/api/audio/include-by-kind/${docId}`,
         { method: "PATCH", body: JSON.stringify({ kind, include }) }
       ),
-    setIntroText: (docId: string, text: string | null) =>
-      request<{ docId: string; text: string | null }>(
-        `/api/audio/intro/${docId}`,
-        { method: "PUT", body: JSON.stringify({ text }) }
-      ),
-    generateIntro: (
-      docId: string,
-      voice: string,
-      rate: string,
-      model?: string
-    ) =>
-      request<{ status: string; docId: string; voice: string }>(
-        `/api/audio/intro/${docId}/generate`,
-        { method: "POST", body: JSON.stringify({ voice, rate, model }) }
-      ),
-    deleteIntroAudio: (docId: string) =>
-      request<{ status: string }>(
-        `/api/audio/intro/${docId}/file`,
-        { method: "DELETE" }
-      ),
+    // Intro der drei Hörbuch-Arten: ohne variant das Original-Hörbuch, sonst Lernhörbuch bzw. Sprachlern-Hörbuch
+    setIntroText: (docId: string, text: string | null, variant?: IntroVariant) =>
+      request<{ docId: string; text: string | null }>(`/api/audio/intro/${docId}${vq(variant)}`, { method: "PUT", body: JSON.stringify({ text }) }),
+    generateIntro: (docId: string, voice: string, rate: string, model?: string, variant?: IntroVariant) =>
+      request<{ status: string; docId: string; voice?: string }>(`/api/audio/intro/${docId}/generate${vq(variant)}`, {
+        method: "POST",
+        body: JSON.stringify({ voice, rate, model }),
+      }),
+    deleteIntroAudio: (docId: string, variant?: IntroVariant) =>
+      request<{ status: string }>(`/api/audio/intro/${docId}/file${vq(variant)}`, { method: "DELETE" }),
     introUrl: (docId: string) => `/api/audio/intro/${docId}/file`,
-    preprocessIntro: (
-      docId: string,
-      body?: { model?: string; force?: boolean }
-    ) =>
-      request<{
-        docId: string;
-        text: string;
-        model: string;
-        cached: boolean;
-      }>(`/api/audio/intro/${docId}/preprocess`, {
+    preprocessIntro: (docId: string, body?: { model?: string; force?: boolean }, variant?: IntroVariant) =>
+      request<{ docId: string; text: string; model: string; cached: boolean }>(`/api/audio/intro/${docId}/preprocess${vq(variant)}`, {
         method: "POST",
         body: JSON.stringify(body ?? {}),
       }),
-    getPreprocessedIntro: (docId: string) =>
-      request<PreprocessedIntro>(`/api/audio/intro/${docId}/preprocessed`),
-    savePreprocessedIntro: (docId: string, text: string | null) =>
-      request<{ docId: string; saved?: boolean; cleared?: boolean; length?: number }>(
-        `/api/audio/intro/${docId}/preprocessed`,
-        { method: "PATCH", body: JSON.stringify({ text }) }
-      ),
+    getPreprocessedIntro: (docId: string, variant?: IntroVariant) =>
+      request<PreprocessedIntro>(`/api/audio/intro/${docId}/preprocessed${vq(variant)}`),
+    savePreprocessedIntro: (docId: string, text: string | null, variant?: IntroVariant) =>
+      request<{ docId: string; saved?: boolean; cleared?: boolean; length?: number }>(`/api/audio/intro/${docId}/preprocessed${vq(variant)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ text }),
+      }),
   },
 };

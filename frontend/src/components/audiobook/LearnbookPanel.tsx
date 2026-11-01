@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
-import { Button } from "../ui/Button";
 import { Menu } from "../ui/Menu";
 import { useToast } from "../ui/Toast";
 import { Notice, SettingRow } from "../settings/parts";
+import { api } from "../../lib/api";
+import { getSettings } from "../../lib/settings";
+import { IntroEditor } from "./IntroEditor";
+import { IntroTextEditModal } from "../IntroTextEditModal";
 
 interface Unit {
   idx: number;
@@ -48,7 +51,7 @@ interface Info {
   state: RunState | null;
   hasBook?: boolean;
   abs?: boolean;
-  intro?: { text: string; template: string; custom: boolean; hasAudio: boolean };
+  intro?: { text: string | null; template: string | null; custom: boolean; audioUrl: string | null };
 }
 
 const LANGS = ["es", "en", "fr", "it", "pt"];
@@ -106,17 +109,12 @@ export function useLearnbook(docId: string, kind: LearnKind, rate: string, enabl
       setAbsBusy(false);
     }
   };
-  const saveIntro = async (text: string | null) => {
-    await request(`${base}/intro`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-    await load();
-  };
-  const speakIntro = () => call("/intro", { rate });
   const hasAudio = !other && !!info?.units.some((u) => u.hasAudio);
   const menu = [
     ...(!other && info?.hasBook ? [{ label: t("audiobook.download.m4b"), onClick: () => window.open(`${base}/book`, "_blank") }] : []),
     ...(!other && info?.hasBook && info.abs ? [{ label: absBusy ? t("learn.absUploading") : t("learn.absUpload"), onClick: () => void uploadAbs(), disabled: absBusy || running }] : []),
   ];
-  return { info, other, running, st: info?.state ?? null, start, cancel, setLang, hasAudio, menu, base, load, saveIntro, speakIntro };
+  return { info, other, running, st: info?.state ?? null, start, cancel, setLang, hasAudio, menu, base, load };
 }
 
 export type LearnbookCtl = ReturnType<typeof useLearnbook>;
@@ -190,7 +188,6 @@ export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKin
       {st?.phase === "done" && st.bookPath && <Notice>{t("learn.saved", { path: st.bookPath })}</Notice>}
       {st?.phase === "done" && st.absUrl && <Notice>{t("learn.absDone")}</Notice>}
       {st?.phase === "done" && st.absError && <Notice kind="warn">{t("learn.absFailed", { error: st.absError })}</Notice>}
-      {!other && info.intro && <IntroBox ctl={ctl} />}
 
       {!other && info.units.length > 0 && (
         <ul className="flex flex-col divide-y divide-border">
@@ -237,61 +234,64 @@ export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKin
   );
 }
 
-// Intro bearbeiten und einzeln neu sprechen; danach wird nur das M4B neu gebaut, die Einheiten bleiben
-function IntroBox({ ctl }: { ctl: LearnbookCtl }) {
-  const intro = ctl.info!.intro!;
-  const [draft, setDraft] = useState(intro.text);
-  const [open, setOpen] = useState(false);
-  const audio = useRef<HTMLAudioElement | null>(null);
-  useEffect(() => setDraft(intro.text), [intro.text]);
-  useEffect(() => () => audio.current?.pause(), []);
-  const dirty = draft.trim() !== intro.text.trim();
+// Intro der Lernhörbücher: derselbe Editor wie beim Original-Hörbuch (Text → Gemma-Sprachfassung → MP3, einzeln
+// anhören und löschen); nur die Vorlage aus den Metadaten kommt vom Server. Neu sprechen baut danach das M4B neu
+export function LearnIntro({ ctl, kind, docId, rate }: { ctl: LearnbookCtl; kind: LearnKind; docId: string; rate: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [editTts, setEditTts] = useState(false);
+  const intro = ctl.info?.intro;
+  if (ctl.other || !intro) return null;
+  const model = getSettings().defaultOllamaModel || undefined;
+  const canSpeak = !!ctl.info?.units.some((u) => u.script && !u.skipReason);
+  const run = async (fn: () => Promise<unknown>, ok?: (r: unknown) => string) => {
+    setBusy(true);
+    try {
+      const r = await fn();
+      if (ok) toast.show(ok(r), "success");
+      await ctl.load();
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-      <div className="flex items-center gap-2">
-        <button type="button" className="flex-1 min-w-0 text-left min-h-[40px]" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <div className="text-sm font-medium">{t("learn.intro")}</div>
-          <div className="text-xs text-neutral-500 truncate">{intro.custom ? t("learn.introCustom") : t("learn.introTemplate")} · {intro.text}</div>
-        </button>
-        {intro.hasAudio && (
-          <button
-            type="button"
-            className="chip"
-            onClick={() => {
-              audio.current?.pause();
-              audio.current = new Audio(`${ctl.base}/intro/audio?t=${Date.now()}`);
-              void audio.current.play();
-            }}
-          >
-            ▶ {t("learn.play")}
-          </button>
-        )}
-      </div>
-      {open && (
-        <>
-          <textarea className="input min-h-[110px] text-sm leading-relaxed" value={draft} onChange={(e) => setDraft(e.target.value)} disabled={ctl.running} />
-          <p className="text-xs text-neutral-500">{t("learn.introHint")}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" disabled={!dirty || ctl.running} onClick={() => void ctl.saveIntro(draft)}>
-              {t("common.save")}
-            </Button>
-            {intro.custom && (
-              <Button variant="ghost" disabled={ctl.running} onClick={() => void ctl.saveIntro(null)}>
-                {t("learn.introReset")}
-              </Button>
-            )}
-            <Button
-              disabled={ctl.running || !ctl.hasAudio}
-              onClick={async () => {
-                if (dirty) await ctl.saveIntro(draft);
-                await ctl.speakIntro();
-              }}
-            >
-              {t("learn.introSpeak")}
-            </Button>
-          </div>
-        </>
+    <>
+      <IntroEditor
+        intro={{ text: intro.text, audioUrl: intro.audioUrl, docMeta: null }}
+        defaultText={intro.template}
+        voice={null}
+        modelName=""
+        busy={busy || ctl.running}
+        canGenerate={canSpeak}
+        onSave={(text) => void run(() => api.audio.setIntroText(docId, text, kind), () => t("audiobook.intro.saved"))}
+        onGenerate={() => void run(() => api.audio.generateIntro(docId, "", rate, model, kind), () => t("audiobook.intro.queued"))}
+        onDeleteAudio={() => {
+          if (confirm(t("audiobook.intro.deleteAudioConfirm"))) void run(() => api.audio.deleteIntroAudio(docId, kind), () => t("audiobook.intro.audioDeleted"));
+        }}
+        onPreprocess={(force) =>
+          void run(
+            () => api.audio.preprocessIntro(docId, { force, model }, kind),
+            (r) => {
+              const res = r as { cached: boolean; model: string };
+              return res.cached ? t("audiobook.intro.preprocessCached") : t("audiobook.intro.preprocessDone", { model: res.model });
+            }
+          )
+        }
+        onEditTts={() => setEditTts(true)}
+      />
+      {editTts && (
+        <IntroTextEditModal
+          docId={docId}
+          variant={kind}
+          onClose={() => setEditTts(false)}
+          onSaved={() => {
+            setEditTts(false);
+            void ctl.load();
+          }}
+        />
       )}
-    </div>
+    </>
   );
 }

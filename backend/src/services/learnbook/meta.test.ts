@@ -16,8 +16,9 @@ describe("Lernhörbuch: Name, Autor, Intro", () => {
 
   test("Intro nennt Titel, Autor, Umfang und Lernweise", () => {
     const de = introText({ kind: "language", lang: "es", title: "Spanisch A1", author: "Max Muster", units: 12 });
-    expect(de).toStartWith("Spanisch A1 – Sprachlern-Hörbuch. Nach dem Buch von Max Muster.");
+    expect(de).toStartWith("Spanisch A1 – Sprachlern-Hörbuch.\n\nNach dem Buch von Max Muster.");
     expect(de).toContain("Du lernst Spanisch in 12 Einheiten");
-    expect(introText({ kind: "subject", lang: "es", title: "IT", author: null, units: 3 })).toStartWith("IT – Lernhörbuch. 3 Einheiten");
+    expect(de).toEndWith("Erstellt mit PageMentor.");
+    expect(introText({ kind: "subject", lang: "es", title: "IT", author: null, units: 3 })).toStartWith("IT – Lernhörbuch.\n\n3 Einheiten");
   });
 });

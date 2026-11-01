@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.73.0 – 2026-11-01
+### Change
+- Lernhörbuch und Sprachlern-Hörbuch nutzen den Intro-Editor des Original-Hörbuchs: Text, Gemma-Sprachfassung, Audio einzeln anhören und löschen.
+- Lernhörbuch-Intro wird wie beim Original aus Gemmas Sprachfassung gesprochen.
+- Vorlage des Lernhörbuch-Intros ist wie beim Original zeilenweise aufgebaut, mit Titelzusatz und „Nach dem Buch von …“.
+
 ## 1.72.0 – 2026-11-01
 ### Fix
 - Leerlauf-Umwandlung entlädt Gemma vor Docling und gibt Docling danach frei, bevor die Begriffe beginnen.
