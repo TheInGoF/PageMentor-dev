@@ -1,6 +1,9 @@
 // Hauptwarteschlange: Reihenfolge, Vorziehen, Abbruch
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { acquire, enqueueTicket, QueueCanceled, queueTickets, release, removeTicket, reorderTickets, resetQueue } from "./queue";
+import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { acquire, enqueueTicket, initQueueFile, markBatchDoc, pausedTickets, QueueCanceled, queueTickets, release, removeTicket, reorderTickets, resetQueue, takePaused } from "./queue";
 
 const settled = (p: Promise<unknown>) => Promise.race([p.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 20))]);
 
@@ -55,5 +58,25 @@ describe("Hauptwarteschlange", () => {
     ctrl.abort();
     await expect(pc).rejects.toBeInstanceOf(QueueCanceled);
     await expect(acquire("gibt-es-nicht")).rejects.toBeInstanceOf(QueueCanceled);
+  });
+
+  test("Übernahme nach Neustart: Datei lesen, Stapel-Bücher und Einzelstücke bleiben draußen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pm-queue-"));
+    const file = join(dir, "queue.json");
+    // Beim Beenden lief d1 (live), d2 wartete (paused aus einem früheren Start), d1 doppelt zählt einmal
+    writeFileSync(file, JSON.stringify({ paused: [{ kind: "learnbook", docId: "d2", params: { probe: false, rate: "+0%" }, createdAt: 1 }], live: [{ kind: "docling", docId: "d1", params: {}, createdAt: 2 }, { kind: "docling", docId: "d1", params: {}, createdAt: 3 }, { kind: "kaputt", docId: "x" }] }));
+    expect(initQueueFile(dir).map((t) => `${t.kind}:${t.docId}`)).toEqual(["learnbook:d2", "docling:d1"]);
+    // Neue Einträge landen als live in der Datei; Stapel-Buch und Einzelkapitel nicht
+    markBatchDoc("d9", true);
+    enqueueTicket("audiobook", "d3", { voiceId: "v" });
+    enqueueTicket("audiobook", "d9", {});
+    enqueueTicket("audiobook", "d4", { single: true });
+    const saved = JSON.parse(readFileSync(file, "utf8")) as { paused: unknown[]; live: Array<{ docId: string }> };
+    expect(saved.live.map((t) => t.docId)).toEqual(["d3"]);
+    expect(saved.paused).toHaveLength(2);
+    // Fortsetzen leert die Übernahme
+    expect(takePaused()).toHaveLength(2);
+    expect(pausedTickets()).toEqual([]);
+    expect((JSON.parse(readFileSync(file, "utf8")) as { paused: unknown[] }).paused).toEqual([]);
   });
 });

@@ -35,6 +35,7 @@ import { moduleRoutes } from "./routes/modules";
 import { ragRoutes } from "./routes/rag";
 import { conceptRoutes } from "./routes/concepts";
 import { cleanupConcepts } from "./services/concepts/links";
+import { initQueueFile } from "./services/queue";
 import { learnbookRoutes } from "./routes/learnbook";
 import { maintenanceRoutes } from "./routes/maintenance";
 import { activityRoutes } from "./routes/activity";
@@ -128,6 +129,11 @@ app.use("/*", serveStatic({ path: join(PUBLIC_DIR, "index.html") }));
 
 await startupStep("Datenbank öffnen", () => initDb());
 migrateTtsEngines();
+// Hauptwarteschlange: was beim Beenden offen war, wartet auf Fortsetzen
+await startupStep("Warteschlange lesen", () => {
+  const open = initQueueFile();
+  if (open.length) startupNote(`Warteschlange: ${open.length} Aufträge unterbrochen, warten auf Fortsetzen`);
+});
 // Begriffsnetz: Aufgabenfetzen und Sprachhefte raus, ohne Modell
 await startupStep("Begriffsnetz aufräumen", () => {
   const r = cleanupConcepts();

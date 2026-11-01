@@ -1,13 +1,16 @@
 // Warteschlange auf einen Blick: vorn die Einträge der Hauptwarteschlange (Umwandlung, Hörbuch, Lernhörbuch) in
 // ihrer Reihenfolge, verschiebbar und entfernbar; dahinter Stapel-Import, Hörbuch-Stapel, Wissenspflege,
 // Begriffsnetz und Stimm-Engines, nur zum Lesen
+import { setTimeout as sleep } from "node:timers/promises";
 import { db } from "../db";
-import { cancelProcessing, pipelineStages } from "./pipeline";
+import { cancelProcessing, isProcessing, pipelineStages, processDocument } from "./pipeline";
 import { queueStatus } from "./batch/queue";
-import { cancelLearnbook, learnStates } from "./learnbook/run";
+import { cancelLearnbook, learnStates, startLearnbook, startLearnIntro } from "./learnbook/run";
 import { learnSettings } from "./learnbook/store";
 import { cancelAudiobook, running as audioRuns } from "./audiobook/state";
-import { queueTickets, removeTicket, reorderTickets, type Ticket } from "./queue";
+import { generateAudiobook } from "./audiobook/book";
+import { emitLog } from "../log/logger";
+import { discardPaused, pausedTickets, queueTickets, removeTicket, reorderTickets, takePaused, type QueueKind, type Ticket } from "./queue";
 import { batchStatus } from "./batch/audiobooks";
 import { maintenanceState } from "./maintenance";
 import { conceptRunState } from "./concepts/extract";
@@ -102,4 +105,41 @@ export function removeQueueEntry(id: string): boolean {
 
 export async function activity(): Promise<ActivityItem[]> {
   return collectActivity(await ttsActivity());
+}
+
+// Nach dem Neustart offen: was beim Beenden in der Hauptwarteschlange stand
+export interface PausedEntry {
+  kind: QueueKind;
+  docId: string;
+  title: string;
+}
+export function pausedQueue(): PausedEntry[] {
+  return pausedTickets().map((t) => ({ kind: t.kind, docId: t.docId, title: docTitle(t.docId) }));
+}
+
+export function discardQueue(): void {
+  discardPaused();
+}
+
+// Fortsetzen: Aufträge in alter Reihenfolge neu starten; jeder macht nur, was noch fehlt
+export async function resumeQueue(): Promise<number> {
+  let n = 0;
+  for (const t of takePaused()) {
+    const p = t.params;
+    const doc = db().prepare("SELECT ocr_status FROM documents WHERE id = ?").get(t.docId) as { ocr_status: string } | undefined;
+    if (!doc) continue;
+    if (t.kind === "docling") {
+      if (doc.ocr_status === "done" || isProcessing(t.docId)) continue;
+      processDocument(t.docId).catch((err) => emitLog("warn", "pipeline", "Umwandlung nach Neustart fehlgeschlagen", { err, ctx: { docId: t.docId } }));
+    } else if (t.kind === "audiobook") {
+      generateAudiobook({ docId: t.docId, voiceId: (p.voiceId as string) || undefined, rate: (p.rate as string) || undefined, model: (p.model as string) || undefined }).catch((err) =>
+        emitLog("warn", "audiobook", "Hörbuch nach Neustart fehlgeschlagen", { err, ctx: { docId: t.docId } })
+      );
+    } else if (p.introOnly) startLearnIntro(t.docId, (p.rate as string) || "+0%");
+    else startLearnbook(t.docId, !!p.probe, (p.rate as string) || "+0%");
+    n++;
+    // Die Einträge entstehen beim Start der Aufträge: kurz warten, damit die Reihenfolge bleibt
+    await sleep(100);
+  }
+  return n;
 }

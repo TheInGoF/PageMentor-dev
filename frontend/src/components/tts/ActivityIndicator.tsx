@@ -24,6 +24,13 @@ export interface ActivityItem {
   ticket?: string;
   movable?: boolean;
 }
+// Nach dem Neustart offen, bis Fortsetzen oder Verwerfen
+interface PausedEntry {
+  kind: "docling" | "audiobook" | "learnbook";
+  docId: string;
+  title: string;
+}
+type Answer = { items: ActivityItem[]; paused: PausedEntry[] };
 
 const ENGINE: Record<string, string> = { f5: "F5", qwen: "Qwen", kokoro: "Kokoro", tada: "TADA" };
 const OWN_PILL = new Set(["batch", "maintenance"]);
@@ -47,15 +54,20 @@ export function activityLabel(a: ActivityItem): string {
 
 export function ActivityIndicator() {
   const [items, setItems] = useState<ActivityItem[]>([]);
+  const [paused, setPaused] = useState<PausedEntry[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const busy = items.length > 0;
+  const apply = (r: Answer) => {
+    setItems(r.items);
+    setPaused(r.paused ?? []);
+  };
 
   useEffect(() => {
     let stop = false;
     const load = () =>
-      void request<{ items: ActivityItem[] }>("/api/activity")
-        .then((r) => !stop && setItems(r.items))
+      void request<Answer>("/api/activity")
+        .then((r) => !stop && apply(r))
         .catch(() => undefined);
     load();
     const iv = setInterval(load, busy ? 3000 : 8000);
@@ -72,11 +84,11 @@ export function ActivityIndicator() {
   }, [open]);
 
   const own = items.filter((i) => !OWN_PILL.has(i.kind));
-  if (!own.length) return null;
-  // Hauptwarteschlange steuern: neue Reihenfolge bzw. Eintrag entfernen, Antwort ist die frische Liste
-  const post = (path: string, body: unknown) =>
-    void request<{ items: ActivityItem[] }>(`/api/activity/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-      .then((r) => setItems(r.items))
+  if (!own.length && !paused.length) return null;
+  // Hauptwarteschlange steuern: Reihenfolge, Eintrag entfernen, Fortsetzen, Verwerfen; Antwort ist die frische Liste
+  const post = (path: string, body?: unknown) =>
+    void request<Answer>(`/api/activity/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) })
+      .then(apply)
       .catch(() => undefined);
   const order = items.filter((i) => i.ticket).map((i) => i.ticket!);
   const shift = (ticket: string, dir: -1 | 1) => post("reorder", { ids: move(order, order.indexOf(ticket), dir) });
@@ -86,7 +98,10 @@ export function ActivityIndicator() {
   };
   const first = own[0];
   const waiting = items.filter((i) => i.status === "waiting").length;
-  const pill = `${activityLabel(first)}${count(first) ? ` · ${count(first)}` : ""}${waiting && first.status === "running" ? ` · ${t("activity.waitingCount", { n: waiting })}` : ""}`;
+  const pill = first
+    ? `${activityLabel(first)}${count(first) ? ` · ${count(first)}` : ""}${waiting && first.status === "running" ? ` · ${t("activity.waitingCount", { n: waiting })}` : ""}`
+    : t("activity.paused", { n: paused.length });
+  const pillRunning = first?.status === "running";
 
   return (
     <div ref={ref} className="relative">
@@ -95,7 +110,7 @@ export function ActivityIndicator() {
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "px-2 py-1 rounded-md text-xs border whitespace-nowrap max-w-[22rem] truncate",
-          first.status === "running" ? "border-accent/40 bg-accent/10 text-accent" : "border-amber-500/40 bg-amber-500/10"
+          pillRunning ? "border-accent/40 bg-accent/10 text-accent" : "border-amber-500/40 bg-amber-500/10"
         )}
         title={t("activity.title")}
       >
@@ -104,6 +119,26 @@ export function ActivityIndicator() {
       {open && (
         <div className="absolute right-0 top-full mt-1 z-40 w-[min(28rem,92vw)] card p-4 flex flex-col gap-3">
           <div className="text-base font-semibold">{t("activity.title")}</div>
+          {paused.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="text-sm font-semibold">{t("activity.paused", { n: paused.length })}</div>
+              <p className="text-xs text-neutral-500">{t("activity.pausedHint")}</p>
+              <ol className="flex flex-col gap-1">
+                {paused.map((p, i) => (
+                  <li key={`${p.kind}-${p.docId}`} className="text-sm truncate">
+                    <span className="text-neutral-500 tabular-nums">{i + 1}. </span>
+                    {t(`activity.kind.${p.kind}`, { step: "" }).trim()} · {p.title}
+                  </li>
+                ))}
+              </ol>
+              <div className="flex gap-2 justify-end">
+                <Button variant="ghost" onClick={() => post("discard")}>
+                  {t("activity.discard")}
+                </Button>
+                <Button onClick={() => post("resume")}>{t("activity.resume")}</Button>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-neutral-500">{t("activity.hint")}</p>
           <ol className="flex flex-col gap-2">
             {items.map((a, i) => {

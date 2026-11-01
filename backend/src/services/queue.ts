@@ -1,8 +1,13 @@
 // Hauptwarteschlange für die Grafikkarte: Umwandlung, Hörbuch und Lernhörbuch stehen als Einträge in einer
 // Reihenfolge, die der Nutzer in der Kopfzeile ändern kann. Ein Auftrag bekommt die Karte, wenn sein Eintrag ganz
 // vorn steht und sie frei ist. Das Lernhörbuch gibt sie zwischen zwei Einheiten zurück: Ein vorgezogener Auftrag
-// kommt dann dazwischen, danach geht es mit der nächsten Einheit weiter
+// kommt dann dazwischen, danach geht es mit der nächsten Einheit weiter.
+// Die Einträge liegen als Datei im Datenordner: Nach einem Neustart stehen sie als „unterbrochen“ bereit und
+// laufen erst nach Bestätigung weiter (Stapel-Bücher und Einzelstücke ausgenommen)
 import { randomUUID } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { DATA_DIR } from "../paths";
 
 export type QueueKind = "docling" | "audiobook" | "learnbook";
 
@@ -15,6 +20,16 @@ export interface Ticket {
   createdAt: number;
   // Hält gerade die Grafikkarte
   active: boolean;
+  // Vom Hörbuch-Stapel gestartet: der Stapel merkt sich seine Bücher selbst
+  batch: boolean;
+}
+
+// Gespeicherter Eintrag, reicht zum Neustart des Auftrags
+export interface StoredTicket {
+  kind: QueueKind;
+  docId: string;
+  params: Record<string, unknown>;
+  createdAt: number;
 }
 
 export class QueueCanceled extends Error {
@@ -28,6 +43,64 @@ const tickets: Ticket[] = [];
 let holder: string | null = null;
 const waiters = new Map<string, { resolve: () => void; reject: (err: Error) => void }>();
 const listeners = new Set<() => void>();
+const batchDocs = new Set<string>();
+// Nach dem Neustart offen, bis Fortsetzen oder Verwerfen
+let paused: StoredTicket[] = [];
+let file: string | null = null;
+
+export function markBatchDoc(docId: string, on: boolean): void {
+  if (on) batchDocs.add(docId);
+  else batchDocs.delete(docId);
+}
+
+// Was nach einem Neustart wieder angeboten wird
+export function persistable(t: Ticket): boolean {
+  return !t.batch && !t.params.single;
+}
+
+const stored = (t: Ticket): StoredTicket => ({ kind: t.kind, docId: t.docId, params: t.params, createdAt: t.createdAt });
+const valid = (x: unknown): x is StoredTicket => !!x && typeof x === "object" && typeof (x as StoredTicket).docId === "string" && ["docling", "audiobook", "learnbook"].includes((x as StoredTicket).kind);
+
+// Beim Start: Datei lesen, alles darin gilt als unterbrochen (auch, was beim Beenden gerade lief)
+export function initQueueFile(dir = DATA_DIR): StoredTicket[] {
+  file = join(dir, "queue.json");
+  try {
+    const s = JSON.parse(readFileSync(file, "utf8")) as { paused?: unknown[]; live?: unknown[] };
+    const all = [...(s.paused ?? []), ...(s.live ?? [])].filter(valid);
+    // Einmal je Auftrag
+    paused = all.filter((t, i) => all.findIndex((o) => o.kind === t.kind && o.docId === t.docId) === i);
+  } catch {
+    paused = [];
+  }
+  save();
+  return pausedTickets();
+}
+
+function save(): void {
+  if (!file) return;
+  try {
+    writeFileSync(file, JSON.stringify({ paused, live: tickets.filter(persistable).map(stored) }, null, 2));
+  } catch {
+    /* Datenordner nicht beschreibbar: dann eben ohne Übernahme */
+  }
+}
+
+export function pausedTickets(): StoredTicket[] {
+  return paused.map((t) => ({ ...t }));
+}
+
+// Fortsetzen: die Liste herausgeben und leeren; der Aufrufer startet die Aufträge neu
+export function takePaused(): StoredTicket[] {
+  const out = paused;
+  paused = [];
+  save();
+  return out;
+}
+
+export function discardPaused(): void {
+  paused = [];
+  save();
+}
 
 // Für Anzeige und Speicherung
 export function queueTickets(): Ticket[] {
@@ -39,6 +112,7 @@ export function onQueueChange(fn: () => void): void {
 }
 
 function changed(): void {
+  save();
   for (const fn of listeners) fn();
 }
 
@@ -56,7 +130,7 @@ function kick(): void {
 }
 
 export function enqueueTicket(kind: QueueKind, docId: string, params: Record<string, unknown> = {}): Ticket {
-  const t: Ticket = { id: randomUUID(), kind, docId, params, createdAt: Date.now(), active: false };
+  const t: Ticket = { id: randomUUID(), kind, docId, params, createdAt: Date.now(), active: false, batch: batchDocs.has(docId) };
   tickets.push(t);
   changed();
   return t;
@@ -121,4 +195,7 @@ export function resetQueue(): void {
   waiters.clear();
   tickets.length = 0;
   holder = null;
+  paused = [];
+  batchDocs.clear();
+  file = null;
 }

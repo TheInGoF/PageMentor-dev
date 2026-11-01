@@ -14,6 +14,7 @@ import { releaseDoclingNow } from "../docling/release";
 import { anyGenerating, cancelAudiobook, generateAudiobook, getRunProgress, hasSpeakableText, isIncluded } from "../audiobook";
 import { absReady, uploadBook } from "../audiobookshelf";
 import { learnBusy } from "../learnbook/run";
+import { markBatchDoc } from "../queue";
 
 export type Step = "wait" | "docling" | "audio" | "abs" | "done" | "failed" | "canceled";
 
@@ -210,7 +211,13 @@ async function convert(item: BatchItem): Promise<boolean> {
   }
   await waitIdle();
   set(item, "docling");
-  await processDocument(item.docId);
+  // Der Stapel merkt sich seine Bücher selbst: ihre Einträge gehören nicht in die Übernahme der Hauptwarteschlange
+  markBatchDoc(item.docId, true);
+  try {
+    await processDocument(item.docId);
+  } finally {
+    markBatchDoc(item.docId, false);
+  }
   if (needsText(item)) set(item, "failed", { error: "Umwandlung fehlgeschlagen" });
   return true;
 }
@@ -248,7 +255,13 @@ async function bookSteps(item: BatchItem): Promise<void> {
   const book = join(DATA_DIR, "audio", item.docId, "book.m4b");
   await waitIdle();
   set(item, "audio");
-  const { regenerated } = await generateAudiobook({ docId: item.docId, voiceId, rate: s.rate, model: s.model });
+  markBatchDoc(item.docId, true);
+  let regenerated = 0;
+  try {
+    ({ regenerated } = await generateAudiobook({ docId: item.docId, voiceId, rate: s.rate, model: s.model }));
+  } finally {
+    markBatchDoc(item.docId, false);
+  }
   if (cancelRequested) return;
   if (!existsSync(book)) {
     const missing = missingChapters(item.docId);
