@@ -37,6 +37,12 @@ describe("Begriffe", () => {
     expect(many).toHaveLength(8);
     expect(many[0].needs).toEqual(["Eins", "Zwei", "Drei"]);
   });
+
+  test("Stempel hängt am Modell: anderes Modell, Kapitel wieder offen", async () => {
+    const { conceptsStamp } = await import("./extract");
+    expect(conceptsStamp("qwen3.6:27b")).not.toBe(conceptsStamp(undefined));
+    expect(conceptsStamp("qwen3.6:27b")).toBe(conceptsStamp("qwen3.6:27b"));
+  });
 });
 
 describe("Ausbreitung", () => {

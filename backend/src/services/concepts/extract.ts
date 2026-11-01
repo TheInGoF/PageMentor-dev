@@ -15,6 +15,8 @@ import { anyProcessing } from "../pipeline";
 import { anyGenerating } from "../audiobook";
 import { normalizeConcept, saveChapterConcepts, type ExtractedConcept } from "./store";
 import { cleanupConcepts, LANGUAGE_DOC, wordTitle } from "./links";
+import { EXTRA_LLMS } from "../../engine/config";
+import { installedModels, isInstalled } from "../../engine/llmExtras";
 
 const VERSION = 2;
 // Längere Kapitel in Stücken; mehr als sechs Stücke bringen kaum neue Begriffe
@@ -44,8 +46,18 @@ const SCHEMA = {
   required: ["begriffe"],
 };
 
-export function conceptsStamp(): string {
-  return createHash("sha1").update(`${VERSION}|${getPrompt("concepts.de")}`).digest("hex").slice(0, 12);
+// Modell fürs Begriffsnetz: Qwen 3.6, wenn geladen, sonst Gemma 4 26B, sonst das Standardmodell. Es ist Teil des
+// Stempels: Mit einem anderen Modell gilt ein Kapitel als offen, damit das Netz aus einem Guss ist
+const CONCEPT_PREFS = ["qwen3.6:27b", "gemma4:26b"];
+let active: string | undefined;
+export async function resolveConceptModel(): Promise<string | undefined> {
+  const installed = (await installedModels()) ?? [];
+  active = CONCEPT_PREFS.find((m) => m in EXTRA_LLMS && isInstalled(installed, m));
+  return active;
+}
+
+export function conceptsStamp(model: string | undefined = active): string {
+  return createHash("sha1").update(`${VERSION}|${getPrompt("concepts.de")}|${model ?? "default"}`).digest("hex").slice(0, 12);
 }
 
 // Antwort lesen; kaputtes JSON gibt eine leere Liste statt eines Abbruchs
@@ -95,7 +107,7 @@ async function extractChapter(ch: { id: string; document_id: string; title: stri
         system: getPrompt("concepts.de"),
         model,
         format: SCHEMA,
-        options: { temperature: 0.1, num_ctx: 16384, num_predict: 3000 },
+        options: { temperature: 0.1, num_ctx: Math.min(16384, (model && EXTRA_LLMS[model]?.ctx) || 16384), num_predict: 3000 },
       })
     ).catch((err) => {
       console.warn(`[concepts] Stück übersprungen: ${err instanceof Error ? err.message : err}`);
@@ -106,7 +118,7 @@ async function extractChapter(ch: { id: string; document_id: string; title: stri
   // Kein einziges Stück beantwortet (Gemma nicht erreichbar): ohne Stempel lassen, damit es später nachgeholt wird
   if (!lists.length) throw new Error("Gemma hat kein Stück beantwortet");
   const items = mergeConcepts(lists);
-  saveChapterConcepts(ch.id, ch.document_id, items, conceptsStamp());
+  saveChapterConcepts(ch.id, ch.document_id, items, conceptsStamp(model));
   return items.length;
 }
 
@@ -177,6 +189,10 @@ async function run(model?: string): Promise<void> {
   cleanupConcepts();
   try {
     await runJob("concepts", "concepts", {}, async () => {
+      // Ohne Wahl das beste geladene Modell; der Stempel der Kapitel hängt daran
+      model = model ?? (await resolveConceptModel());
+      active = model;
+      emitLog("info", "concepts", `Begriffsnetz mit ${model ?? "Standardmodell"}`);
       while (queue.size && !cancel) {
         const docs = [...queue];
         const open = openChapters(docs);

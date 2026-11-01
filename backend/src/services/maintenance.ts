@@ -16,7 +16,7 @@ import { learnBusy } from "./learnbook/run";
 import { batchStatus } from "./batch/audiobooks";
 import { gpuIdleSeconds } from "./ttsActivity";
 import { pronRunState } from "./pronCheck/run";
-import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters } from "./concepts/extract";
+import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters, resolveConceptModel } from "./concepts/extract";
 
 const COUNTDOWN_MS = 60_000;
 const SNOOZE_MS = 2 * 3600_000;
@@ -88,8 +88,13 @@ async function scanOpen(): Promise<MaintenanceOpen> {
         .prepare("SELECT COUNT(*) AS n, COUNT(DISTINCT document_id) AS d FROM chunks WHERE embedding IS NULL OR embedding_model IS NULL OR embedding_model != ?")
         .get(embedder.model) as { n: number; d: number })
     : { n: 0, d: 0 };
-  // Begriffe nur zählen, wenn Gemma erreichbar ist: sonst würde der Lauf sofort scheitern
-  const chapters = (await llmAvailable().catch(() => false)) ? openChapters() : [];
+  // Begriffe nur zählen, wenn das Sprachmodell erreichbar ist: sonst würde der Lauf sofort scheitern.
+  // Erst das Modell bestimmen, weil der Stempel der Kapitel daran hängt
+  let chapters: ReturnType<typeof openChapters> = [];
+  if (await llmAvailable().catch(() => false)) {
+    await resolveConceptModel();
+    chapters = openChapters();
+  }
   return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size };
 }
 
@@ -242,8 +247,10 @@ async function embeddings(): Promise<void> {
 
 // Begriffsnetz über die vorhandene Warteschlange; Fortschritt von dort übernehmen
 async function concepts(): Promise<void> {
+  if (!(await llmAvailable().catch(() => false))) return;
+  await resolveConceptModel();
   const docs = [...new Set(openChapters().map((c) => c.document_id))];
-  if (!docs.length || !(await llmAvailable().catch(() => false))) return;
+  if (!docs.length) return;
   state.phase = "concepts";
   enqueueConcepts(docs);
   for (let c = conceptRunState(); c.running && !cancel; c = conceptRunState()) {

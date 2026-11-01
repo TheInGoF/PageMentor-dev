@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.99.0 – 2026-11-01
+### Change
+- Begriffsnetz: Die Wissenspflege nimmt Qwen 3.6, wenn es geladen ist, sonst Gemma 4 26B, sonst das Standardmodell. Das Modell steht im Stempel der Kapitel: Mit einem anderen Modell gelten sie als offen, das Netz entsteht aus einem Guss.
+
 ## 1.98.0 – 2026-11-01
 ### Change
 - Hörbuch-Bereinigung: Gemma schreibt englische Wörter, Anglizismen und englische Eigen- und Produktnamen immer in deutscher Lautschrift, auch geläufige Lehnwörter. Abkürzungen, die nicht als Wort gesprochen werden, mit deutschen Buchstabennamen („Teh Teh Ess“), keine englischen Auflösungen in Klammern.
