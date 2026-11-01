@@ -261,6 +261,7 @@ voiceRoutes.get("/design/:id/preview", async (c) => {
       headers: {
         "Content-Type": "audio/mpeg",
         "Content-Length": String(buf.length),
+        "Cache-Control": "no-store",
       },
     });
   } catch (e) {
@@ -475,6 +476,7 @@ voiceRoutes.get("/custom/:id/preview", async (c) => {
       headers: {
         "Content-Type": "audio/mpeg",
         "Content-Length": String(buf.length),
+        "Cache-Control": "no-store",
       },
     });
   } catch (e) {

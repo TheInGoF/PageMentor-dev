@@ -12,6 +12,9 @@ export function TtsEnginesPanel() {
   const [enabled, setEnabled] = useState<string[]>([]);
   const [token, setToken] = useState("");
   const [saving, setSaving] = useState(false);
+  // Klangstufen als Entwurf: gespeichert wird alles zusammen mit „Übernehmen“
+  type Q = "fast" | "calm" | "best";
+  const [quality, setQuality] = useState<{ tada: Q; f5: Q }>({ tada: "calm", f5: "calm" });
 
   useEffect(() => {
     api.engine
@@ -19,6 +22,7 @@ export function TtsEnginesPanel() {
       .then((i) => {
         setInfo(i);
         setEnabled(i.enabled);
+        setQuality({ tada: i.quality?.tada ?? "calm", f5: i.quality?.f5 ?? "calm" });
       })
       .catch(() => {});
   }, []);
@@ -27,15 +31,26 @@ export function TtsEnginesPanel() {
 
   const toggle = (id: string) => setEnabled((cur) => (cur.includes(id) ? cur.filter((e) => e !== id) : [...cur, id]));
   const needsToken = enabled.includes("tada") && !info.hfTokenPresent && !token.trim();
-  const changed = enabled.join(",") !== info.enabled.join(",") || !!token.trim();
+  const savedQ = { tada: info.quality?.tada ?? "calm", f5: info.quality?.f5 ?? "calm" };
+  const qualityChanged = quality.tada !== savedQ.tada || quality.f5 !== savedQ.f5;
+  const enginesChanged = enabled.join(",") !== info.enabled.join(",") || !!token.trim();
+  const changed = enginesChanged || qualityChanged;
 
   async function save() {
     setSaving(true);
     try {
-      const r = await api.engine.saveTtsEngines(enabled, token.trim() || undefined);
-      setInfo({ ...info!, enabled: r.enabled, hfTokenPresent: info!.hfTokenPresent || !!token.trim() });
+      // Klangstufen gelten sofort, ohne Neustart der Engine
+      for (const e of ["tada", "f5"] as const) if (quality[e] !== savedQ[e]) await api.engine.setQuality(e, quality[e]);
+      let applying = false;
+      let nextEnabled = info!.enabled;
+      if (enginesChanged) {
+        const r = await api.engine.saveTtsEngines(enabled, token.trim() || undefined);
+        applying = !!r.applying;
+        nextEnabled = r.enabled;
+      }
+      setInfo({ ...info!, enabled: nextEnabled, hfTokenPresent: info!.hfTokenPresent || !!token.trim(), quality });
       setToken("");
-      toast.show(r.applying ? t("ttsEngines.applying") : t("ttsEngines.saved"), "success");
+      toast.show(applying ? t("ttsEngines.applying") : t("ttsEngines.saved"), "success");
     } catch (err) {
       toast.show(err instanceof Error ? err.message : t("common.error"), "error");
     } finally {
@@ -60,17 +75,13 @@ export function TtsEnginesPanel() {
       {(["f5", "tada"] as const)
         .filter((e) => enabled.includes(e) && info.enabled.includes(e))
         .map((e) => {
-          const q = info.quality?.[e] ?? "calm";
+          const q = quality[e];
           return (
             <SettingRow key={e} label={t(`ttsEngines.quality.${e}`)} hint={t(`ttsEngines.quality.${e}.${q}Hint`)}>
               <select
                 className="input w-full"
                 value={q}
-                onChange={async (ev) => {
-                  await api.engine.setQuality(e, ev.target.value);
-                  setInfo({ ...info, quality: { tada: "calm", f5: "calm", ...info.quality, [e]: ev.target.value as "fast" | "calm" | "best" } });
-                  toast.show(t("ttsEngines.saved"), "success");
-                }}
+                onChange={(ev) => setQuality({ ...quality, [e]: ev.target.value as Q })}
               >
                 {(["fast", "calm", "best"] as const).map((x) => (
                   <option key={x} value={x}>

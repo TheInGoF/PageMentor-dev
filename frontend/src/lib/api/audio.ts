@@ -72,6 +72,8 @@ export const audioApi = {
       if (opts?.topK) parts.push(`top_k=${encodeURIComponent(opts.topK)}`);
       if (opts?.repetitionPenalty)
         parts.push(`repetition_penalty=${encodeURIComponent(opts.repetitionPenalty)}`);
+      // Zeitstempel: nie eine alte Aufnahme aus dem Browser-Speicher (Klangstufe oder Ausspracheliste geändert)
+      parts.push(`t=${Date.now()}`);
       return `/api/audio/preview?${parts.join("&")}`;
     },
     get: (docId: string) => request<AudioDocument>(`/api/audio/document/${docId}`),

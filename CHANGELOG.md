@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.70.0 – 2026-11-01
+### Change
+- Engine-Seite einheitlich: Klangstufen und Download-Bremse werden wie alles andere erst mit „Übernehmen“ gespeichert.
+
+### Fix
+- Testsätze deutscher Stimmen nutzen die Ausspracheliste („PageMentor“ → „Pejdsch-Mentor“).
+- Testsätze werden nach Änderungen neu berechnet statt aus dem Browser-Speicher zu kommen.
+
 ## 1.69.0 – 2026-11-01
 ### New
 - Klangstufen für F5 (Schnell 16, Standard 32, Beste 64 Schritte) unter Engine → Stimm-Engines.

@@ -6,6 +6,7 @@
  */
 
 import { setTimeout as sleep } from "timers/promises";
+import { applyPronunciation } from "../services/pronunciation";
 import { findVoice, engineFor } from "./voices";
 import type { Segment } from "./segment";
 import type { EngineId, Voice } from "./engines/base";
@@ -199,10 +200,12 @@ export async function synthesizePreview(params: {
   if (!voice) throw new Error(`Unknown voice: ${params.voice}`);
   const engine = engineFor(voice.engine);
   if (!engine) throw new Error(`Unknown TTS engine: ${voice.engine}`);
+  // Deutsche Stimmen: Ausspracheliste wie im Hörbuch („PageMentor“ → „Pejdsch-Mentor“)
+  const text = voice.language === "de" || params.locale.startsWith("de") ? applyPronunciation(params.text) : params.text;
   return engine.preview({
     voice,
     locale: params.locale,
-    text: params.text,
+    text,
     instructOverride: params.instructOverride,
     temperatureOverride: params.temperatureOverride,
     topPOverride: params.topPOverride,

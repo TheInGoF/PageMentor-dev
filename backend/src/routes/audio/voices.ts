@@ -53,13 +53,6 @@ voiceRoutes.get("/preview", async (c) => {
   const topPOverride = c.req.query("top_p");
   const topKOverride = c.req.query("top_k");
   const repPenOverride = c.req.query("repetition_penalty");
-  const hasOverrides =
-    textOverride !== undefined ||
-    instructOverride !== undefined ||
-    tempOverride !== undefined ||
-    topPOverride !== undefined ||
-    topKOverride !== undefined ||
-    repPenOverride !== undefined;
 
   // Längerer Probetext: Qwen driftet erst nach ~5 s, wie im Hörbuch
   const sample = textOverride || PREVIEW_TEXT[voice.language] || PREVIEW_TEXT.en;
@@ -94,7 +87,8 @@ voiceRoutes.get("/preview", async (c) => {
     return new Response(body, {
       headers: {
         "Content-Type": "audio/mpeg",
-        "Cache-Control": hasOverrides ? "no-store" : "public, max-age=86400",
+        // Nie zwischenspeichern: nach einer Änderung (Klangstufe, Ausspracheliste, Probe) soll der Testsatz neu klingen
+        "Cache-Control": "no-store",
       },
     });
   } catch (err) {
