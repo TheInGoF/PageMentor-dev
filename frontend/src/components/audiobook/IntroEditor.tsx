@@ -11,7 +11,7 @@ const ENGINE_NAMES: Record<string, string> = { qwen: "Qwen3-TTS", kokoro: "Kokor
 // Standard-Intro als lesbarer Text, Namen in normaler Schreibweise
 // Die phonetische Umschrift macht Gemma direkt vor der Synthese
 function buildIntroDefault(
-  meta: { title: string; author: string | null; language: string } | null,
+  meta: { title: string; author: string | null; language: string; module?: string | null } | null,
   voice: Voice | null,
   model: string
 ): string {
@@ -27,9 +27,11 @@ function buildIntroDefault(
         .trim()
     : "";
   const engineName = voice ? ENGINE_NAMES[voice.engine] ?? voice.engine : "";
+  // Modulname vor dem Hefttitel, wenn das Heft einem Modul zugeordnet ist
+  const fullTitle = meta.module?.trim() ? `${meta.module.trim()}, ${meta.title}` : meta.title;
 
   if (isDe) {
-    lines.push(`Hörbuch: ${meta.title}.`);
+    lines.push(`Hörbuch: ${fullTitle}.`);
     lines.push("");
     if (meta.author) {
       lines.push(`Von ${meta.author}.`);
@@ -44,7 +46,7 @@ function buildIntroDefault(
     }
     lines.push(`Erstellt mit PageMentor.`);
   } else {
-    lines.push(`Audiobook: ${meta.title}.`);
+    lines.push(`Audiobook: ${fullTitle}.`);
     lines.push("");
     if (meta.author) {
       lines.push(`By ${meta.author}.`);

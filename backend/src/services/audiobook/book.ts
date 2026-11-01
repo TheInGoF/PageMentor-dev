@@ -159,7 +159,7 @@ async function generateAudiobookImpl(params: {
     | { audio_intro_text: string | null; audio_intro_stamp: string | null }
     | undefined;
   if (!saved?.audio_intro_text?.trim()) {
-    const text = defaultIntroText({ title: introTitle(doc.doc_title, doc.title), author: doc.author, language: doc.language }, voice, params.model ?? "");
+    const text = defaultIntroText({ title: introTitle(doc.doc_title, doc.title), author: doc.author, language: doc.language, module: doc.module_name }, voice, params.model ?? "");
     d.prepare("UPDATE documents SET audio_intro_text = ?, audio_intro_text_tts = NULL, audio_intro_text_tts_model = NULL WHERE id = ?").run(text, doc.id);
   }
   const introText = await introTtsText(doc.id, params.model);

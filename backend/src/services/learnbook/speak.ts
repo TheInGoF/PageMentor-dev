@@ -102,6 +102,8 @@ export async function speakUnit(p: {
   isCanceled: () => boolean;
   // Fortschritt innerhalb der Einheit: gesprochene Stücke von allen
   onProgress?: (done: number, total: number) => void;
+  // Stille vor dem ersten Wort; das Intro bekommt eine volle Sekunde
+  leadMs?: number;
 }): Promise<{ path: string; durationMs: number }> {
   // Absolute Pfade: ffmpeg löst Einträge der Verkettungsliste sonst relativ zur Liste auf
   const dir = resolve(DATA_DIR, "audio", p.docId, "learn", `unit-${String(p.idx + 1).padStart(3, "0")}`);
@@ -139,7 +141,7 @@ export async function speakUnit(p: {
   const files = plan.filter((x): x is { file: string } => "file" in x);
   if (!files.length) throw new Error("Skript ohne Sprechtext");
   const sr = (await probeSampleRate(files[0].file)) ?? 24000;
-  const seq = [await silence(dir, 800, sr)];
+  const seq = [await silence(dir, p.leadMs ?? 800, sr)];
   for (const x of plan) seq.push("file" in x ? x.file : await silence(dir, x.pause, sr));
   seq.push(await silence(dir, 1500, sr));
   const merged = join(dir, "merged.mp3");

@@ -33,7 +33,7 @@ chapterRoutes.get("/chapter-status/:docId", (c) => {
     .all(docId);
   const doc = db()
     .prepare(
-      "SELECT title, doc_title, author, language, audio_intro_text FROM documents WHERE id = ?"
+      "SELECT d.title, d.doc_title, d.author, d.language, d.audio_intro_text, m.name AS module_name FROM documents d LEFT JOIN modules m ON m.id = d.module_id WHERE d.id = ?"
     )
     .get(docId) as
     | {
@@ -42,6 +42,7 @@ chapterRoutes.get("/chapter-status/:docId", (c) => {
         author: string | null;
         language: string;
         audio_intro_text: string | null;
+        module_name: string | null;
       }
     | undefined;
   const introPath = join(DATA_DIR, "audio", docId, "intro.mp3");
@@ -56,6 +57,7 @@ chapterRoutes.get("/chapter-status/:docId", (c) => {
             title: introTitle(doc.doc_title, doc.title),
             author: doc.author,
             language: doc.language,
+            module: doc.module_name,
           }
         : null,
     },

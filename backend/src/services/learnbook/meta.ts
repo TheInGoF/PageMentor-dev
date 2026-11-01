@@ -25,8 +25,9 @@ const LANG_NAMES: Record<string, string> = { es: "Spanisch", en: "Englisch", fr:
 
 // Vorlage fürs Intro, aufgebaut wie beim Original-Hörbuch (Titel, Autor, Hinweis, PageMentor); anders ist nur der
 // Metadaten-Vorbau: Titel mit dem Zusatz wie in M4B und Audiobookshelf, „Nach dem Buch von …“, Umfang und wie man lernt
-export function introText(p: { kind: LearnKindName; lang: string; title: string; author: string | null; units: number }): string {
-  const lines = [`${learnTitle(p.title, p.kind)}.`, ""];
+export function introText(p: { kind: LearnKindName; lang: string; title: string; author: string | null; units: number; module?: string | null }): string {
+  // Modulname vor dem Hefttitel, wie beim Original-Hörbuch
+  const lines = [`${p.module?.trim() ? `${p.module.trim()}, ` : ""}${learnTitle(p.title, p.kind)}.`, ""];
   if (p.author?.trim()) {
     const a = learnAuthor(p.author);
     lines.push(`${a[0].toUpperCase()}${a.slice(1)}.`);

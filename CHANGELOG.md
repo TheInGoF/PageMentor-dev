@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.94.0 – 2026-11-01
+### Change
+- Intro: Die Vorlage nennt vor dem Hefttitel den Modulnamen („Hörbuch: Elektrotechnik, Gleichstrom.“), beim Original wie bei Lernhörbuch und Sprachlern-Hörbuch.
+- Lernhörbuch-Intro beginnt mit einer Sekunde Stille statt 0,8 Sekunden. Das Original-Intro hat 1,5 Sekunden.
+
 ## 1.93.0 – 2026-11-01
 ### New
 - Warteschlange: Umwandlungen, Hörbücher und Lernhörbücher, die beim Beenden offen waren, stehen nach dem Neustart als „unterbrochen“ in der Kopfzeile. „Fortsetzen“ startet sie in alter Reihenfolge, jeder macht nur, was noch fehlt; „Verwerfen“ räumt sie weg. Stapel-Bücher und Einzelkapitel sind ausgenommen, der Stapel merkt sich seine Bücher selbst.

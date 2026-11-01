@@ -32,10 +32,12 @@ type DocRow = Record<string, string | null> & { title: string; doc_title: string
 // Vorlage der Lernhörbücher; das Original baut seine Vorlage in der Oberfläche (Stimme, Modell)
 export function introTemplate(docId: string, v: IntroVariant): string | null {
   if (v === "original") return null;
-  const doc = db().prepare("SELECT title, doc_title, author FROM documents WHERE id = ?").get(docId) as DocRow | undefined;
+  const doc = db()
+    .prepare("SELECT d.title, d.doc_title, d.author, m.name AS module_name FROM documents d LEFT JOIN modules m ON m.id = d.module_id WHERE d.id = ?")
+    .get(docId) as DocRow | undefined;
   if (!doc) return null;
   const units = listUnits(docId).filter((u) => !u.skip_reason).length;
-  return introText({ kind: v, lang: learnSettings(docId).lang, title: doc.doc_title || doc.title, author: doc.author, units });
+  return introText({ kind: v, lang: learnSettings(docId).lang, title: doc.doc_title || doc.title, author: doc.author, units, module: doc.module_name });
 }
 
 export function getIntro(docId: string, v: IntroVariant): IntroRecord | null {

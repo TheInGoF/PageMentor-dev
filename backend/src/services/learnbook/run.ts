@@ -298,7 +298,7 @@ async function speakIntro(docId: string, kind: "language" | "subject", main: Voi
   } catch {
     // noch kein Intro
   }
-  const r = await speakUnit({ docId, idx: -1, title: "Einleitung", album: doc.doc_title || doc.title, script: text, main, second: null, rate, isCanceled: () => canceled.has(docId) });
+  const r = await speakUnit({ docId, idx: -1, title: "Einleitung", album: doc.doc_title || doc.title, script: text, main, second: null, rate, isCanceled: () => canceled.has(docId), leadMs: 1000 });
   // speakUnit legt Einheit 0 (idx -1) als unit-000.mp3 ab; als intro.mp3 merken
   const { renameSync } = await import("node:fs");
   renameSync(r.path, path);

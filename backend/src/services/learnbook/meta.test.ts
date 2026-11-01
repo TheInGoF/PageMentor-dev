@@ -20,5 +20,6 @@ describe("Lernhörbuch: Name, Autor, Intro", () => {
     expect(de).toContain("Du lernst Spanisch in 12 Einheiten");
     expect(de).toEndWith("Erstellt mit PageMentor.");
     expect(introText({ kind: "subject", lang: "es", title: "IT", author: null, units: 3 })).toStartWith("IT – Lernhörbuch.\n\n3 Einheiten");
+    expect(introText({ kind: "subject", lang: "es", title: "IT", author: null, units: 3, module: "Informatik" })).toStartWith("Informatik, IT – Lernhörbuch.");
   });
 });

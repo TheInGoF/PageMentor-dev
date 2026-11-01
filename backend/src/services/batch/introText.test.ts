@@ -15,4 +15,8 @@ describe("Intro aus den Metadaten", () => {
     expect(text).toContain("Von Prof. X.");
     expect(text).toContain("Gesprochen durch F5-TTS, mit der Stimme Thorsten.");
   });
+  test("Modulname vor dem Hefttitel", () => {
+    expect(defaultIntroText({ title: "Gleichstrom", author: null, language: "de", module: "Elektrotechnik" }, null, "")).toStartWith("Hörbuch: Elektrotechnik, Gleichstrom.");
+    expect(defaultIntroText({ title: "DC", author: null, language: "en", module: "  " }, null, "")).toStartWith("Audiobook: DC.");
+  });
 });

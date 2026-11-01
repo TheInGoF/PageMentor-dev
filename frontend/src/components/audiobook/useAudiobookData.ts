@@ -42,6 +42,7 @@ export function useAudiobookData(docId: string, documentLanguage: string) {
       title: string;
       author: string | null;
       language: string;
+      module?: string | null;
     } | null;
   }>({ text: null, audioUrl: null, docMeta: null });
   const [introBusy, setIntroBusy] = useState(false);
