@@ -38,6 +38,12 @@ describe("Begriffe", () => {
     expect(many[0].needs).toEqual(["Eins", "Zwei", "Drei"]);
   });
 
+  test("leere Antworten zählen nicht als beantwortet", async () => {
+    const { answeredPieces } = await import("./extract");
+    expect(answeredPieces([null, { response: "", doneReason: "length" }, { response: "   " }])).toEqual([]);
+    expect(answeredPieces([{ response: "", doneReason: "length" }, { response: '{"begriffe":[{"name":"Entropie","erklaerung":"x","erklaert":true,"baut_auf":[]}]}' }])).toHaveLength(1);
+  });
+
   test("Stempel hängt am Modell: anderes Modell, Kapitel wieder offen", async () => {
     const { conceptsStamp } = await import("./extract");
     expect(conceptsStamp("qwen3.6:27b")).not.toBe(conceptsStamp(undefined));

@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.102.0 – 2026-11-01
+### Fix
+- Begriffsnetz: Qwen lief im Denkmodus, brauchte das ganze Token-Budget auf und lieferte leere Antworten. Die Erfassung läuft jetzt ohne Denkmodus, wie das Lernhörbuch.
+- Begriffsnetz: Eine leere Antwort gilt nicht mehr als fertig. Vorher wurde so ein Kapitel ohne Begriffe gestempelt und verlor, was es hatte. Das Netz wird einmal komplett neu gebaut.
+
 ## 1.101.0 – 2026-11-01
 ### Fix
 - Lernhörbuch-Intro: Jede Leerzeile im Text wird zu einer Sekunde Pause. Vorher lagen nur 0,3 Sekunden zwischen Titelblock und Autor.

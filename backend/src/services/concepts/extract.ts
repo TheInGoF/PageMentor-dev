@@ -18,7 +18,8 @@ import { cleanupConcepts, LANGUAGE_DOC, wordTitle } from "./links";
 import { EXTRA_LLMS } from "../../engine/config";
 import { installedModels, isInstalled } from "../../engine/llmExtras";
 
-const VERSION = 2;
+// 3: leere Antworten gelten nicht mehr als fertig; das Netz wird einmal neu gebaut
+const VERSION = 3;
 // Längere Kapitel in Stücken; mehr als sechs Stücke bringen kaum neue Begriffe
 const PIECE_CHARS = 8000;
 const MAX_PIECES = 6;
@@ -97,26 +98,45 @@ export function mergeConcepts(lists: ExtractedConcept[][]): ExtractedConcept[] {
   return [...byNorm.values()];
 }
 
+// Nur Stücke mit Antwort zählen: Eine leere Antwort (etwa Denkmodus, der das Budget aufbraucht) ist keine Antwort.
+// Sonst würde ein Kapitel ohne Begriffe als fertig gestempelt und verlöre, was es hatte
+export function answeredPieces(results: Array<{ response: string; doneReason?: string } | null>, title = ""): ExtractedConcept[][] {
+  const lists: ExtractedConcept[][] = [];
+  for (const r of results) {
+    if (!r) continue;
+    if (!r.response.trim()) {
+      console.warn(`[concepts] leere Antwort (${r.doneReason ?? "?"}) für „${title}“`);
+      continue;
+    }
+    lists.push(parseConcepts(r.response));
+  }
+  return lists;
+}
+
 async function extractChapter(ch: { id: string; document_id: string; title: string; text: string }, model?: string): Promise<number> {
   const pieces = splitForPreprocess(ch.text, PIECE_CHARS).slice(0, MAX_PIECES);
-  const lists: ExtractedConcept[][] = [];
+  const results: Array<{ response: string; doneReason?: string } | null> = [];
   for (const piece of pieces) {
-    const r = await withGemmaLock(`concepts ${ch.title.slice(0, 30)}`, () =>
-      generate({
-        prompt: `Abschnitt „${ch.title}“:\n\n${piece}`,
-        system: getPrompt("concepts.de"),
-        model,
-        format: SCHEMA,
-        options: { temperature: 0.1, num_ctx: Math.min(16384, (model && EXTRA_LLMS[model]?.ctx) || 16384), num_predict: 3000 },
+    results.push(
+      await withGemmaLock(`concepts ${ch.title.slice(0, 30)}`, () =>
+        generate({
+          prompt: `Abschnitt „${ch.title}“:\n\n${piece}`,
+          system: getPrompt("concepts.de"),
+          model,
+          // Ohne Denkmodus: Qwen denkt sonst, bis das Budget aufgebraucht ist, und liefert nichts
+          think: false,
+          format: SCHEMA,
+          options: { temperature: 0.1, num_ctx: Math.min(16384, (model && EXTRA_LLMS[model]?.ctx) || 16384), num_predict: 3000 },
+        })
+      ).catch((err) => {
+        console.warn(`[concepts] Stück übersprungen: ${err instanceof Error ? err.message : err}`);
+        return null;
       })
-    ).catch((err) => {
-      console.warn(`[concepts] Stück übersprungen: ${err instanceof Error ? err.message : err}`);
-      return null;
-    });
-    if (r) lists.push(parseConcepts(r.response));
+    );
   }
-  // Kein einziges Stück beantwortet (Gemma nicht erreichbar): ohne Stempel lassen, damit es später nachgeholt wird
-  if (!lists.length) throw new Error("Gemma hat kein Stück beantwortet");
+  const lists = answeredPieces(results, ch.title);
+  // Kein einziges Stück beantwortet (Modell nicht erreichbar oder nur leere Antworten): ohne Stempel lassen
+  if (!lists.length) throw new Error("Modell hat kein Stück beantwortet");
   const items = mergeConcepts(lists);
   saveChapterConcepts(ch.id, ch.document_id, items, conceptsStamp(model));
   return items.length;
