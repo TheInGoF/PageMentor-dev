@@ -14,7 +14,7 @@ import { ChapterWorkbench } from "./audiobook/ChapterWorkbench";
 import { BookProgressPanel } from "./audiobook/BookProgressPanel";
 import { IntroEditor } from "./audiobook/IntroEditor";
 import { SecondVoice } from "./audiobook/SecondVoice";
-import { LearnbookPanel } from "./audiobook/LearnbookPanel";
+import { LearnbookBody, LearnbookProgress, useLearnbook } from "./audiobook/LearnbookPanel";
 import { KindFilterBar } from "./audiobook/KindFilterBar";
 import { Menu, type MenuItem } from "./ui/Menu";
 import { cn } from "../lib/cn";
@@ -97,6 +97,8 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     absConfigured,
     loadChapterStatus,
   } = d;
+  // Lernhörbuch-Zustand für Kopf und Ansicht; lädt nur, wenn eine Lern-Variante offen ist
+  const learn = useLearnbook(docId, mode === "language" ? "language" : "subject", rate, mode !== "original");
   const {
     generate,
     uploadToAbs,
@@ -284,73 +286,102 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         )}
       </section>
 
-      {/* Drei Hörbücher aus demselben Heft */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" role="tablist">
-        {(["original", "subject", "language"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            onClick={() => pickMode(m)}
-            className={cn(
-              "card p-4 text-left flex flex-col gap-1 min-h-[88px] border-2 transition-colors",
-              mode === m ? "border-accent bg-accent/10" : "border-transparent hover:border-border"
-            )}
-          >
-            <span className={cn("text-base font-semibold", mode === m && "text-accent")}>{t(`audiobook.mode.${m}`)}</span>
-            <span className="text-xs text-neutral-500">{t(`audiobook.mode.${m}Hint`)}</span>
-            {modeRun(m) && (
-              <span className="text-xs text-accent font-medium tabular-nums">
-                {modeRun(m)!.status === "waiting" ? t("activity.waits") : t("audiobook.mode.running")}
-                {modeRun(m)!.total ? ` · ${modeRun(m)!.done ?? 0}/${modeRun(m)!.total}` : ""}
+      {/* Bedien-Kopf für alle drei Hörbücher: Variante wählen, erzeugen, Fortschritt, weitere Aktionen hinter ⋯ */}
+      <section className="card p-4 flex flex-col gap-4 sticky top-2 z-20">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="tablist">
+          {(["original", "subject", "language"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              onClick={() => pickMode(m)}
+              title={t(`audiobook.mode.${m}Hint`)}
+              className={cn(
+                "rounded-lg px-4 py-3 text-left flex flex-col gap-0.5 min-h-[56px] border-2 transition-colors",
+                mode === m ? "border-accent bg-accent/10" : "border-border hover:border-neutral-400"
+              )}
+            >
+              <span className={cn("text-sm font-semibold", mode === m && "text-accent")}>{t(`audiobook.mode.${m}`)}</span>
+              {modeRun(m) ? (
+                <span className="text-xs text-accent font-medium tabular-nums">
+                  {modeRun(m)!.status === "waiting" ? t("activity.waits") : t("audiobook.mode.running")}
+                  {modeRun(m)!.total ? ` · ${modeRun(m)!.done ?? 0}/${modeRun(m)!.total}` : ""}
+                </span>
+              ) : (
+                <span className="text-xs text-neutral-500 truncate">{t(`audiobook.mode.${m}Hint`)}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+          <div className="flex-1 min-w-[220px]">
+            {mode === "original" ? (
+              m4bProgress && m4bProgress.totalMs > 0 ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-500">{t("audiobook.m4b.building")}</span>
+                  <div className="flex-1 h-2 bg-bg-elevated rounded overflow-hidden">
+                    <div className="h-full bg-accent transition-[width] duration-300" style={{ width: `${Math.min(100, (m4bProgress.currentMs / m4bProgress.totalMs) * 100).toFixed(1)}%` }} />
+                  </div>
+                  <span className="text-xs text-neutral-400 font-mono tabular-nums">{((m4bProgress.currentMs / m4bProgress.totalMs) * 100).toFixed(0)}%</span>
+                </div>
+              ) : (
+                <span className="text-xs text-neutral-500">
+                  {phaseMessage || t("audiobook.status", { done: doneCount, total: includedCount })}
+                </span>
+              )
+            ) : learn.running ? (
+              <LearnbookProgress ctl={learn} />
+            ) : (
+              <span className="text-xs text-neutral-500">
+                {learn.hasAudio
+                  ? t("audiobook.learnStatus", { n: learn.info?.units.filter((u) => u.hasAudio).length ?? 0, total: learn.info?.units.length ?? 0 })
+                  : t("audiobook.learnEmpty")}
               </span>
             )}
-          </button>
-        ))}
-      </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {mode === "original" ? (
+              <>
+                {generating && (
+                  <Button variant="danger" onClick={cancelRun}>
+                    {t("audiobook.cancel")}
+                  </Button>
+                )}
+                <Button onClick={generate} disabled={busy || generating || !voiceId || (includedCount > 0 && missingCount === 0)}>
+                  {generating
+                    ? t("audiobook.generating")
+                    : includedCount === 0
+                    ? t("audiobook.generate")
+                    : missingCount === 0
+                    ? t("audiobook.allDone")
+                    : doneCount === 0
+                    ? t("audiobook.generate")
+                    : t("audiobook.generateMissing", { n: missingCount })}
+                </Button>
+                {bookMenu.length > 0 && <Menu label={t("audiobook.actions")} items={bookMenu} />}
+              </>
+            ) : learn.running ? (
+              <Button variant="danger" onClick={() => void learn.cancel()}>
+                {t("audiobook.cancel")}
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => void learn.start(true)}>
+                  {t("learn.probe")}
+                </Button>
+                <Button onClick={() => void learn.start(false)}>{t(learn.hasAudio ? "learn.update" : "learn.full")}</Button>
+                {learn.menu.length > 0 && <Menu label={t("audiobook.actions")} items={learn.menu} />}
+              </>
+            )}
+          </div>
+        </div>
+        {mode === "original" && bookProgress && <BookProgressPanel progress={bookProgress} benchmarkMsPerChar={voices.find((v) => v.id === voiceId)?.msPerChar ?? null} />}
+      </section>
 
       {mode === "original" && (
         <>
-          <section className="card p-5 flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold">{t("audiobook.title")}</h2>
-                <p className="text-xs text-neutral-500 mt-1">{t("audiobook.subtitle")}</p>
-              </div>
-              {bookMenu.length > 0 && <Menu label={t("audiobook.actions")} items={bookMenu} />}
-            </div>
-            {m4bProgress && m4bProgress.totalMs > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-neutral-500">{t("audiobook.m4b.building")}</span>
-                <div className="flex-1 h-2 bg-bg-elevated rounded overflow-hidden">
-                  <div className="h-full bg-accent transition-[width] duration-300" style={{ width: `${Math.min(100, (m4bProgress.currentMs / m4bProgress.totalMs) * 100).toFixed(1)}%` }} />
-                </div>
-                <span className="text-xs text-neutral-400 font-mono tabular-nums">{((m4bProgress.currentMs / m4bProgress.totalMs) * 100).toFixed(0)}%</span>
-              </div>
-            )}
-            {bookProgress && <BookProgressPanel progress={bookProgress} benchmarkMsPerChar={voices.find((v) => v.id === voiceId)?.msPerChar ?? null} />}
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={generate} disabled={busy || generating || !voiceId || (includedCount > 0 && missingCount === 0)}>
-                {generating
-                  ? t("audiobook.generating")
-                  : includedCount === 0
-                  ? t("audiobook.generate")
-                  : missingCount === 0
-                  ? t("audiobook.allDone")
-                  : doneCount === 0
-                  ? t("audiobook.generate")
-                  : t("audiobook.generateMissing", { n: missingCount })}
-              </Button>
-              {generating && (
-                <Button variant="danger" onClick={cancelRun}>
-                  {t("audiobook.cancel")}
-                </Button>
-              )}
-              {phaseMessage && <span className="text-xs text-neutral-400 truncate">{phaseMessage}</span>}
-            </div>
-          </section>
-
           <IntroEditor
             intro={intro}
             voice={voices.find((v) => v.id === voiceId) ?? null}
@@ -386,7 +417,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
         </>
       )}
 
-      {mode !== "original" && <LearnbookPanel docId={docId} rate={rate} kind={mode} />}
+      {mode !== "original" && <LearnbookBody ctl={learn} kind={mode} />}
 
       {editChapterId && (
         <AudioTextEditModal

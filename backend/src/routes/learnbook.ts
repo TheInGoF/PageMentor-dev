@@ -5,6 +5,8 @@ import { db } from "../db";
 import { learnSettings, listUnits } from "../services/learnbook/store";
 import { cancelLearnbook, learnState, startLearnbook, uploadLearnbook } from "../services/learnbook/run";
 import { learnBookPath } from "../services/learnbook/speak";
+import { learnFileSuffix } from "../services/learnbook/meta";
+import { bookFileName } from "../services/audiobook/export";
 import { absEnabled } from "../services/llmConfig";
 import { absReady } from "../services/audiobookshelf";
 import { learnModel } from "../services/learnbook/script";
@@ -51,6 +53,17 @@ learnbookRoutes.post("/:docId/start", async (c) => {
 learnbookRoutes.post("/:docId/cancel", (c) => {
   cancelLearnbook(c.req.param("docId"));
   return c.json(learnState(c.req.param("docId")));
+});
+
+// Fertiges Lernhörbuch herunterladen, Dateiname mit Zusatz wie im Hörbücher-Ordner
+learnbookRoutes.get("/:docId/book", (c) => {
+  const docId = c.req.param("docId");
+  const path = learnBookPath(docId);
+  if (!existsSync(path)) return c.json({ error: "Noch kein Lernhörbuch" }, 404);
+  const name = bookFileName(docId).replace(/\.m4b$/i, `${learnFileSuffix(learnSettings(docId).kind)}.m4b`);
+  return new Response(Bun.file(path), {
+    headers: { "Content-Type": "audio/mp4", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}` },
+  });
 });
 
 // Fertiges Lernhörbuch nachträglich zu Audiobookshelf (eigener Eintrag neben dem Original)

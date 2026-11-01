@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.61.0 – 2026-11-01
+### New
+- Lernhörbücher lassen sich über das ⋯-Menü herunterladen, mit Zusatz im Dateinamen.
+
+### Change
+- Das Lernhörbuch-Intro nennt Titel und Autor genau mit dem Zusatz wie im M4B und in Audiobookshelf.
+- Gemeinsamer Bedien-Kopf für alle drei Hörbücher: Variante wählen, Erzeugen bzw. Probe und Ganzes Heft, Fortschritt und ⋯-Menü an derselben Stelle.
+
 ## 1.60.0 – 2026-11-01
 ### New
 - Fertige Lernhörbücher lassen sich nachträglich mit einem Knopf zu Audiobookshelf hochladen.

@@ -1,10 +1,9 @@
-// Lernhörbuch neben dem normalen Hörbuch: Art und Zielsprache wählen, erst eine Probe-Einheit anhören,
-// dann das ganze Heft. Einheiten mit Skript, Merkpunkten und Prüfnotiz; Aktionen je Einheit hinter ⋯
+// Lernhörbuch und Sprachlern-Hörbuch: Zustand und Aktionen als Hook (für den gemeinsamen Bedien-Kopf im Hörbuch-Reiter),
+// darunter die eigene Ansicht mit Zielsprache, Modell, Meldungen und Einheiten (Skript, Merkpunkte, Prüfnotiz hinter ⋯)
 import { useEffect, useRef, useState } from "react";
 import { request } from "../../lib/api/request";
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
-import { Button } from "../ui/Button";
 import { Menu } from "../ui/Menu";
 import { useToast } from "../ui/Toast";
 import { Notice, SettingRow } from "../settings/parts";
@@ -49,53 +48,108 @@ interface Info {
 }
 
 const LANGS = ["es", "en", "fr", "it", "pt"];
-const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.round((ms % 60000) / 1000)).padStart(2, "0")}`;
+export const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.round((ms % 60000) / 1000)).padStart(2, "0")}`;
 
-export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: string; kind: "language" | "subject" }) {
+export type LearnKind = "language" | "subject";
+
+export function useLearnbook(docId: string, kind: LearnKind, rate: string, enabled: boolean) {
   const [info, setInfo] = useState<Info | null>(null);
-  const [open, setOpen] = useState<number | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
-  const toast = useToast();
   const [absBusy, setAbsBusy] = useState(false);
+  const toast = useToast();
   const base = `/api/learnbook/${docId}`;
-
   const load = () => request<Info>(base).then(setInfo).catch(() => undefined);
   useEffect(() => {
-    void load();
-    return () => audio.current?.pause();
+    if (enabled) void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docId]);
+  }, [docId, enabled]);
   const running = !!info?.state?.running;
-  // Sekundentakt für die Laufzeit der aktuellen Einheit
+  // Sekundentakt für die Laufzeit der aktuellen Einheit, Stand alle 4 s
   const [, setTick] = useState(0);
   useEffect(() => {
-    if (!running) return;
-    const iv = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(iv);
-  }, [running]);
-  useEffect(() => {
-    if (!running) return;
-    const iv = setInterval(() => void load(), 4000);
-    return () => clearInterval(iv);
+    if (!running || !enabled) return;
+    const tick = setInterval(() => setTick((n) => n + 1), 1000);
+    const poll = setInterval(() => void load(), 4000);
+    return () => {
+      clearInterval(tick);
+      clearInterval(poll);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running]);
+  }, [running, enabled]);
 
-  if (!info) return null;
-  const st = info.state;
   // Gewählt ist der Knopf oben; das Heft stellt erst beim Start um, damit Anschauen nichts verwirft
-  const other = info.kind !== kind;
-  const post = async (path: string, body?: object) => {
-    if (path === "/start" && other) await request(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) });
+  const other = !!info && info.kind !== kind;
+  const call = async (path: string, body?: object) => {
     await request(`${base}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
     await load();
   };
-  const setKind = async (patch: { kind?: string; lang?: string }) => {
-    await request(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+  const start = async (probe: boolean) => {
+    if (other) await request(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) });
+    await call("/start", { probe, rate });
+  };
+  const cancel = () => call("/cancel");
+  const setLang = async (lang: string) => {
+    await request(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang }) });
     await load();
   };
+  const uploadAbs = async () => {
+    setAbsBusy(true);
+    try {
+      await request(`${base}/abs`, { method: "POST" });
+      toast.show(t("learn.absDone"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setAbsBusy(false);
+    }
+  };
+  const hasAudio = !other && !!info?.units.some((u) => u.hasAudio);
+  const menu = [
+    ...(!other && info?.hasBook ? [{ label: t("audiobook.download.m4b"), onClick: () => window.open(`${base}/book`, "_blank") }] : []),
+    ...(!other && info?.hasBook && info.abs ? [{ label: absBusy ? t("learn.absUploading") : t("learn.absUpload"), onClick: () => void uploadAbs(), disabled: absBusy || running }] : []),
+  ];
+  return { info, other, running, st: info?.state ?? null, start, cancel, setLang, hasAudio, menu, base, load };
+}
+
+export type LearnbookCtl = ReturnType<typeof useLearnbook>;
+
+// Fortschritt für den Bedien-Kopf: was gerade passiert, Schritt mit Laufzeit, Balken
+export function LearnbookProgress({ ctl }: { ctl: LearnbookCtl }) {
+  const st = ctl.st;
+  if (!st?.running) return null;
+  return (
+    <div className="flex flex-col gap-1 w-full">
+      <span className="text-sm">
+        {st.waiting ? t("learn.phase.wait") : t(`learn.phase.${st.phase}`, { done: Math.min(st.done + 1, Math.max(1, st.total)), total: st.total, current: st.current ?? "" })}
+      </span>
+      {!st.waiting && st.step && (st.phase === "script" || st.phase === "audio") && (
+        <span className="text-xs text-neutral-500 tabular-nums">
+          {t(`learn.step.${st.step}`)}
+          {st.step === "speak" && st.partsTotal ? ` · ${t("learn.parts", { done: st.partsDone ?? 0, total: st.partsTotal })}` : ""}
+          {st.unitStartedAt ? ` · ${mmss(Date.now() - st.unitStartedAt)}` : ""}
+        </span>
+      )}
+      {st.total > 0 && (
+        <div className="h-1.5 rounded bg-bg-elevated overflow-hidden">
+          <div
+            className="h-full bg-accent transition-[width] duration-500"
+            style={{ width: `${Math.min(100, ((st.done + (st.step === "speak" && st.partsTotal ? (st.partsDone ?? 0) / st.partsTotal : 0)) / st.total) * 100)}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Ansicht unter dem Kopf: Zielsprache, Modell, Meldungen, Einheiten
+export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKind }) {
+  const [open, setOpen] = useState<number | null>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => () => audio.current?.pause(), []);
+  const { info, other, running, st } = ctl;
+  if (!info) return null;
   const play = (idx: number) => {
     audio.current?.pause();
-    audio.current = new Audio(`${base}/unit/${idx}/audio?t=${Date.now()}`);
+    audio.current = new Audio(`${ctl.base}/unit/${idx}/audio?t=${Date.now()}`);
     void audio.current.play();
   };
   const totalMs = info.units.reduce((a, u) => a + (u.durationMs ?? 0), 0);
@@ -103,15 +157,14 @@ export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: str
   return (
     <section className="card p-4 flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold flex-1">{t(`learn.title.${kind}`)}</h2>
+        <p className="text-xs text-neutral-500 flex-1">{t(`learn.kind.${kind}Hint`)}</p>
         {!other && totalMs > 0 && <span className="text-xs text-neutral-500">{t("learn.total", { n: info.units.filter((u) => u.hasAudio).length, time: mmss(totalMs) })}</span>}
       </div>
-      <p className="text-xs text-neutral-500">{t(`learn.kind.${kind}Hint`)}</p>
       {other && info.units.some((u) => u.script) && <Notice kind="warn">{t("learn.otherKind", { kind: t(`learn.kind.${info.kind}`) })}</Notice>}
 
       {kind === "language" && (
         <SettingRow label={t("learn.lang")}>
-          <select className="input w-full" value={info.lang} disabled={running} onChange={(e) => void setKind({ lang: e.target.value })}>
+          <select className="input w-full" value={info.lang} disabled={running} onChange={(e) => void ctl.setLang(e.target.value)}>
             {LANGS.map((l) => (
               <option key={l} value={l}>
                 {t(`lang.name.${l}`)}
@@ -124,64 +177,10 @@ export function LearnbookPanel({ docId, rate, kind }: { docId: string; rate: str
         <span className="text-sm">{info.model ?? t("learn.defaultModel")}</span>
       </SettingRow>
 
-      {st?.running ? (
-        <Notice action={<Button variant="ghost" onClick={() => void post("/cancel")}>{t("common.cancel")}</Button>}>
-          <div className="flex flex-col gap-2 w-full">
-            <span>
-              {st.waiting
-                ? t("learn.phase.wait")
-                : t(`learn.phase.${st.phase}`, { done: Math.min(st.done + 1, Math.max(1, st.total)), total: st.total, current: st.current ?? "" })}
-            </span>
-            {!st.waiting && st.step && (st.phase === "script" || st.phase === "audio") && (
-              <span className="text-xs text-neutral-500 tabular-nums">
-                {t(`learn.step.${st.step}`)}
-                {st.step === "speak" && st.partsTotal ? ` · ${t("learn.parts", { done: st.partsDone ?? 0, total: st.partsTotal })}` : ""}
-                {st.unitStartedAt ? ` · ${mmss(Date.now() - st.unitStartedAt)}` : ""}
-              </span>
-            )}
-            {st.total > 0 && (
-              <div className="h-1.5 rounded bg-bg-elevated overflow-hidden">
-                <div
-                  className="h-full bg-accent transition-[width] duration-500"
-                  style={{ width: `${Math.min(100, ((st.done + (st.step === "speak" && st.partsTotal ? (st.partsDone ?? 0) / st.partsTotal : 0)) / st.total) * 100)}%` }}
-                />
-              </div>
-            )}
-          </div>
-        </Notice>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => void post("/start", { probe: true, rate })}>
-            {t("learn.probe")}
-          </Button>
-          <Button onClick={() => void post("/start", { probe: false, rate })}>{t(!other && info.units.some((u) => u.hasAudio) ? "learn.update" : "learn.full")}</Button>
-        </div>
-      )}
       {st?.phase === "failed" && <Notice kind="error">{st.error}</Notice>}
       {st?.phase === "done" && st.bookPath && <Notice>{t("learn.saved", { path: st.bookPath })}</Notice>}
       {st?.phase === "done" && st.absUrl && <Notice>{t("learn.absDone")}</Notice>}
       {st?.phase === "done" && st.absError && <Notice kind="warn">{t("learn.absFailed", { error: st.absError })}</Notice>}
-      {!other && info.hasBook && info.abs && !running && (
-        <div>
-          <Button
-            variant="outline"
-            disabled={absBusy}
-            onClick={async () => {
-              setAbsBusy(true);
-              try {
-                await request(`${base}/abs`, { method: "POST" });
-                toast.show(t("learn.absDone"), "success");
-              } catch (err) {
-                toast.show(err instanceof Error ? err.message : t("common.error"), "error");
-              } finally {
-                setAbsBusy(false);
-              }
-            }}
-          >
-            {absBusy ? t("learn.absUploading") : t("learn.absUpload")}
-          </Button>
-        </div>
-      )}
 
       {!other && info.units.length > 0 && (
         <ul className="flex flex-col divide-y divide-border">

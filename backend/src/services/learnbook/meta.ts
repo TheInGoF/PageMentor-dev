@@ -20,19 +20,18 @@ export function learnFileSuffix(kind: LearnKindName): string {
 
 const LANG_NAMES: Record<string, string> = { es: "Spanisch", en: "Englisch", fr: "Französisch", it: "Italienisch", pt: "Portugiesisch" };
 
-// Gesprochenes Intro vor der ersten Einheit: was es ist, nach wessen Buch, wie man damit lernt
+// Gesprochenes Intro vor der ersten Einheit: Titel und Autor genau mit dem Zusatz wie in M4B und Audiobookshelf,
+// dann Umfang und wie man damit lernt
 export function introText(p: { kind: LearnKindName; lang: string; title: string; author: string | null; units: number }): string {
-  const by = p.author?.trim() ? `, nach dem Buch von ${p.author.trim()}` : "";
+  const head = `${learnTitle(p.title, p.kind)}. ${p.author?.trim() ? `${learnAuthor(p.author)[0].toUpperCase()}${learnAuthor(p.author).slice(1)}.` : ""}`.trim();
   if (p.kind === "language") {
     return (
-      `${p.title}. ${LEARN_SUFFIX.language}${by}. ` +
-      `Du lernst ${LANG_NAMES[p.lang] ?? p.lang} in ${p.units} Einheiten. ` +
+      `${head} Du lernst ${LANG_NAMES[p.lang] ?? p.lang} in ${p.units} Einheiten. ` +
       `Wenn eine Pause kommt, sprich laut nach oder antworte selbst, bevor die Lösung kommt. [PAUSE 1]`
     );
   }
   return (
-    `${p.title}. ${LEARN_SUFFIX.subject}${by}. ` +
-    `${p.units} Einheiten erklären das Heft Schritt für Schritt, mit Beispielen und Denkfragen. ` +
+    `${head} ${p.units} Einheiten erklären das Heft Schritt für Schritt, mit Beispielen und Denkfragen. ` +
     `Wenn eine Frage kommt, halte kurz an und überlege selbst, bevor die Antwort folgt. [PAUSE 1]`
   );
 }
