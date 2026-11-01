@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { pickActivity } from "./ttsActivity";
+import { idleSeconds, pickActivity } from "./ttsActivity";
 
 describe("Ladeanzeige Stimm-Engines", () => {
   test("Download vor Laden vor Start, sonst nichts", () => {
@@ -10,5 +10,11 @@ describe("Ladeanzeige Stimm-Engines", () => {
       engines: { qwen: { activity: { phase: "load", model: "Qwen", seconds: 2 } }, f5: { activity: { phase: "download", model: "F5 Spanish", seconds: 9, bytes: 5, total: 10 } } },
     });
     expect(a).toMatchObject({ engine: "f5", phase: "download", bytes: 5, total: 10 });
+  });
+
+  test("Ruhezeit der Grafikkarte: belegt oder startend = 0, sonst seit der letzten Nutzung", () => {
+    expect(idleSeconds({ owner: "tts:f5", since_seconds: 40 })).toBe(0);
+    expect(idleSeconds({ owner: "idle", since_seconds: 12, starting: { engine: "tada", seconds: 3 } })).toBe(0);
+    expect(idleSeconds({ owner: "idle", since_seconds: 95.5 })).toBe(95.5);
   });
 });

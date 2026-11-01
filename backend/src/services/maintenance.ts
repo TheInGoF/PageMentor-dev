@@ -14,6 +14,7 @@ import { anyProcessing, cancelProcessing, processDocument } from "./pipeline";
 import { anyGenerating } from "./audiobook";
 import { learnBusy } from "./learnbook/run";
 import { batchStatus } from "./batch/audiobooks";
+import { gpuIdleSeconds } from "./ttsActivity";
 import { pronRunState } from "./pronCheck/run";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters } from "./concepts/extract";
 
@@ -54,11 +55,20 @@ export function maintenanceState(): MaintenanceState {
 
 // Gemma ruht erst, wenn so lange kein Aufruf kam (Tutor, Begriffe, Lernhörbuch zwischen zwei Einheiten)
 export const LLM_QUIET_MS = 3 * 60_000;
-const llmBusy = () => Date.now() - llmLastUsedAt() < LLM_QUIET_MS;
+// Eigene Arbeit der Wissenspflege (Entladen, Umwandlung mit Nacharbeit) zählt nicht als fremde Nutzung
+let ownAt = 0;
+const foreignRecent = (lastUsed: number) => Date.now() - lastUsed < LLM_QUIET_MS && lastUsed > ownAt + 2000;
+const llmBusy = () => foreignRecent(llmLastUsedAt());
+// Alles, was über den GPU-Arbiter läuft (Stimmen, Testsätze, Modelltests, Sprachmodell), zählt genauso: erst nach
+// dieser Ruhe gilt die Karte als frei
+const gpuBusy = async () => {
+  const idle = await gpuIdleSeconds();
+  return idle !== null && (idle === 0 ? Date.now() > ownAt + 2000 : foreignRecent(Date.now() - idle * 1000));
+};
 
 // Andere Arbeit auf der Grafikkarte oder an Gemma: Umwandlung, Hörbuch, Stapel, Lernhörbuch, Sprachmodell, Begriffe von Hand
-function busy(): boolean {
-  return llmBusy() || anyProcessing() || anyGenerating() || learnBusy() || !!pronRunState()?.running || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
+async function busy(): Promise<boolean> {
+  return llmBusy() || (await gpuBusy()) || anyProcessing() || anyGenerating() || learnBusy() || !!pronRunState()?.running || batchStatus()?.status === "running" || (conceptRunState().running && state.status !== "running");
 }
 
 // Metadaten gepflegt: im Bearbeiten-Dialog gespeichert, oder (für Hefte von vor dieser Markierung) Autor bzw. Kürzel eingetragen
@@ -101,7 +111,7 @@ export function decide(s: Pick<MaintenanceState, "status" | "until">, now: numbe
 async function tick(): Promise<void> {
   if (state.status === "running") return;
   if (state.status !== "countdown") state.open = await scanOpen();
-  const d = decide(state, Date.now(), hasWork(state.open), busy());
+  const d = decide(state, Date.now(), hasWork(state.open), await busy());
   state.status = d.status;
   state.until = d.until;
   if (d.start) void runNow();
@@ -180,13 +190,14 @@ async function extract(): Promise<void> {
     if (cancel) return;
     // Vor jedem Heft neu prüfen: Gemma, Lernhörbuch, Stapel oder Hörbuch gehen vor, Docling nie gleichzeitig
     Object.assign(state, { doc: d.title, detail: undefined });
-    while (!cancel && busy()) {
+    while (!cancel && (await busy())) {
       state.detail = "Wartet, bis die Grafikkarte frei ist";
       await sleep(5000);
     }
     if (cancel) return;
     state.detail = undefined;
     await freeLlm();
+    ownAt = Date.now();
     extracting = d.id;
     try {
       await processDocument(d.id);
@@ -194,6 +205,7 @@ async function extract(): Promise<void> {
       emitLog("warn", "maintenance", `Umwandlung von „${d.title}“ fehlgeschlagen`, { err });
     } finally {
       extracting = null;
+      ownAt = Date.now();
     }
     state.done++;
   }

@@ -35,3 +35,20 @@ export async function ttsActivity(): Promise<TtsActivity | null> {
     return null;
   }
 }
+
+// Wie lange die Grafikkarte laut Arbiter schon ruht (Sekunden); 0 = gerade belegt (Stimme, Sprachmodell, Spracherkennung,
+// auch Testsätze und Modelltests), null = Arbiter nicht erreichbar
+export function idleSeconds(st: { owner?: string; since_seconds?: number; starting?: unknown }): number {
+  if (st.starting || (st.owner && st.owner !== "idle")) return 0;
+  return st.since_seconds ?? 0;
+}
+
+export async function gpuIdleSeconds(): Promise<number | null> {
+  try {
+    const r = await fetch(`${baseUrl()}/status`, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) return null;
+    return idleSeconds((await r.json()) as { owner?: string; since_seconds?: number; starting?: unknown });
+  } catch {
+    return null;
+  }
+}
