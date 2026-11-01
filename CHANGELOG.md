@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.96.0 – 2026-11-01
+### Change
+- Intro-Vorlage neu gegliedert: Modul als eigene Zeile, dann „Hörbuch: Titel“ bzw. „Lernhörbuch: Titel“ oder „Sprachlern-Hörbuch: Titel“, dann Autor. Die Lernhörbücher nennen dazu „Zum Lernen aufbereitet durch …“ mit dem Modell, das die Einheiten geschrieben hat, sonst „KI“.
+
 ## 1.95.0 – 2026-11-01
 ### Fix
 - Audiobookshelf: Beim erneuten Hochladen werden alle alten Fassungen des Buchs entfernt, nicht nur ein eindeutiger Treffer. Jeder Upload trägt ein Kennzeichen als Tag, darüber findet der nächste Upload die alte Fassung auch nach Umbenennen. Nach dem Upload gilt der neueste Eintrag als der eigene, mit bis zu 20 Sekunden Wartezeit auf den Scan.

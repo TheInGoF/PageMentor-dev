@@ -27,11 +27,11 @@ function buildIntroDefault(
         .trim()
     : "";
   const engineName = voice ? ENGINE_NAMES[voice.engine] ?? voice.engine : "";
-  // Modulname vor dem Hefttitel, wenn das Heft einem Modul zugeordnet ist
-  const fullTitle = meta.module?.trim() ? `${meta.module.trim()}, ${meta.title}` : meta.title;
+  // Modul als eigene Zeile, dann „Hörbuch: Titel“
+  if (meta.module?.trim()) lines.push(`${meta.module.trim()}.`);
 
   if (isDe) {
-    lines.push(`Hörbuch: ${fullTitle}.`);
+    lines.push(`Hörbuch: ${meta.title}.`);
     lines.push("");
     if (meta.author) {
       lines.push(`Von ${meta.author}.`);
@@ -46,7 +46,7 @@ function buildIntroDefault(
     }
     lines.push(`Erstellt mit PageMentor.`);
   } else {
-    lines.push(`Audiobook: ${fullTitle}.`);
+    lines.push(`Audiobook: ${meta.title}.`);
     lines.push("");
     if (meta.author) {
       lines.push(`By ${meta.author}.`);

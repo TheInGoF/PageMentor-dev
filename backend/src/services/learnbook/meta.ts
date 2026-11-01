@@ -25,13 +25,16 @@ const LANG_NAMES: Record<string, string> = { es: "Spanisch", en: "Englisch", fr:
 
 // Vorlage fürs Intro, aufgebaut wie beim Original-Hörbuch (Titel, Autor, Hinweis, PageMentor); anders ist nur der
 // Metadaten-Vorbau: Titel mit dem Zusatz wie in M4B und Audiobookshelf, „Nach dem Buch von …“, Umfang und wie man lernt
-export function introText(p: { kind: LearnKindName; lang: string; title: string; author: string | null; units: number; module?: string | null }): string {
-  // Modulname vor dem Hefttitel, wie beim Original-Hörbuch
-  const lines = [`${p.module?.trim() ? `${p.module.trim()}, ` : ""}${learnTitle(p.title, p.kind)}.`, ""];
+export function introText(p: { kind: LearnKindName; lang: string; title: string; author: string | null; units: number; module?: string | null; model?: string | null }): string {
+  // Modul als eigene Zeile, dann die Art mit dem Hefttitel; danach Autor und Aufbereitung
+  const lines: string[] = [];
+  if (p.module?.trim()) lines.push(`${p.module.trim()}.`);
+  lines.push(`${LEARN_SUFFIX[p.kind]}: ${p.title}.`, "");
   if (p.author?.trim()) {
     const a = learnAuthor(p.author);
     lines.push(`${a[0].toUpperCase()}${a.slice(1)}.`);
   }
+  lines.push(`Zum Lernen aufbereitet durch ${p.model?.trim() || "KI"}.`);
   if (p.kind === "language") {
     lines.push(`Du lernst ${LANG_NAMES[p.lang] ?? p.lang} in ${p.units} Einheiten.`);
     lines.push("Wenn eine Pause kommt, sprich laut nach oder antworte selbst, bevor die Lösung kommt.");

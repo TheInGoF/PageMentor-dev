@@ -36,8 +36,11 @@ export function introTemplate(docId: string, v: IntroVariant): string | null {
     .prepare("SELECT d.title, d.doc_title, d.author, m.name AS module_name FROM documents d LEFT JOIN modules m ON m.id = d.module_id WHERE d.id = ?")
     .get(docId) as DocRow | undefined;
   if (!doc) return null;
-  const units = listUnits(docId).filter((u) => !u.skip_reason).length;
-  return introText({ kind: v, lang: learnSettings(docId).lang, title: doc.doc_title || doc.title, author: doc.author, units, module: doc.module_name });
+  const all = listUnits(docId);
+  const units = all.filter((u) => !u.skip_reason).length;
+  // Modell, das die Einheiten geschrieben hat; „default“ ist das Standardmodell ohne Namen
+  const model = all.find((u) => u.model && u.model !== "default")?.model ?? null;
+  return introText({ kind: v, lang: learnSettings(docId).lang, title: doc.doc_title || doc.title, author: doc.author, units, module: doc.module_name, model });
 }
 
 export function getIntro(docId: string, v: IntroVariant): IntroRecord | null {

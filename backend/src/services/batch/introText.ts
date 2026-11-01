@@ -4,18 +4,15 @@ import { spokenAuthors } from "../../lib/authors";
 
 const ENGINE_NAMES: Record<string, string> = { qwen: "Qwen3-TTS", kokoro: "Kokoro", f5: "F5-TTS", tada: "TADA" };
 
-// Modulname vor dem Hefttitel, wenn das Heft einem Modul zugeordnet ist
-export function spokenTitle(module: string | null | undefined, title: string): string {
-  return module?.trim() ? `${module.trim()}, ${title}` : title;
-}
-
 export function defaultIntroText(meta: { title: string; author: string | null; language: string; module?: string | null }, voice: Voice | null, model: string): string {
   const de = meta.language === "de";
   // Zusätze wie „(Vorlage)“ oder „· Design“ aus dem Stimmnamen entfernen
   const voiceLabel = voice ? voice.label.replace(/\s*[·•]\s*\S.*$/, "").replace(/\s*\([^)]*\)\s*/g, " ").trim() : "";
   const engine = voice ? ENGINE_NAMES[voice.engine] ?? voice.engine : "";
-  const full = spokenTitle(meta.module, meta.title);
-  const lines = [de ? `Hörbuch: ${full}.` : `Audiobook: ${full}.`, ""];
+  // Modul als eigene Zeile, dann „Hörbuch: Titel“
+  const lines: string[] = [];
+  if (meta.module?.trim()) lines.push(`${meta.module.trim()}.`);
+  lines.push(de ? `Hörbuch: ${meta.title}.` : `Audiobook: ${meta.title}.`, "");
   // Mehrere Autoren zum Vorlesen mit „und“ verbunden
   const by = spokenAuthors(meta.author, meta.language);
   if (by) lines.push(de ? `Von ${by}.` : `By ${by}.`);
