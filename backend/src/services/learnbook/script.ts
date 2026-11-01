@@ -126,15 +126,17 @@ export function learnableChars(source: string): number {
     .replace(/[^\p{L}\p{N}]+/gu, "").length;
 }
 export const MIN_LEARNABLE = 120;
+// Erst nachrechnen, dann urteilen: Die Feldreihenfolge gibt dem Modell ohne Denkmodus Platz zum Rechnen
 const CHECK_SCHEMA = {
   type: "object",
   properties: {
+    rechnungen: { type: "array", items: { type: "string" } },
     abweichungen: {
       type: "array",
       items: { type: "object", properties: { stelle: { type: "string" }, problem: { type: "string" }, korrektur: { type: "string" } }, required: ["stelle", "problem", "korrektur"] },
     },
   },
-  required: ["abweichungen"],
+  required: ["rechnungen", "abweichungen"],
 };
 
 function parseJson<T>(raw: string): T | null {
@@ -233,19 +235,23 @@ export async function writeUnit(p: {
       model: p.model,
       think,
       format: CHECK_SCHEMA,
-      options: { temperature: 0.1, num_ctx: p.ctx, num_predict: 2000 },
+      options: { temperature: 0.1, num_ctx: p.ctx, num_predict: 3000 },
     }).catch(() => null);
-    const issues = (c && parseJson<{ abweichungen?: Array<{ stelle: string; problem: string; korrektur: string }> }>(c.response)?.abweichungen) ?? [];
+    const parsed = c ? parseJson<{ rechnungen?: string[]; abweichungen?: Array<{ stelle: string; problem: string; korrektur: string }> }>(c.response) : null;
+    const issues = parsed?.abweichungen ?? [];
+    // Die Nachrechnung steht in der Prüfnotiz, damit man sieht, was geprüft wurde
+    const calc = (parsed?.rechnungen ?? []).filter((x) => typeof x === "string" && x.trim());
+    const calcNote = calc.length ? `\nNachgerechnet:\n${calc.map((r) => `- ${r}`).join("\n")}` : "";
     if (!c) checkNote = "Prüfung nicht möglich";
-    else if (!issues.length) checkNote = "geprüft, keine Abweichung";
+    else if (!issues.length) checkNote = `geprüft, keine Abweichung${calcNote}`;
     else {
       const list = issues.map((i) => `- „${i.stelle}“: ${i.problem} → ${i.korrektur}`).join("\n");
       try {
         p.onStep?.("revise");
         out = await write(`\n\nDein erster Entwurf hatte diese fachlichen Fehler. Schreibe das Skript neu und korrigiere genau diese Stellen:\n${list}`);
-        checkNote = `${issues.length} Abweichung(en) gefunden und korrigiert:\n${list}`;
+        checkNote = `${issues.length} Abweichung(en) gefunden und korrigiert:\n${list}${calcNote}`;
       } catch {
-        checkNote = `${issues.length} Abweichung(en) gefunden, Korrektur fehlgeschlagen:\n${list}`;
+        checkNote = `${issues.length} Abweichung(en) gefunden, Korrektur fehlgeschlagen:\n${list}${calcNote}`;
       }
     }
   }

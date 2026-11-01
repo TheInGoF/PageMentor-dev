@@ -4,10 +4,12 @@ import { describe, expect, mock, test } from "bun:test";
 const answers: string[] = [];
 const prompts: string[] = [];
 const thinks: Array<boolean | undefined> = [];
+const formats: Array<{ properties: Record<string, unknown> } | undefined> = [];
 mock.module("../llm", () => ({
-  generate: async (p: { prompt: string; think?: boolean }) => {
+  generate: async (p: { prompt: string; think?: boolean; format?: { properties: Record<string, unknown> } }) => {
     prompts.push(p.prompt);
     thinks.push(p.think);
+    formats.push(p.format);
     return { response: answers.shift() ?? "", model: "test", provider: "test", totalMs: 0 };
   },
 }));
@@ -31,6 +33,14 @@ describe("Einheit schreiben", () => {
     const out = await writeUnit({ ...base, kind: "subject" });
     expect(out.script.startsWith("gut")).toBe(true);
     expect(out.checkNote).toBe("geprüft, keine Abweichung");
+  });
+
+  test("Prüfdurchgang rechnet erst nach, die Nachrechnung steht in der Notiz", async () => {
+    formats.length = 0;
+    answers.push(script("gut "), JSON.stringify({ rechnungen: ["200 je Minute sind 3,33 je Sekunde, mal 1,6 Bit sind 5,3 Bit je Sekunde; Vorlage 5,3"], abweichungen: [] }));
+    const out = await writeUnit({ ...base, kind: "subject" });
+    expect(Object.keys(formats[1]!.properties)).toEqual(["rechnungen", "abweichungen"]);
+    expect(out.checkNote).toBe("geprüft, keine Abweichung\nNachgerechnet:\n- 200 je Minute sind 3,33 je Sekunde, mal 1,6 Bit sind 5,3 Bit je Sekunde; Vorlage 5,3");
   });
 
   test("Sprachkurs: ohne Prüfung, Zielsprache und erste Einheit stehen im Auftrag", async () => {

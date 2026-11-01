@@ -1,4 +1,4 @@
-Du schreibst ein Lern-Hörskript für ein Fernstudium, zum Anhören ohne Heft, zum Beispiel beim Autofahren. Grundlage ist ein Abschnitt aus einem Lehrheft. Du bleibst inhaltlich genau beim Heft: keine Fakten, Formeln oder Zahlen, die dort nicht stehen. Du gestaltest aber den Ablauf so, dass man beim Zuhören wirklich lernt.
+Du schreibst ein Lern-Hörskript für ein Fernstudium, zum Anhören ohne Heft, zum Beispiel beim Autofahren. Grundlage ist ein Abschnitt aus einem Lehrheft. Du bleibst inhaltlich genau beim Heft: keine Fakten, Formeln oder Zahlen, die dort nicht stehen. Rechenbeispiele übernimmst du mit den Zahlen, dem Rechenweg und dem Ergebnis des Hefts. Rechnet das Heft absichtlich falsch, etwa um einen Irrtum oder einen Verlust zu zeigen, bleibt dieser Fehler erhalten und wird als absichtlich benannt. Du gestaltest aber den Ablauf so, dass man beim Zuhören wirklich lernt.
 
 Aufbau einer Einheit (5 bis 10 Minuten gesprochen):
 1. Einstieg: worum es geht und warum es wichtig ist, zwei, drei Sätze.

@@ -36,6 +36,7 @@ function germanWordToInt(word: string): number | null {
 // Repariert:
 // - "Beispiel zwei Punkt fünf" → "Beispiel 2.5"
 // - "zweitausendachtzehn" → "2018"
+// - "achtzigvier" → "vierundachtzig"
 // - "Seite 104 ff." → "Seite 104 und folgende"
 // Meldet in `rejected`: unrettbare Wortbrei wie "zwehaufachtzig"
 // Läuft pro Teilstück und einmal auf dem Gesamttext
@@ -72,6 +73,15 @@ export function fixGermanNumeralBleed(text: string): {
     }
     rejected.push(match);
     return match;
+  });
+
+  // Verdrehte Zehner und Einer: "achtzigvier" → "vierundachtzig", "hundertsiebzigfünf" → "hundertfünfundsiebzig"
+  const swappedRe =
+    /\b([a-zäöüß]*?)(zwanzig|dreißig|vierzig|fünfzig|sechzig|siebzig|achtzig|neunzig)(eins?|zwei|drei|vier|fünf|sechs|sieben|acht|neun)\b/gi;
+  result = result.replace(swappedRe, (_m, pre: string, tens: string, one: string) => {
+    const word = `${pre}${one.toLowerCase().replace(/^eins$/, "ein")}und${tens.toLowerCase()}`;
+    const upper = /^[A-ZÄÖÜ]/.test(pre || tens);
+    return upper ? word[0].toUpperCase() + word.slice(1) : word;
   });
 
   // f./ff.: Satzpunkt behalten, wenn Abkürzung am Satzende steht

@@ -37,6 +37,12 @@ describe("Einheit sprechen", () => {
     expect(r.durationMs).toBeLessThan(8200);
   }, 30000);
 
+  test("deutsche Zahlwort-Fehler werden vor dem Sprechen repariert", async () => {
+    calls.length = 0;
+    await speakUnit({ docId: DOC, idx: 2, title: "Zip", album: "Test", script: "Es blieben achtzigvier Prozent übrig.", main: de, second: null, rate: "+0%", isCanceled: () => false });
+    expect(calls[0].text).toContain("vierundachtzig Prozent");
+  }, 30000);
+
   test("Abbruch stoppt vor dem nächsten Stück", async () => {
     await expect(speakUnit({ docId: DOC, idx: 1, title: "x", album: "Test", script: "Eins. [PAUSE 1] Zwei.", main: de, second: null, rate: "+0%", isCanceled: () => true })).rejects.toThrow("abgebrochen");
   });

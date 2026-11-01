@@ -11,6 +11,7 @@ import { buildM4B, concatMp3, normalizeAndTag, run } from "../../tts/ffmpeg";
 import { probeSampleRate } from "../../tts/ffmpeg/mp3";
 import type { Voice } from "../../tts/engines/base";
 import { applyPronunciation } from "../pronunciation";
+import { fixGermanNumeralBleed } from "../audioPreprocess/numerals";
 import { ensureSentenceEnd, splitLanguageRuns } from "../audiobook/synthChapter";
 import { coverPathFor } from "../audiobook/files";
 import { bookFileName } from "../audiobook/export";
@@ -91,7 +92,8 @@ export async function speakUnit(p: {
     const german = voice.locale.startsWith("de");
     if (prevLang !== undefined) plan.push({ pause: prevLang === part.lang ? GAP_MS : SWITCH_MS });
     for (const seg of segmentText(part.text, maxChunkFor(voice.engine))) {
-      const text = ensureSentenceEnd(seg.paragraphs.map((t) => (german ? applyPronunciation(t) : t)).join("\n\n"));
+      // Deutsch: Zahlwort-Brei des Modells reparieren (wie beim Original-Hörbuch), dann Ausspracheliste
+      const text = ensureSentenceEnd(seg.paragraphs.map((t) => (german ? applyPronunciation(fixGermanNumeralBleed(t).text) : t)).join("\n\n"));
       if (!/[\p{L}\p{N}]/u.test(text)) continue;
       const out = join(dir, `${hash(`${text}|${voice.id}|${p.rate}`)}.mp3`);
       if (!existsSync(out) || statSync(out).size === 0) {

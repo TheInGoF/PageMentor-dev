@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.78.0 – 2026-11-01
+### Change
+- Lernhörbuch: Der Prüfdurchgang rechnet jedes Zahlenbeispiel nach und gleicht es mit dem Heft ab. Absichtlich falsche Beispiele des Hefts bleiben erhalten. Die Nachrechnung steht in der Prüfnotiz.
+### Fix
+- Lernhörbuch: Verdrehte Zahlwörter wie „achtzigvier“ werden vor dem Sprechen zu „vierundachtzig“. Die Zahlwort-Reparatur des Original-Hörbuchs läuft auch hier.
+
 ## 1.77.0 – 2026-11-01
 ### New
 - Gehirn lässt sich mit dem Mausrad an der Mausposition zoomen, durch Ziehen verschieben und über +, − und „Ganzes Netz“ steuern.
