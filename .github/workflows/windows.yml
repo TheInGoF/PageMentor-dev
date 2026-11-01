@@ -102,7 +102,7 @@ jobs:
           if ($log -notmatch "App-Fenster bereit") { Write-Warning "Fenster hat die Seite nicht gemeldet" }
           if ($log -notmatch "Fenster geschlossen") { Write-Warning "Fenster wurde nicht über die eigene Leiste geschlossen" }
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: PageMentor-Fenster
           path: dist/screens/
@@ -140,13 +140,13 @@ jobs:
           if (Test-Path "$app\PageMentor.exe") { throw "Exe nach Deinstallation noch da" }
           if (-not (Test-Path ([Environment]::GetFolderPath('MyDocuments') + "\PageMentor"))) { throw "Nutzerdaten wurden gelöscht" }
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: PageMentor-Setup-${{ steps.ver.outputs.v }}
           path: dist/PageMentor-Setup-*.exe
           retention-days: 14
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: PageMentor-windows-${{ steps.ver.outputs.v }}
           path: dist/PageMentor
