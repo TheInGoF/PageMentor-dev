@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.67.0 – 2026-11-01
+### New
+- Ausspracheprüfung: „Rest ignorieren“ räumt die offenen Befunde eines Kapitels mit einem Klick weg.
+
+### Fix
+- Ausspracheprüfung meldet nur noch echte Abweichungen: Zahlen, Abkürzungen, buchstabierte Namen, Formelzeichen, getrennt oder zusammen geschriebene Wörter, Schreibvarianten und „unsicher“ fallen weg. Gilt auch für schon gespeicherte Befunde.
+
 ## 1.66.0 – 2026-11-01
 ### New
 - Wissenspflege wandelt in Leerlaufpausen hochgeladene Hefte mit Docling um, sobald ihre Metadaten bearbeitet sind. So bekommen Suche und Tutor Futter.

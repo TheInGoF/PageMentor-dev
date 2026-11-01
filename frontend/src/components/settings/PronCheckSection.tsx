@@ -218,6 +218,17 @@ export function PronCheckSection({ onEngines }: { onEngines: () => void }) {
                     <div className="text-sm font-medium flex-1 truncate">
                       {list[0].chapter_number}. {list[0].chapter_title}
                     </div>
+                    {filter === "open" && (
+                      <Button
+                        variant="ghost"
+                        onClick={async () => {
+                          await request(`/api/pron-check/chapter/${chId}/ignore`, { method: "POST" });
+                          await loadDoc(docId);
+                        }}
+                      >
+                        {t("pronCheck.ignoreRest")}
+                      </Button>
+                    )}
                     <Button variant="ghost" onClick={() => void run([chId])} disabled={running}>
                       {t("pronCheck.recheck")}
                     </Button>

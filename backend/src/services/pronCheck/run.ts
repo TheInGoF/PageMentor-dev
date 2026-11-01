@@ -11,6 +11,7 @@ import { anyGenerating } from "../audiobook";
 import { learnUnitActive } from "../learnbook/run";
 import { findIssues, tokens } from "./align";
 import { saveCheck } from "./store";
+import { isNoise } from "./noise";
 import { transcribe } from "./stt";
 
 export interface PronRunState {
@@ -83,7 +84,8 @@ async function run(docId: string, chapterIds: string[]): Promise<void> {
         }
         const text = expectedText(ch, lang);
         const heard = await transcribe(file, lang);
-        const findings = findIssues(text, heard.words);
+        // Zahlen, Abkürzungen, Formelzeichen, Schreibvarianten: kein Aussprachefehler
+        const findings = findIssues(text, heard.words).filter((f) => !isNoise(f));
         saveCheck(docId, ch.id, findings, tokens(text).length, heard.duration);
         st.found += findings.length;
         st.done++;

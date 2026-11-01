@@ -4,6 +4,7 @@ import type { Database } from "bun:sqlite";
 import { randomUUID } from "node:crypto";
 import { db } from "../../db";
 import type { Finding } from "./align";
+import { isNoise } from "./noise";
 
 export function ensurePronTables(d: Database): void {
   d.exec(`
@@ -87,7 +88,9 @@ export function listIssues(docId: string): IssueRow[] {
          FROM pron_issues i JOIN chapters c ON c.id = i.chapter_id
         WHERE i.document_id = ? ORDER BY c.sort_order, c.number, i.start`
     )
-    .all(docId) as IssueRow[];
+    .all(docId)
+    // Auch ältere Befunde ohne Filter: Rauschen nicht mehr zeigen
+    .filter((r) => !isNoise(r as IssueRow)) as IssueRow[];
 }
 
 export function getIssue(id: string): (IssueRow & { document_id: string }) | null {
@@ -108,17 +111,28 @@ export function setIssueStatus(id: string, status: IssueRow["status"], note?: st
 
 // Je Kapitel des Hefts: Audio vorhanden, zuletzt geprüft, offene Befunde
 export function chapterOverview(docId: string): Array<{ id: string; number: number; title: string; hasAudio: boolean; checkedAt: number | null; open: number }> {
+  const open = listIssues(docId).filter((i) => i.status === "open");
   return db()
     .prepare(
       `SELECT c.id, c.number, c.title,
               EXISTS(SELECT 1 FROM audio a WHERE a.chapter_id = c.id AND a.status = 'done') AS hasAudio,
               (SELECT MAX(created_at) FROM pron_checks p WHERE p.chapter_id = c.id) AS checkedAt,
-              (SELECT COUNT(*) FROM pron_issues i WHERE i.chapter_id = c.id AND i.status = 'open') AS open
+              0 AS open
          FROM chapters c WHERE c.document_id = ? ORDER BY c.sort_order, c.number`
     )
     .all(docId)
     .map((r) => {
       const x = r as { id: string; number: number; title: string; hasAudio: number; checkedAt: number | null; open: number };
-      return { ...x, hasAudio: !!x.hasAudio };
+      return { ...x, hasAudio: !!x.hasAudio, open: open.filter((i) => i.chapter_id === x.id).length };
     });
+}
+
+// Offene Befunde eines Hefts (nach Filter), für die Heftauswahl
+export function openCount(docId: string): number {
+  return listIssues(docId).filter((i) => i.status === "open").length;
+}
+
+// Alle offenen Befunde eines Kapitels auf einmal ignorieren
+export function ignoreChapter(chapterId: string): number {
+  return db().prepare("UPDATE pron_issues SET status = 'ignored' WHERE chapter_id = ? AND status = 'open'").run(chapterId).changes;
 }

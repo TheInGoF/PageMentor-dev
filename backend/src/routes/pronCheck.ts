@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { db } from "../db";
 import { fromDataPath } from "../paths";
 import { toolPath } from "../tools";
-import { chapterOverview, getIssue, listIssues, setIssueStatus } from "../services/pronCheck/store";
+import { chapterOverview, getIssue, ignoreChapter, listIssues, openCount, setIssueStatus } from "../services/pronCheck/store";
 import { cancelPronCheck, pronRunState, startPronCheck } from "../services/pronCheck/run";
 import { sttAvailable } from "../services/pronCheck/stt";
 import { enqueueLearn } from "../services/pronCheck/learn";
@@ -17,12 +17,12 @@ pronCheckRoutes.get("/docs", async (c) => {
   await refreshExtraStatus().catch(() => undefined);
   const docs = db()
     .prepare(
-      `SELECT d.id, d.title, d.doc_title, d.language,
-              (SELECT COUNT(*) FROM pron_issues i WHERE i.document_id = d.id AND i.status = 'open') AS open
+      `SELECT d.id, d.title, d.doc_title, d.language
          FROM documents d WHERE EXISTS (SELECT 1 FROM chapters c JOIN audio a ON a.chapter_id = c.id AND a.status = 'done' WHERE c.document_id = d.id)
         ORDER BY d.title COLLATE NOCASE`
     )
-    .all();
+    .all()
+    .map((d) => ({ ...(d as { id: string }), open: openCount((d as { id: string }).id) }));
   return c.json({ available: sttAvailable(), docs, state: pronRunState() });
 });
 
@@ -38,6 +38,9 @@ pronCheckRoutes.post("/doc/:docId/run", async (c) => {
   if (!sttAvailable()) return c.json({ error: "Whisper ist nicht eingeschaltet (Einstellungen → Engine → Stimm-Engines)" }, 409);
   return c.json(startPronCheck(docId, ids));
 });
+
+// Rest eines Kapitels auf einmal wegklicken
+pronCheckRoutes.post("/chapter/:id/ignore", (c) => c.json({ ignored: ignoreChapter(c.req.param("id")) }));
 
 pronCheckRoutes.post("/cancel", (c) => {
   cancelPronCheck();

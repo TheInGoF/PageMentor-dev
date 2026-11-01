@@ -112,6 +112,8 @@ export function findIssues(text: string, heard: HeardWord[], opts: { unsureBelow
   const unsureBelow = opts.unsureBelow ?? 0.45;
   const expRaw = tokens(text);
   const exp = expRaw.map(norm);
+  // Reine Satzzeichen, die Whisper als Wort ausgibt („-“), zählen nicht
+  heard = heard.filter((w) => norm(w.word).length > 0);
   const hNorm = heard.map((w) => norm(w.word));
   // Fensterweise ausrichten: Whisper hält die Reihenfolge, die Fenster überlappen nicht
   const ops: Op[] = [];
