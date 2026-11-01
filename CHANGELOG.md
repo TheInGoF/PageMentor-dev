@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.79.0 – 2026-11-01
+### Change
+- Lernhörbuch: Jede Einheit beginnt mit einer Vorab-Frage, die die Zusammenfassung am Ende ausdrücklich beantwortet.
+- Lernhörbuch: Von den zwei Denkfragen prüft die erste das Warum, die zweite wendet das Gelernte auf eine Alltagssituation an. Keine Frage fragt nur den eben gesagten Satz zurück.
+
 ## 1.78.0 – 2026-11-01
 ### Change
 - Lernhörbuch: Der Prüfdurchgang rechnet jedes Zahlenbeispiel nach und gleicht es mit dem Heft ab. Absichtlich falsche Beispiele des Hefts bleiben erhalten. Die Nachrechnung steht in der Prüfnotiz.
