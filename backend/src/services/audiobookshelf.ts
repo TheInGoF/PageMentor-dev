@@ -22,6 +22,30 @@ import { pickLang, tLang } from "../lib/i18n";
 import { DATA_DIR } from "../paths";
 import { httpErrorFrom } from "../log/errors";
 
+// Kennzeichen je Heft und Hörbuch-Art als Tag in Audiobookshelf: So findet der nächste Upload die alte Fassung,
+// auch wenn Titel oder Autor inzwischen anders heißen
+export function pmTag(docId: string, variant?: string): string {
+  return variant ? `pm:${docId}:${variant}` : `pm:${docId}`;
+}
+
+export type SearchHit = { libraryItem?: { id?: string; addedAt?: number; media?: { metadata?: { title?: string; authorName?: string } } } };
+const norm = (s?: string) => (s ?? "").trim().toLowerCase();
+
+// Treffer der Titelsuche, die dasselbe Buch sind: gleicher Titel und gleicher Autor, alle davon
+export function matchingItems(hits: SearchHit[] | undefined, title: string, author: string): string[] {
+  return (hits ?? [])
+    .filter((b) => norm(b.libraryItem?.media?.metadata?.title) === norm(title) && norm(b.libraryItem?.media?.metadata?.authorName) === norm(author))
+    .map((b) => b.libraryItem?.id)
+    .filter((id): id is string => !!id);
+}
+
+// Neuester Eintrag mit diesem Titel: der gerade hochgeladene, falls noch eine alte Fassung daneben steht
+export function newestItem(hits: SearchHit[] | undefined, title: string): string | null {
+  const same = (hits ?? []).filter((b) => norm(b.libraryItem?.media?.metadata?.title) === norm(title) && b.libraryItem?.id);
+  same.sort((a, b) => (b.libraryItem?.addedAt ?? 0) - (a.libraryItem?.addedAt ?? 0));
+  return same[0]?.libraryItem?.id ?? null;
+}
+
 
 // Eingerichtet: Adresse, Schlüssel und Bibliothek vorhanden
 export function absReady(): boolean {
@@ -242,7 +266,8 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
   const folderId = folders[0].id;
 
   // Neue Fassung ersetzt die alte: vorhandenen Eintrag samt Dateien löschen, dann neu hochladen
-  await removePreviousUpload(url, libraryId, docId, bookTitle, authorName, itemCol);
+  const tag = pmTag(docId, variant);
+  await removePreviousUpload(url, libraryId, docId, bookTitle, authorName, itemCol, tag);
 
   const form = new FormData();
   form.append("library", libraryId);
@@ -322,7 +347,8 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
     const searchUrl = `${url}/api/libraries/${libraryId}/search?q=${encodeURIComponent(
       bookTitle
     )}&limit=5`;
-    for (let i = 0; i < 8; i++) {
+    // Bis 20 Sekunden warten: bei großen Bibliotheken dauert der Scan; der neueste Treffer ist der eigene
+    for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       try {
         const sr = await fetch(searchUrl, {
@@ -330,21 +356,10 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
           signal: AbortSignal.timeout(5_000),
         });
         if (!sr.ok) continue;
-        const sdata = (await sr.json()) as {
-          book?: Array<{
-            libraryItem?: {
-              id?: string;
-              media?: { metadata?: { title?: string } };
-            };
-          }>;
-        };
-        const hit = (sdata.book ?? []).find(
-          (b) =>
-            b.libraryItem?.media?.metadata?.title?.trim().toLowerCase() ===
-            bookTitle.trim().toLowerCase()
-        );
-        if (hit?.libraryItem?.id) {
-          uploadData.libraryItemId = hit.libraryItem.id;
+        const sdata = (await sr.json()) as { book?: SearchHit[] };
+        const found = newestItem(sdata.book, bookTitle);
+        if (found) {
+          uploadData.libraryItemId = found;
           console.log(
             `[abs] item found after scan: ${uploadData.libraryItemId} (attempt ${i + 1})`
           );
@@ -393,6 +408,8 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
           genres: variant ? ["Audiobook", "Lernhörbuch"] : ["Audiobook"],
           language: doc.language || "de",
         },
+        // Kennzeichen für den nächsten Upload: die alte Fassung wird darüber gefunden und entfernt
+        tags: ["PageMentor", tag],
       };
       const patchRes = await fetch(
         `${url}/api/items/${uploadData.libraryItemId}/media`,
@@ -430,7 +447,8 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
   };
 }
 
-// Früheren Upload dieses Buchs finden (gemerkte ID, sonst gleicher Titel und Autor) und mit Dateien löschen.
+// Frühere Uploads dieses Buchs finden und samt Dateien löschen: gemerkte ID, Einträge mit dem Kennzeichen-Tag
+// und alle Treffer mit gleichem Titel und Autor, nicht nur ein eindeutiger. So bleibt keine alte Fassung stehen.
 // Hörfortschritt in Audiobookshelf hängt am Eintrag und beginnt danach von vorn.
 async function removePreviousUpload(
   url: string,
@@ -438,36 +456,42 @@ async function removePreviousUpload(
   docId: string,
   title: string,
   author: string,
-  itemCol: "abs_item_id" | "abs_learn_item_id" = "abs_item_id"
+  itemCol: "abs_item_id" | "abs_learn_item_id",
+  tag: string
 ): Promise<void> {
+  const ids = new Set<string>();
   const stored = (db().prepare(`SELECT ${itemCol} AS id FROM documents WHERE id = ?`).get(docId) as { id: string | null } | undefined)?.id;
-  let itemId: string | null = null;
   if (stored) {
     const r = await fetch(`${url}/api/items/${stored}`, { headers: absHeaders(), signal: AbortSignal.timeout(8_000) }).catch(() => null);
-    if (r?.ok) itemId = stored;
+    if (r?.ok) ids.add(stored);
   }
-  if (!itemId) {
-    try {
-      const sr = await fetch(`${url}/api/libraries/${libraryId}/search?q=${encodeURIComponent(title)}&limit=10`, { headers: absHeaders(), signal: AbortSignal.timeout(8_000) });
-      if (sr.ok) {
-        const data = (await sr.json()) as {
-          book?: Array<{ libraryItem?: { id?: string; media?: { metadata?: { title?: string; authorName?: string } } } }>;
-        };
-        const norm = (s?: string) => (s ?? "").trim().toLowerCase();
-        // Nur bei eindeutigem Treffer: gleicher Titel und gleicher Autor
-        const hits = (data.book ?? []).filter(
-          (b) => norm(b.libraryItem?.media?.metadata?.title) === norm(title) && norm(b.libraryItem?.media?.metadata?.authorName) === norm(author)
-        );
-        if (hits.length === 1) itemId = hits[0].libraryItem?.id ?? null;
-      }
-    } catch (e) {
-      console.warn(`[abs] search for previous upload failed:`, e);
+  // Über das Kennzeichen: findet die alte Fassung auch nach Umbenennen
+  try {
+    const filter = encodeURIComponent(`tags.${Buffer.from(tag).toString("base64")}`);
+    const fr = await fetch(`${url}/api/libraries/${libraryId}/items?filter=${filter}&limit=100`, { headers: absHeaders(), signal: AbortSignal.timeout(8_000) });
+    if (fr.ok) {
+      const data = (await fr.json()) as { results?: Array<{ id?: string }> };
+      for (const it of data.results ?? []) if (it.id) ids.add(it.id);
     }
+  } catch (e) {
+    console.warn(`[abs] tag lookup for previous upload failed:`, e);
   }
-  if (!itemId) return;
-  const del = await fetch(`${url}/api/items/${itemId}?hard=1`, { method: "DELETE", headers: absHeaders(), signal: AbortSignal.timeout(30_000) });
-  if (!del.ok) throw new Error(`ABS: alte Fassung nicht gelöscht (${del.status})`);
-  console.log(`[abs] previous upload ${itemId} removed, uploading new version`);
+  // Gleicher Titel und Autor: alle Treffer
+  try {
+    const sr = await fetch(`${url}/api/libraries/${libraryId}/search?q=${encodeURIComponent(title)}&limit=20`, { headers: absHeaders(), signal: AbortSignal.timeout(8_000) });
+    if (sr.ok) {
+      const data = (await sr.json()) as { book?: SearchHit[] };
+      for (const id of matchingItems(data.book, title, author)) ids.add(id);
+    }
+  } catch (e) {
+    console.warn(`[abs] search for previous upload failed:`, e);
+  }
+  if (!ids.size) return;
+  for (const id of ids) {
+    const del = await fetch(`${url}/api/items/${id}?hard=1`, { method: "DELETE", headers: absHeaders(), signal: AbortSignal.timeout(30_000) });
+    if (!del.ok && del.status !== 404) throw new Error(`ABS: alte Fassung ${id} nicht gelöscht (${del.status})`);
+  }
+  console.log(`[abs] ${ids.size} frühere Fassung(en) entfernt, lade neu hoch`);
   db().prepare(`UPDATE documents SET ${itemCol} = NULL WHERE id = ?`).run(docId);
   // ABS braucht einen Moment, bis der Ordner weg ist
   await new Promise((r) => setTimeout(r, 2000));

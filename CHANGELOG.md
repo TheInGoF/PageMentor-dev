@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.95.0 – 2026-11-01
+### Fix
+- Audiobookshelf: Beim erneuten Hochladen werden alle alten Fassungen des Buchs entfernt, nicht nur ein eindeutiger Treffer. Jeder Upload trägt ein Kennzeichen als Tag, darüber findet der nächste Upload die alte Fassung auch nach Umbenennen. Nach dem Upload gilt der neueste Eintrag als der eigene, mit bis zu 20 Sekunden Wartezeit auf den Scan.
+
 ## 1.94.0 – 2026-11-01
 ### Change
 - Intro: Die Vorlage nennt vor dem Hefttitel den Modulnamen („Hörbuch: Elektrotechnik, Gleichstrom.“), beim Original wie bei Lernhörbuch und Sprachlern-Hörbuch.
