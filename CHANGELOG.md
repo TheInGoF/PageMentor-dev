@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.81.0 – 2026-11-01
+### Change
+- Lernhörbuch: Formeln werden erst in Worten erklärt und dann einmal gesprochen; Größen heißen „Zustand eins“ statt „x i“.
+- Lernhörbuch: Jede Einheit beginnt mit „Einheit N: Titel“ statt mit einem erfundenen Kursnamen.
+- Lernhörbuch: Keine Verweise auf Beispiel-, Abbildungs- oder Abschnittsnummern und nicht auf das Heft; das Beispiel wird selbst erzählt.
+- Lernhörbuch: Die Wiederholung entfällt ohne Hinweis, wenn es noch nichts zu wiederholen gibt.
+
 ## 1.80.0 – 2026-11-01
 ### Change
 - Lernhörbuch: Pausen nach ihrer Aufgabe: eine Sekunde zwischen Absätzen, zwei vor einem neuen Abschnitt, sechs nach einer Frage an den Hörer, acht bei einer Rechnung. Rhetorische Fragen bekommen keine Pause.
