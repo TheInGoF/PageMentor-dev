@@ -164,9 +164,10 @@ geschickt und müssen unter allen Umständen vermieden werden:
    RICHTIG: "Motivatoren oder Inhalts-Faktoren"
    RICHTIG: "harte Fachkompetenzen versus soziale Kompetenzen"
    RICHTIG: "die Leistungs-Indikatoren"
-   Wenn keine geläufige deutsche Übersetzung existiert (z.B. Eigennamen,
-   Markenbegriffe wie "Coaching", "Feedback", "Burnout"), lasse das Wort
-   stehen — es ist im Deutschen lehnwortlich etabliert.
+   Wenn keine geläufige deutsche Übersetzung existiert (Eigennamen,
+   Markenbegriffe, Lehnwörter wie "Coaching", "Feedback", "Burnout"),
+   schreibe das Wort in deutscher Lautschrift (Abschnitt 9). Das gilt auch
+   für geläufige Lehnwörter: Die Stimme liest sonst Buchstaben statt Laute.
 
 9) AUFZÄHLUNGEN MIT MEHR ALS VIER KOMMA-ITEMS SPLITTEN
    Sechs+ Items im selben Atemzug verlieren die Prosodie-Linie und
@@ -583,11 +584,12 @@ sie sind gesprochen wertvoller als die Notation selbst.
 ================================================================
 9. EIGENNAMEN, FACHBEGRIFFE, FREMDSPRACHE
 ================================================================
-- Behalte alle Fachbegriffe und Eigennamen exakt bei — auch wenn sie technisch klingen.
-- Englische Begriffe und Anglizismen: wo es eine geläufige deutsche Übersetzung gibt, übersetzen (Regel 8 oben). Wo nicht, in deutscher Lautschrift schreiben, damit die deutsche Stimme sie richtig ausspricht: "Workflow" → "Wörkflou", "Framework" → "Frejmwörk", "Mainframe" → "Mejnfrejm". Im Deutschen übliche Lehnwörter ("Computer", "Coaching", "Burnout") bleiben. Die App wendet danach zusätzlich ihre Aussprache-Liste an.
-- Akronyme: bekannte (z. B. "USA", "EU", "BWL") so lassen — werden Buchstabe für Buchstabe gelesen. Ungewöhnliche Akronyme ggf. einmal in Klammern auflösen ("ERP, also Enterprise Resource Planning").
+- Deutsche Fachbegriffe und deutsche Eigennamen exakt beibehalten — auch wenn sie technisch klingen.
+- Englische Wörter und Anglizismen: wo es eine geläufige deutsche Übersetzung gibt, übersetzen (Regel 8 oben). Sonst immer in deutscher Lautschrift schreiben, auch geläufige Lehnwörter, damit die deutsche Stimme Laute statt Buchstaben liest: "Workflow" → "Wörkflow", "Software" → "Softwär", "Team" → "Tiem", "Meeting" → "Mieting", "Feedback" → "Fiedbäck". Längere Wörter mit Bindestrich je Silbe: "Audiobookshelf" → "Aodio-Buck-Schelf".
+- Englische Eigen- und Produktnamen genauso in Lautschrift: "Qwen" → "Kwenn", "Gemma" → "Dschemma", "Docling" → "Dockling", "PageMentor" → "Päidsch-Mentor". Nur deutsche Namen bleiben, wie sie sind.
+- Abkürzungen: Wird eine Abkürzung als Wort gesprochen ("NATO", "UNO", "BAföG"), bleibt sie. Alle anderen mit deutschen Buchstabennamen ausschreiben, Ziffern als Zahlwort: "TTS" → "Teh Teh Ess", "USB" → "U Ess Beh", "API" → "Ah Peh Ih", "F5-TTS" → "Eff fünf Teh Teh Ess". Keine englischen Auflösungen in Klammern. Deutsche Abkürzungen wie "z. B." oder "d. h." sind ausgeschrieben (siehe oben).
+- Steht ein Wort in den geprüften Aussprache-Beispielen unten, schreibe es genau so wie dort. Für alle anderen Wörter derselben Art gilt dasselbe Schema. Die App wendet danach zusätzlich ihre Aussprache-Liste an.
 - Lateinische Phrasen ("a priori", "ad hoc", "de facto") so lassen.
-- Schwierige Eigennamen mit eindeutigen Buchstaben kannst du belassen — TTS liest sie meist akzeptabel.
 
 ================================================================
 10. PAUSEN UND SATZRHYTHMUS (für TTS-Prosodie)

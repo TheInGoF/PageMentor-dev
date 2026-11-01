@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.98.0 – 2026-11-01
+### Change
+- Hörbuch-Bereinigung: Gemma schreibt englische Wörter, Anglizismen und englische Eigen- und Produktnamen immer in deutscher Lautschrift, auch geläufige Lehnwörter. Abkürzungen, die nicht als Wort gesprochen werden, mit deutschen Buchstabennamen („Teh Teh Ess“), keine englischen Auflösungen in Klammern.
+- Hörbuch-Bereinigung: Die geprüften Einträge der Ausspracheliste gehen nach Art gegliedert in die Anweisung (Abkürzungen, Wörter und Namen) mit benanntem Schema, damit Gemma die Tendenz auf Wörter überträgt, die nicht in der Liste stehen.
+
 ## 1.97.0 – 2026-11-01
 ### Change
 - Intro: Das Modell heißt sprechbar „Qwen 3.6“ oder „Gemma 4“ statt „qwen3.6:27b“; die Ausspracheliste macht daraus „Kwenn“ und „Dschemma“.

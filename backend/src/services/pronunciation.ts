@@ -84,8 +84,19 @@ export function checkedExamples(): PronunciationEntry[] {
   return pronunciationList().entries.filter((e) => e.checked);
 }
 
-export function examplesBlock(): string {
-  const ex = checkedExamples();
-  if (!ex.length) return "";
-  return `GEPRÜFTE AUSSPRACHE-BEISPIELE (vom Nutzer angehört, so klingt es mit seiner Stimme richtig; wende dasselbe Muster auf ähnliche Wörter an):\n${ex.map((e) => `  "${e.from}" → "${e.to}"`).join("\n")}`;
+// Abkürzung: zwei Großbuchstaben am Stück oder Ziffern im Wort ("TTS", "F5-TTS", "USB-C")
+export function isAbbreviation(word: string): boolean {
+  return /[A-ZÄÖÜ]{2,}/.test(word) || /\d/.test(word);
+}
+
+// Nach Art gruppiert und mit benanntem Schema: So überträgt Gemma die Tendenz auf Wörter, die nicht in der Liste stehen
+export function examplesBlock(list: PronunciationEntry[] = checkedExamples()): string {
+  if (!list.length) return "";
+  const abbr = list.filter((e) => isAbbreviation(e.from));
+  const words = list.filter((e) => !isAbbreviation(e.from));
+  const lines = (es: PronunciationEntry[]) => es.map((e) => `  "${e.from}" → "${e.to}"`).join("\n");
+  const parts = ["GEPRÜFTE AUSSPRACHE-BEISPIELE (vom Nutzer angehört, so klingt es mit seiner Stimme richtig). Schreibe diese Wörter genau so und wende dasselbe Schema auf alle ähnlichen Wörter an, auch wenn sie hier nicht stehen:"];
+  if (abbr.length) parts.push(`Abkürzungen, Buchstaben deutsch benannt, Ziffern als Zahlwort:\n${lines(abbr)}`);
+  if (words.length) parts.push(`Englische Wörter und Namen in deutscher Lautschrift, längere mit Bindestrich je Silbe:\n${lines(words)}`);
+  return parts.join("\n");
 }
