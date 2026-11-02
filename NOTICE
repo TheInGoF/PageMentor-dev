@@ -19,6 +19,8 @@ Backend npm packages
 - webview-bun           (MIT)       https://github.com/tr1ckydev/webview-bun
   App-Fenster über WebView2; bringt libwebview (MIT) mit
 - meilisearch (client)  (MIT)       https://github.com/meilisearch/meilisearch-js
+- @resvg/resvg-wasm     (MPL-2.0)   https://github.com/thx/resvg-js
+  Zeichnet die Hörbuch-Cover (SVG → PNG) im Prozess, als WebAssembly
 
 Frontend npm packages
 ---------------------
@@ -132,6 +134,14 @@ Bundled Windows tools (Windows package only, in bin/)
 
 These programs keep their own licenses. PageMentor calls them as external
 processes; only sqlite-vec is loaded into the process as a SQLite extension.
+
+================================================================================
+Bundled fonts (backend/assets/fonts)
+================================================================================
+
+- Inter (Regular, Bold) — SIL Open Font License 1.1, Copyright 2016-2023
+  The Inter Project Authors, https://github.com/rsms/inter. Eingebettet in die
+  Exe für die Hörbuch-Cover; Lizenztext in backend/assets/fonts/LICENSE.txt.
 
 ================================================================================
 Bundled voice samples (frontend/public/voices)

@@ -1,7 +1,7 @@
 // Dateien und DB-Zeilen der Hörbuch-Audios
 import { randomUUID, createHash } from "crypto";
 import { existsSync, readdirSync, rmSync } from "fs";
-import { join, join as pathJoin } from "path";
+import { join } from "path";
 import { db } from "../../db";
 import { DATA_DIR, fromDataPath, toDataRel } from "../../paths";
 import type { EngineId } from "../../tts/engines/base";
@@ -24,17 +24,6 @@ export function chunkHash(input: {
 }
 
 
-export function coverPathFor(docId: string): string | undefined {
-  // pdftoppm schreibt "{base}-1.jpg"
-  for (const candidate of [
-    pathJoin(DATA_DIR, "covers", `${docId}-1.jpg`),
-    pathJoin(DATA_DIR, "covers", `${docId}-01.jpg`),
-    pathJoin(DATA_DIR, "covers", `${docId}.jpg`),
-  ]) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return undefined;
-}
 
 export async function documentTitle(docId: string): Promise<string> {
   const row = db().prepare("SELECT title FROM documents WHERE id = ?").get(docId) as

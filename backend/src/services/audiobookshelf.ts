@@ -52,7 +52,7 @@ export function absReady(): boolean {
   return absEnabled() && !!absBaseUrl() && !!absApiKey() && !!effective("absLibraryId", "PM_ABS_LIBRARY_ID");
 }
 
-function absBaseUrl(): string | null {
+export function absBaseUrl(): string | null {
   const url = effective("absUrl", "PM_ABS_URL");
   if (!url) return null;
   return url.replace(/\/+$/, "");
@@ -62,7 +62,7 @@ function absApiKey(): string | null {
   return effective("absApiKey", "PM_ABS_API_KEY") ?? null;
 }
 
-function absHeaders(): Record<string, string> {
+export function absHeaders(): Record<string, string> {
   const key = absApiKey();
   return key ? { Authorization: `Bearer ${key}` } : {};
 }
@@ -206,7 +206,7 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
 
   // Render the cover lazily if missing — so the upload always
   // includes a cover.
-  const coverPath = await ensureCover(docId);
+  const coverPath = await ensureCover(docId, variant ?? "original");
 
   // === Upload ===
   // POST /api/upload accepts multipart/form-data:
@@ -286,7 +286,7 @@ export async function uploadBook(docId: string, variant?: LearnKindName): Promis
     const coverBytes = readFileSync(coverPath);
     form.append(
       "1",
-      new Blob([new Uint8Array(coverBytes)], { type: "image/jpeg" }),
+      new Blob([new Uint8Array(coverBytes)], { type: coverPath.endsWith(".png") ? "image/png" : "image/jpeg" }),
       basename(coverPath)
     );
   }

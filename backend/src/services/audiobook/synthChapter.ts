@@ -7,7 +7,8 @@ import { synthesizeChunk, interChunkPause, maxChunkFor } from "../../tts/synth";
 import { concatMp3WithGaps, normalizeAndTag } from "../../tts/ffmpeg";
 import type { Voice } from "../../tts/engines/base";
 import { AudiobookCanceled, type Chapter } from "./state";
-import { chunkHash, coverPathFor, documentTitle } from "./files";
+import { chunkHash, documentTitle } from "./files";
+import { ensureCover } from "../covers";
 
 // Text mit . ! ? abschließen
 // Ohne Punkt spricht Qwen das letzte Wort abgehackt
@@ -191,7 +192,7 @@ export async function synthesizeChapter(params: {
     // Pausen: 300 ms zwischen Chunks, 1200 ms am Kapitelende; Intro mit 1,5 s davor und 700 ms je Zeile
     await concatMp3WithGaps(chunkFiles, mergedPath, params.intro ? { leadingMs: 1500, interChunkMs: 700, trailingMs: 1500 } : { interChunkMs: 300, trailingMs: 1200 });
 
-    const cover = coverPathFor(chapter.document_id);
+    const cover = await ensureCover(chapter.document_id);
     const { durationMs } = await normalizeAndTag({
       input: mergedPath,
       output: outFile,

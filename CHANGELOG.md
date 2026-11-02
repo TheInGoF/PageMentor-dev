@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.106.0 – 2026-11-02
+### New
+- Hörbuch-Cover: drei eigene Vorlagen mit PageMentor-Logo, Kopfhörer, Modulname, Hefttitel und der Art des Hörbuchs (Hörbuch, Lernhörbuch, Sprachlern-Hörbuch). Farbfeld in der Modulfarbe ist Standard, dazu Hell und Zweigeteilt mit der Originalseite oben; die Originalseite bleibt wählbar. Auswahl mit Vorschau je Heft im Hörbuch-Tab unter den Einstellungen für alle Hörbücher. Lange Titel schrumpfen stufenweise, Wörter werden nur zur Not getrennt; Buch- oder Quadratformat folgt der Bibliothek in Audiobookshelf.
+### Fix
+- Lernhörbuch: M4B und Einheiten bekommen jetzt ein Cover; der alte Pfadsucher fand die gerenderte Seite nicht.
+
 ## 1.105.0 – 2026-11-02
 ### Change
 - Kopfzeile: eine Pille statt drei. Die Warteschlange zeigt oben die Aufträge mit ↑ ↓ und ⋯, darunter den Hörbuch-Stapel mit seinen Büchern (Umsortieren, Fortsetzen, Abbrechen) und die Wissenspflege mit Jetzt starten und Abbrechen. Die Pille nennt das Laufende, sonst die Übernahme, den Stapel oder die Wissenspflege.

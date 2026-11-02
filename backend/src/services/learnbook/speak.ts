@@ -13,7 +13,7 @@ import type { Voice } from "../../tts/engines/base";
 import { applyPronunciation } from "../pronunciation";
 import { fixGermanNumeralBleed } from "../audioPreprocess/numerals";
 import { ensureSentenceEnd, splitLanguageRuns } from "../audiobook/synthChapter";
-import { coverPathFor } from "../audiobook/files";
+import { ensureCover } from "../covers";
 import { bookFileName } from "../audiobook/export";
 import { learnSettings, listUnits } from "./store";
 import { learnAuthor, learnFileSuffix, learnTitle } from "./meta";
@@ -152,7 +152,7 @@ export async function speakUnit(p: {
   const merged = join(dir, "merged.mp3");
   await concatMp3(seq, merged);
   const path = resolve(DATA_DIR, "audio", p.docId, "learn", `unit-${String(p.idx + 1).padStart(3, "0")}.mp3`);
-  const { durationMs } = await normalizeAndTag({ input: merged, output: path, title: p.title, album: p.album, trackNumber: p.idx + 1, coverPath: coverPathFor(p.docId) });
+  const { durationMs } = await normalizeAndTag({ input: merged, output: path, title: p.title, album: p.album, trackNumber: p.idx + 1, coverPath: await ensureCover(p.docId, learnSettings(p.docId).kind) });
   return { path, durationMs };
 }
 
@@ -188,7 +188,7 @@ export async function buildLearnBook(docId: string, intro?: { path: string; dura
     artist: learnAuthor(doc.author),
     shortCode: doc.short_code ?? undefined,
     series: doc.module_name ?? undefined,
-    coverPath: coverPathFor(docId),
+    coverPath: await ensureCover(docId, kind),
   });
   mkdirSync(AUDIOBOOK_EXPORT_DIR, { recursive: true });
   const dest = join(AUDIOBOOK_EXPORT_DIR, bookFileName(docId).replace(/\.m4b$/i, `${learnFileSuffix(kind)}.m4b`));

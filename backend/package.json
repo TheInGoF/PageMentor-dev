@@ -1,6 +1,6 @@
 {
   "name": "pagementor-backend",
-  "version": "1.105.0",
+  "version": "1.106.0",
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/index.ts",
@@ -9,6 +9,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
     "@google/generative-ai": "^0.24.1",
+    "@resvg/resvg-wasm": "2.6.2",
     "hono": "^4.7.0",
     "meilisearch": "^0.57.0",
     "openai": "^6.34.0",

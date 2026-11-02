@@ -14,6 +14,7 @@ import { ChapterWorkbench } from "./audiobook/ChapterWorkbench";
 import { BookProgressPanel } from "./audiobook/BookProgressPanel";
 import { IntroEditor } from "./audiobook/IntroEditor";
 import { SecondVoice } from "./audiobook/SecondVoice";
+import { CoverPicker } from "./audiobook/CoverPicker";
 import { LearnbookBody, LearnbookProgress, LearnIntro, useLearnbook } from "./audiobook/LearnbookPanel";
 import { KindFilterBar } from "./audiobook/KindFilterBar";
 import { Menu, type MenuItem } from "./ui/Menu";
@@ -281,6 +282,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
               </div>
             </div>
             <SecondVoice docId={docId} voices={voices} />
+            <CoverPicker docId={docId} kind={mode} />
             <ComparePanel docId={docId} voices={voices} voiceId={voiceId} chapters={chapterStatus} documentLanguage={documentLanguage} />
           </div>
         )}

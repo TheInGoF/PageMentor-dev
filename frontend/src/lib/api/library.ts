@@ -33,6 +33,7 @@ export const libraryApi = {
         series_sequence?: string | null;
         second_language?: string | null;
         voice2?: string | null;
+        cover_style?: string | null;
       }
     ) =>
       request<Document>(`/api/documents/${id}`, {

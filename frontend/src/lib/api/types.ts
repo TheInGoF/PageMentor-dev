@@ -30,6 +30,8 @@ export interface Document {
   // Lehrbuch mit zweiter Sprache (z. B. "es") und Stimme dafür
   second_language?: string | null;
   voice2?: string | null;
+  // Cover-Vorlage fürs Hörbuch (original, a, c, d); leer = Standard (Farbfeld)
+  cover_style?: string | null;
   chapter_count?: number;
   card_count?: number;
   audio_done?: number;

@@ -237,6 +237,8 @@ export function initDb() {
     d.exec("ALTER TABLE documents ADD COLUMN second_language TEXT");
     d.exec("ALTER TABLE documents ADD COLUMN voice2 TEXT");
   }
+  // Cover-Vorlage je Heft (original, a, c, d); leer = Standard der App
+  if (!stampCols.some((c) => c.name === "cover_style")) d.exec("ALTER TABLE documents ADD COLUMN cover_style TEXT");
 
   const docCols = d.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
   if (!docCols.some((c) => c.name === "author")) {

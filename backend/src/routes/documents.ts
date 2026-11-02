@@ -12,6 +12,7 @@ import { doclingAlive } from "../services/docling";
 import { removeDocument as removeFromIndex } from "../services/search";
 import { tt } from "../lib/i18n";
 import { DATA_DIR, fromDataPath } from "../paths";
+import { ensureCover, isCoverChoice, isCoverKind } from "../services/covers";
 
 const UPLOAD_DIR = join(DATA_DIR, "uploads");
 
@@ -108,6 +109,16 @@ documentRoutes.get("/:id", (c) => {
     tags: row.tag_labels ? String(row.tag_labels).split(",") : [],
     tag_labels: undefined,
   });
+});
+
+// Cover-Vorschau: style = original|a|c|d (leer: Wahl des Hefts), kind = Hörbuch-Art für die Pille
+documentRoutes.get("/:id/cover", async (c) => {
+  const style = c.req.query("style") || undefined;
+  const kind = c.req.query("kind") || "original";
+  if (!isCoverKind(kind) || (style !== undefined && !isCoverChoice(style))) return c.json({ error: tt(c, "err.invalidCover") }, 400);
+  const path = await ensureCover(c.req.param("id"), kind, style === undefined ? undefined : isCoverChoice(style) ? style : undefined);
+  if (!path) return c.json({ error: tt(c, "err.docNotFound") }, 404);
+  return new Response(Bun.file(path), { headers: { "Content-Type": path.endsWith(".png") ? "image/png" : "image/jpeg", "Cache-Control": "no-cache" } });
 });
 
 // Stream the original PDF file with HTTP Range support (for the in-browser viewer).
@@ -295,6 +306,7 @@ documentRoutes.patch("/:id", async (c) => {
     series_sequence?: string | null;
     second_language?: string | null;
     voice2?: string | null;
+    cover_style?: string | null;
   }>();
 
   const doc = db().prepare("SELECT id, page_count FROM documents WHERE id = ?").get(id) as
@@ -317,6 +329,11 @@ documentRoutes.patch("/:id", async (c) => {
     db().prepare("UPDATE documents SET module_id = ?, assign_confidence = 'manuell' WHERE id = ?").run(body.module_id, id);
     // Modulfilter der Vektorsuche nachziehen
     syncVectors(db());
+  }
+  if (body.cover_style !== undefined) {
+    // Cover-Vorlage fürs Hörbuch; leer = Standard der App
+    if (body.cover_style !== null && !isCoverChoice(body.cover_style)) return c.json({ error: tt(c, "err.invalidCover") }, 400);
+    db().prepare("UPDATE documents SET cover_style = ? WHERE id = ?").run(body.cover_style, id);
   }
   if (body.thumb_page !== undefined) {
     const max = doc.page_count > 0 ? doc.page_count : Number.MAX_SAFE_INTEGER;
