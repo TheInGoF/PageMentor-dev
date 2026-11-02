@@ -4,6 +4,8 @@ import { ActivityIndicator } from "./tts/ActivityIndicator";
 import { api } from "../lib/api";
 import { Button } from "./ui/Button";
 import { LogsContent } from "./LogsPage";
+import { PerformancePanel } from "./system/PerformancePanel";
+import { cn } from "../lib/cn";
 import { EnginePanel } from "./engine/EnginePanel";
 import { setSettings } from "../lib/settings";
 import { t, useLocale } from "../lib/i18n";
@@ -158,11 +160,28 @@ export function SettingsPage({ onBack, initialTab }: Props) {
               <StudyImportSection />
             </>
           )}
-          {tab === "diagnose" && <LogsContent />}
+          {tab === "diagnose" && <DiagnoseContent />}
         </div>
       </main>
 
       <VoiceEditModals st={st} />
+    </div>
+  );
+}
+
+// Diagnose: Protokolle oder Leistung (Auslastung wie im Task-Manager)
+function DiagnoseContent() {
+  const [view, setView] = useState<"logs" | "perf">("logs");
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-2">
+        {(["logs", "perf"] as const).map((v) => (
+          <button key={v} type="button" className={cn("chip", view === v && "chip-active")} onClick={() => setView(v)}>
+            {t(`perf.tab.${v}`)}
+          </button>
+        ))}
+      </div>
+      {view === "logs" ? <LogsContent /> : <PerformancePanel />}
     </div>
   );
 }
