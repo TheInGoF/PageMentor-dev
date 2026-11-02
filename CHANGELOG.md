@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.105.0 – 2026-11-02
+### Change
+- Kopfzeile: eine Pille statt drei. Die Warteschlange zeigt oben die Aufträge mit ↑ ↓ und ⋯, darunter den Hörbuch-Stapel mit seinen Büchern (Umsortieren, Fortsetzen, Abbrechen) und die Wissenspflege mit Jetzt starten und Abbrechen. Die Pille nennt das Laufende, sonst die Übernahme, den Stapel oder die Wissenspflege.
+
 ## 1.104.0 – 2026-11-01
 ### New
 - Wortprüfung: Lautschriften, die Gemma bei der Bereinigung in den Kapiteltext geschrieben hat, werden aus dem Vergleich mit dem Original herausgelesen, von Gemma bestätigt und als offene Einträge in die Ausspracheliste gestellt. Die Wortprüfung hört sie danach ab. Je Lauf bis zu 20 Kapitel, durchgesehene Kapitel werden gemerkt.

@@ -6,7 +6,6 @@ import {
   type ModuleExam,
 } from "../lib/api";
 import { Button } from "./ui/Button";
-import { BatchIndicator } from "./batch/BatchIndicator";
 import { useToast } from "./ui/Toast";
 import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
@@ -140,7 +139,6 @@ export function ModuleDetail({
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <ActivityIndicator />
-            <BatchIndicator />
             <Button variant="outline" onClick={() => setUploading(true)} title={t("module.uploadHint")}>
               ↑ {t("library.upload")}
             </Button>

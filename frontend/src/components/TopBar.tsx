@@ -1,8 +1,6 @@
 import { Button } from "./ui/Button";
 import { t } from "../lib/i18n";
 import { SearchOverlay } from "./SearchOverlay";
-import { BatchIndicator } from "./batch/BatchIndicator";
-import { MaintenanceIndicator } from "./maintenance/MaintenanceIndicator";
 import { ActivityIndicator } from "./tts/ActivityIndicator";
 import { Logo } from "./Logo";
 import { isFrameless } from "../lib/desktop";
@@ -49,8 +47,6 @@ export function TopBar({ onUpload, onOpenDocument, onOpenSettings }: Props) {
             </div>
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               <ActivityIndicator />
-              <MaintenanceIndicator />
-              <BatchIndicator />
               {onUpload && (
                 <Button variant="primary" onClick={onUpload}>
                   +{" "}
