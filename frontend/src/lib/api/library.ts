@@ -5,6 +5,7 @@ import type {
   Chapter,
   SearchResult,
   Module,
+  DisciplineTaxonomy,
   ModuleListItem,
   ModuleDetail,
   DashboardData,
@@ -92,7 +93,8 @@ export const libraryApi = {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    patch: (id: string, body: Partial<Module>) =>
+    disciplines: () => request<DisciplineTaxonomy>("/api/modules/disciplines"),
+    patch: (id: string, body: Omit<Partial<Module>, "color_custom"> & { color_custom?: boolean }) =>
       request<{ status: string }>(`/api/modules/${id}`, {
         method: "PATCH",
         body: JSON.stringify(body),

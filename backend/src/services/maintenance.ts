@@ -21,6 +21,7 @@ import { sttAvailable } from "./pronCheck/stt";
 import { verifyOpenEntries } from "./pronCheck/verify";
 import { collectFromCleanup, unscannedChapters } from "./pronCheck/candidates";
 import { pronunciationList } from "./pronunciation";
+import { classifyModule, openModules } from "./disciplines/classify";
 
 const COUNTDOWN_MS = 60_000;
 const SNOOZE_MS = 2 * 3600_000;
@@ -37,6 +38,8 @@ export interface MaintenanceOpen {
   chapterDocs: number;
   // Offene Einträge der Ausspracheliste (Wortprüfung), 0 ohne Whisper
   words: number;
+  // Module ohne Wissenschaft (Qwen ordnet zu), 0 ohne Sprachmodell
+  modules: number;
 }
 
 export interface MaintenanceState {
@@ -44,14 +47,14 @@ export interface MaintenanceState {
   // Countdown-Ende bzw. Ende der Ruhe (ms seit 1970)
   until?: number;
   open: MaintenanceOpen;
-  phase?: "docling" | "embeddings" | "concepts" | "pron";
+  phase?: "docling" | "embeddings" | "disciplines" | "concepts" | "pron";
   doc?: string;
   detail?: string;
   done: number;
   total: number;
 }
 
-const state: MaintenanceState = { status: "idle", open: { extract: 0, chunks: 0, chunkDocs: 0, chapters: 0, chapterDocs: 0, words: 0 }, done: 0, total: 0 };
+const state: MaintenanceState = { status: "idle", open: { extract: 0, chunks: 0, chunkDocs: 0, chapters: 0, chapterDocs: 0, words: 0, modules: 0 }, done: 0, total: 0 };
 let cancel = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -97,15 +100,17 @@ async function scanOpen(): Promise<MaintenanceOpen> {
   // Begriffe nur zählen, wenn das Sprachmodell erreichbar ist: sonst würde der Lauf sofort scheitern.
   // Erst das Modell bestimmen, weil der Stempel der Kapitel daran hängt
   let chapters: ReturnType<typeof openChapters> = [];
+  let modules = 0;
   if (await llmAvailable().catch(() => false)) {
     await resolveConceptModel();
     chapters = openChapters();
+    modules = openModules().length;
   }
   const words = sttAvailable() ? pronunciationList().entries.filter((e) => !e.checked).length + unscannedChapters().length : 0;
-  return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size, words };
+  return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size, words, modules };
 }
 
-const hasWork = (o: MaintenanceOpen) => o.extract > 0 || o.chunks > 0 || o.chapters > 0 || o.words > 0;
+const hasWork = (o: MaintenanceOpen) => o.extract > 0 || o.chunks > 0 || o.chapters > 0 || o.words > 0 || o.modules > 0;
 
 // Regelmäßig prüfen; die Entscheidung selbst ist eine reine Funktion (testbar)
 export function decide(s: Pick<MaintenanceState, "status" | "until">, now: number, work: boolean, isBusy: boolean): { status: MaintenanceState["status"]; until?: number; start: boolean } {
@@ -169,6 +174,7 @@ async function runNow(): Promise<void> {
     // Docling behält sonst noch Minuten lang seinen Grafikspeicher; Gemma soll ihn für die Begriffe haben
     if (state.phase === "docling") await releaseDoclingNow().catch(() => undefined);
     if (!cancel) await embeddings();
+    if (!cancel) await disciplines();
     if (!cancel) await concepts();
     if (!cancel) await words();
     if (!cancel) {
@@ -277,6 +283,20 @@ async function embeddings(): Promise<void> {
 }
 
 // Begriffsnetz über die vorhandene Warteschlange; Fortschritt von dort übernehmen
+// Module ohne Wissenschaft einordnen (Qwen, kurz je Modul); ein Fehler lässt das Modul offen für den nächsten Lauf
+async function disciplines(): Promise<void> {
+  if (!(await llmAvailable().catch(() => false))) return;
+  const mods = openModules();
+  if (!mods.length) return;
+  Object.assign(state, { phase: "disciplines", done: 0, total: mods.length });
+  for (const m of mods) {
+    if (cancel) return;
+    Object.assign(state, { doc: m.name, detail: undefined });
+    await classifyModule(m).catch((err) => emitLog("warn", "maintenance", `Wissenschaft für „${m.name}“ nicht bestimmt`, { err }));
+    state.done++;
+  }
+}
+
 async function concepts(): Promise<void> {
   if (!(await llmAvailable().catch(() => false))) return;
   await resolveConceptModel();

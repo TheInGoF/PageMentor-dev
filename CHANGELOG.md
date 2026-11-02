@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.112.0 – 2026-11-02
+### New
+- Module haben eine Wissenschaft: Qwen ordnet sie in der Wissenspflege zu, auch neue Module; im Bearbeiten-Dialog lässt sie sich von Hand wählen oder an Qwen zurückgeben.
+- Jede Wissenschaft hat eine Farbe, verwandte Fächer liegen im selben Farbraum; die Modulkarte zeigt Wissenschaft und Farbe, eine selbst gewählte Farbe bleibt.
+
 ## 1.111.0 – 2026-11-02
 ### Change
 - Leistungsanzeige mit logarithmischer Zeitachse über 15 Minuten: rechts die letzten Sekunden breit, nach links gedrängt, mit Marken bei 10 s, 1 min und 5 min.

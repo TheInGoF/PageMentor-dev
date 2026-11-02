@@ -70,6 +70,15 @@ export interface Module {
   exam_form?: string | null;
   area?: string | null;
   in_path?: number;
+  // Wissenschaft (Qwen "ai" oder von Hand "user"); Farbe folgt ihr, außer color_custom = 1
+  discipline?: string | null;
+  discipline_by?: "ai" | "user" | null;
+  color_custom?: number;
+}
+
+export interface DisciplineTaxonomy {
+  families: Array<{ id: string; name: string }>;
+  disciplines: Array<{ id: string; name: string; family: string; color: string }>;
 }
 
 export interface ModuleListItem extends Module {

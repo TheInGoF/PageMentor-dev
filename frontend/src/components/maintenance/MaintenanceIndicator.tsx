@@ -8,8 +8,8 @@ import { Button } from "../ui/Button";
 export interface MaintenanceState {
   status: "idle" | "countdown" | "running" | "snoozed";
   until?: number;
-  open: { extract?: number; chunks: number; chunkDocs: number; chapters: number; chapterDocs: number; words?: number };
-  phase?: "docling" | "embeddings" | "concepts" | "pron";
+  open: { extract?: number; chunks: number; chunkDocs: number; chapters: number; chapterDocs: number; words?: number; modules?: number };
+  phase?: "docling" | "embeddings" | "disciplines" | "concepts" | "pron";
   doc?: string;
   detail?: string;
   done: number;
@@ -73,6 +73,7 @@ export function MaintenanceSection({ st, now, act }: { st: MaintenanceState; now
             {st.open.chunks > 0 && <li>{t("maintenance.openChunks", { docs: st.open.chunkDocs, n: st.open.chunks })}</li>}
             {st.open.chapters > 0 && <li>{t("maintenance.openChapters", { docs: st.open.chapterDocs, n: st.open.chapters })}</li>}
             {!!st.open.words && <li>{t("maintenance.openWords", { n: st.open.words })}</li>}
+            {!!st.open.modules && <li>{t("maintenance.openModules", { n: st.open.modules })}</li>}
           </ul>
         </>
       ) : (

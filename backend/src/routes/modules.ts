@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { randomUUID } from "crypto";
 import { db } from "../db";
+import { disciplineColor, isDiscipline, taxonomy } from "../services/disciplines/taxonomy";
+import { setDiscipline } from "../services/disciplines/classify";
 import { tt } from "../lib/i18n";
 
 export const moduleRoutes = new Hono();
@@ -66,6 +68,9 @@ moduleRoutes.get("/", (c) => {
 
 /** Single module with all dependent entities (documents grouped by type,
  *  card stats, exam history) — used by the module detail view. */
+// Wissenschaften mit Familien und Farben (für Auswahl und Anzeige)
+moduleRoutes.get("/disciplines", (c) => c.json(taxonomy()));
+
 moduleRoutes.get("/:id", (c) => {
   const id = c.req.param("id");
   const d = db();
@@ -185,6 +190,8 @@ moduleRoutes.post("/", async (c) => {
         body.parent_code ?? null,
         body.in_path ?? 1
       );
+    // Beim Anlegen eigens gewählte Farbe behalten; die Standardfarbe weicht später der Farbe der Wissenschaft
+    if (body.color && !["#3b82f6", "#ef4444"].includes(body.color.toLowerCase())) db().prepare("UPDATE modules SET color_custom = 1 WHERE id = ?").run(id);
   } catch (err) {
     if (/UNIQUE/.test(String(err))) return c.json({ error: "Kürzel ist schon vergeben" }, 409);
     throw err;
@@ -194,9 +201,24 @@ moduleRoutes.post("/", async (c) => {
 
 moduleRoutes.patch("/:id", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json<Partial<Module>>();
-  const existing = db().prepare("SELECT id FROM modules WHERE id = ?").get(id);
+  const body = await c.req.json<Partial<Module> & { discipline?: string | null; color_custom?: boolean }>();
+  const existing = db().prepare("SELECT id, color, discipline FROM modules WHERE id = ?").get(id) as { id: string; color: string; discipline: string | null } | undefined;
   if (!existing) return c.json({ error: tt(c, "err.notFound") }, 404);
+
+  // Wissenschaft von Hand; null = wieder Qwen überlassen (die Wissenspflege ordnet neu ein)
+  if ("discipline" in body) {
+    if (body.discipline !== null && !isDiscipline(body.discipline)) return c.json({ error: "Unbekannte Wissenschaft" }, 400);
+    setDiscipline(id, body.discipline ?? null, body.discipline ? "user" : null);
+  }
+  // Eigene Farbe gewählt: bleibt, auch wenn sich die Wissenschaft ändert. color_custom: false = wieder Farbe der Wissenschaft
+  if (body.color !== undefined && body.color !== existing.color) db().prepare("UPDATE modules SET color_custom = 1 WHERE id = ?").run(id);
+  // Unveränderte Farbe nicht zurückschreiben: sonst überschriebe sie die Farbe der eben gewählten Wissenschaft
+  else delete body.color;
+  if (body.color_custom === false) {
+    const disc = "discipline" in body ? body.discipline ?? null : existing.discipline;
+    db().prepare("UPDATE modules SET color_custom = 0, color = COALESCE(?, color) WHERE id = ?").run(disciplineColor(disc), id);
+    delete body.color;
+  }
 
   const sets: string[] = [];
   const vals: any[] = [];

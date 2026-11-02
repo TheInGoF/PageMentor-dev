@@ -6,6 +6,7 @@ import { t, useLocale } from "../lib/i18n";
 import { cn } from "../lib/cn";
 import { TopBar } from "./TopBar";
 import { ModuleEditModal } from "./module/ModuleEditModal";
+import { useDisciplines } from "../lib/disciplines";
 import { distinctAreas, distinctSemesters, groupBySemester, semesterOf } from "../lib/modules";
 
 type SortKey = "semester" | "name" | "code" | "due";
@@ -200,6 +201,9 @@ function ModuleCard({
   onOpen: () => void;
   onEdit: () => void;
 }) {
+  const tax = useDisciplines();
+  const d = m.discipline ? tax?.disciplines.find((x) => x.id === m.discipline) : undefined;
+  const discipline = d ? { ...d, family: tax!.families.find((f) => f.id === d.family)?.name ?? "" } : null;
   return (
     <div
       className="card card-hover p-4 flex flex-col gap-2 cursor-pointer group"
@@ -219,6 +223,14 @@ function ModuleCard({
             <p className="text-xs text-neutral-500">
               {[m.code, m.cp != null ? `${m.cp} CP` : null, semesterOf(m) != null ? t("modules.semester", { n: semesterOf(m)! }) : null].filter(Boolean).join(" · ")}
             </p>
+            {discipline && (
+              <p className="text-xs flex items-center gap-1.5 mt-0.5 min-w-0" title={discipline.family}>
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: discipline.color }} />
+                <span className="truncate" style={{ color: discipline.color }}>
+                  {discipline.name}
+                </span>
+              </p>
+            )}
           </div>
         </div>
         <button

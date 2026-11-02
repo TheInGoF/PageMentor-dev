@@ -166,6 +166,14 @@ export function initDb() {
     // active ones.
     d.exec("ALTER TABLE modules ADD COLUMN completed INTEGER NOT NULL DEFAULT 0");
   }
+  // Wissenschaft des Moduls (services/disciplines): von Qwen ("ai") oder von Hand ("user"); Farbe folgt ihr,
+  // außer der Nutzer hat selbst eine Farbe gewählt (color_custom). Bisherige Farben außer den Standardfarben gelten als eigene
+  if (!moduleCols.some((c) => c.name === "discipline")) {
+    d.exec("ALTER TABLE modules ADD COLUMN discipline TEXT");
+    d.exec("ALTER TABLE modules ADD COLUMN discipline_by TEXT");
+    d.exec("ALTER TABLE modules ADD COLUMN color_custom INTEGER NOT NULL DEFAULT 0");
+    d.exec("UPDATE modules SET color_custom = 1 WHERE lower(color) NOT IN ('#3b82f6', '#ef4444')");
+  }
 
   const summaryCols = d.prepare("PRAGMA table_info(summaries)").all() as Array<{ name: string }>;
   if (!summaryCols.some((c) => c.name === "generation_ms")) {

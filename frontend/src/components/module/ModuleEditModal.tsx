@@ -7,6 +7,7 @@ import { Input } from "../ui/Input";
 import { useToast } from "../ui/Toast";
 import { t } from "../../lib/i18n";
 import { cn } from "../../lib/cn";
+import { useDisciplines } from "../../lib/disciplines";
 import { semesterOf } from "../../lib/modules";
 
 // Prüfungsformen wie im Plan (Kürzel der Leistungen)
@@ -60,6 +61,10 @@ export function ModuleEditModal({
   const [code, setCode] = useState("");
   const [cp, setCp] = useState("");
   const [prefixes, setPrefixes] = useState("");
+  // "" = Qwen ordnet zu (Wissenspflege), sonst von Hand gewählt
+  const [discipline, setDiscipline] = useState("");
+  const [colorCustom, setColorCustom] = useState(false);
+  const tax = useDisciplines();
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -75,6 +80,8 @@ export function ModuleEditModal({
     setCode(editing?.code ?? "");
     setCp(editing?.cp != null ? String(editing.cp) : "");
     setPrefixes("");
+    setDiscipline(editing?.discipline_by === "user" ? editing.discipline ?? "" : "");
+    setColorCustom(!!editing?.color_custom);
     if (editing) {
       void api.study.prefixes(editing.id).then((r) => setPrefixes(formatPrefixes(r.prefixes))).catch(() => undefined);
     }
@@ -99,7 +106,13 @@ export function ModuleEditModal({
         cp: cp.trim() ? Number(cp.replace(",", ".")) : null,
       };
       const id = editing ? editing.id : (await api.modules.create(body)).id;
-      if (editing) await api.modules.patch(id, body);
+      // Wissenschaft nur schicken, wenn geändert: leer gibt sie an Qwen zurück
+      const prevDiscipline = editing?.discipline_by === "user" ? editing.discipline ?? "" : "";
+      const extra = {
+        ...(discipline !== prevDiscipline || (!editing && discipline) ? { discipline: discipline || null } : {}),
+        ...(editing?.color_custom && !colorCustom ? { color_custom: false } : {}),
+      };
+      if (editing || Object.keys(extra).length) await api.modules.patch(id, editing ? { ...body, ...extra } : extra);
       await api.study.setPrefixes(id, parsePrefixes(prefixes));
       onSaved();
     } catch (err) {
@@ -195,6 +208,30 @@ export function ModuleEditModal({
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-neutral-400" htmlFor="module-discipline">
+            {t("module.modal.discipline")}
+          </label>
+          <select id="module-discipline" className="input" value={discipline} onChange={(e) => setDiscipline(e.target.value)}>
+            <option value="">
+              {editing?.discipline && editing.discipline_by !== "user"
+                ? t("module.modal.disciplineAuto", { name: tax?.disciplines.find((d) => d.id === editing.discipline)?.name ?? editing.discipline })
+                : t("module.modal.disciplineAutoOpen")}
+            </option>
+            {tax?.families.map((f) => (
+              <optgroup key={f.id} label={f.name}>
+                {tax.disciplines
+                  .filter((d) => d.family === f.id)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+          <p className="text-xs text-neutral-500">{t("module.modal.disciplineHint")}</p>
+        </div>
         <div className="grid grid-cols-[1fr_auto] gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-neutral-400">
@@ -205,7 +242,10 @@ export function ModuleEditModal({
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setColor(c)}
+                  onClick={() => {
+                    setColor(c);
+                    setColorCustom(true);
+                  }}
                   className={cn(
                     "w-8 h-8 rounded-md border-2 transition-transform",
                     color === c
@@ -217,6 +257,11 @@ export function ModuleEditModal({
                 />
               ))}
             </div>
+            {colorCustom && (
+              <button type="button" className="text-xs text-accent hover:underline self-start min-h-[32px]" onClick={() => setColorCustom(false)}>
+                {t("module.modal.colorFromDiscipline")}
+              </button>
+            )}
           </div>
           <Input
             label={t("module.modal.icon")}
