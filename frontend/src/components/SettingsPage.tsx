@@ -13,6 +13,7 @@ import { usePresetTester } from "./settings/usePresetTester";
 import type { SettingsTab } from "./settings/types";
 import { AppearanceSection } from "./settings/AppearanceSection";
 import { GeneralSection } from "./settings/GeneralSection";
+import { NetworkSection } from "./settings/NetworkSection";
 import { StudyImportSection } from "./settings/StudyImportSection";
 import { UpdateSection } from "./settings/UpdateSection";
 import { AudiobookSection } from "./settings/AudiobookSection";
@@ -153,6 +154,7 @@ export function SettingsPage({ onBack, initialTab }: Props) {
               <UpdateSection />
               <AppearanceSection />
               <GeneralSection st={st} />
+              <NetworkSection />
               <StudyImportSection />
             </>
           )}

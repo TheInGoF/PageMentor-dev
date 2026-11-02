@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.108.0 – 2026-11-02
+### New
+- Zugriff im Heimnetz: unter Einstellungen → Allgemein lässt sich die App für Laptop oder Handy im selben Netz öffnen. Passwort setzen, Schalter an, angezeigte Adresse im Browser öffnen und anmelden; das Fenster am PC braucht keine Anmeldung. Der Port wird sofort umgeschaltet, ein Knopf legt die Regel in der Windows-Firewall an (Windows fragt nach Administratorrechten). Andere Geräte sehen nur die Oberfläche, alles läuft weiter auf dem PC; die Heimnetz-Einstellungen selbst sind nur am PC änderbar.
+
 ## 1.107.1 – 2026-11-02
 ### Fix
 - Stapel-Import: Ordner werden in fester Reihenfolge gelesen (erst Dateien nach Name, dann Unterordner). Vorher hing es vom Dateisystem ab, welche von zwei gleichen Dateien als Dublette galt; die Prüfungen auf GitHub scheiterten daran.

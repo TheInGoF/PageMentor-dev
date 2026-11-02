@@ -248,6 +248,9 @@ is restarted after a few idle minutes to give its memory back.
   from any page you choose.
 - **Modules & tags** — organise by module (series) + free-form tags, instead of a
   folder tree.
+- **Home network access** — optional: open the port for your laptop or phone and
+  sign in with a password (*Settings → General → Home network access*); the window
+  on the PC itself needs no login.
 - **PDF viewer** — continuous scroll, zoom, page jump, text-selection → flashcard.
 - **Text extraction** — [Docling](https://github.com/docling-project/docling-serve)
   at its highest level: German OCR for scanned pages, formulas as LaTeX (also

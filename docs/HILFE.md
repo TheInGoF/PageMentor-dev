@@ -17,6 +17,16 @@ beides z. B. auf D: legen.
 
 Einstellungen (Zahnrad) und Diagnose bleiben oben rechts.
 
+## Vom Laptop oder Handy aus nutzen
+
+PageMentor läuft auf dem PC; andere Geräte im selben Heimnetz können die Oberfläche im
+Browser öffnen. Einschalten unter *Einstellungen → Allgemein → Zugriff im Heimnetz*:
+Passwort setzen, Schalter an, dann die angezeigte Adresse (z. B. `http://rechnername:3100`)
+auf dem Laptop öffnen und mit dem Passwort anmelden. Beim ersten Mal fragt Windows nach
+der Firewall-Freigabe; der Knopf *Freigeben* legt die Regel für private Netze an. Das Fenster
+am PC braucht keine Anmeldung. Hörbücher, Tutor und alles andere laufen weiter auf dem PC,
+der Laptop zeigt nur die Oberfläche.
+
 ## Umstieg vom Studium Maker
 
 1. **Einstellungen → Allgemein → Übernahme aus dem Studium Maker.**

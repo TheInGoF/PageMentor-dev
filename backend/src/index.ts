@@ -20,7 +20,9 @@ import { publicConfig } from "./services/llmConfig";
 import { Hono } from "hono";
 import { join } from "path";
 import { serveStatic } from "hono/bun";
-import { localOnly, authRoutes } from "./auth";
+import { accessGuard, authRoutes } from "./auth";
+import { lanEnabled } from "./lan";
+import { LAN_HOST, LOCAL_HOST, startServer } from "./server";
 import { documentRoutes } from "./routes/documents";
 import { chapterRoutes } from "./routes/chapters";
 import { audioRoutes } from "./routes/audio";
@@ -66,8 +68,8 @@ startupHeader(APP_VERSION, {
 registerDiagnostic("einstellungen", () => publicConfig());
 registerDiagnostic("werkzeuge", () => toolStatus());
 
-// Nur lokal erreichbar; PM_HOST=0.0.0.0 z. B. für Docker
-const HOST = process.env.PM_HOST || "127.0.0.1";
+// Nur lokal erreichbar, es sei denn, der Zugriff aus dem Heimnetz ist eingeschaltet; PM_HOST=0.0.0.0 z. B. für Docker
+const HOST = process.env.PM_HOST || (lanEnabled() ? LAN_HOST : LOCAL_HOST);
 const PORT = Number(process.env.PM_PORT_INTERNAL || process.env.PORT || 3100);
 const APP_URL = `http://127.0.0.1:${PORT}`;
 
@@ -79,7 +81,7 @@ if (await alreadyRunning(APP_URL)) {
 
 const app = new Hono();
 
-app.use("/*", localOnly);
+app.use("/*", accessGuard);
 app.use("/*", requestLogger);
 app.onError(onRouteError);
 
@@ -157,22 +159,7 @@ setTimeout(() => {
 }, 2000);
 startupNote(`Dienste laut Einstellungen: ${JSON.stringify(serviceUrls())}`);
 
-export default {
-  port: PORT,
-  hostname: HOST,
-  fetch: app.fetch,
-  // Bun's default idleTimeout of 10 s kills audio range fetches and
-  // LLM streaming. 255 s was long enough until M4B rebuilds came in —
-  // a large book re-encode (14+ chapters, 130 min audio → AAC) can
-  // run 5-10 min CPU-bound without sending bytes to the client,
-  // and Bun would close the request mid-flight.
-  // 0 = no timeout (per Bun docs). Makes the backend robust against
-  // slow long-polling / encode paths. LLM streaming and ranges
-  // are active streams and don't need the timer anyway.
-  idleTimeout: 0,
-  // Videos für den Stimm-Extraktor können groß sein (Standard wären 128 MB)
-  maxRequestBodySize: 8 * 1024 ** 3,
-};
+startServer(app.fetch, HOST, PORT);
 
 startupNote(`API läuft auf http://${HOST}:${PORT}, Version ${APP_VERSION}`);
 startupDone();

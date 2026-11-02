@@ -4,6 +4,7 @@ import "./index.css";
 // KaTeX-Styles global für Formeln
 import "katex/dist/katex.min.css";
 import { App } from "./App";
+import { LoginGate } from "./components/Login";
 import { installGlobalErrorHandlers } from "./lib/reportError";
 import { initTheme } from "./lib/theme";
 import { initDesktop } from "./lib/desktop";
@@ -14,6 +15,8 @@ initDesktop();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <LoginGate>
+      <App />
+    </LoginGate>
   </StrictMode>
 );

@@ -41,6 +41,8 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       const data = await res.json();
       msg = data.error || msg;
+      // Aus dem Heimnetz ohne Sitzung: Anmeldeseite zeigen
+      if (res.status === 401 && data.login) window.dispatchEvent(new Event("pm:login"));
     } catch {
       // ignore
     }

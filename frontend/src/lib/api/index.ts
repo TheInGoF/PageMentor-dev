@@ -2,6 +2,7 @@ export * from "./types";
 export { ApiError } from "./request";
 export { subscribeProgress } from "./progress";
 export type { StoredLogLine, LogErrorInfo, LogLevel } from "./logs";
+export type { LanInfo } from "./lan";
 export type { EngineStatus, EngineCheck, CheckStatus, TtsEnginesInfo } from "./engine";
 export type { CompareRun, CompareItem } from "./audio";
 export type { Assessment, AssessmentKind, AssessmentStatus, StudyProgress, ExamSlot, ShiftPlan, StudyTimeInfo, ExamFocus } from "./plan";
@@ -25,6 +26,7 @@ import { cloudApi } from "./cloud";
 import { updateApi } from "./update";
 import { batchApi } from "./batch";
 import { promptsApi, pronunciationApi } from "./prompts";
+import { lanApi } from "./lan";
 
 export const api = {
   ...libraryApi,
@@ -42,4 +44,5 @@ export const api = {
   ...batchApi,
   ...promptsApi,
   ...pronunciationApi,
+  ...lanApi,
 };
