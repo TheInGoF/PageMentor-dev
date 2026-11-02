@@ -1,6 +1,6 @@
 // Cover je Heft und Hörbuch-Art: die Originalseite (pdftoppm) oder eine der eigenen Vorlagen (resvg).
 // Dateien unter covers/: <heft>-p<seite>.jpg fürs Original, <heft>-<vorlage>-<hash>.png für die Vorlagen.
-// Der Hash deckt Titel, Modul, Farbe, Art und Format ab; alte Dateien bleiben bis zum Löschen des Hefts
+// Der Hash deckt Titel, Modulfarbe, Art und Format ab; alte Dateien bleiben bis zum Löschen des Hefts
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -17,7 +17,7 @@ export type CoverChoice = CoverStyle | "original";
 export const COVER_CHOICES: readonly CoverChoice[] = ["original", "a", "c", "d"];
 export const DEFAULT_COVER: CoverChoice = "c";
 // Bei Änderungen an den Vorlagen hochzählen, damit fertige Dateien neu gezeichnet werden
-const TEMPLATE_VERSION = 1;
+const TEMPLATE_VERSION = 2;
 
 export function isCoverChoice(v: unknown): v is CoverChoice {
   return typeof v === "string" && (COVER_CHOICES as readonly string[]).includes(v);
@@ -34,14 +34,13 @@ type DocRow = {
   doc_title: string | null;
   filename: string;
   cover_style: string | null;
-  module_name: string | null;
   module_color: string | null;
 };
 
 function docRow(docId: string): DocRow | undefined {
   return db()
     .prepare(
-      `SELECT d.stored_path, d.thumb_page, d.title, d.doc_title, d.filename, d.cover_style, m.name AS module_name, m.color AS module_color
+      `SELECT d.stored_path, d.thumb_page, d.title, d.doc_title, d.filename, d.cover_style, m.color AS module_color
        FROM documents d LEFT JOIN modules m ON m.id = d.module_id WHERE d.id = ?`
     )
     .get(docId) as DocRow | undefined;
@@ -67,12 +66,11 @@ export async function ensureCover(docId: string, kind: CoverKind = "original", s
     aspect,
     kind,
     title: doc.title?.trim() || doc.doc_title?.trim() || doc.filename,
-    module: doc.module_name,
     color: doc.module_color,
     image: null,
   };
   const stamp = createHash("sha1")
-    .update(JSON.stringify([TEMPLATE_VERSION, spec.style, spec.aspect, spec.kind, spec.title, spec.module, spec.color, choice === "d" ? page : 0]))
+    .update(JSON.stringify([TEMPLATE_VERSION, spec.style, spec.aspect, spec.kind, spec.title, spec.color, choice === "d" ? page : 0]))
     .digest("hex")
     .slice(0, 10);
   const target = join(DATA_DIR, "covers", `${docId}-${choice}-${stamp}.png`);

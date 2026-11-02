@@ -92,37 +92,23 @@ export function wrap(text: string, f: Face, maxWidth: number, hyphenate: boolean
   return lines;
 }
 
-export type FitOpts = { weight: Weight; spacing?: number; maxWidth: number; maxHeight: number; maxSize: number; minSize: number; lineHeight: number; maxLines?: number };
-export type Fit = { size: number; lines: string[]; lineHeight: number; height: number; overflow: boolean };
+export type Block = { size: number; lines: string[]; lineHeight: number; height: number; cut: boolean };
 
-// Größte Schriftgröße, bei der der Text in Breite und Höhe passt. Erst ohne Worttrennung schrumpfen,
-// dann mit; passt er selbst bei Mindestgröße nicht, werden die letzten Zeilen mit „…“ gekappt
-export function fit(text: string, o: FitOpts): Fit {
-  const result = (size: number, lines: string[], overflow = false): Fit => ({ size, lines, lineHeight: o.lineHeight, height: lines.length * size * o.lineHeight, overflow });
-  const fits = (size: number, lines: string[]) =>
-    lines.length * size * o.lineHeight <= o.maxHeight + 0.01 && (!o.maxLines || lines.length <= o.maxLines) && lines.every((l) => measure(l, { size, weight: o.weight, spacing: o.spacing }) <= o.maxWidth);
-  for (const hyphenate of [false, true]) {
-    // Die größte passende Schrift; etwas kleiner (bis 15 %) darf es werden, wenn das eine Zeile spart
-    let best: Fit | null = null;
-    for (let size = o.maxSize; size >= o.minSize; size--) {
-      if (best && size < best.size * 0.85) break;
-      const lines = wrap(text, { size, weight: o.weight, spacing: o.spacing }, o.maxWidth, hyphenate);
-      if (fits(size, lines) && (!best || lines.length < best.lines.length)) best = result(size, lines);
-    }
-    if (best) return best;
+// Feste Schriftgröße: umbrechen, zu breite Wörter trennen, ab maxLines mit „…“ kappen
+export function clamp(text: string, f: Face, maxWidth: number, maxLines: number, lineHeight: number): Block {
+  const all = wrap(text.trim(), f, maxWidth, true);
+  const cut = all.length > maxLines;
+  const lines = all.slice(0, maxLines);
+  if (cut) {
+    let last = lines[lines.length - 1].replace(/-$/, "");
+    while (last.length > 1 && measure(`${last}…`, f) > maxWidth) last = last.slice(0, -1).trimEnd();
+    lines[lines.length - 1] = `${last}…`;
   }
-  const size = o.minSize;
-  const f: Face = { size, weight: o.weight, spacing: o.spacing };
-  const room = Math.max(1, Math.min(o.maxLines ?? Infinity, Math.floor(o.maxHeight / (size * o.lineHeight))));
-  const lines = wrap(text, f, o.maxWidth, true).slice(0, room);
-  let last = lines[lines.length - 1];
-  while (last.length > 1 && measure(`${last}…`, f) > o.maxWidth) last = last.slice(0, -1).trimEnd();
-  lines[lines.length - 1] = `${last}…`;
-  return result(size, lines, true);
+  return { size: f.size, lines, lineHeight, height: lines.length * f.size * lineHeight, cut };
 }
 
-// Zeilen eines Fit zeichnen; top ist die Oberkante des Textblocks
-export function lines(f: Fit, x: number, top: number, weight: Weight, attrs = "", spacing?: number): string {
+// Zeilen eines Blocks zeichnen; top ist die Oberkante des Textblocks
+export function lines(f: Block, x: number, top: number, weight: Weight, attrs = "", spacing?: number): string {
   const step = f.size * f.lineHeight;
   // Grundlinie: Versalhöhe von Inter ≈ 0,73 em, mittig im Zeilenkasten
   const base = top + step / 2 + f.size * 0.36;

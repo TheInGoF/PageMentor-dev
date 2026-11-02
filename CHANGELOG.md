@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.107.0 – 2026-11-02
+### Change
+- Hörbuch-Cover: feste Maße für ruhige Regale in Audiobookshelf. Der Kopfhörer ist auf jedem Cover gleich groß und sitzt an derselben Stelle, der Titel steht in fester Schriftgröße mit höchstens drei Zeilen, längere Titel enden mit „…“. Der Modulname entfällt.
+
 ## 1.106.0 – 2026-11-02
 ### New
 - Hörbuch-Cover: drei eigene Vorlagen mit PageMentor-Logo, Kopfhörer, Modulname, Hefttitel und der Art des Hörbuchs (Hörbuch, Lernhörbuch, Sprachlern-Hörbuch). Farbfeld in der Modulfarbe ist Standard, dazu Hell und Zweigeteilt mit der Originalseite oben; die Originalseite bleibt wählbar. Auswahl mit Vorschau je Heft im Hörbuch-Tab unter den Einstellungen für alle Hörbücher. Lange Titel schrumpfen stufenweise, Wörter werden nur zur Not getrennt; Buch- oder Quadratformat folgt der Bibliothek in Audiobookshelf.

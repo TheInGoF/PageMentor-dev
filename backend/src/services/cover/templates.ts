@@ -1,6 +1,8 @@
 // Die drei Cover-Vorlagen als SVG (Einheiten: 500 breit, 800 hoch beim Buchformat, 500 beim Quadrat)
-// A: hell und klar · C: Farbfeld in der Modulfarbe · D: zweigeteilt mit der Originalseite oben
-import { fit, lines, measure, textEl, type Fit } from "./text";
+// A: hell und klar · C: Farbfeld in der Modulfarbe · D: zweigeteilt mit der Originalseite oben.
+// Feste Maße, damit die Regale in Audiobookshelf ruhig wirken: Kopfhörer immer gleich groß, Titel in fester
+// Schriftgröße mit höchstens drei Zeilen (darüber „…“), kein Modulname
+import { clamp, lines, measure, textEl, type Block } from "./text";
 
 export type CoverKind = "original" | "subject" | "language";
 export type CoverStyle = "a" | "c" | "d";
@@ -10,7 +12,6 @@ export type CoverSpec = {
   aspect: CoverAspect;
   kind: CoverKind;
   title: string;
-  module: string | null;
   // Modulfarbe (Hex) fürs Farbfeld
   color: string | null;
   // Originalseite für die zweigeteilte Vorlage
@@ -75,13 +76,16 @@ function badgeColors(kind: CoverKind): { bg: string; fg: string } {
   return kind === "original" ? { bg: "#e5e7eb", fg: "#374151" } : { bg: accent(kind), fg: "#fff" };
 }
 
-function moduleFit(module: string | null, maxWidth: number, maxSize: number, maxLines: number): Fit | null {
-  if (!module?.trim()) return null;
-  return fit(module.trim().toUpperCase(), { weight: 400, spacing: 0.08, maxWidth, maxHeight: maxLines * maxSize * 1.3, maxSize, minSize: 12, lineHeight: 1.3, maxLines });
+const TITLE_LINES = 3;
+const TITLE_LH = 1.15;
+
+function titleBlock(title: string, size: number, maxWidth: number): Block {
+  return clamp(title, { size, weight: 700 }, maxWidth, TITLE_LINES, TITLE_LH);
 }
 
-function titleFit(title: string, maxWidth: number, maxHeight: number, maxSize: number, maxLines: number): Fit {
-  return fit(title.trim(), { weight: 700, maxWidth, maxHeight, maxSize, minSize: 18, lineHeight: 1.1, maxLines });
+// Platz für drei Zeilen, auch wenn der Titel kürzer ist
+function titleReserve(size: number): number {
+  return TITLE_LINES * size * TITLE_LH;
 }
 
 function svgOpen(h: number): string {
@@ -103,49 +107,44 @@ function luminance(c: [number, number, number]): number {
   return 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
 }
 
-// A: heller Grund, Modul und Titel oben, Kopfhörer mittig, Logo und Pille unten
+// A: heller Grund, Titel oben, Kopfhörer mittig, Logo und Pille unten
 function styleA(s: CoverSpec): string {
   const H = heightFor(s.aspect);
+  const square = s.aspect === "square";
   const pad = 54;
   const inner = W - 2 * pad;
-  const mod = moduleFit(s.module, inner, 22, 2);
+  const title = titleBlock(s.title, 36, inner);
   const bottomH = 36;
-  const modH = mod ? mod.height + 18 : 0;
-  const title = titleFit(s.title, inner, H - 2 * pad - modH - bottomH - 110, s.aspect === "square" ? 48 : 58, s.aspect === "square" ? 4 : 5);
-  const topEnd = pad + modH + title.height;
-  const avail = H - pad - bottomH - 24 - topEnd - 24;
-  const icon = Math.min(260, avail);
+  const bottomTop = H - pad - bottomH;
+  const icon = square ? 150 : 240;
+  const iconTop = (pad + titleReserve(36) + 16 + bottomTop - 16) / 2 - icon / 2;
   const logo = brand(pad, H - pad - 30, DARK);
   const pill = badge(KIND_LABEL[s.kind], inner - logo.w - 16, badgeColors(s.kind));
-  const bottomTop = H - pad - bottomH;
   return (
     svgOpen(H) +
     `<rect width="${W}" height="${H}" fill="#fbf8f1"/>` +
-    (mod ? lines(mod, pad, pad, 400, `fill="#555"`, 0.08) : "") +
-    lines(title, pad, pad + modH, 700, `fill="${DARK}"`) +
-    (icon >= 60 ? headphones((W - icon) / 2, topEnd + 24 + (avail - icon) / 2, icon, accent(s.kind)) : "") +
+    lines(title, pad, pad, 700, `fill="${DARK}"`) +
+    headphones((W - icon) / 2, iconTop, icon, accent(s.kind)) +
     logo.svg +
     pill.draw(W - pad - pill.w, bottomTop + bottomH - pill.h) +
     "</svg>"
   );
 }
 
-// C: Farbfeld in der Modulfarbe, Logo und Pille oben, Kopfhörer mittig, Modul und Titel unten
+// C: Farbfeld in der Modulfarbe, Logo und Pille oben, Kopfhörer mittig, Titel unten (an der Unterkante)
 function styleC(s: CoverSpec): string {
   const H = heightFor(s.aspect);
+  const square = s.aspect === "square";
   const pad = 54;
   const inner = W - 2 * pad;
   const base = rgb(s.color ?? "") ?? rgb("#1565c0")!;
   const light = luminance(base) > 0.45;
   const fg = light ? DARK : "#ffffff";
-  const soft = light ? "rgba(17,24,39,.75)" : "rgba(255,255,255,.8)";
-  const title = titleFit(s.title, inner, H * 0.34, s.aspect === "square" ? 50 : 64, s.aspect === "square" ? 4 : 5);
-  const mod = moduleFit(s.module, inner, 22, 2);
+  const title = titleBlock(s.title, 36, inner);
   const titleTop = H - pad - title.height;
-  const modTop = mod ? titleTop - 14 - mod.height : titleTop;
   const rowH = 36;
-  const avail = modTop - 30 - (pad + rowH + 30);
-  const icon = Math.min(300, avail);
+  const icon = square ? 150 : 280;
+  const iconTop = (pad + rowH + 16 + H - pad - titleReserve(36) - 16) / 2 - icon / 2;
   const logo = brand(pad, pad + (rowH - 30) / 2, fg);
   const pill = badge(KIND_LABEL[s.kind], inner - logo.w - 16, { bg: light ? "rgba(17,24,39,.08)" : "rgba(255,255,255,.18)", fg, border: light ? "rgba(17,24,39,.5)" : "rgba(255,255,255,.6)" });
   return (
@@ -154,29 +153,24 @@ function styleC(s: CoverSpec): string {
     `<rect width="${W}" height="${H}" fill="url(#g)"/>` +
     logo.svg +
     pill.draw(W - pad - pill.w, pad + (rowH - pill.h) / 2) +
-    (icon >= 60 ? headphones((W - icon) / 2, pad + rowH + 30 + (avail - icon) / 2, icon, fg, 0.9) : "") +
-    (mod ? lines(mod, pad, modTop, 400, `fill="${soft}"`, 0.08) : "") +
+    headphones((W - icon) / 2, iconTop, icon, fg, 0.9) +
     lines(title, pad, titleTop, 700, `fill="${fg}"`) +
     "</svg>"
   );
 }
 
-// D: Originalseite oben (angeschnitten), darunter Modul, Titel, Art und Logo
+// D: Originalseite oben (angeschnitten), darunter Titel, Art und Logo
 function styleD(s: CoverSpec): string {
   const H = heightFor(s.aspect);
   const square = s.aspect === "square";
   const imgH = Math.round(H * (square ? 0.5 : 0.54));
   const padX = square ? 36 : 44;
   const padY = square ? 24 : 36;
-  const inner = W - 2 * padX;
-  const blockTop = imgH + 6;
-  const mod = moduleFit(s.module, inner, square ? 16 : 18, square ? 1 : 2);
-  const modH = mod ? mod.height + 10 : 0;
+  const size = square ? 28 : 32;
+  const title = titleBlock(s.title, size, W - 2 * padX);
+  const titleTop = imgH + 6 + padY;
   const kindH = square ? 28 : 36;
-  const brandH = 30;
-  const titleMax = H - padY - blockTop - padY - modH - 18 - kindH - 16 - brandH;
-  const title = titleFit(s.title, inner, titleMax, square ? 34 : 46, square ? 3 : 4);
-  const kindTop = blockTop + padY + modH + title.height + 18;
+  const kindTop = titleTop + titleReserve(size) + (square ? 12 : 18);
   const kindFace = { size: square ? 20 : 24, weight: 700 as const };
   const image = s.image
     ? `<image href="data:${s.image.mime};base64,${Buffer.from(s.image.bytes).toString("base64")}" x="0" y="0" width="${W}" height="${imgH}" preserveAspectRatio="xMidYMin slice"/>`
@@ -186,11 +180,10 @@ function styleD(s: CoverSpec): string {
     `<rect width="${W}" height="${H}" fill="#ffffff"/>` +
     image +
     `<rect x="0" y="${imgH}" width="${W}" height="6" fill="${accent(s.kind)}"/>` +
-    (mod ? lines(mod, padX, blockTop + padY, 400, `fill="#555"`, 0.08) : "") +
-    lines(title, padX, blockTop + padY + modH, 700, `fill="${DARK}"`) +
+    lines(title, padX, titleTop, 700, `fill="${DARK}"`) +
     headphones(padX, kindTop, kindH, accent(s.kind)) +
     textEl(KIND_LABEL[s.kind], padX + kindH + 12, kindTop + kindH / 2 + kindFace.size * 0.36, kindFace, `fill="${accent(s.kind)}"`) +
-    brand(padX, H - padY - brandH, DARK).svg +
+    brand(padX, H - padY - 30, DARK).svg +
     "</svg>"
   );
 }

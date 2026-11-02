@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fit, measure, ready, renderPng, wrap } from "./text";
+import { clamp, measure, ready, renderPng, wrap } from "./text";
 import { coverSvg, KIND_LABEL } from "./templates";
 
 await ready();
@@ -22,37 +22,43 @@ describe("Cover-Text", () => {
     for (const l of broken) expect(measure(l, bold)).toBeLessThanOrEqual(300);
   });
 
-  test("schrumpft, bis Titel in Breite und Zeilenzahl passen", () => {
-    const f = fit("Investitionsrechnung und Finanzierungsentscheidungen in mittelständischen Unternehmen", { weight: 700, maxWidth: 392, maxHeight: 400, maxSize: 58, minSize: 18, lineHeight: 1.1, maxLines: 5 });
-    expect(f.overflow).toBe(false);
-    expect(f.lines.length).toBeLessThanOrEqual(5);
-    expect(f.lines.every((l) => measure(l, { size: f.size, weight: 700 }) <= 392)).toBe(true);
-    expect(f.lines.some((l) => l.endsWith("-"))).toBe(false);
-    expect(fit("Information", { weight: 700, maxWidth: 392, maxHeight: 400, maxSize: 58, minSize: 18, lineHeight: 1.1 }).size).toBe(58);
+  test("feste Schriftgröße: höchstens drei Zeilen, darüber mit „…“ gekappt", () => {
+    const f = { size: 36, weight: 700 as const };
+    const short = clamp("Information", f, 392, 3, 1.15);
+    expect(short.lines).toEqual(["Information"]);
+    expect(short.cut).toBe(false);
+    const long = clamp("Investitionsrechnung und Finanzierungsentscheidungen in mittelständischen Unternehmen", f, 392, 3, 1.15);
+    expect(long.cut).toBe(true);
+    expect(long.lines.length).toBe(3);
+    expect(long.lines[2].endsWith("…")).toBe(true);
+    expect(long.lines.every((l) => measure(l, f) <= 392)).toBe(true);
+    // Ein zu breites Wort wird getrennt, der Trennstrich bleibt nicht vor dem „…“ stehen
+    const word = clamp("Wahrscheinlichkeitsrechnung", f, 392, 3, 1.15);
+    expect(word.lines.length).toBe(2);
+    expect(word.lines[0].endsWith("-")).toBe(true);
+    expect(clamp("Wahrscheinlichkeitsrechnung der Zufallsgrößen und Verteilungen", f, 200, 1, 1.15).lines[0]).toMatch(/[^-]…$/);
   });
 
-  test("kappt mit Auslassungspunkten, wenn selbst die Mindestgröße nicht reicht", () => {
-    const f = fit("Ein sehr langer Titel mit vielen Wörtern, der niemals in zwei kurze Zeilen passt", { weight: 700, maxWidth: 200, maxHeight: 50, maxSize: 30, minSize: 20, lineHeight: 1.1 });
-    expect(f.overflow).toBe(true);
-    expect(f.lines.length).toBe(2);
-    expect(f.lines[1].endsWith("…")).toBe(true);
-  });
-
-  test("Vorlagen enthalten Titel, Modul und Pille und ergeben ein PNG", () => {
+  test("Vorlagen enthalten Titel und Pille und ergeben ein PNG", () => {
     for (const style of ["a", "c", "d"] as const) {
-      const svg = coverSvg({ style, aspect: "book", kind: "language", title: "Spanisch für Anfänger 1", module: "Spanisch (WP Sprache)", color: "#1c7a5a", image: null });
-      expect(svg).toContain("Spanisch");
+      const svg = coverSvg({ style, aspect: "book", kind: "language", title: "Spanisch für Anfänger 1", color: "#1c7a5a", image: null });
+      expect(svg).toContain("Spanisch für");
       expect(svg).toContain("Anfänger 1");
-      expect(svg).toContain("SPANISCH (WP SPRACHE)");
       expect(svg).toContain(style === "d" ? KIND_LABEL.language : KIND_LABEL.language.toUpperCase());
       const png = renderPng(svg, 300);
       expect(Array.from(png.slice(1, 4))).toEqual([0x50, 0x4e, 0x47]);
     }
   });
 
+  test("Kopfhörer sitzt bei kurzem und langem Titel an derselben Stelle", () => {
+    const at = (title: string) => /translate\(([\d.]+ [\d.]+)\) scale\(4\.\d+\)/.exec(coverSvg({ style: "c", aspect: "book", kind: "subject", title, color: "#1565c0", image: null }))?.[1];
+    expect(at("Information")).toBeDefined();
+    expect(at("Information")).toBe(at("Investitionsrechnung und Finanzierungsentscheidungen in mittelständischen Unternehmen"));
+  });
+
   test("helle Modulfarbe bekommt dunkle Schrift, dunkle Farbe weiße", () => {
-    const yellow = coverSvg({ style: "c", aspect: "square", kind: "subject", title: "T", module: null, color: "#facc15", image: null });
-    const navy = coverSvg({ style: "c", aspect: "square", kind: "subject", title: "T", module: null, color: "#0b3d91", image: null });
+    const yellow = coverSvg({ style: "c", aspect: "square", kind: "subject", title: "T", color: "#facc15", image: null });
+    const navy = coverSvg({ style: "c", aspect: "square", kind: "subject", title: "T", color: "#0b3d91", image: null });
     expect(yellow).toContain('fill="#111827"');
     expect(navy).toContain('fill="#ffffff"');
   });
