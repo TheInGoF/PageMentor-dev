@@ -1,4 +1,4 @@
-// Leistungsanzeige (Diagnose → Leistung): CPU, Arbeitsspeicher, Grafikkarte und Platte alle 2 s, die letzten 5 Minuten.
+// Leistungsanzeige (Diagnose → Leistung): CPU, Arbeitsspeicher, Grafikkarte und Platte alle 2 s, die letzten 15 Minuten.
 // Misst nur, solange jemand zuschaut (Abfrage in der letzten Minute), damit im Leerlauf nichts mitläuft.
 // Grafikkarte über nvidia-smi des Rechners; CPU-Temperatur gibt Windows ohne Adminrechte nicht her
 import { cpus, freemem, totalmem } from "node:os";
@@ -26,7 +26,8 @@ export interface SystemInfo {
 }
 
 const INTERVAL_MS = 2000;
-const KEEP = 150;
+// 15 Minuten: die Zeitachse ist logarithmisch, links passt viel Vergangenheit hinein
+const KEEP = 450;
 const IDLE_STOP_MS = 60_000;
 
 const samples: Sample[] = [];

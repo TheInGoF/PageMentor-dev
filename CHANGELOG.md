@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.111.0 – 2026-11-02
+### Change
+- Leistungsanzeige mit logarithmischer Zeitachse über 15 Minuten: rechts die letzten Sekunden breit, nach links gedrängt, mit Marken bei 10 s, 1 min und 5 min.
+
 ## 1.110.0 – 2026-11-02
 ### Change
 - Hörbuch-Kapitel zeigen, mit welchem Modell und wann der Text bereinigt wurde, sowie Stimme, Engine und Zeitpunkt des Audios.

@@ -25,7 +25,19 @@ interface Info {
   diskTotal: number | null;
 }
 
-const WINDOW_MS = 5 * 60_000;
+const WINDOW_MS = 15 * 60_000;
+// Logarithmische Zeitachse wie im Task-Manager: rechts die letzten Sekunden breit, nach links immer gedrängter.
+// TAU legt fest, ab wann gestaucht wird (die letzten ~10 s sind fast linear)
+const TAU_MS = 10_000;
+function logX(ageMs: number, width: number): number {
+  const f = Math.log1p(Math.max(0, ageMs) / TAU_MS) / Math.log1p(WINDOW_MS / TAU_MS);
+  return width * (1 - Math.min(1, f));
+}
+const TICKS: Array<{ ms: number; label: string }> = [
+  { ms: 10_000, label: "10 s" },
+  { ms: 60_000, label: "1 min" },
+  { ms: 5 * 60_000, label: "5 min" },
+];
 const gb = (b: number) => (b / 1024 ** 3).toFixed(1).replace(".", ",");
 
 export function PerformancePanel() {
@@ -78,8 +90,8 @@ export function PerformancePanel() {
             />
             <Tile
               title={t("perf.gpuTemp")}
-              value={last?.gpuTemp != null ? `${last.gpuTemp} °C` : "–"}
-              sub={t("perf.tempMax", { n: Math.max(0, ...samples.map((s) => s.gpuTemp ?? 0)) })}
+              value={last?.gpuTemp != null ? `${Math.round(last.gpuTemp)} °C` : "–"}
+              sub={t("perf.tempMax", { n: Math.round(Math.max(0, ...samples.map((s) => s.gpuTemp ?? 0))) })}
               points={series((s) => s.gpuTemp)}
               max={100}
               warn={(last?.gpuTemp ?? 0) >= 83}
@@ -122,6 +134,15 @@ function Tile({ title, value, sub, points, max, warn }: { title: string; value: 
         <span className={cn("text-base font-semibold tabular-nums", warn && "text-red-500")}>{value}</span>
       </div>
       <Chart points={points} max={max} warn={warn} />
+      <div className="relative h-3 text-[10px] text-neutral-500 tabular-nums" aria-hidden>
+        <span className="absolute left-0">15 min</span>
+        {TICKS.map((k) => (
+          <span key={k.ms} className="absolute -translate-x-1/2" style={{ left: `${(logX(k.ms, 1) * 100).toFixed(1)}%` }}>
+            {k.label}
+          </span>
+        ))}
+        <span className="absolute right-0">{t("perf.now")}</span>
+      </div>
       <span className="text-xs text-neutral-500 truncate" title={sub}>
         {sub}
       </span>
@@ -129,20 +150,23 @@ function Tile({ title, value, sub, points, max, warn }: { title: string; value: 
   );
 }
 
-// Verlauf als Fläche über feste 5 Minuten: neue Werte kommen rechts herein wie im Task-Manager
+// Verlauf als Fläche über 15 Minuten, Zeit logarithmisch: neue Werte kommen rechts herein und wandern nach links
 function Chart({ points, max, warn }: { points: Array<{ t: number; v: number | null }>; max: number; warn?: boolean }) {
   const W = 300;
   const H = 70;
   const now = points[points.length - 1]?.t ?? Date.now();
   const xy = points
     .filter((p): p is { t: number; v: number } => p.v !== null)
-    .map((p) => [W - ((now - p.t) / WINDOW_MS) * W, H - Math.min(1, p.v / (max || 1)) * H] as const)
+    .map((p) => [logX(now - p.t, W), H - Math.min(1, p.v / (max || 1)) * H] as const)
     .filter(([x]) => x >= 0);
   const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={cn("w-full h-20 rounded bg-bg-elevated", warn ? "text-red-500" : "text-accent")} aria-hidden>
       {[0.25, 0.5, 0.75].map((f) => (
         <line key={f} x1={0} x2={W} y1={H * f} y2={H * f} stroke="currentColor" strokeOpacity={0.08} vectorEffect="non-scaling-stroke" />
+      ))}
+      {TICKS.map((k) => (
+        <line key={k.ms} x1={logX(k.ms, W)} x2={logX(k.ms, W)} y1={0} y2={H} stroke="currentColor" strokeOpacity={0.12} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
       ))}
       {xy.length > 1 && (
         <>
