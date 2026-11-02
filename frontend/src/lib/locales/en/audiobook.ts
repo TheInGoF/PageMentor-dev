@@ -200,6 +200,8 @@ export const audiobook: Record<string, string> = {
   "learn.kind.subject": "Subject booklet",
   "learn.kind.subjectHint": "Explanation, formulas in words, example, thinking questions; each unit is checked against the booklet.",
   "learn.lang": "Target language",
+  "learn.voice": "Voice",
+  "learn.voiceHint": "If you pick another voice under “Settings for all audiobooks”, “Update” re-speaks the units; the scripts stay.",
   "learn.model": "Written by",
   "learn.modelHint": "For better scripts, load a large model under Settings → Engine → Language models.",
   "learn.pages": "p. {from}–{to}",

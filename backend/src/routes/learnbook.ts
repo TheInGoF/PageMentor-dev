@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { serveFileWithRange } from "./audio/files";
 import { db } from "../db";
 import { learnSettings, listUnits } from "../services/learnbook/store";
-import { cancelLearnbook, learnIntroInfo, learnState, startLearnbook, uploadLearnbook } from "../services/learnbook/run";
+import { cancelLearnbook, learnIntroInfo, learnVoice, learnState, startLearnbook, uploadLearnbook } from "../services/learnbook/run";
 import { learnBookPath } from "../services/learnbook/speak";
 import { learnFileSuffix } from "../services/learnbook/meta";
 import { bookFileName } from "../services/audiobook/export";
@@ -37,6 +37,7 @@ learnbookRoutes.get("/:docId", async (c) => {
     state: learnState(docId),
     hasBook: existsSync(learnBookPath(docId)),
     intro: learnIntroInfo(docId),
+    voice: learnVoice(docId),
     abs: absEnabled() && absReady(),
   });
 });
@@ -49,8 +50,8 @@ learnbookRoutes.put("/:docId", async (c) => {
 });
 
 learnbookRoutes.post("/:docId/start", async (c) => {
-  const body = (await c.req.json().catch(() => ({}))) as { probe?: boolean; rate?: string };
-  return c.json(startLearnbook(c.req.param("docId"), !!body.probe, body.rate || "+0%"));
+  const body = (await c.req.json().catch(() => ({}))) as { probe?: boolean; rate?: string; voice?: string };
+  return c.json(startLearnbook(c.req.param("docId"), !!body.probe, body.rate || "+0%", body.voice || undefined));
 });
 
 learnbookRoutes.post("/:docId/cancel", (c) => {

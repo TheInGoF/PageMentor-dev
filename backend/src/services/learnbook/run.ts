@@ -101,9 +101,17 @@ export function learnStates(): LearnRunState[] {
   return [...states.values()];
 }
 
-export function startLearnbook(docId: string, probe: boolean, rate = "+0%"): LearnRunState {
+// Gewählte Hauptstimme merken (gilt auch für „Intro neu“); eine unbekannte Stimme ändert nichts
+export function setLearnVoice(docId: string, voiceId: string | undefined): void {
+  if (!voiceId) return;
+  const lang = (db().prepare("SELECT language FROM documents WHERE id = ?").get(docId) as { language: string } | undefined)?.language;
+  if (lang && findVoice(voiceId, lang)) db().prepare("UPDATE documents SET learn_voice = ? WHERE id = ?").run(voiceId, docId);
+}
+
+export function startLearnbook(docId: string, probe: boolean, rate = "+0%", voiceId?: string): LearnRunState {
   const cur = states.get(docId);
   if (cur?.running) return cur;
+  setLearnVoice(docId, voiceId);
   const st: LearnRunState = { docId, running: true, phase: "wait", done: 0, total: 0, probe };
   states.set(docId, st);
   launch({ docId, probe, rate });
@@ -118,9 +126,10 @@ function launch(job: Job): void {
 }
 
 // Intro nach einer Änderung einzeln neu sprechen; das M4B wird danach mit den vorhandenen Einheiten neu gebaut
-export function startLearnIntro(docId: string, rate = "+0%"): LearnRunState {
+export function startLearnIntro(docId: string, rate = "+0%", voiceId?: string): LearnRunState {
   const cur = states.get(docId);
   if (cur?.running) return cur;
+  setLearnVoice(docId, voiceId);
   const st: LearnRunState = { docId, running: true, phase: "wait", done: 0, total: 1, probe: false };
   states.set(docId, st);
   launch({ docId, probe: false, rate, introOnly: true });
@@ -206,9 +215,21 @@ async function scripts(docId: string, probe: boolean, st: LearnRunState): Promis
 }
 
 // Stimmen: Hauptsprache des Hefts; beim Sprachkurs die Stimme am Heft für die zweite Sprache, sonst deren Standard
+// Für die Anzeige: mit welcher Stimme die Einheiten gesprochen werden
+export function learnVoice(docId: string): { id: string; label: string; engine: string } | null {
+  try {
+    const { kind, lang } = learnSettings(docId);
+    const v = voicesFor(docId, kind, lang).main;
+    return { id: v.id, label: v.label, engine: v.engine };
+  } catch {
+    return null;
+  }
+}
+
 function voicesFor(docId: string, kind: "language" | "subject", lang: string): { main: Voice; second: Voice | null } {
-  const doc = db().prepare("SELECT language, voice2 FROM documents WHERE id = ?").get(docId) as { language: string; voice2: string | null };
-  const main = findVoice(defaultVoiceFor(doc.language), doc.language);
+  const doc = db().prepare("SELECT language, voice2, learn_voice FROM documents WHERE id = ?").get(docId) as { language: string; voice2: string | null; learn_voice: string | null };
+  // Die im Hörbuch-Reiter gewählte Stimme; geänderte Stimme = neue Audio-Stempel, die Skripte bleiben
+  const main = (doc.learn_voice && findVoice(doc.learn_voice, doc.language)) || findVoice(defaultVoiceFor(doc.language), doc.language);
   if (!main) throw new Error(`Keine Stimme für ${doc.language}`);
   if (kind !== "language") return { main, second: null };
   const id = doc.voice2 && doc.voice2 !== "main" ? doc.voice2 : defaultVoiceFor(lang);

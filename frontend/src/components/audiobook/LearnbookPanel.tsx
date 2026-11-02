@@ -52,6 +52,8 @@ interface Info {
   hasBook?: boolean;
   abs?: boolean;
   intro?: { text: string | null; template: string | null; custom: boolean; audioUrl: string | null };
+  // Hauptstimme, mit der die Einheiten gesprochen werden
+  voice?: { id: string; label: string; engine: string } | null;
 }
 
 const LANGS = ["es", "en", "fr", "it", "pt"];
@@ -59,7 +61,8 @@ export const mmss = (ms: number) => `${Math.floor(ms / 60000)}:${String(Math.rou
 
 export type LearnKind = "language" | "subject";
 
-export function useLearnbook(docId: string, kind: LearnKind, rate: string, enabled: boolean) {
+// voiceId: die in „Einstellungen für alle Hörbücher“ gewählte Stimme, gilt auch für die Lernhörbücher
+export function useLearnbook(docId: string, kind: LearnKind, rate: string, enabled: boolean, voiceId: string) {
   const [info, setInfo] = useState<Info | null>(null);
   const [absBusy, setAbsBusy] = useState(false);
   const toast = useToast();
@@ -91,7 +94,7 @@ export function useLearnbook(docId: string, kind: LearnKind, rate: string, enabl
   };
   const start = async (probe: boolean) => {
     if (other) await request(base, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) });
-    await call("/start", { probe, rate });
+    await call("/start", { probe, rate, voice: voiceId || undefined });
   };
   const cancel = () => call("/cancel");
   const setLang = async (lang: string) => {
@@ -114,7 +117,7 @@ export function useLearnbook(docId: string, kind: LearnKind, rate: string, enabl
     ...(!other && info?.hasBook ? [{ label: t("audiobook.download.m4b"), onClick: () => window.open(`${base}/book`, "_blank") }] : []),
     ...(!other && info?.hasBook && info.abs ? [{ label: absBusy ? t("learn.absUploading") : t("learn.absUpload"), onClick: () => void uploadAbs(), disabled: absBusy || running }] : []),
   ];
-  return { info, other, running, st: info?.state ?? null, start, cancel, setLang, hasAudio, menu, base, load };
+  return { info, other, running, st: info?.state ?? null, start, cancel, setLang, hasAudio, menu, base, load, voiceId };
 }
 
 export type LearnbookCtl = ReturnType<typeof useLearnbook>;
@@ -176,6 +179,9 @@ export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKin
           </select>
         </SettingRow>
       )}
+      <SettingRow label={t("learn.voice")} hint={t("learn.voiceHint")}>
+        <span className="text-sm">{info.voice ? `${info.voice.label} · ${t(`audiobook.engine.${info.voice.engine}`)}` : "–"}</span>
+      </SettingRow>
       <SettingRow label={t("learn.model")} hint={info.model ? undefined : t("learn.modelHint")}>
         <span className="text-sm">{info.model ?? t("learn.defaultModel")}</span>
       </SettingRow>
@@ -271,7 +277,7 @@ export function LearnIntro({ ctl, kind, docId, rate }: { ctl: LearnbookCtl; kind
         busy={busy || ctl.running}
         canGenerate={canSpeak}
         onSave={(text) => void run(() => api.audio.setIntroText(docId, text, kind), () => t("audiobook.intro.saved"))}
-        onGenerate={() => void run(() => api.audio.generateIntro(docId, "", rate, model, kind), () => t("audiobook.intro.queued"))}
+        onGenerate={() => void run(() => api.audio.generateIntro(docId, ctl.voiceId || "", rate, model, kind), () => t("audiobook.intro.queued"))}
         onDeleteAudio={() => {
           if (confirm(t("audiobook.intro.deleteAudioConfirm"))) void run(() => api.audio.deleteIntroAudio(docId, kind), () => t("audiobook.intro.audioDeleted"));
         }}

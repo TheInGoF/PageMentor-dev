@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.113.0 – 2026-11-02
+### Change
+- Lernhörbuch und Sprachlern-Hörbuch zeigen, mit welcher Stimme die Einheiten gesprochen werden.
+
+### Fix
+- Lernhörbuch und Sprachlern-Hörbuch übernehmen die im Hörbuch-Reiter gewählte Stimme; „Aktualisieren“ spricht die Einheiten damit neu und behält die Skripte.
+
 ## 1.112.0 – 2026-11-02
 ### New
 - Module haben eine Wissenschaft: Qwen ordnet sie in der Wissenspflege zu, auch neue Module; im Bearbeiten-Dialog lässt sie sich von Hand wählen oder an Qwen zurückgeben.

@@ -74,7 +74,7 @@ introRoutes.post("/intro/:docId/generate", async (c) => {
   if (v !== "original") {
     if (learnSettings(docId).kind !== v) return c.json({ error: "Das Heft hat gerade die andere Lernhörbuch-Art" }, 400);
     if (!listUnits(docId).some((u) => u.script && !u.skip_reason)) return c.json({ error: "Noch keine Einheiten mit Skript" }, 400);
-    startLearnIntro(docId, body.rate || "+0%");
+    startLearnIntro(docId, body.rate || "+0%", body.voice || undefined);
     return c.json({ status: "queued", docId });
   }
 

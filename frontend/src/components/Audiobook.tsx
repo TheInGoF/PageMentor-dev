@@ -99,7 +99,13 @@ export function Audiobook({ docId, documentLanguage }: Props) {
     loadChapterStatus,
   } = d;
   // Lernhörbuch-Zustand für Kopf und Ansicht; lädt nur, wenn eine Lern-Variante offen ist
-  const learn = useLearnbook(docId, mode === "language" ? "language" : "subject", rate, mode !== "original");
+  // Stimme hier ausdrücklich gewählt: dann übernehmen die Lernhörbücher sie, sonst behalten sie ihre bisherige
+  const [voicePicked, setVoicePicked] = useState(false);
+  const pickVoice = (id: string) => {
+    setVoiceId(id);
+    setVoicePicked(true);
+  };
+  const learn = useLearnbook(docId, mode === "language" ? "language" : "subject", rate, mode !== "original", voicePicked ? voiceId : "");
   const {
     generate,
     uploadToAbs,
@@ -144,7 +150,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
   const pickEngine = (e: string) => {
     setEngineSel(e);
     const first = voices.filter((v) => v.engine === e).sort(compareVoices).find((v) => v.language === documentLanguage);
-    if (first) setVoiceId(first.id);
+    if (first) pickVoice(first.id);
   };
   const engineVoices = useMemo(() => voices.filter((v) => v.engine === engine), [voices, engine]);
 
@@ -248,7 +254,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
                 {langVoices.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {langVoices.map((v) => (
-                      <VoiceChip key={v.id} voice={v} active={voiceId === v.id} onSelect={() => setVoiceId(v.id)} />
+                      <VoiceChip key={v.id} voice={v} active={voiceId === v.id} onSelect={() => pickVoice(v.id)} />
                     ))}
                   </div>
                 ) : (
@@ -259,7 +265,7 @@ export function Audiobook({ docId, documentLanguage }: Props) {
                     <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-300">{t("audiobook.voice.more", { n: otherVoices.length })}</summary>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {otherVoices.map((v) => (
-                        <VoiceChip key={v.id} voice={v} active={voiceId === v.id} onSelect={() => setVoiceId(v.id)} />
+                        <VoiceChip key={v.id} voice={v} active={voiceId === v.id} onSelect={() => pickVoice(v.id)} />
                       ))}
                     </div>
                   </details>

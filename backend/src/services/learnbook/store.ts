@@ -50,6 +50,8 @@ export function ensureLearnTables(d: Database): void {
   // Art des Lernhörbuchs und Zielsprache (Sprachkurs); leer = aus dem Heft geschätzt
   if (!cols.some((c) => c.name === "learn_kind")) d.exec("ALTER TABLE documents ADD COLUMN learn_kind TEXT");
   if (!cols.some((c) => c.name === "learn_lang")) d.exec("ALTER TABLE documents ADD COLUMN learn_lang TEXT");
+  // Hauptstimme der Lernhörbücher: die im Hörbuch-Reiter gewählte (leer = Standardstimme der Sprache)
+  if (!cols.some((c) => c.name === "learn_voice")) d.exec("ALTER TABLE documents ADD COLUMN learn_voice TEXT");
   const ucols = d.prepare("PRAGMA table_info(learn_units)").all() as Array<{ name: string }>;
   if (!ucols.some((c) => c.name === "skip_reason")) d.exec("ALTER TABLE learn_units ADD COLUMN skip_reason TEXT");
   // Eigener Intro-Text je Art (leer = Vorlage der App)
