@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.107.1 – 2026-11-02
+### Fix
+- Stapel-Import: Ordner werden in fester Reihenfolge gelesen (erst Dateien nach Name, dann Unterordner). Vorher hing es vom Dateisystem ab, welche von zwei gleichen Dateien als Dublette galt; die Prüfungen auf GitHub scheiterten daran.
+
 ## 1.107.0 – 2026-11-02
 ### Change
 - Hörbuch-Cover: feste Maße für ruhige Regale in Audiobookshelf. Der Kopfhörer ist auf jedem Cover gleich groß und sitzt an derselben Stelle, der Titel steht in fester Schriftgröße mit höchstens drei Zeilen, längere Titel enden mit „…“. Der Modulname entfällt.

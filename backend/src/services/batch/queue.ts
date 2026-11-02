@@ -20,15 +20,14 @@ export interface EnqueueOptions {
 export const IMPORT_DONE = "Erledigt";
 export const IMPORT_DUPLICATES = "Dubletten";
 
+// Feste Reihenfolge unabhängig vom Dateisystem: erst die Dateien des Ordners (nach Name), dann die Unterordner.
+// So gewinnt bei gleichen Dateien die obere, und die Dublettenprüfung fällt überall gleich aus
 function walk(dir: string, ext: string, out: string[] = [], skip: string[] = []): string[] {
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name.startsWith(".")) continue;
-    const p = join(dir, e.name);
-    if (e.isDirectory()) {
-      if (!skip.includes(e.name)) walk(p, ext, out, skip);
-    }
-    else if (extname(e.name).toLowerCase() === ext) out.push(p);
-  }
+  const entries = readdirSync(dir, { withFileTypes: true })
+    .filter((e) => !e.name.startsWith("."))
+    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+  for (const e of entries) if (!e.isDirectory() && extname(e.name).toLowerCase() === ext) out.push(join(dir, e.name));
+  for (const e of entries) if (e.isDirectory() && !skip.includes(e.name)) walk(join(dir, e.name), ext, out, skip);
   return out;
 }
 
