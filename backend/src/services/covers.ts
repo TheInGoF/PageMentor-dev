@@ -11,6 +11,7 @@ import { DATA_DIR, fromDataPath } from "../paths";
 import { libraryCoverAspect } from "./cover/aspect";
 import { coverSvg, pixelSize, type CoverKind, type CoverSpec, type CoverStyle } from "./cover/templates";
 import { ready, renderPng } from "./cover/text";
+import { getLlmConfig, setLlmConfig } from "./llmConfig";
 
 export type { CoverKind } from "./cover/templates";
 export type CoverChoice = CoverStyle | "original";
@@ -46,9 +47,19 @@ function docRow(docId: string): DocRow | undefined {
     .get(docId) as DocRow | undefined;
 }
 
-// Gewählte Vorlage des Hefts, sonst der Standard der App
+// Standard für Hefte ohne eigene Wahl (Einstellungen → Hörbuch)
+export function defaultCover(): CoverChoice {
+  const v = getLlmConfig().coverDefault;
+  return isCoverChoice(v) ? v : DEFAULT_COVER;
+}
+
+export function setDefaultCover(v: CoverChoice): void {
+  setLlmConfig({ coverDefault: v });
+}
+
+// Gewählte Vorlage des Hefts, sonst der Standard aus den Einstellungen
 export function coverChoice(doc: { cover_style: string | null }): CoverChoice {
-  return isCoverChoice(doc.cover_style) ? doc.cover_style : DEFAULT_COVER;
+  return isCoverChoice(doc.cover_style) ? doc.cover_style : defaultCover();
 }
 
 /** Sorgt für eine Cover-Datei zum Heft (Original oder Vorlage) und gibt den Pfad zurück; ohne Heft oder

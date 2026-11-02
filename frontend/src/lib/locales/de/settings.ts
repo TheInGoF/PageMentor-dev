@@ -23,6 +23,8 @@ export const settings: Record<string, string> = {
   "settings.section.audiobook": "Hörbuch",
   "settings.defaultVoice": "Standardstimme",
   "settings.voice.server": "Automatisch",
+  "settings.coverDefault": "Standard-Cover",
+  "settings.coverDefaultHint": "Gilt für alle Hefte ohne eigene Wahl; die Vorschau zeigt das zuletzt hochgeladene Heft. Im Hörbuch-Reiter eines Hefts lässt sich die Vorlage weiter einzeln wählen.",
   "settings.defaultRate": "Geschwindigkeit",
   "settings.defaultExamCount": "Probeklausur: Fragen",
   "settings.defaultExamMinutes": "Probeklausur: Minuten (0 = ohne Limit)",

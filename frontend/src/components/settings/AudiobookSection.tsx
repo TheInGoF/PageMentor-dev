@@ -6,6 +6,7 @@ import type { SettingsState } from "./state";
 import { RATES } from "./types";
 import { Card, SettingRow } from "./parts";
 import { VoiceDefaultsRows } from "./VoiceDefaultsRows";
+import { CoverDefaultPicker } from "../audiobook/CoverPicker";
 
 export function AudiobookSection({ st }: { st: SettingsState }) {
   const { absBusy, absKeyInput, absLibraries, absTest, absTestResult, llmConfig, removeApiKey, s, setAbsKeyInput, setLlmConfig, setS, voices } = st;
@@ -22,6 +23,11 @@ export function AudiobookSection({ st }: { st: SettingsState }) {
           ))}
         </select>
       </SettingRow>
+      <div className="flex flex-col gap-2 py-2">
+        <span className="text-sm">{t("settings.coverDefault")}</span>
+        <CoverDefaultPicker />
+        <span className="text-xs text-neutral-500">{t("settings.coverDefaultHint")}</span>
+      </div>
       <SettingRow label={t("settings.abs.title")} hint={t("settings.abs.short")}>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={absOn} onChange={(e) => setLlmConfig({ ...llmConfig, absEnabled: e.target.checked ? "1" : "" })} />

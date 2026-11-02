@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.114.0 – 2026-11-02
+### New
+- Standard-Cover in Einstellungen → Stimmen & Hörbuch wählbar, mit Vorschau am zuletzt hochgeladenen Heft; gilt für alle Hefte ohne eigene Wahl.
+
+### Change
+- Im Hörbuch-Reiter setzt „Standard der Einstellungen verwenden“ die Cover-Wahl eines Hefts zurück.
+
 ## 1.113.0 – 2026-11-02
 ### Change
 - Lernhörbuch und Sprachlern-Hörbuch zeigen, mit welcher Stimme die Einheiten gesprochen werden.

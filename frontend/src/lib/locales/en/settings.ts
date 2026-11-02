@@ -23,6 +23,8 @@ export const settings: Record<string, string> = {
   "settings.section.audiobook": "Audiobook",
   "settings.defaultVoice": "Default voice",
   "settings.voice.server": "Automatic",
+  "settings.coverDefault": "Default cover",
+  "settings.coverDefaultHint": "Applies to every booklet without its own choice; the preview shows the most recently uploaded booklet. Each booklet's audiobook tab can still pick its own.",
   "settings.defaultRate": "Speed",
   "settings.defaultExamCount": "Mock exam: questions",
   "settings.defaultExamMinutes": "Mock exam: minutes (0 = no limit)",

@@ -16,6 +16,7 @@ export const audiobook: Record<string, string> = {
   "audiobook.cover.a": "Hell",
   "audiobook.cover.c": "Farbfeld",
   "audiobook.cover.d": "Zweigeteilt",
+  "audiobook.cover.useDefault": "Standard der Einstellungen verwenden",
   "audiobook.cover.default": "Standard",
   "audiobook.cover.hint": "Mit Modul, Hefttitel und der Art des Hörbuchs. Gilt für M4B, Kapitel-MP3s und Audiobookshelf ab dem nächsten Bauen oder Hochladen; Buch- oder Quadratformat folgt der Bibliothek in Audiobookshelf.",
   "audiobook.engine.qwen": "Qwen",
