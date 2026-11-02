@@ -218,6 +218,8 @@ export function initDb() {
   // Versionsstempel: zeigen, mit welcher Anweisung/Aussprache/Stimme ein Ergebnis entstand.
   // Weicht der Stempel ab, erzeugt der nächste Hörbuch-Lauf das Teil neu (services/stamps.ts)
   if (!chapterCols.some((c) => c.name === "audio_text_stamp")) d.exec("ALTER TABLE chapters ADD COLUMN audio_text_stamp TEXT");
+  // Wann die Sprachfassung entstand (Gemma oder von Hand), für die Anzeige beim Kapitel
+  if (!chapterCols.some((c) => c.name === "audio_text_at")) d.exec("ALTER TABLE chapters ADD COLUMN audio_text_at TEXT");
   // Zweisprachige Bücher: Text mit Sprachmarkierungen ([es]…[/es]) samt Stempel
   if (!chapterCols.some((c) => c.name === "audio_lang_text")) {
     d.exec("ALTER TABLE chapters ADD COLUMN audio_lang_text TEXT");

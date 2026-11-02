@@ -56,7 +56,8 @@ export function upsertAudio(params: {
     | undefined;
   if (existing) {
     d.prepare(
-      "UPDATE audio SET stored_path = ?, duration_ms = ?, engine = ?, voice = ?, status = ?, stamp = ? WHERE chapter_id = ?"
+      // Neu erzeugt: Zeitpunkt mitziehen, sonst zeigt ein Wiederholungslauf das alte Datum
+      "UPDATE audio SET stored_path = ?, duration_ms = ?, engine = ?, voice = ?, status = ?, stamp = ?, created_at = datetime('now') WHERE chapter_id = ?"
     ).run(
       params.storedRelPath,
       params.durationMs,

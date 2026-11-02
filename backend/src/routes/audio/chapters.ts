@@ -23,8 +23,8 @@ chapterRoutes.get("/chapter-status/:docId", (c) => {
               c.include_in_audio,
               length(c.text) as text_length,
               length(c.audio_text) as audio_text_length,
-              c.audio_text_model,
-              a.id as audio_id, a.duration_ms, a.voice, a.status as audio_status
+              c.audio_text_model, c.audio_text_at,
+              a.id as audio_id, a.duration_ms, a.voice, a.engine as audio_engine, a.created_at as audio_at, a.status as audio_status
        FROM chapters c
        LEFT JOIN audio a ON a.chapter_id = c.id
        WHERE c.document_id = ?
@@ -176,7 +176,7 @@ chapterRoutes.patch("/preprocessed/:chapterId", async (c) => {
   db()
     .prepare(
     // Eigener Modellname markiert Handarbeit für die UI
-      "UPDATE chapters SET audio_text = ?, audio_text_model = ? WHERE id = ?"
+      "UPDATE chapters SET audio_text = ?, audio_text_model = ?, audio_text_at = datetime('now') WHERE id = ?"
     )
     .run(body.text.trim(), "manual-edit", chapterId);
   return c.json({ chapterId, saved: true, length: body.text.trim().length });

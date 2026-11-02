@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.110.0 – 2026-11-02
+### Change
+- Hörbuch-Kapitel zeigen, mit welchem Modell und wann der Text bereinigt wurde, sowie Stimme, Engine und Zeitpunkt des Audios.
+
+### Fix
+- Ein Wiederholungslauf setzt den Zeitpunkt des Kapitel-Audios neu statt das alte Datum zu behalten.
+
 ## 1.109.0 – 2026-11-02
 ### New
 - Diagnose hat den Reiter Leistung: CPU, Arbeitsspeicher, GPU-Last, Grafikspeicher, GPU-Temperatur, Leistungsaufnahme und Platte mit Verlauf der letzten 5 Minuten.

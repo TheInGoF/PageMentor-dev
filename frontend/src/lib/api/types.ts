@@ -157,9 +157,13 @@ export interface ChapterAudioStatus {
   text_length: number;
   audio_text_length: number | null;
   audio_text_model: string | null;
+  // Zeitpunkte aus SQLite (UTC, "YYYY-MM-DD HH:MM:SS")
+  audio_text_at?: string | null;
   audio_id: string | null;
   duration_ms: number | null;
   voice: string | null;
+  audio_engine?: string | null;
+  audio_at?: string | null;
   audio_status: "pending" | "running" | "done" | "failed" | null;
 }
 

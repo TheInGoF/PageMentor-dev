@@ -5,6 +5,12 @@ import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
 import { formatDuration } from "./helpers";
 
+// SQLite-Zeit (UTC) als Ortszeit: „02.11.26, 14:32“
+function when(sqlite: string): string {
+  const d = new Date(`${sqlite.replace(" ", "T")}Z`);
+  return Number.isNaN(d.getTime()) ? sqlite : d.toLocaleString(undefined, { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
 export function ChapterRow({
   chapter,
   progress,
@@ -128,12 +134,15 @@ export function ChapterRow({
               >
                 {manualEdit
                   ? t("audiobook.chapter.badge.manual")
-                  : t("audiobook.chapter.badge.cleaned")}
+                  : `${t("audiobook.chapter.badge.cleaned")} · ${chapter.audio_text_model ?? "?"}`}
+                {chapter.audio_text_at ? ` · ${when(chapter.audio_text_at)}` : ""}
               </span>
             )}
             {audioDone && (
               <span className="px-1.5 py-0.5 rounded text-xs bg-accent/15 text-accent">
                 {formatDuration(chapter.duration_ms ?? 0)} · {chapter.voice}
+                {chapter.audio_engine && !chapter.voice?.toLowerCase().includes(chapter.audio_engine.toLowerCase()) ? ` · ${chapter.audio_engine}` : ""}
+                {chapter.audio_at ? ` · ${when(chapter.audio_at)}` : ""}
               </span>
             )}
             {ttsFailed && !ttsRunning && (

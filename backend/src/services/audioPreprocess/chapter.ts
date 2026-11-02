@@ -241,7 +241,7 @@ async function preprocessChapterForAudioImpl(params: {
     }
 
     d.prepare(
-      "UPDATE chapters SET audio_text = ?, audio_text_model = ?, audio_text_stamp = ? WHERE id = ?"
+      "UPDATE chapters SET audio_text = ?, audio_text_model = ?, audio_text_stamp = ?, audio_text_at = datetime('now') WHERE id = ?"
     ).run(cleaned, lastModel, rawPieces ? null : stamp, params.chapterId);
     // Ohne Stempel versucht der nächste Lauf die rohen Stücke erneut
     if (rawPieces) console.warn(`[audio-preprocess] ${chapterLabel}: ${rawPieces} Teilstück(e) unbearbeitet, nächster Lauf versucht es erneut`);
