@@ -15,6 +15,7 @@ export function TtsEnginesPanel() {
   // Klangstufen als Entwurf: gespeichert wird alles zusammen mit „Übernehmen“
   type Q = "fast" | "calm" | "best";
   const [quality, setQuality] = useState<{ tada: Q; f5: Q }>({ tada: "calm", f5: "calm" });
+  const [qwenBatch, setQwenBatch] = useState(1);
 
   useEffect(() => {
     api.engine
@@ -23,6 +24,7 @@ export function TtsEnginesPanel() {
         setInfo(i);
         setEnabled(i.enabled);
         setQuality({ tada: i.quality?.tada ?? "calm", f5: i.quality?.f5 ?? "calm" });
+        setQwenBatch(i.qwenBatch ?? 1);
       })
       .catch(() => {});
   }, []);
@@ -34,13 +36,15 @@ export function TtsEnginesPanel() {
   const savedQ = { tada: info.quality?.tada ?? "calm", f5: info.quality?.f5 ?? "calm" };
   const qualityChanged = quality.tada !== savedQ.tada || quality.f5 !== savedQ.f5;
   const enginesChanged = enabled.join(",") !== info.enabled.join(",") || !!token.trim();
-  const changed = enginesChanged || qualityChanged;
+  const batchChanged = qwenBatch !== (info.qwenBatch ?? 1);
+  const changed = enginesChanged || qualityChanged || batchChanged;
 
   async function save() {
     setSaving(true);
     try {
       // Klangstufen gelten sofort, ohne Neustart der Engine
       for (const e of ["tada", "f5"] as const) if (quality[e] !== savedQ[e]) await api.engine.setQuality(e, quality[e]);
+      if (batchChanged) await api.engine.setQwenBatch(qwenBatch);
       let applying = false;
       let nextEnabled = info!.enabled;
       if (enginesChanged) {
@@ -48,7 +52,7 @@ export function TtsEnginesPanel() {
         applying = !!r.applying;
         nextEnabled = r.enabled;
       }
-      setInfo({ ...info!, enabled: nextEnabled, hfTokenPresent: info!.hfTokenPresent || !!token.trim(), quality });
+      setInfo({ ...info!, enabled: nextEnabled, hfTokenPresent: info!.hfTokenPresent || !!token.trim(), quality, qwenBatch });
       setToken("");
       toast.show(applying ? t("ttsEngines.applying") : t("ttsEngines.saved"), "success");
     } catch (err) {
@@ -92,6 +96,17 @@ export function TtsEnginesPanel() {
             </SettingRow>
           );
         })}
+      {enabled.includes("qwen") && info.enabled.includes("qwen") && (
+        <SettingRow label={t("ttsEngines.qwenBatch")} hint={t(qwenBatch > 1 ? "ttsEngines.qwenBatchOnHint" : "ttsEngines.qwenBatchHint")}>
+          <select className="input w-full" value={qwenBatch} onChange={(ev) => setQwenBatch(Number(ev.target.value))}>
+            {[1, 2, 3, 4].map((n) => (
+              <option key={n} value={n}>
+                {n === 1 ? t("ttsEngines.qwenBatchOff") : t("ttsEngines.qwenBatchN", { n })}
+              </option>
+            ))}
+          </select>
+        </SettingRow>
+      )}
       {enabled.includes("tada") && (
         <div className="flex flex-col gap-2">
           <label className="text-xs text-neutral-400">

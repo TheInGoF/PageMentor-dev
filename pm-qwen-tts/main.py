@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
+import base64
 from typing import Literal, Optional
 
 from logs import _log_ring, log
@@ -50,7 +51,7 @@ from config import (
 import models
 from models import _load_model
 from audio_io import _REF_AUDIO_CACHE_MAX, _decode_ref_audio, _encode_audio
-from synth_clone import _synth_clone
+from synth_clone import MAX_BATCH, _synth_clone, _synth_clone_batch
 from synth_custom import _synth_custom
 from synth_design import _synth_design
 
@@ -245,3 +246,46 @@ def speech(req: SpeechRequest):
         )
     body, ctype = _encode_audio(samples, sr, req.response_format)
     return Response(content=body, media_type=ctype)
+
+
+class BatchRequest(BaseModel):
+    # Mehrere Abschnitte derselben geklonten Stimme in einem Durchgang
+    inputs: list[str] = Field(..., min_length=1, max_length=MAX_BATCH)
+    voice: Optional[str] = None
+    response_format: Literal["mp3", "wav", "flac"] = "mp3"
+    ref_audio_b64: str = Field(..., min_length=1)
+    ref_text: Optional[str] = None
+    instruct: Optional[str] = None
+    language: str = DEFAULT_LANGUAGE
+    seed: int = 0
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    repetition_penalty: Optional[float] = None
+    max_new_tokens_override: Optional[int] = None
+
+
+# Antwort: je Abschnitt eine Audiodatei (Base64) in derselben Reihenfolge
+@app.post("/v1/audio/speech/batch")
+def speech_batch(req: BatchRequest):
+    if any(not t.strip() for t in req.inputs):
+        raise HTTPException(status_code=400, detail="leerer Text im Durchgang")
+    ref_audio = _decode_ref_audio(req.ref_audio_b64)
+    results = _synth_clone_batch(
+        texts=req.inputs,
+        ref_audio=ref_audio,
+        ref_text=req.ref_text,
+        language=req.language,
+        seed=req.seed,
+        temperature=req.temperature,
+        top_p=req.top_p,
+        top_k=req.top_k,
+        repetition_penalty=req.repetition_penalty,
+        max_new_tokens_override=req.max_new_tokens_override,
+        instruct=req.instruct,
+    )
+    items = []
+    for samples, sr in results:
+        body, ctype = _encode_audio(samples, sr, req.response_format)
+        items.append({"audio_b64": base64.b64encode(body).decode("ascii"), "content_type": ctype})
+    return JSONResponse({"items": items})

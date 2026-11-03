@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.115.0 – 2026-11-03
+### New
+- Qwen spricht auf Wunsch mehrere Abschnitte einer eigenen Stimme in einem Durchgang (Engine-Seite, 2 bis 4, Standard aus); schlägt ein Durchgang fehl, spricht die App die Abschnitte einzeln.
+
 ## 1.114.0 – 2026-11-02
 ### New
 - Standard-Cover in Einstellungen → Stimmen & Hörbuch wählbar, mit Vorschau am zuletzt hochgeladenen Heft; gilt für alle Hefte ohne eigene Wahl.

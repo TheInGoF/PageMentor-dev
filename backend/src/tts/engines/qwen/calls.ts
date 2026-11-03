@@ -214,3 +214,43 @@ export async function callSpeechPreset(params: {
   }
   return Buffer.from(await res.arrayBuffer());
 }
+
+// Mehrere Abschnitte derselben eigenen Stimme in einem Durchgang (Batching). 404 = Sidecar ohne Batch (ältere Version)
+export async function callSpeechCloneBatch(params: {
+  texts: string[];
+  sample: VoiceSample;
+  timeoutMs: number;
+  dials?: AdvancedDials;
+  signal?: AbortSignal;
+}): Promise<Buffer[]> {
+  const url = baseUrl();
+  const d = params.dials ?? {};
+  const res = await ttsFetch(`${url}/v1/audio/speech/batch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      inputs: params.texts,
+      voice: params.sample.id,
+      response_format: "mp3",
+      ref_audio_b64: readVoiceRefBytes(params.sample).toString("base64"),
+      ref_text: params.sample.refText ?? undefined,
+      instruct: params.sample.instruct || undefined,
+      language: qwenLanguageFor(params.sample.language),
+      seed: params.sample.seed,
+      temperature: d.temperature,
+      top_p: d.topP,
+      top_k: d.topK,
+      repetition_penalty: d.repetitionPenalty,
+    }),
+    timeoutMs: params.timeoutMs,
+    signal: params.signal,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`Qwen-TTS batch ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  const data = JSON.parse(await res.text()) as { items?: Array<{ audio_b64: string }> };
+  const items = (data.items ?? []).map((i) => Buffer.from(i.audio_b64, "base64"));
+  if (items.length !== params.texts.length || items.some((b) => b.length === 0)) throw new Error("Qwen-TTS batch: unvollständige Antwort");
+  return items;
+}

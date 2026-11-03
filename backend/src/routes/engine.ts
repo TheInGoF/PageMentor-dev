@@ -11,6 +11,7 @@ import { engineState, runRepair, runSelftest } from "../engine/manager";
 import { enabledExtras, EXTRA_SERVICES, type ExtraEngine } from "../engine/extraEngines";
 import { effective, getLlmConfig, setLlmConfig } from "../services/llmConfig";
 import { extraStatus, refreshExtraStatus } from "../tts/engines/extra/probe";
+import { QWEN_BATCH_MAX, qwenBatchSize } from "../tts/engines/qwen/batch";
 import { setThrottle, throttleStatus } from "../engine/throttle";
 
 export const engineRoutes = new Hono();
@@ -32,6 +33,15 @@ engineRoutes.post("/repair/:id", (c) => {
 });
 
 // Klangstufe je Engine (TADA, F5): gilt ab dem nächsten Satz, ohne Neustart
+// Qwen-Batching: Abschnitte je Durchgang (1 = aus)
+engineRoutes.put("/qwen-batch", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { n?: number };
+  const n = Number(body.n);
+  if (!Number.isInteger(n) || n < 1 || n > QWEN_BATCH_MAX) return c.json({ error: "ungültig" }, 400);
+  setLlmConfig({ qwenBatch: String(n) });
+  return c.json({ n: qwenBatchSize() });
+});
+
 engineRoutes.put("/quality/:engine", async (c) => {
   const engine = c.req.param("engine");
   const body = (await c.req.json().catch(() => ({}))) as { quality?: string };
@@ -60,7 +70,7 @@ engineRoutes.get("/logs/:service", async (c) => {
 // Zusätzliche Stimmen-Engines: Auswahl und HF-Token
 engineRoutes.get("/tts-engines", async (c) => {
   await refreshExtraStatus();
-  return c.json({ engines: EXTRA_SERVICES, enabled: enabledExtras(), hfTokenPresent: !!getLlmConfig().hfToken, arbiter: extraStatus(), quality: { tada: getLlmConfig().tadaQuality || "calm", f5: getLlmConfig().f5Quality || "calm" } });
+  return c.json({ engines: EXTRA_SERVICES, enabled: enabledExtras(), hfTokenPresent: !!getLlmConfig().hfToken, arbiter: extraStatus(), quality: { tada: getLlmConfig().tadaQuality || "calm", f5: getLlmConfig().f5Quality || "calm" }, qwenBatch: qwenBatchSize() });
 });
 
 engineRoutes.post("/tts-engines", async (c) => {

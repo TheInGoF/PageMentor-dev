@@ -116,6 +116,8 @@ export interface LlmConfig {
   downloadMaxMbit?: string;
   // Cover-Vorlage für Hefte ohne eigene Wahl: original, a, c (Standard) oder d
   coverDefault?: string;
+  // Qwen: so viele Abschnitte einer eigenen Stimme in einem Durchgang (1 = aus, bis 4)
+  qwenBatch?: string;
 }
 
 let cached: LlmConfig | null = null;

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import { segmentText } from "../../tts/segment";
 import { applyPronunciation } from "../pronunciation";
+import { canBatch, qwenBatchSize, synthesizeQwenBatch } from "../../tts/engines/qwen/batch";
 import { synthesizeChunk, interChunkPause, maxChunkFor } from "../../tts/synth";
 import { concatMp3WithGaps, normalizeAndTag } from "../../tts/ffmpeg";
 import type { Voice } from "../../tts/engines/base";
@@ -89,56 +90,51 @@ export async function synthesizeChapter(params: {
     const isDe = params.voice.locale.startsWith("de");
     const bookStart = Date.now();
 
+    // Text, Stimme und Datei eines Abschnitts; null = nichts zu sprechen (leerer Platzhalter, nur Satzzeichen)
+    const explicitTitle = chapter.title?.trim() ? speak(chapter.title.trim()) : undefined;
+    const jobFor = (i: number) => {
+      let announcement: string | undefined;
+      if (i === 0) {
+        if (explicitTitle) {
+          announcement = isDe ? `Kapitel: ${explicitTitle}` : `Chapter: ${explicitTitle}`;
+        } else if (chapter.number > 0) {
+          announcement = isDe ? `Kapitel ${chapter.number}` : `Chapter ${chapter.number}`;
+        }
+      }
+      const segVoice = segments[i].voice;
+      if (!announcement && !segments[i].paragraphs.length) return null;
+      const paragraphText = segments[i].paragraphs.join("\n\n");
+      const plainText = ensureSentenceEnd(announcement ? (paragraphText ? `${announcement}.\n\n${paragraphText}` : announcement) : paragraphText);
+      // Stücke ohne Buchstaben und Ziffern (nur Satzzeichen, Leerraum) lehnt die Stimme ab: überspringen
+      if (!/[\p{L}\p{N}]/u.test(plainText)) return null;
+      // Cache-Schlüssel aus Text, Stimme, Tempo
+      const cacheKey = chunkHash({ text: plainText, voice: segVoice.id, rate, chapterId: chapter.id, index: i });
+      const name = `chunk-${String(i).padStart(3, "0")}-${cacheKey}`;
+      return { announcement, segVoice, plainText, cacheKey, chunkPath: join(tmpDir, `${name}.mp3`), textDumpPath: join(tmpDir, `${name}.txt`) };
+    };
+    const done = (path: string) => existsSync(path) && statSync(path).size > 0;
+    // Gesendeten Text neben der MP3 ablegen: Hänger nachstellbar
+    const dumpText = (path: string, text: string) => {
+      try {
+        writeFileSync(path, text, "utf8");
+      } catch (err) {
+        console.warn(`[tts] could not write chunk-text dump:`, err);
+      }
+    };
+    const batchSize = qwenBatchSize();
+
     const chunkFiles: string[] = [];
     let skippedCount = 0;
     for (let i = 0; i < segments.length; i++) {
       if (signal.aborted) throw new AudiobookCanceled();
-      const explicitTitle = chapter.title?.trim() ? speak(chapter.title.trim()) : undefined;
-      let announcement: string | undefined;
-      if (i === 0) {
-        if (explicitTitle) {
-          announcement = isDe
-            ? `Kapitel: ${explicitTitle}`
-            : `Chapter: ${explicitTitle}`;
-        } else if (chapter.number > 0) {
-          announcement = isDe
-            ? `Kapitel ${chapter.number}`
-            : `Chapter ${chapter.number}`;
-        }
-      }
-      const segVoice = segments[i].voice;
-      // Leerer Platzhalter ohne Ansage (Kapitel 0 ohne Titel): nichts zu sprechen
-      if (!announcement && !segments[i].paragraphs.length) {
+      const job = jobFor(i);
+      if (!job) {
         params.onChunk(i + 1, segments.length);
         continue;
       }
-      const paragraphText = segments[i].paragraphs.join("\n\n");
-      const plainText = ensureSentenceEnd(
-        announcement
-          ? paragraphText ? `${announcement}.\n\n${paragraphText}` : announcement
-          : paragraphText
-      );
+      const { announcement, segVoice, plainText, cacheKey, chunkPath, textDumpPath } = job;
 
-      // Stücke ohne Buchstaben und Ziffern (nur Satzzeichen, Leerraum) lehnt die Stimme ab: überspringen
-      if (!/[\p{L}\p{N}]/u.test(plainText)) {
-        params.onChunk(i + 1, segments.length);
-        continue;
-      }
-
-      // Cache-Schlüssel aus Text, Stimme, Tempo
-      const cacheKey = chunkHash({
-        text: plainText,
-        voice: segVoice.id,
-        rate,
-        chapterId: chapter.id,
-        index: i,
-      });
-      const chunkPath = join(
-        tmpDir,
-        `chunk-${String(i).padStart(3, "0")}-${cacheKey}.mp3`
-      );
-
-      if (existsSync(chunkPath) && statSync(chunkPath).size > 0) {
+      if (done(chunkPath)) {
         console.log(
           `[tts] chunk ${i + 1}/${segments.length} cached (${cacheKey}) — skip`
         );
@@ -148,15 +144,34 @@ export async function synthesizeChapter(params: {
         continue;
       }
 
-      // Gesendeten Text neben der MP3 ablegen: Hänger nachstellbar
-      const textDumpPath = join(
-        tmpDir,
-        `chunk-${String(i).padStart(3, "0")}-${cacheKey}.txt`
-      );
-      try {
-        writeFileSync(textDumpPath, plainText, "utf8");
-      } catch (err) {
-        console.warn(`[tts] could not write chunk-text dump:`, err);
+      dumpText(textDumpPath, plainText);
+
+      // Qwen-Batching: die folgenden offenen Abschnitte derselben eigenen Stimme gleich mitsprechen.
+      // Geht der Durchgang schief, spricht die Schleife sie einzeln wie bisher
+      if (batchSize > 1 && canBatch(segVoice)) {
+        const group = [job];
+        for (let k = i + 1; k < segments.length && group.length < batchSize; k++) {
+          const next = jobFor(k);
+          if (!next) continue;
+          if (next.segVoice.id !== segVoice.id) break;
+          if (!done(next.chunkPath)) group.push(next);
+        }
+        if (group.length > 1) {
+          const tb = Date.now();
+          try {
+            for (const g of group) dumpText(g.textDumpPath, g.plainText);
+            await synthesizeQwenBatch({ texts: group.map((g) => g.plainText), voice: segVoice, rate, outPaths: group.map((g) => g.chunkPath), signal });
+            console.log(`[tts] chunks ${i + 1}… (${group.length} im Durchgang) done in ${((Date.now() - tb) / 1000).toFixed(1)}s`);
+          } catch (err) {
+            if (signal.aborted) throw new AudiobookCanceled();
+            console.warn(`[tts] Qwen-Durchgang fehlgeschlagen, Abschnitte einzeln:`, err instanceof Error ? err.message : err);
+          }
+          if (done(chunkPath)) {
+            chunkFiles.push(chunkPath);
+            params.onChunk(i + 1, segments.length);
+            continue;
+          }
+        }
       }
 
       const t0 = Date.now();

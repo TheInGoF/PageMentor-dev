@@ -204,3 +204,82 @@ def _synth_clone(
         req_hash, elapsed, audio_s, elapsed / audio_s if audio_s > 0 else 0.0,
     )
     return samples, int(sr)
+
+
+# Höchstens so viele Abschnitte in einem Durchgang (Grafikspeicher, Wartezeit je Anfrage)
+MAX_BATCH = 4
+
+
+def _synth_clone_batch(
+    texts: list[str],
+    ref_audio: tuple[np.ndarray, int],
+    ref_text: Optional[str],
+    language: str,
+    seed: int,
+    max_new_tokens_override: Optional[int] = None,
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    top_k: Optional[int] = None,
+    repetition_penalty: Optional[float] = None,
+    instruct: Optional[str] = None,
+) -> list[tuple[np.ndarray, int]]:
+    """Mehrere Abschnitte derselben Stimme in einem Durchgang (Batching).
+
+    Gleicher Klon-Prompt und Seed für alle; die Grafikkarte rechnet die Abschnitte parallel. Erkennt die
+    Schleifenprüfung bei einem Abschnitt einen Hänger, stoppt der ganze Durchgang: dann 503, und das Backend
+    spricht die Abschnitte einzeln."""
+    if models._model is None:
+        raise HTTPException(status_code=503, detail=f"model not loaded ({models._load_error or 'still initializing'})")
+    if not texts or len(texts) > MAX_BATCH:
+        raise HTTPException(status_code=400, detail=f"1 bis {MAX_BATCH} Texte je Durchgang")
+
+    _apply_seed(seed)
+    clone_prompt = _get_clone_prompt(ref_audio, ref_text)
+    prompt_items = clone_prompt if isinstance(clone_prompt, list) else [clone_prompt]
+    effective_max = max_new_tokens_override if max_new_tokens_override and max_new_tokens_override > 0 else MAX_NEW_TOKENS
+    stopping_criteria, loop_detector = _build_stopping_criteria()
+    gen_kwargs: dict[str, Any] = {
+        "text": list(texts),
+        "language": [language] * len(texts),
+        "voice_clone_prompt": prompt_items[:1] * len(texts),
+        "max_new_tokens": effective_max,
+        **_resolve_sampling(temperature, top_p, top_k, repetition_penalty),
+    }
+    if stopping_criteria is not None:
+        gen_kwargs["stopping_criteria"] = stopping_criteria
+    if instruct and instruct.strip():
+        gen_kwargs["instruct"] = instruct.strip()
+
+    req_hash = hashlib.sha256(f"{'|'.join(texts)}|{seed}".encode("utf-8")).hexdigest()[:8]
+    log.info("clone batch start [%s] n=%d seed=%d lang=%s chars=%s", req_hash, len(texts), seed, language, [len(t) for t in texts])
+    t0 = time.time()
+
+    def run() -> tuple[Any, Any]:
+        try:
+            with torch.inference_mode():
+                return models._model.generate_voice_clone(**gen_kwargs)
+        except TypeError as te:
+            if "instruct" in gen_kwargs and "instruct" in str(te):
+                gen_kwargs.pop("instruct", None)
+                with torch.inference_mode():
+                    return models._model.generate_voice_clone(**gen_kwargs)
+            log.exception("generate_voice_clone batch [%s] failed", req_hash)
+            raise HTTPException(status_code=500, detail=f"generation failed: {te}") from te
+        except Exception as e:  # noqa: BLE001
+            log.exception("generate_voice_clone batch [%s] failed", req_hash)
+            raise HTTPException(status_code=500, detail=f"generation failed: {e}") from e
+
+    wavs, sr = _run_with_heartbeat_and_timeout(run, label=f"batch [{req_hash}]", timeout_s=GENERATION_TIMEOUT_S)
+    elapsed = time.time() - t0
+    if loop_detector is not None and loop_detector.triggered:
+        log.warning("batch [%s] LOOP DETECTED — abort after %.1fs", req_hash, elapsed)
+        raise HTTPException(status_code=503, detail="loop_detected in batch — speak the parts one by one")
+    if wavs is None or len(wavs) != len(texts):
+        raise HTTPException(status_code=500, detail=f"model returned {0 if wavs is None else len(wavs)} waveforms for {len(texts)} texts")
+
+    out = [(_normalize_samples(np.asarray(w)), int(sr)) for w in wavs]
+    if any(s.shape[0] == 0 for s, _ in out):
+        raise HTTPException(status_code=500, detail="model returned an empty waveform in batch")
+    audio_s = sum(s.shape[0] for s, _ in out) / float(sr) if sr else 0.0
+    log.info("batch done  [%s] n=%d in %.1fs (audio=%.1fs, rt=%.2fx)", req_hash, len(texts), elapsed, audio_s, elapsed / audio_s if audio_s > 0 else 0.0)
+    return out

@@ -29,6 +29,8 @@ export interface TtsEnginesInfo {
   hfTokenPresent: boolean;
   arbiter: Record<string, { container: string; gpu: boolean }>;
   quality?: { tada: "fast" | "calm" | "best"; f5: "fast" | "calm" | "best" };
+  // Qwen: Abschnitte je Durchgang (1 = aus)
+  qwenBatch?: number;
 }
 
 export interface KokoroPack {
@@ -61,6 +63,8 @@ export const engineApi = {
     ttsEngines: () => request<TtsEnginesInfo>("/api/engine/tts-engines"),
     setQuality: (engine: "tada" | "f5", quality: string) =>
       request<{ engine: string; quality: string }>(`/api/engine/quality/${engine}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quality }) }),
+    setQwenBatch: (n: number) =>
+      request<{ n: number }>("/api/engine/qwen-batch", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n }) }),
     kokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack"),
     installKokoroPack: () => request<KokoroPack>("/api/engine/kokoro-pack", { method: "POST" }),
     throttle: () => request<ThrottleInfo>("/api/engine/throttle"),
