@@ -309,7 +309,7 @@ export const settings: Record<string, string> = {
   "engine.banner.running": "Engine: {title}{pct} – {message}",
   "engine.banner.help": "The AI engine needs help. Click here to repair.",
   "engine.update": "Update",
-  "engine.updateHint": "Download new package versions and restart services",
+  "engine.updateHint": "Checks every package, downloads only what changed and recreates the services. Best while no audiobook runs: voices and language model restart.",
   "engine.quit": "Quit PageMentor",
   "engine.quitConfirm": "Quit PageMentor? Running audiobook or card jobs will stop.",
   "study.import.title": "Import from Studium Maker",

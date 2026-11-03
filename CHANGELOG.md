@@ -3,6 +3,13 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.122.0 – 2026-11-03
+### Change
+- Nach „Engine aktualisieren“ steht im Protokoll, welcher Paketstand je Dienst läuft.
+
+### Fix
+- „Engine aktualisieren“ legt die Dienste neu an; vorher startete eine Stimme wie Qwen weiter aus dem alten Container, obwohl das neue Paket schon geladen war.
+
 ## 1.121.0 – 2026-11-03
 ### Fix
 - „Engine aktualisieren“ lädt alle Programmpakete neu, auch wenn der Paketstand gleich aussieht; vorher blieb ein Paket alt, das beim letzten Laden noch nicht neu gebaut war.

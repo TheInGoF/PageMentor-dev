@@ -196,7 +196,8 @@ async function pullImages(progress: Progress, force = false): Promise<void> {
     }
   }
   progress("Starte Dienste …", 1);
-  await startServices(progress);
+  await startServices(progress, force);
+  if (force) await logRunningImages();
   await inDistro(`echo '${rev}' > ${IMAGES_MARK_IN_DISTRO} && rm -f /opt/pagementor/.images-version`, { timeoutMs: 30_000, quiet: true });
   await pruneImages(progress);
 }
@@ -236,21 +237,24 @@ async function portHint(text: string): Promise<string | null> {
     : `Port ${port} ist belegt, ein anderes Programm nutzt ihn. Bitte Windows neu starten oder das Programm beenden, danach „Dienste starten“.`;
 }
 
-async function startServices(progress: Progress): Promise<void> {
+// recreate: Container neu anlegen, damit sie das eben geladene Paket nutzen. Sonst startet der Arbiter
+// eine Stimme aus dem alten Container weiter, obwohl das neue Paket schon da ist
+async function startServices(progress: Progress, recreate = false): Promise<void> {
   progress("Starte Dienste …");
   await syncCompose();
   await writeEngineEnv();
   const compose = `${DOCKER} compose -f ${COMPOSE_IN_DISTRO}`;
   const extra = extraServices();
   // Kerndienste zuerst und für sich: eine fehlende Zusatzstimme darf sie nicht blockieren
-  const core = await inDistro(`${compose} up -d --remove-orphans ${ALWAYS_ON.join(" ")}`, {
+  const again = recreate ? " --force-recreate" : "";
+  const core = await inDistro(`${compose} up -d --remove-orphans${again} ${ALWAYS_ON.join(" ")}`, {
     timeoutMs: 15 * 60_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
   });
   if (core.code !== 0) throw new RepairError(await portHint(failText(core)) ?? `Dienste starten fehlgeschlagen: ${failText(core)}`);
   // Abgeschaltete Zusatzstimmen entfernen; scheitert ohne Folgen, wenn es sie nicht gibt
   if (extra.off.length) await inDistro(`docker rm -f ${extra.off.join(" ")} >/dev/null 2>&1 || true`, { timeoutMs: 120_000, quiet: true });
-  const cmds = [extra.up.length ? `${compose} up -d ${extra.up.join(" ")}` : "", extra.create.length ? `${compose} up --no-start ${extra.create.join(" ")}` : ""].filter(Boolean);
+  const cmds = [extra.up.length ? `${compose} up -d${again} ${extra.up.join(" ")}` : "", extra.create.length ? `${compose} up --no-start${again} ${extra.create.join(" ")}` : ""].filter(Boolean);
   if (!cmds.length) return;
   const voices = await inDistro(cmds.join(" && "), { timeoutMs: 15 * 60_000, onLine: (l) => progress(l.trim().slice(0, 160)) });
   if (voices.code !== 0) {
@@ -261,6 +265,15 @@ async function startServices(progress: Progress): Promise<void> {
         : `Kerndienste laufen. Zusätzliche Stimmen nicht gestartet: ${failText(voices)}`
     );
   }
+}
+
+// Nach „Engine aktualisieren“: welcher Paketstand je Container läuft (Erstelldatum des Pakets), zur Kontrolle im Protokoll
+async function logRunningImages(): Promise<void> {
+  const r = await inDistro(
+    `for c in $(docker ps -a --format '{{.Names}}' | grep '^pm-'); do i=$(docker inspect -f '{{.Image}}' "$c"); echo "$c $(docker image inspect -f '{{.Created}}' "$i" | cut -c1-16)"; done`,
+    { timeoutMs: 60_000, quiet: true }
+  );
+  if (r.code === 0 && r.stdout.trim()) logEngine("info", `Paketstände nach dem Aktualisieren: ${r.stdout.trim().split("\n").join(" · ")}`);
 }
 
 // Zusatzmodelle in den Docling-Cache (Docker-Volume, übersteht Updates); schon vorhandene Dateien werden übersprungen

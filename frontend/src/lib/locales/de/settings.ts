@@ -309,7 +309,7 @@ export const settings: Record<string, string> = {
   "engine.banner.running": "Engine: {title}{pct} – {message}",
   "engine.banner.help": "Die KI-Engine braucht Hilfe. Hier klicken zum Reparieren.",
   "engine.update": "Aktualisieren",
-  "engine.updateHint": "Neue Versionen der Programmpakete laden und Dienste neu starten",
+  "engine.updateHint": "Prüft alle Programmpakete, lädt nur Geändertes und legt die Dienste neu an. Am besten, wenn kein Hörbuch läuft: Stimmen und Sprachmodell starten dabei neu.",
   "engine.quit": "PageMentor beenden",
   "engine.quitConfirm": "PageMentor beenden? Laufende Hörbuch- oder Kartenjobs werden abgebrochen.",
   "study.import.title": "Übernahme aus dem Studium Maker",
