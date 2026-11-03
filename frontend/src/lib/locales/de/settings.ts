@@ -493,7 +493,6 @@ export const settings: Record<string, string> = {
   "voices.qwen.tester": "Hörprobe",
   "voices.qwen.dials": "Regler",
   "voices.qwen.dialsHint": "Leer = Standardwerte. Driftet die Stimme, Repetition Penalty leicht erhöhen.",
-  "voices.qwen.connection": "Verbindung",
   "voices.qwen.reset": "Zurücksetzen",
   "voices.qwen.resetHint": "Hilft, wenn eine Hörprobe hängt.",
   "ttsEngines.qwen": "Klont Stimmen, Stimmen aus Beschreibung, Vorgabe-Stimmen. Braucht die Grafikkarte.",

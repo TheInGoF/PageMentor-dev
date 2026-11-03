@@ -34,6 +34,20 @@ export function EnginePanel() {
     }
   }
 
+  // Hängt eine Stimme mit voller Grafikkarte: Stimmen-Container und Sprachmodell neu starten
+  const [gpuResetBusy, setGpuResetBusy] = useState(false);
+  async function resetGpu() {
+    setGpuResetBusy(true);
+    try {
+      await api.admin.gpuReset();
+      toast.show(t("settings.tts.resetDone"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setGpuResetBusy(false);
+    }
+  }
+
   async function repair(id: string) {
     try {
       await api.engine.repair(id);
@@ -103,6 +117,11 @@ export function EnginePanel() {
           <SettingRow label={t("engine.update")} hint={t("engine.updateHint")}>
             <Button variant="outline" className="w-full" onClick={() => repair("pull-images")} disabled={!!status?.task}>
               {t("engine.update")}
+            </Button>
+          </SettingRow>
+          <SettingRow label={t("settings.tts.resetButton")} hint={t("voices.qwen.resetHint")}>
+            <Button variant="outline" className="w-full" onClick={() => void resetGpu()} disabled={gpuResetBusy}>
+              {gpuResetBusy ? t("settings.tts.resetBusy") : t("voices.qwen.reset")}
             </Button>
           </SettingRow>
           <SettingRow label={t("engine.quit")} hint={t("engine.quitHint")}>

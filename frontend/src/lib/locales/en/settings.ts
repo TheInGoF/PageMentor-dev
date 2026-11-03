@@ -493,7 +493,6 @@ export const settings: Record<string, string> = {
   "voices.qwen.tester": "Preview",
   "voices.qwen.dials": "Dials",
   "voices.qwen.dialsHint": "Empty = defaults. If the voice drifts, raise repetition penalty slightly.",
-  "voices.qwen.connection": "Connection",
   "voices.qwen.reset": "Reset",
   "voices.qwen.resetHint": "Helps when a preview hangs.",
   "ttsEngines.qwen": "Clones voices, voices from a description, preset voices. Needs the graphics card.",

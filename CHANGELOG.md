@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.117.0 – 2026-11-03
+### Change
+- „GPU zurücksetzen“ steht jetzt auf der Engine-Seite unter Wartung.
+- Qwen-Einstellung „Abschnitte gleichzeitig“ steht jetzt in den Qwen-Experteneinstellungen bei den Reglern.
+- Qwen-Experteneinstellungen ohne Arbiter-Adresse und API-Key; die Engine läuft immer auf diesem PC.
+
 ## 1.116.0 – 2026-11-03
 ### Change
 - Cover-Auswahl im Hörbuch-Reiter: „Als Standard für alle Hefte“ macht die gewählte Vorlage zum globalen Standard.

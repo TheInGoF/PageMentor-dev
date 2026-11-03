@@ -22,6 +22,8 @@ export interface LlmConfig {
   qwenTtsTopP?: string;
   qwenTtsTopK?: string;
   qwenTtsRepetitionPenalty?: string;
+  // Qwen: Abschnitte je Durchgang (1 = aus)
+  qwenBatch?: string;
   ttsMaxChunk?: string;
   doclingCharts?: string;
 }

@@ -1,4 +1,4 @@
-// Qwen3-TTS für Experten: Vorgabe-Stimmen, Sprech-Anweisung, Hörprobe, Regler, Verbindung
+// Qwen3-TTS für Experten: Vorgabe-Stimmen, Sprech-Anweisung, Hörprobe, Regler, Abschnitte gleichzeitig
 import { Input } from "../ui/Input";
 import { Button } from "../ui/Button";
 import { t } from "../../lib/i18n";
@@ -15,8 +15,8 @@ const DIALS = [
 
 export function TtsSection({ st }: { st: SettingsState }) {
   const {
-    gpuResetBusy, llmConfig, previewAudioUrl, previewBusy, previewLang, previewText, previewVoiceId, qwenTtsKeyInput, removeApiKey, resetGpu, runPresetPreview,
-    setLlmConfig, setPreviewLang, setPreviewText, setPreviewVoiceId, setQwenTtsKeyInput, voices, presetVisibility, togglePresetVisibility,
+    llmConfig, previewAudioUrl, previewBusy, previewLang, previewText, previewVoiceId, runPresetPreview,
+    setLlmConfig, setPreviewLang, setPreviewText, setPreviewVoiceId, voices, presetVisibility, togglePresetVisibility,
   } = st;
   const presets = voices.filter((v) => v.id.startsWith("preset:") && v.language === previewLang);
   const chunk = Number((llmConfig.ttsMaxChunk ?? "").trim());
@@ -113,39 +113,17 @@ export function TtsSection({ st }: { st: SettingsState }) {
         </div>
         {chunkBad && <p className="text-xs text-red-400">{t("settings.tts.advanced.chunkSizeOutOfRange")}</p>}
         <p className="text-xs text-neutral-500">{t("voices.qwen.dialsHint")}</p>
-      </div>
-
-      <div className="flex flex-col gap-4">
-        <SubTitle>{t("voices.qwen.connection")}</SubTitle>
-        <Input
-          label={t("settings.tts.qwenTtsUrl")}
-          type="url"
-          value={llmConfig.qwenTtsUrl ?? ""}
-          onChange={(e) => setLlmConfig({ ...llmConfig, qwenTtsUrl: e.target.value })}
-          placeholder="http://localhost:8790"
-        />
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <Input
-              label={t("settings.tts.qwenTtsApiKey")}
-              type="password"
-              value={qwenTtsKeyInput}
-              onChange={(e) => setQwenTtsKeyInput(e.target.value)}
-              placeholder={llmConfig.qwenTtsApiKeyPresent ? "•••" : t("settings.tts.qwenTtsKeyPlaceholder")}
-            />
-          </div>
-          {llmConfig.qwenTtsApiKeyPresent && (
-            <Button variant="ghost" onClick={() => removeApiKey("qwenTts")}>
-              {t("settings.llm.removeKey")}
-            </Button>
-          )}
-        </div>
-        <SettingRow label={t("settings.tts.resetButton")} hint={t("voices.qwen.resetHint")}>
-          <Button variant="outline" className="w-full" onClick={resetGpu} disabled={gpuResetBusy}>
-            {gpuResetBusy ? t("settings.tts.resetBusy") : t("voices.qwen.reset")}
-          </Button>
+        <SettingRow label={t("ttsEngines.qwenBatch")} hint={t(Number(llmConfig.qwenBatch) > 1 ? "ttsEngines.qwenBatchOnHint" : "ttsEngines.qwenBatchHint")}>
+          <select className="input w-full" value={llmConfig.qwenBatch || "1"} onChange={(e) => setLlmConfig({ ...llmConfig, qwenBatch: e.target.value })}>
+            {[1, 2, 3, 4].map((n) => (
+              <option key={n} value={String(n)}>
+                {n === 1 ? t("ttsEngines.qwenBatchOff") : t("ttsEngines.qwenBatchN", { n })}
+              </option>
+            ))}
+          </select>
         </SettingRow>
       </div>
+
     </Expert>
   );
 }
