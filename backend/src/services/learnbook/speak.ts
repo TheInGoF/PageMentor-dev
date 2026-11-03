@@ -1,7 +1,7 @@
 // Lernhörbuch, Schritt Sprache: Skript in Sprechstücke und Pausen zerlegen, Deutsch und Fremdsprache mit
 // eigener Stimme, echte Stille für [PAUSE n], [langsam]…[/langsam] gebremst, je Einheit eine MP3, am Ende ein M4B
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { db } from "../../db";
 import { AUDIOBOOK_EXPORT_DIR, DATA_DIR } from "../../paths";
@@ -17,6 +17,7 @@ import { ensureCover } from "../covers";
 import { bookFileName } from "../audiobook/export";
 import { learnSettings, listUnits } from "./store";
 import { canBatch, qwenBatchSize, synthesizeQwenBatch } from "../../tts/engines/qwen/batch";
+import { registerExport, removeExport } from "../cleanup";
 import { learnAuthor, learnFileSuffix, learnTitle } from "./meta";
 
 export type ScriptPart = { kind: "speech"; lang: string | null; text: string; slow?: boolean } | { kind: "pause"; ms: number };
@@ -228,5 +229,27 @@ export async function buildLearnBook(docId: string, intro?: { path: string; dura
   mkdirSync(AUDIOBOOK_EXPORT_DIR, { recursive: true });
   const dest = join(AUDIOBOOK_EXPORT_DIR, bookFileName(docId).replace(/\.m4b$/i, `${learnFileSuffix(kind)}.m4b`));
   copyFileSync(out, dest);
+  registerExport(dest, docId, kind);
   return dest;
+}
+
+// Lernhörbuch-Audio löschen: alle Einheiten (oder eine), Intro, M4B und die Kopie im Hörbücher-Ordner.
+// Die Skripte bleiben; der nächste Lauf spricht nur neu
+export function clearLearnAudio(docId: string, kind: "subject" | "language", idx?: number): void {
+  const dir = resolve(DATA_DIR, "audio", docId, "learn");
+  const units = db().prepare("SELECT idx, audio_path FROM learn_units WHERE document_id = ?").all(docId) as Array<{ idx: number; audio_path: string | null }>;
+  for (const u of units) {
+    if (idx !== undefined && u.idx !== idx) continue;
+    const base = join(dir, `unit-${String(u.idx + 1).padStart(3, "0")}`);
+    for (const p of [u.audio_path, `${base}.mp3`, base]) if (p) rmSync(p, { recursive: true, force: true });
+  }
+  db()
+    .prepare(`UPDATE learn_units SET audio_path = NULL, audio_stamp = NULL, duration_ms = NULL WHERE document_id = ?${idx !== undefined ? " AND idx = ?" : ""}`)
+    .run(...(idx !== undefined ? [docId, idx] : [docId]));
+  // Das M4B stimmt nicht mehr, sobald eine Einheit fehlt
+  rmSync(learnBookPath(docId), { force: true });
+  if (idx === undefined) {
+    for (const p of [learnIntroPath(docId), `${learnIntroPath(docId)}.json`]) rmSync(p, { force: true });
+  }
+  removeExport(join(AUDIOBOOK_EXPORT_DIR, bookFileName(docId).replace(/\.m4b$/i, `${learnFileSuffix(kind)}.m4b`)));
 }

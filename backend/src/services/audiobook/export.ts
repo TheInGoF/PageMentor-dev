@@ -5,6 +5,7 @@ import { join } from "path";
 import { db } from "../../db";
 import { AUDIOBOOK_EXPORT_DIR, DATA_DIR, IS_WINDOWS } from "../../paths";
 import { logger } from "../../log/logger";
+import { registerExport } from "../cleanup";
 
 const log = logger("audiobook");
 
@@ -47,6 +48,7 @@ export function exportBook(docId: string): string | null {
     mkdirSync(AUDIOBOOK_EXPORT_DIR, { recursive: true });
     const dest = exportedBookPath(docId);
     copyFileSync(src, dest);
+    registerExport(dest, docId, "original");
     log.info(`Hörbuch abgelegt: ${dest}`, { docId });
     return dest;
   } catch (err) {

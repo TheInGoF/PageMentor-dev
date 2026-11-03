@@ -3,6 +3,14 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.126.0 – 2026-11-03
+### New
+- Aufräumen: PageMentor löscht nach dem Start und alle 6 Stunden Hörbuch-Dateien, die es nicht mehr braucht (Reste gelöschter Hefte, alte Kapitel, fertige Zwischenstücke, alte Cover, eigene Kopien unter überholtem Namen); von Hand unter Engine → Wartung → „Speicher aufräumen“.
+- Lern- und Sprachlern-Hörbuch: Audio des ganzen Hörbuchs (⋯ oben) oder einer Einheit (⋯ an der Einheit) löschen; die Skripte bleiben.
+
+### Fix
+- „Hörbuch löschen“ beim Original-Hörbuch löscht nicht mehr Lern- und Sprachlern-Hörbuch mit, entfernt dafür auch die Kopie im Hörbücher-Ordner.
+
 ## 1.125.0 – 2026-11-03
 ### Change
 - Qwen-Image auf Torch 2.5.1.

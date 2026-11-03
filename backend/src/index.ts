@@ -10,6 +10,7 @@ import { batchRoutes } from "./routes/batch";
 import { promptRoutes, pronunciationRoutes } from "./routes/prompts";
 import { systemRoutes } from "./routes/system";
 import { startMonitor } from "./services/system/monitor";
+import { startCleanup } from "./services/cleanup";
 import { coverRoutes } from "./routes/covers";
 import { studyRoutes } from "./routes/study";
 import { knowledgeRoutes, startQueue, watchImportFolder } from "./routes/knowledge";
@@ -178,6 +179,8 @@ openUi(APP_URL);
 startMaintenance();
 // Leistungsanzeige (Diagnose): Verlauf ab dem Start mitschreiben
 startMonitor();
+// Aufräumen: Hörbuch-Leichen und alte Kopien, nach dem Start und alle 6 Stunden
+startCleanup();
 
 // Engine im Hintergrund prüfen und starten, blockiert die App nicht
 void autoStart().catch((err) => console.error("[engine] Autostart fehlgeschlagen", err));

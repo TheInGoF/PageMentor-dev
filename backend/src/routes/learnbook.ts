@@ -5,7 +5,7 @@ import { serveFileWithRange } from "./audio/files";
 import { db } from "../db";
 import { learnSettings, listUnits } from "../services/learnbook/store";
 import { cancelLearnbook, learnIntroInfo, learnVoice, learnState, startLearnbook, uploadLearnbook } from "../services/learnbook/run";
-import { learnBookPath } from "../services/learnbook/speak";
+import { clearLearnAudio, learnBookPath } from "../services/learnbook/speak";
 import { learnFileSuffix } from "../services/learnbook/meta";
 import { bookFileName } from "../services/audiobook/export";
 import { absEnabled } from "../services/llmConfig";
@@ -52,6 +52,20 @@ learnbookRoutes.put("/:docId", async (c) => {
 learnbookRoutes.post("/:docId/start", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { probe?: boolean; rate?: string; voice?: string };
   return c.json(startLearnbook(c.req.param("docId"), !!body.probe, body.rate || "+0%", body.voice || undefined));
+});
+
+// Audio löschen: ganzes Lernhörbuch oder eine Einheit; Skripte bleiben. Nicht während eines Laufs
+learnbookRoutes.delete("/:docId/audio", (c) => {
+  const docId = c.req.param("docId");
+  if (learnState(docId)?.running) return c.json({ error: "Läuft gerade, erst abbrechen" }, 409);
+  clearLearnAudio(docId, learnSettings(docId).kind);
+  return c.json({ status: "ok" });
+});
+learnbookRoutes.delete("/:docId/unit/:idx/audio", (c) => {
+  const docId = c.req.param("docId");
+  if (learnState(docId)?.running) return c.json({ error: "Läuft gerade, erst abbrechen" }, 409);
+  clearLearnAudio(docId, learnSettings(docId).kind, Number(c.req.param("idx")));
+  return c.json({ status: "ok" });
 });
 
 learnbookRoutes.post("/:docId/cancel", (c) => {

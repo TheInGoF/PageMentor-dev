@@ -6,6 +6,8 @@ import { db } from "../../db";
 import { DATA_DIR, fromDataPath, toDataRel } from "../../paths";
 import type { EngineId } from "../../tts/engines/base";
 import type { Chapter } from "./state";
+import { exportedBookPath } from "./export";
+import { removeExport } from "../cleanup";
 
 // 8 Zeichen Hash: Text, Stimme, Tempo, Kapitel, Index
 export function chunkHash(input: {
@@ -94,14 +96,17 @@ export function deleteAudioForChapter(chapterId: string, chapterFilePath: string
 }
 
 // Alle Hörbuch-Dateien eines Dokuments löschen
+// Original-Hörbuch löschen: Kapitel, Zwischenstücke, Intro-Audio, M4B und seine Kopie im Hörbücher-Ordner.
+// Lern- und Sprachlern-Hörbuch (learn/, learn.m4b) liegen im selben Ordner und bleiben
 export function clearAudio(docId: string): void {
   const dir = join(DATA_DIR, "audio", docId);
   if (existsSync(dir)) {
     for (const entry of readdirSync(dir)) {
-      const full = join(dir, entry);
-      rmSync(full, { recursive: true, force: true });
+      if (entry === "learn" || entry === "learn.m4b") continue;
+      rmSync(join(dir, entry), { recursive: true, force: true });
     }
   }
+  removeExport(exportedBookPath(docId));
   db().prepare(
     `DELETE FROM audio WHERE chapter_id IN (SELECT id FROM chapters WHERE document_id = ?)`
   ).run(docId);

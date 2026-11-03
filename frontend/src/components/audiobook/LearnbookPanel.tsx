@@ -115,11 +115,23 @@ export function useLearnbook(docId: string, kind: LearnKind, rate: string, enabl
     }
   };
   const hasAudio = !other && !!info?.units.some((u) => u.hasAudio);
+  // Audio löschen (ganzes Lernhörbuch oder eine Einheit); Skripte bleiben, der nächste Lauf spricht neu
+  const clearAudio = async (idx?: number) => {
+    if (!confirm(t(idx === undefined ? "learn.clearConfirm" : "learn.clearUnitConfirm", { n: (idx ?? 0) + 1 }))) return;
+    try {
+      await request(idx === undefined ? `${base}/audio` : `${base}/unit/${idx}/audio`, { method: "DELETE" });
+      toast.show(t("learn.cleared"), "success");
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    }
+    await load();
+  };
   const menu = [
     ...(!other && info?.hasBook ? [{ label: t("audiobook.download.m4b"), onClick: () => window.open(`${base}/book`, "_blank") }] : []),
     ...(!other && info?.hasBook && info.abs ? [{ label: absBusy ? t("learn.absUploading") : t("learn.absUpload"), onClick: () => void uploadAbs(), disabled: absBusy || running }] : []),
+    ...(!other && (hasAudio || info?.hasBook) ? [{ label: t("learn.clear"), onClick: () => void clearAudio(), danger: true, disabled: running }] : []),
   ];
-  return { info, other, running, st: info?.state ?? null, start, cancel, setLang, hasAudio, menu, base, load, voiceId };
+  return { info, other, running, st: info?.state ?? null, start, cancel, setLang, hasAudio, menu, base, load, voiceId, clearAudio };
 }
 
 export type LearnbookCtl = ReturnType<typeof useLearnbook>;
@@ -218,7 +230,10 @@ export function LearnbookBody({ ctl, kind }: { ctl: LearnbookCtl; kind: LearnKin
                 )}
                 <Menu
                   label={t("learn.actions")}
-                  items={[{ label: t(open === u.idx ? "learn.hideScript" : "learn.showScript"), onClick: () => setOpen(open === u.idx ? null : u.idx), disabled: !u.script }]}
+                  items={[
+                    { label: t(open === u.idx ? "learn.hideScript" : "learn.showScript"), onClick: () => setOpen(open === u.idx ? null : u.idx), disabled: !u.script },
+                    ...(u.hasAudio ? [{ label: t("learn.clearUnit"), onClick: () => void ctl.clearAudio(u.idx), danger: true, disabled: running }] : []),
+                  ]}
                 />
               </div>
               {playing?.idx === u.idx && (

@@ -34,6 +34,23 @@ export function EnginePanel() {
     }
   }
 
+  // Hörbuch-Leichen und alte Kopien entfernen (läuft sonst nach dem Start und alle 6 Stunden von selbst)
+  const [cleaning, setCleaning] = useState(false);
+  async function runCleanup() {
+    setCleaning(true);
+    try {
+      const r = await api.engine.cleanup();
+      toast.show(
+        r.skipped ? t("engine.cleanupSkipped", { why: r.skipped }) : t("engine.cleanupDone", { n: r.files, gb: (r.bytes / 1024 ** 3).toFixed(2).replace(".", ",") }),
+        r.skipped ? "info" : "success"
+      );
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : t("common.error"), "error");
+    } finally {
+      setCleaning(false);
+    }
+  }
+
   // Hängt eine Stimme mit voller Grafikkarte: Stimmen-Container und Sprachmodell neu starten
   const [gpuResetBusy, setGpuResetBusy] = useState(false);
   async function resetGpu() {
@@ -122,6 +139,11 @@ export function EnginePanel() {
           <SettingRow label={t("settings.tts.resetButton")} hint={t("voices.qwen.resetHint")}>
             <Button variant="outline" className="w-full" onClick={() => void resetGpu()} disabled={gpuResetBusy}>
               {gpuResetBusy ? t("settings.tts.resetBusy") : t("voices.qwen.reset")}
+            </Button>
+          </SettingRow>
+          <SettingRow label={t("engine.cleanup")} hint={t("engine.cleanupHint")}>
+            <Button variant="outline" className="w-full" onClick={() => void runCleanup()} disabled={cleaning}>
+              {cleaning ? t("engine.cleanupBusy") : t("engine.cleanup")}
             </Button>
           </SettingRow>
           <SettingRow label={t("engine.restart")} hint={t("engine.restartHint")}>
