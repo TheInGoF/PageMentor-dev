@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.123.0 – 2026-11-03
+### Fix
+- Beim Start der Dienste werden Container, die noch auf einem älteren Paket laufen, mit dem geladenen neuen Paket neu angelegt; das gilt auch für „Programmpakete laden“ und den automatischen Abgleich.
+
 ## 1.122.0 – 2026-11-03
 ### Change
 - Nach „Engine aktualisieren“ steht im Protokoll, welcher Paketstand je Dienst läuft.

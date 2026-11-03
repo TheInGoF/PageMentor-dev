@@ -247,6 +247,7 @@ async function startServices(progress: Progress, recreate = false): Promise<void
   const extra = extraServices();
   // Kerndienste zuerst und für sich: eine fehlende Zusatzstimme darf sie nicht blockieren
   const again = recreate ? " --force-recreate" : "";
+  await removeStaleContainers();
   const core = await inDistro(`${compose} up -d --remove-orphans${again} ${ALWAYS_ON.join(" ")}`, {
     timeoutMs: 15 * 60_000,
     onLine: (l) => progress(l.trim().slice(0, 160)),
@@ -265,6 +266,17 @@ async function startServices(progress: Progress, recreate = false): Promise<void
         : `Kerndienste laufen. Zusätzliche Stimmen nicht gestartet: ${failText(voices)}`
     );
   }
+}
+
+// Container, die noch auf einem älteren Paket laufen als dem geladenen (gleicher Name, neues Paket), entfernen:
+// compose legt sie danach mit dem neuen Paket an. Sonst startet der Arbiter eine Stimme weiter aus dem alten Container
+async function removeStaleContainers(): Promise<void> {
+  const r = await inDistro(
+    `for c in $(docker ps -a --format '{{.Names}}' | grep '^pm-'); do ref=$(docker inspect -f '{{.Config.Image}}' "$c"); cur=$(docker inspect -f '{{.Image}}' "$c"); new=$(docker image inspect -f '{{.Id}}' "$ref" 2>/dev/null); if [ -n "$new" ] && [ "$cur" != "$new" ]; then docker rm -f "$c" >/dev/null && echo "$c"; fi; done`,
+    { timeoutMs: 120_000, quiet: true }
+  );
+  const stale = r.stdout.split("\n").map((s) => s.trim()).filter(Boolean);
+  if (stale.length) logEngine("info", `Auf neues Paket umgestellt: ${stale.join(", ")}`);
 }
 
 // Nach „Engine aktualisieren“: welcher Paketstand je Container läuft (Erstelldatum des Pakets), zur Kontrolle im Protokoll
