@@ -310,7 +310,7 @@ export const settings: Record<string, string> = {
   "engine.banner.help": "Die KI-Engine braucht Hilfe. Hier klicken zum Reparieren.",
   "engine.update": "Aktualisieren",
   "engine.cleanup": "Speicher aufräumen",
-  "engine.cleanupHint": "Löscht Hörbuch-Dateien, die PageMentor nicht mehr braucht: Reste gelöschter Hefte, alte Kapitel, fertige Zwischenstücke, alte Cover und eigene Kopien im Hörbücher-Ordner unter überholtem Namen. Läuft auch nach dem Start und alle 6 Stunden, aber nie während eines Hörbuchs.",
+  "engine.cleanupHint": "Löscht Hörbuch-Dateien, die PageMentor nicht mehr braucht: Reste gelöschter Hefte, alte Kapitel, fertige Zwischenstücke, alte Cover und eigene Kopien im Hörbücher-Ordner unter überholtem Namen. Läuft auch nach dem Start und alle 6 Stunden; ein Heft, das gerade gesprochen wird, bleibt dabei unberührt.",
   "engine.cleanupBusy": "Räume auf …",
   "engine.cleanupDone": "{n} Dateien/Ordner gelöscht, {gb} GB frei",
   "engine.cleanupSkipped": "Nicht aufgeräumt: {why}",

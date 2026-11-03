@@ -29,7 +29,8 @@ beforeAll(async () => {
   touch(join(a, "chapter-001-c1.mp3")); // gültig
   touch(join(a, "chapter-005-old.mp3")); // ohne Eintrag
   touch(join(a, ".tmp-c1", "chunk-000.mp3")); // Kapitel fertig
-  touch(join(a, ".tmp-c2", "chunk-000.mp3")); // Kapitel offen: Fortsetzungs-Vorrat
+  touch(join(a, ".tmp-c2", "chunk-000.mp3")); // Kapitel offen, aber kein Lauf: weg
+  touch(join(a, "learn", "unit-001", "abc.mp3")); // Stücke einer Einheit: weg
   touch(join(a, "book.m4b"));
   touch(join(a, "learn.m4b"));
   touch(join(a, "learn", "intro.mp3"));
@@ -64,7 +65,8 @@ describe("Aufräumen", () => {
     expect(existsSync(join(EXPORT, "Alter_Name.m4b"))).toBe(false);
 
     expect(existsSync(join(a, "chapter-001-c1.mp3"))).toBe(true);
-    expect(existsSync(join(a, ".tmp-c2"))).toBe(true);
+    expect(existsSync(join(a, ".tmp-c2"))).toBe(false);
+    expect(existsSync(join(a, "learn", "unit-001"))).toBe(false);
     expect(existsSync(join(a, "book.m4b"))).toBe(true);
     expect(existsSync(join(a, "learn.m4b"))).toBe(true);
     expect(existsSync(join(a, "learn", "intro.mp3"))).toBe(true);

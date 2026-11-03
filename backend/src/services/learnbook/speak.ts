@@ -189,6 +189,8 @@ export async function speakUnit(p: {
   await concatMp3(seq, merged);
   const path = resolve(DATA_DIR, "audio", p.docId, "learn", `unit-${String(p.idx + 1).padStart(3, "0")}.mp3`);
   const { durationMs } = await normalizeAndTag({ input: merged, output: path, title: p.title, album: p.album, trackNumber: p.idx + 1, coverPath: await ensureCover(p.docId, learnSettings(p.docId).kind) });
+  // Einheit fertig: die einzelnen Stücke braucht niemand mehr
+  rmSync(dir, { recursive: true, force: true });
   return { path, durationMs };
 }
 

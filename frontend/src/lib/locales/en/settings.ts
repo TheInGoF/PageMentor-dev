@@ -310,7 +310,7 @@ export const settings: Record<string, string> = {
   "engine.banner.help": "The AI engine needs help. Click here to repair.",
   "engine.update": "Update",
   "engine.cleanup": "Clean up storage",
-  "engine.cleanupHint": "Deletes audiobook files PageMentor no longer needs: leftovers of deleted booklets, old chapters, finished intermediate parts, old covers and own copies in the audiobooks folder under outdated names. Also runs after start and every 6 hours, never during an audiobook.",
+  "engine.cleanupHint": "Deletes audiobook files PageMentor no longer needs: leftovers of deleted booklets, old chapters, finished intermediate parts, old covers and own copies in the audiobooks folder under outdated names. Also runs after start and every 6 hours; a booklet being spoken right now is left alone.",
   "engine.cleanupBusy": "Cleaning up …",
   "engine.cleanupDone": "{n} files/folders deleted, {gb} GB freed",
   "engine.cleanupSkipped": "Not cleaned: {why}",

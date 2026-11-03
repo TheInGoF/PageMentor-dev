@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.129.0 – 2026-11-03
+### Change
+- Aufräumen entfernt alle Stückordner (unit-NNN, .tmp-Kapitel) außerhalb eines Laufs und überspringt nur das Heft, das gerade gesprochen wird, statt ganz zu warten.
+- Eine fertige Einheit eines Lernhörbuchs löscht ihre einzelnen Stücke sofort.
+
 ## 1.128.0 – 2026-11-03
 ### Fix
 - Keine Warnung mehr beim Start, solange die Engine-Umgebung hochfährt (Log-Spiegel der Engine); erst nach 90 s ohne Antwort.

@@ -1,9 +1,9 @@
 // Aufräumen: Hörbuch-Dateien, die PageMentor selbst erzeugt hat und nicht mehr braucht. Gelöscht wird nur, was sich
-// eindeutig zuordnen lässt; alles andere bleibt. Läuft nach dem Start, alle 6 Stunden und von Hand, aber nie, solange
-// ein Hörbuch oder Lernhörbuch läuft (dessen Zwischendateien sind dann in Benutzung).
+// eindeutig zuordnen lässt; alles andere bleibt. Läuft nach dem Start, alle 6 Stunden und von Hand. Ein Heft, dessen
+// Hörbuch oder Lernhörbuch gerade gesprochen wird, bleibt dabei unberührt (seine Zwischendateien sind in Benutzung).
 //   audio/<heft>/…          Hefte, die es nicht mehr gibt; Kapitel-MP3s ohne Eintrag (Neunummerierung, alte Titel);
-//                           Zwischenordner .tmp-<kapitel> von fertigen oder gelöschten Kapiteln, sonst nach 7 Tagen
-//   audio/<heft>/learn/…    Stückordner fertiger Einheiten, Einheiten über die aktuelle Zahl hinaus
+//                           Stückordner .tmp-<kapitel> (nur Zwischenstücke, nach dem Lauf nicht mehr gebraucht)
+//   audio/<heft>/learn/…    Stückordner unit-NNN/, Einheit-MP3s ohne Eintrag oder über die aktuelle Zahl hinaus
 //   audio/compare/…         Stimmvergleiche gelöschter Hefte oder älter als 14 Tage
 //   covers/                 Cover gelöschter Hefte, ältere Fassungen derselben Vorlage, Seiten außer der gewählten
 //   Hörbücher-Ordner        Kopien, die PageMentor abgelegt hat, unter einem Namen, der nicht mehr gilt
@@ -12,8 +12,8 @@ import { join, resolve } from "node:path";
 import { db } from "../db";
 import { AUDIOBOOK_EXPORT_DIR, DATA_DIR, fromDataPath } from "../paths";
 import { emitLog } from "../log/logger";
-import { anyGenerating } from "./audiobook";
-import { learnBusy } from "./learnbook/run";
+import { isGenerating } from "./audiobook";
+import { learnState } from "./learnbook/run";
 import { run } from "../tts/ffmpeg/run";
 
 const DAY = 24 * 3600_000;
@@ -110,13 +110,10 @@ class Sweep {
 }
 
 // ----- Hörbuch-Ordner je Heft -----
+const busy = (docId: string) => isGenerating(docId) || !!learnState(docId)?.running;
+
 function sweepAudio(s: Sweep, docs: Set<string>): void {
   const root = join(DATA_DIR, "audio");
-  const chapters = new Map<string, { doc: string; done: boolean }>(
-    (db().prepare("SELECT c.id, c.document_id, a.status FROM chapters c LEFT JOIN audio a ON a.chapter_id = c.id").all() as Array<{ id: string; document_id: string; status: string | null }>).map(
-      (r) => [r.id, { doc: r.document_id, done: r.status === "done" }]
-    )
-  );
   const keep = new Set(
     (db().prepare("SELECT stored_path FROM audio WHERE stored_path IS NOT NULL AND stored_path <> ''").all() as Array<{ stored_path: string }>).map((r) => resolve(fromDataPath(r.stored_path)))
   );
@@ -134,12 +131,12 @@ function sweepAudio(s: Sweep, docs: Set<string>): void {
       s.remove(dir, "Heft gelöscht");
       continue;
     }
+    if (busy(name)) continue;
     for (const entry of list(dir)) {
       const path = join(dir, entry);
       if (entry.startsWith(".tmp-")) {
-        // Zwischenstücke: nach Erfolg überflüssig, sonst Fortsetzungs-Vorrat bis 7 Tage
-        const ch = chapters.get(entry.slice(5));
-        if (!ch || ch.doc !== name || ch.done || age(path) > 7 * DAY) s.remove(path, "Zwischenstücke");
+        // Zwischenstücke: außerhalb eines Laufs nicht mehr gebraucht (ein neuer Lauf spricht offene Kapitel neu)
+        s.remove(path, "Zwischenstücke");
       } else if (/^chapter-.*\.mp3$/.test(entry)) {
         if (!keep.has(resolve(path))) s.remove(path, "Kapitel ohne Eintrag");
       } else if (entry === "learn") {
@@ -151,17 +148,16 @@ function sweepAudio(s: Sweep, docs: Set<string>): void {
 
 function sweepLearn(s: Sweep, dir: string, units: Array<{ idx: number; audio_path: string | null }>): void {
   const done = new Set(units.filter((u) => u.audio_path && existsSync(u.audio_path)).map((u) => resolve(u.audio_path!)));
-  const count = units.length;
   for (const entry of list(dir)) {
     const path = join(dir, entry);
     const m = /^unit-(\d{3})(\.mp3)?$/.exec(entry);
     if (!m) continue;
-    const idx = Number(m[1]) - 1;
-    if (m[2]) {
-      // Einheit-MP3: gilt, solange sie eingetragen ist; unit-000 ist das Intro beim Sprechen (wird umbenannt)
-      if (idx >= 0 && !done.has(resolve(path))) s.remove(path, "Einheit ohne Eintrag");
-    } else if (idx >= count || done.has(resolve(join(dir, `${entry}.mp3`))) || age(path) > 7 * DAY) {
-      s.remove(path, "Stücke einer fertigen Einheit");
+    if (!m[2]) {
+      // Stückordner: außerhalb eines Laufs nicht mehr gebraucht
+      s.remove(path, "Stücke einer Einheit");
+    } else if (Number(m[1]) >= 1 && !done.has(resolve(path))) {
+      // Einheit-MP3 ohne Eintrag (alte Einteilung, gelöschte Einheit); unit-000 entsteht kurz beim Intro
+      s.remove(path, "Einheit ohne Eintrag");
     }
   }
 }
@@ -230,6 +226,8 @@ async function sweepExports(s: Sweep, docs: Set<string>): Promise<void> {
     if (!existsSync(path)) {
       delete reg[path];
       changed = true;
+    } else if (busy(e.docId)) {
+      continue;
     } else if (!docs.has(e.docId) || expected(e.docId, e.kind) !== path) {
       s.remove(path, "alte Kopie im Hörbücher-Ordner");
       delete reg[path];
@@ -269,7 +267,6 @@ async function m4bTags(path: string): Promise<{ title?: string; genre?: string }
 let running = false;
 export async function cleanup(opts: { dry?: boolean } = {}): Promise<CleanupResult> {
   if (running) return { files: 0, bytes: 0, skipped: "läuft schon" };
-  if (anyGenerating() || learnBusy()) return { files: 0, bytes: 0, skipped: "Hörbuch läuft" };
   running = true;
   const s = new Sweep(!!opts.dry);
   try {
