@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.127.0 – 2026-11-03
+### Fix
+- Ohne festgelegtes Modell nimmt die App Gemma 4 e4b statt des ersten installierten Modells (z. B. qwen3.6:27b).
+- Sprachmodell-Aufrufe ohne eigene Angabe laufen ohne Denkmodus; das Intro des Lernhörbuchs kam sonst leer zurück und wurde ohne Aufbereitung gesprochen.
+
 ## 1.126.0 – 2026-11-03
 ### New
 - Aufräumen: PageMentor löscht nach dem Start und alle 6 Stunden Hörbuch-Dateien, die es nicht mehr braucht (Reste gelöschter Hefte, alte Kapitel, fertige Zwischenstücke, alte Cover, eigene Kopien unter überholtem Namen); von Hand unter Engine → Wartung → „Speicher aufräumen“.

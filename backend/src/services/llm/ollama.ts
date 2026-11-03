@@ -1,3 +1,4 @@
+import { DEFAULT_LLM_MODEL } from "../../engine/config";
 // Ollama: Erreichbarkeit, Modelle, Pull
 
 export async function pingOllama(url: string): Promise<boolean> {
@@ -75,8 +76,11 @@ export async function resolveOllamaModel(
     );
   }
 
-  // Kein Modell gewünscht: laut loggen, erstes Textmodell nehmen
+  // Kein Modell gewünscht: das Standardmodell der App (Gemma 4 e4b), sonst das erste Textmodell.
+  // Nicht blind das erste der Liste: alphabetisch käme sonst z. B. qwen3.6:27b, ein großes Denkmodell
   const generative = available.filter((n) => !isEmbeddingModel(n));
+  const preferred = generative.find((n) => n === DEFAULT_LLM_MODEL || n === `${DEFAULT_LLM_MODEL}:latest`);
+  if (preferred) return preferred;
   if (generative.length > 0) {
     // Nur einmal je Modell melden, sonst steht die Warnung vor jedem Gemma-Aufruf im Log
     if (autoPickWarned === generative[0]) return generative[0];

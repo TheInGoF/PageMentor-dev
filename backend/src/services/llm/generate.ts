@@ -54,9 +54,11 @@ async function generateImpl(params: {
         }),
         signal: AbortSignal.timeout(15 * 60 * 1000),
       });
-    let res = await call(params.think);
+    // Ohne Angabe nicht denken: Denkmodelle (Qwen 3.6, Gemma 4) verbrauchen sonst das Antwortbudget mit
+    // Nachdenken und liefern leer („reason=length“). Wer Denken will, gibt think: true an
+    let res = await call(params.think ?? false);
     // Modell ohne Denkmodus lehnt die Angabe ab: ohne wiederholen
-    if (res.status === 400 && params.think !== undefined) {
+    if (res.status === 400) {
       const txt = await res.clone().text().catch(() => "");
       if (/think/i.test(txt)) res = await call(undefined);
     }
