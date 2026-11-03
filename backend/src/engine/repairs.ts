@@ -166,22 +166,16 @@ const imageName = (img: string) => img.split("/").pop()!.split(":")[0];
 const DOCKER_CONFIG_DIR = "/opt/pagementor/docker";
 const DOCKER = `DOCKER_CONFIG=${DOCKER_CONFIG_DIR} docker`;
 
-// force: alle Pakete neu holen (Knopf „Engine aktualisieren“), auch wenn der Paketstand gleich aussieht.
-// Sonst bleibt ein Paket alt, das beim letzten Laden auf ghcr.io noch nicht neu gebaut war
+// Pakete auf den neuesten Stand bringen; force (Knopf „Engine aktualisieren“) legt zusätzlich alle Dienste neu an
 async function pullImages(progress: Progress, force = false): Promise<void> {
   // Profile der zusätzlichen Stimmen zuerst, sonst fehlen ihre Pakete
   await writeEngineEnv();
   await syncCompose();
   const rev = imagesRevision();
-  // Merker bis v1.21.3 hieß .images-version: Stände sind frisch, nur Fehlendes laden statt alles erneut
-  const mark = (await inDistro(`cat ${IMAGES_MARK_IN_DISTRO} 2>/dev/null || (test -f /opt/pagementor/.images-version && echo '${rev}')`, { timeoutMs: 30_000, quiet: true })).stdout.trim();
   const compose = `${DOCKER} compose -f ${COMPOSE_IN_DISTRO}`;
-  const list = await inDistro(
-    mark === rev && !force
-      ? `for i in $(${compose} config --images); do docker image inspect "$i" >/dev/null 2>&1 || echo "$i"; done`
-      : `${compose} config --images`,
-    { timeoutMs: 60_000, quiet: true }
-  );
+  // Immer alle Pakete beim Paketlager abfragen: ein unverändertes kostet Sekunden, ein neueres wird geladen.
+  // „Nur fehlende laden“ ließ ein Paket alt, das beim letzten Laden auf ghcr.io noch nicht neu gebaut war
+  const list = await inDistro(`${compose} config --images`, { timeoutMs: 60_000, quiet: true });
   if (list.code !== 0) throw new RepairError(`Paketliste nicht lesbar: ${failText(list)}`);
   const images = [...new Set(list.stdout.split("\n").map((s) => s.trim()).filter(Boolean))];
   if (images.length) requireSpace("die Programmpakete");
@@ -197,7 +191,7 @@ async function pullImages(progress: Progress, force = false): Promise<void> {
   }
   progress("Starte Dienste …", 1);
   await startServices(progress, force);
-  if (force) await logRunningImages();
+  await logRunningImages();
   await inDistro(`echo '${rev}' > ${IMAGES_MARK_IN_DISTRO} && rm -f /opt/pagementor/.images-version`, { timeoutMs: 30_000, quiet: true });
   await pruneImages(progress);
 }

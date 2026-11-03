@@ -3,6 +3,16 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.124.0 – 2026-11-03
+### New
+- „Alles neu starten“ in Einstellungen → Engine → Wartung: hält alle Dienste an, beendet die Engine-Umgebung und öffnet PageMentor neu.
+
+### Change
+- Nach jedem Laden der Programmpakete steht im Protokoll, welcher Paketstand je Dienst läuft.
+
+### Fix
+- Programmpakete laden fragt immer alle Pakete nach dem neuesten Stand; vorher blieb ein Paket alt, das beim letzten Laden auf ghcr.io noch nicht neu gebaut war.
+
 ## 1.123.0 – 2026-11-03
 ### Fix
 - Beim Start der Dienste werden Container, die noch auf einem älteren Paket laufen, mit dem geladenen neuen Paket neu angelegt; das gilt auch für „Programmpakete laden“ und den automatischen Abgleich.

@@ -17,7 +17,7 @@ import { cloudRoutes } from "./routes/cloud";
 import { engineRoutes } from "./routes/engine";
 import { updateRoutes } from "./routes/update";
 import { autoStart } from "./engine/manager";
-import { alreadyRunning, appWindowHandle, openUi, quitApp } from "./launch";
+import { alreadyRunning, appWindowHandle, openUi, quitApp, restartApp } from "./launch";
 import { registerDiagnostic } from "./log/diagnostics";
 import { publicConfig } from "./services/llmConfig";
 import { Hono } from "hono";
@@ -125,6 +125,11 @@ app.route("/api/system", systemRoutes);
 app.route("/api/covers", coverRoutes);
 // Für den zweiten Start: Fenster der laufenden Instanz
 app.get("/api/app/window", (c) => c.json({ hwnd: appWindowHandle() }));
+// Alles neu starten (Engine und App); ohne Windows-Exe nur Hinweis
+app.post("/api/app/restart", (c) => {
+  if (!restartApp("über die Oberfläche")) return c.json({ ok: false, error: "Neustart nur in der Windows-App" }, 400);
+  return c.json({ ok: true });
+});
 app.post("/api/app/quit", (c) => {
   quitApp("über die Oberfläche");
   return c.json({ ok: true });

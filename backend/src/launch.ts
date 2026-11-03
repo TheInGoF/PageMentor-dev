@@ -114,3 +114,18 @@ export function quitApp(reason: string): void {
     process.exit(0);
   }, 300);
 }
+
+// Alles neu starten: Engine-Dienste anhalten und die Engine-Umgebung beenden (wie beim Schließen), dann die App
+// neu öffnen. Ein kleiner Helfer wartet, bis dieser Prozess weg ist, sonst sähe der neue Start die alte Instanz
+export function restartApp(reason: string): boolean {
+  if (!IS_WINDOWS || !IS_COMPILED) return false;
+  emitLog("info", "startup", `Starte PageMentor neu: ${reason}`);
+  const exe = process.execPath.replace(/'/g, "''");
+  spawn(
+    "powershell.exe",
+    ["-NoProfile", "-WindowStyle", "Hidden", "-Command", `Wait-Process -Id ${process.pid} -ErrorAction SilentlyContinue; Start-Process -FilePath '${exe}'`],
+    { detached: true, stdio: "ignore", windowsHide: true }
+  ).unref();
+  quitApp("Neustart");
+  return true;
+}

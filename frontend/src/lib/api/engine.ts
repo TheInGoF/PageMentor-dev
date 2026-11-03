@@ -59,6 +59,7 @@ export const engineApi = {
     status: () => request<EngineStatus>("/api/engine/status"),
     selftest: () => request<{ results: EngineCheck[] }>("/api/engine/selftest", { method: "POST" }),
     quitApp: () => request<{ ok: boolean }>("/api/app/quit", { method: "POST" }),
+    restartApp: () => request<{ ok: boolean }>("/api/app/restart", { method: "POST" }),
     repair: (id: string) => request<{ started: boolean }>(`/api/engine/repair/${id}`, { method: "POST" }),
     ttsEngines: () => request<TtsEnginesInfo>("/api/engine/tts-engines"),
     setQuality: (engine: "tada" | "f5", quality: string) =>

@@ -124,6 +124,11 @@ export function EnginePanel() {
               {gpuResetBusy ? t("settings.tts.resetBusy") : t("voices.qwen.reset")}
             </Button>
           </SettingRow>
+          <SettingRow label={t("engine.restart")} hint={t("engine.restartHint")}>
+            <Button variant="outline" className="w-full" onClick={() => confirm(t("engine.restartConfirm")) && api.engine.restartApp().catch((err) => toast.show(err instanceof Error ? err.message : t("common.error"), "error"))}>
+              {t("engine.restart")}
+            </Button>
+          </SettingRow>
           <SettingRow label={t("engine.quit")} hint={t("engine.quitHint")}>
             <Button variant="outline" className="w-full" onClick={() => confirm(t("engine.quitConfirm")) && api.engine.quitApp().catch(() => {})}>
               {t("engine.quit")}
