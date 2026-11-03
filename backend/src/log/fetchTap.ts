@@ -46,7 +46,8 @@ export function installFetchTap(): void {
     try {
       const res = await orig(input, init);
       const durationMs = Math.round(performance.now() - t0);
-      emitLog(res.ok ? "debug" : "warn", "http-out", `${method} ${target} → ${res.status} (${durationMs} ms)`, {
+      // Weiterleitungen (z. B. GitHub „releases/latest“ → aktuelle Version) sind normal, keine Warnung
+      emitLog(res.ok || (res.status >= 300 && res.status < 400) ? "debug" : "warn", "http-out", `${method} ${target} → ${res.status} (${durationMs} ms)`, {
         ctx: { status: res.status, durationMs },
       });
       return res;

@@ -37,6 +37,8 @@ export function startSidecarLogPump(intervalMs: number = 5000, engine?: string):
   let lastErrorLogAt = 0;
   let lastErrorDetail = "";
   const REPEAT_NOTICE_MS = 5 * 60 * 1000;
+  const STARTUP_GRACE_MS = 90_000;
+  const pumpStarted = Date.now();
 
   function classifyError(msg: string): "404" | "unreachable" {
     if (/HTTP 404\b/.test(msg)) return "404";
@@ -61,6 +63,9 @@ export function startSidecarLogPump(intervalMs: number = 5000, engine?: string):
           message:
             "[sidecar-log-pump] sidecar/arbiter has no /diagnostics/recent-logs endpoint — upgrade to a newer image to see live sidecar logs",
         });
+      } else if (now - pumpStarted < STARTUP_GRACE_MS) {
+        // Beim Start der App fährt die Engine-Umgebung noch hoch: erst melden, wenn es nach 90 s noch so ist
+        lastErrorLogAt = now - REPEAT_NOTICE_MS + STARTUP_GRACE_MS;
       } else {
         publish({
           ts: now,

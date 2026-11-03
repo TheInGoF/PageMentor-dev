@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.128.0 – 2026-11-03
+### Fix
+- Keine Warnung mehr beim Start, solange die Engine-Umgebung hochfährt (Log-Spiegel der Engine); erst nach 90 s ohne Antwort.
+- Weiterleitungen wie bei der Update-Prüfung auf GitHub erscheinen nicht mehr als Warnung.
+
 ## 1.127.0 – 2026-11-03
 ### Fix
 - Ohne festgelegtes Modell nimmt die App Gemma 4 e4b statt des ersten installierten Modells (z. B. qwen3.6:27b).
