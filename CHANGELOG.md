@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.120.0 – 2026-11-03
+### Fix
+- Qwen-Batching pausiert nach einem gescheiterten Durchgang 30 Minuten, statt bei jedem Stück erneut Rechenzeit zu verlieren.
+- Qwen-Batching scheiterte am Ende jedes Durchgangs beim Umwandeln in Audio; das Umwandeln läuft jetzt Stück für Stück, das Erzeugen bleibt gemeinsam.
+
 ## 1.119.0 – 2026-11-03
 ### Change
 - Leistungsanzeige misst ab dem Start der App dauerhaft im Hintergrund; beim Öffnen sind die letzten 15 Minuten schon da.

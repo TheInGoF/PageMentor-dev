@@ -13,7 +13,13 @@ import { resolveDesign, resolveSample } from "./voices";
 
 export const QWEN_BATCH_MAX = 4;
 
+// Scheitert ein Durchgang am Sidecar (nicht an einer Schleife), eine Weile einzeln sprechen: sonst kostet
+// jeder weitere Versuch die volle Rechenzeit, bevor einzeln nachgesprochen wird
+const PAUSE_AFTER_FAIL_MS = 30 * 60_000;
+let pausedUntil = 0;
+
 export function qwenBatchSize(): number {
+  if (Date.now() < pausedUntil) return 1;
   const n = Number(getLlmConfig().qwenBatch);
   return Number.isInteger(n) && n >= 1 && n <= QWEN_BATCH_MAX ? n : 1;
 }
@@ -26,7 +32,17 @@ export async function synthesizeQwenBatch(p: { texts: string[]; voice: Voice; ra
   const sample = resolveSample(p.voice.id);
   if (!sample) throw new Error(`Qwen-TTS voice sample ${p.voice.id} not found`);
   const t0 = Date.now();
-  const bufs = await callSpeechCloneBatch({ texts: p.texts, sample, timeoutMs: SYNTH_TIMEOUT_MS, dials: readDials(), signal: p.signal });
+  let bufs: Buffer[];
+  try {
+    bufs = await callSpeechCloneBatch({ texts: p.texts, sample, timeoutMs: SYNTH_TIMEOUT_MS, dials: readDials(), signal: p.signal });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!p.signal?.aborted && !/loop_detected/i.test(msg)) {
+      pausedUntil = Date.now() + PAUSE_AFTER_FAIL_MS;
+      console.warn(`[qwen-tts] Batching für 30 Minuten pausiert: ${msg.slice(0, 160)}`);
+    }
+    throw err;
+  }
   const speed = parseRate(p.rate);
   for (let i = 0; i < bufs.length; i++) {
     if (Math.abs(speed - 1) < 1e-3) {

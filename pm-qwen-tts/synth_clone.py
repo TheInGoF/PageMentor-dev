@@ -210,6 +210,29 @@ def _synth_clone(
 MAX_BATCH = 4
 
 
+def _decode_one_by_one() -> None:
+    """Der Decoder (Tonzeichen → Audio) scheitert mit dieser Torch-Version an mehreren Stücken zugleich
+    (In-place-Maske in transformers' sdpa_mask_older_torch). Das Erzeugen bleibt gemeinsam, nur das
+    Umwandeln läuft Stück für Stück; das kostet je Stück wenige Sekunden. Einmalig am Tokenizer eingehängt."""
+    tok = getattr(getattr(models._model, "model", None), "speech_tokenizer", None)
+    if tok is None or getattr(tok, "_pm_one_by_one", False):
+        return
+    orig = tok.decode
+
+    def decode(items, *args, **kwargs):
+        if isinstance(items, list) and len(items) > 1:
+            wavs: list = []
+            fs = None
+            for it in items:
+                w, fs = orig([it], *args, **kwargs)
+                wavs.extend(w)
+            return wavs, fs
+        return orig(items, *args, **kwargs)
+
+    tok.decode = decode
+    tok._pm_one_by_one = True
+
+
 def _synth_clone_batch(
     texts: list[str],
     ref_audio: tuple[np.ndarray, int],
@@ -234,6 +257,7 @@ def _synth_clone_batch(
         raise HTTPException(status_code=400, detail=f"1 bis {MAX_BATCH} Texte je Durchgang")
 
     _apply_seed(seed)
+    _decode_one_by_one()
     clone_prompt = _get_clone_prompt(ref_audio, ref_text)
     prompt_items = clone_prompt if isinstance(clone_prompt, list) else [clone_prompt]
     effective_max = max_new_tokens_override if max_new_tokens_override and max_new_tokens_override > 0 else MAX_NEW_TOKENS
