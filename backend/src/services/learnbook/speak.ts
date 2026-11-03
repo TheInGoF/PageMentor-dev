@@ -25,9 +25,10 @@ export type ScriptPart = { kind: "speech"; lang: string | null; text: string; sl
 // Langsame Fassung: Tempo der Stücke in [langsam]…[/langsam], die Tonhöhe bleibt
 export const SLOW_TEMPO = 0.8;
 
-// Pausen zwischen Sprechstücken: kurz innerhalb einer Sprache, etwas länger beim Wechsel
+// Pausen zwischen Sprechstücken: kurz innerhalb des Deutschen; um fremdsprachige Stücke eine halbe Sekunde,
+// damit kurze Wendungen („Hola.“) nicht abgehackt an den Nachbarn kleben
 const GAP_MS = 250;
-const SWITCH_MS = 450;
+export const FOREIGN_GAP_MS = 500;
 
 // "[PAUSE 4]" wird zu vier Sekunden Stille (0,5 bis 10 s), [es]…[/es] zur zweiten Stimme, [langsam]…[/langsam]
 // (auch über Pausen hinweg) zu gebremsten Stücken
@@ -128,7 +129,7 @@ export async function speakUnit(p: {
     }
     const voice = part.lang && p.second ? p.second : p.main;
     const german = voice.locale.startsWith("de");
-    if (prevLang !== undefined) steps.push({ pause: prevLang === part.lang ? GAP_MS : SWITCH_MS });
+    if (prevLang !== undefined) steps.push({ pause: prevLang === null && part.lang === null ? GAP_MS : FOREIGN_GAP_MS });
     for (const seg of segmentText(part.text, maxChunkFor(voice.engine))) {
       // Deutsch: Zahlwort-Brei des Modells reparieren (wie beim Original-Hörbuch), dann Ausspracheliste
       const text = ensureSentenceEnd(seg.paragraphs.map((t) => (german ? applyPronunciation(fixGermanNumeralBleed(t).text) : t)).join("\n\n"));

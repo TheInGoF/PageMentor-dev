@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.133.0 – 2026-11-03
+### Change
+- Sprachlernhörbuch: kürzere Pausen zum Nachsprechen (meist zwei, bei langen Sätzen drei Sekunden).
+### Fix
+- Sprachlernhörbuch: Kurze fremdsprachige Wendungen enden immer mit Satzzeichen und haben eine halbe Sekunde Stille davor und danach, damit Qwen sie nicht abgehackt spricht.
+
 ## 1.132.0 – 2026-11-03
 ### Change
 - Aufgaben aus Klausuren und Übungen werden Schritt für Schritt erklärt: Lösungsidee, je Schritt was und warum, Rechnung mit eingesetzten Zahlen und Ergebnis mit Einordnung.
