@@ -48,6 +48,8 @@ export interface ProgressEvent {
   chapterNumber?: number;
   total?: number;
   current?: number;
+  // Qwen-Batching: so viele Stücke ab current+1 gerade in einem Durchgang
+  batch?: number;
   message?: string;
   ts: number;
 }

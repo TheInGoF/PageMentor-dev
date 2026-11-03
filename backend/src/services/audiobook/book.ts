@@ -292,7 +292,7 @@ async function generateAudiobookImpl(params: {
           outFile,
           signal,
           voices: extraVoices,
-          onChunk: (chunkIdx, chunkTotal) => {
+          onChunk: (chunkIdx, chunkTotal, batch) => {
             runState.chunkCurrent = chunkIdx;
             runState.chunkTotal = chunkTotal;
             emit({
@@ -302,6 +302,7 @@ async function generateAudiobookImpl(params: {
               chapterNumber: ch.number,
               current: chunkIdx,
               total: chunkTotal,
+              batch,
             });
           },
         });

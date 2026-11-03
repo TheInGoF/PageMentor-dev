@@ -45,7 +45,8 @@ export async function synthesizeChapter(params: {
   rate: string;
   outFile: string;
   signal: AbortSignal;
-  onChunk: (current: number, total: number) => void;
+  // batch: so viele Stücke ab current+1 gerade in einem Qwen-Durchgang
+  onChunk: (current: number, total: number, batch?: number) => void;
   // Intro: jede Zeile ein eigener Abschnitt mit Pause dazwischen, Stille davor
   intro?: boolean;
   // Zweisprachige Bücher: Stimme je markierter Sprache ([es]…[/es]), z. B. { es: Dora }
@@ -158,6 +159,7 @@ export async function synthesizeChapter(params: {
         }
         if (group.length > 1) {
           const tb = Date.now();
+          params.onChunk(i, segments.length, group.length);
           try {
             for (const g of group) dumpText(g.textDumpPath, g.plainText);
             await synthesizeQwenBatch({ texts: group.map((g) => g.plainText), voice: segVoice, rate, outPaths: group.map((g) => g.chunkPath), signal });

@@ -10,6 +10,7 @@ import { Notice, SettingRow } from "../settings/parts";
 import { api } from "../../lib/api";
 import { getSettings } from "../../lib/settings";
 import { IntroEditor } from "./IntroEditor";
+import { partsBatchLabel } from "../../lib/partsLabel";
 import { IntroTextEditModal } from "../IntroTextEditModal";
 
 interface Unit {
@@ -42,6 +43,7 @@ interface RunState {
   unitStartedAt?: number;
   partsDone?: number;
   partsTotal?: number;
+  partsBatch?: number;
 }
 interface Info {
   kind: "language" | "subject";
@@ -134,7 +136,9 @@ export function LearnbookProgress({ ctl }: { ctl: LearnbookCtl }) {
       {!st.waiting && st.step && (st.phase === "script" || st.phase === "audio") && (
         <span className="text-xs text-neutral-500 tabular-nums">
           {t(`learn.step.${st.step}`)}
-          {st.step === "speak" && st.partsTotal ? ` · ${t("learn.parts", { done: st.partsDone ?? 0, total: st.partsTotal })}` : ""}
+          {st.step === "speak" && st.partsTotal
+            ? ` · ${st.partsBatch && st.partsBatch > 1 ? partsBatchLabel((st.partsDone ?? 0) + 1, st.partsBatch, st.partsTotal) : t("learn.parts", { done: st.partsDone ?? 0, total: st.partsTotal })}`
+            : ""}
           {st.unitStartedAt ? ` · ${mmss(Date.now() - st.unitStartedAt)}` : ""}
         </span>
       )}

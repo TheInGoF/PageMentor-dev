@@ -112,7 +112,7 @@ async function generateSingleChapterAudioImpl(params: {
       rate,
       outFile,
       signal: abortController.signal,
-      onChunk: (current, total) =>
+      onChunk: (current, total, batch) =>
         emit({
           phase: "audiobook.chapter.progress",
           docId: row.document_id,
@@ -120,6 +120,7 @@ async function generateSingleChapterAudioImpl(params: {
           chapterNumber: row.number,
           current,
           total,
+          batch,
         }),
     });
 

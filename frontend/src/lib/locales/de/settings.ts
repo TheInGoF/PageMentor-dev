@@ -267,7 +267,7 @@ export const settings: Record<string, string> = {
   "ttsEngines.qwenBatch": "Qwen: Abschnitte gleichzeitig",
   "ttsEngines.qwenBatchOff": "Aus (einzeln, wie bisher)",
   "ttsEngines.qwenBatchN": "{n} gleichzeitig",
-  "ttsEngines.qwenBatchHint": "Nur für eigene Stimmen im Original-Hörbuch. Mehrere Abschnitte in einem Durchgang nutzen die Grafikkarte besser; ob die Stimme dabei stärker driftet, am Probekapitel vergleichen.",
+  "ttsEngines.qwenBatchHint": "Nur für eigene Stimmen, in Original- und Lernhörbüchern. Mehrere Abschnitte in einem Durchgang nutzen die Grafikkarte besser; ob die Stimme dabei stärker driftet, am Probekapitel vergleichen.",
   "ttsEngines.qwenBatchOnHint": "Erwartet etwa 1,5- bis 1,8-mal so schnell. Klingt es unruhiger, zurück auf „Aus“; schlägt ein Durchgang fehl, spricht die App die Abschnitte einzeln.",
   "ttsEngines.hfToken": "Hugging-Face-Token",
   "ttsEngines.hfTokenSet": "gespeichert",

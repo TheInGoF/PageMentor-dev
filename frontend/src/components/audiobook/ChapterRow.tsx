@@ -3,6 +3,7 @@ import { api, type ChapterAudioStatus, type ProgressEvent } from "../../lib/api"
 import { cn } from "../../lib/cn";
 import { t } from "../../lib/i18n";
 import { Button } from "../ui/Button";
+import { partsBatchLabel } from "../../lib/partsLabel";
 import { formatDuration } from "./helpers";
 
 // SQLite-Zeit (UTC) als Ortszeit: „02.11.26, 14:32“
@@ -152,10 +153,12 @@ export function ChapterRow({
             )}
             {ttsRunning && (
               <span className="px-1.5 py-0.5 rounded text-xs bg-accent/15 text-accent animate-pulse">
-                {t("audiobook.chapterPartsRunning", {
-                  current: progress?.current ?? 1,
-                  total: progress?.total ?? "?",
-                })}
+                {progress?.batch && progress.batch > 1 && progress.total
+                  ? partsBatchLabel((progress.current ?? 0) + 1, progress.batch, progress.total)
+                  : t("audiobook.chapterPartsRunning", {
+                      current: progress?.current ?? 1,
+                      total: progress?.total ?? "?",
+                    })}
               </span>
             )}
           </div>

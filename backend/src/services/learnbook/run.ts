@@ -41,6 +41,8 @@ export interface LearnRunState {
   unitStartedAt?: number;
   partsDone?: number;
   partsTotal?: number;
+  // So viele Stücke spricht Qwen gerade in einem Durchgang (nur bei mehr als einem)
+  partsBatch?: number;
 }
 
 const states = new Map<string, LearnRunState>();
@@ -253,7 +255,7 @@ async function audio(docId: string, probe: boolean, rate: string, st: LearnRunSt
         const r = await speakUnit({
           docId, idx: u.idx, title: st.current, album, script: u.script!, main, second, rate,
           isCanceled: () => canceled.has(docId),
-          onProgress: (done, total) => Object.assign(st, { partsDone: done, partsTotal: total }),
+          onProgress: (done, total, batch) => Object.assign(st, { partsDone: done, partsTotal: total, partsBatch: batch && batch > 1 ? batch : undefined }),
         });
         saveAudio(docId, u.idx, r.path, stamp, r.durationMs);
       }

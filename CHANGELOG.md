@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.118.0 – 2026-11-03
+### New
+- Fortschritt zeigt Qwen-Durchgänge mit mehreren Stücken an, z. B. „Stück 7 und 8 von 12 · 2 gleichzeitig“.
+- Lernhörbuch und Sprachlern-Hörbuch sprechen mit eigener Qwen-Stimme ebenfalls mehrere Stücke in einem Durchgang, wenn „Abschnitte gleichzeitig“ eingestellt ist.
+
 ## 1.117.0 – 2026-11-03
 ### Change
 - „GPU zurücksetzen“ steht jetzt auf der Engine-Seite unter Wartung.

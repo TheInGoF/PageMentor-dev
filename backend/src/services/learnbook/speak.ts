@@ -16,6 +16,7 @@ import { ensureSentenceEnd, splitLanguageRuns } from "../audiobook/synthChapter"
 import { ensureCover } from "../covers";
 import { bookFileName } from "../audiobook/export";
 import { learnSettings, listUnits } from "./store";
+import { canBatch, qwenBatchSize, synthesizeQwenBatch } from "../../tts/engines/qwen/batch";
 import { learnAuthor, learnFileSuffix, learnTitle } from "./meta";
 
 export type ScriptPart = { kind: "speech"; lang: string | null; text: string; slow?: boolean } | { kind: "pause"; ms: number };
@@ -106,43 +107,76 @@ export async function speakUnit(p: {
   rate: string;
   isCanceled: () => boolean;
   // Fortschritt innerhalb der Einheit: gesprochene Stücke von allen
-  onProgress?: (done: number, total: number) => void;
+  // Fortschritt innerhalb der Einheit: gesprochene Stücke von allen; batch = so viele gerade in einem Durchgang
+  onProgress?: (done: number, total: number, batch?: number) => void;
   // Stille vor dem ersten Wort; das Intro bekommt eine volle Sekunde
   leadMs?: number;
 }): Promise<{ path: string; durationMs: number }> {
   // Absolute Pfade: ffmpeg löst Einträge der Verkettungsliste sonst relativ zur Liste auf
   const dir = resolve(DATA_DIR, "audio", p.docId, "learn", `unit-${String(p.idx + 1).padStart(3, "0")}`);
   mkdirSync(dir, { recursive: true });
-  // Erst sprechen, dann zusammensetzen: so steht die Abtastrate für die Stille fest
-  const plan: Array<{ pause: number } | { file: string }> = [];
+  // Erst planen (Stücke und Pausen), dann sprechen, dann zusammensetzen: so steht die Abtastrate für die Stille fest
+  const jobs: Array<{ text: string; voice: Voice; out: string; slow: boolean }> = [];
+  const steps: Array<{ pause: number } | { job: number }> = [];
   let prevLang: string | null | undefined;
-  const parts = parseScript(p.script);
-  const speech = parts.filter((x) => x.kind === "speech").length;
-  let spoken = 0;
-  p.onProgress?.(0, speech);
-  for (const part of parts) {
-    if (p.isCanceled()) throw new Error("abgebrochen");
+  for (const part of parseScript(p.script)) {
     if (part.kind === "pause") {
-      plan.push({ pause: part.ms });
+      steps.push({ pause: part.ms });
       prevLang = undefined;
       continue;
     }
     const voice = part.lang && p.second ? p.second : p.main;
     const german = voice.locale.startsWith("de");
-    if (prevLang !== undefined) plan.push({ pause: prevLang === part.lang ? GAP_MS : SWITCH_MS });
+    if (prevLang !== undefined) steps.push({ pause: prevLang === part.lang ? GAP_MS : SWITCH_MS });
     for (const seg of segmentText(part.text, maxChunkFor(voice.engine))) {
       // Deutsch: Zahlwort-Brei des Modells reparieren (wie beim Original-Hörbuch), dann Ausspracheliste
       const text = ensureSentenceEnd(seg.paragraphs.map((t) => (german ? applyPronunciation(fixGermanNumeralBleed(t).text) : t)).join("\n\n"));
       if (!/[\p{L}\p{N}]/u.test(text)) continue;
-      const out = join(dir, `${hash(`${text}|${voice.id}|${p.rate}`)}.mp3`);
-      if (!existsSync(out) || statSync(out).size === 0) {
-        await synthesizeChunk({ segment: { paragraphs: [text] }, text, voice, locale: voice.locale, rate: p.rate, outPath: out });
-      }
-      plan.push({ file: part.slow ? await slowed(out) : out });
+      steps.push({ job: jobs.length });
+      jobs.push({ text, voice, out: join(dir, `${hash(`${text}|${voice.id}|${p.rate}`)}.mp3`), slow: !!part.slow });
     }
     prevLang = part.lang;
-    p.onProgress?.(++spoken, speech);
   }
+
+  // Sprechen; fertige Stücke liegen schon da (neuer Versuch). Qwen-Batching: offene Stücke derselben eigenen
+  // Stimme zusammen in einem Durchgang; schlägt er fehl, einzeln wie bisher
+  const ready = (j: number) => existsSync(jobs[j].out) && statSync(jobs[j].out).size > 0;
+  const batchSize = qwenBatchSize();
+  let done = jobs.filter((_, j) => ready(j)).length;
+  p.onProgress?.(done, jobs.length);
+  for (let j = 0; j < jobs.length; j++) {
+    if (p.isCanceled()) throw new Error("abgebrochen");
+    if (ready(j)) continue;
+    const group = [j];
+    if (batchSize > 1 && canBatch(jobs[j].voice)) {
+      for (let k = j + 1; k < jobs.length && group.length < batchSize; k++) {
+        if (ready(k)) continue;
+        if (jobs[k].voice.id !== jobs[j].voice.id) break;
+        group.push(k);
+      }
+    }
+    p.onProgress?.(done, jobs.length, group.length);
+    if (group.length > 1) {
+      try {
+        await synthesizeQwenBatch({ texts: group.map((g) => jobs[g].text), voice: jobs[j].voice, rate: p.rate, outPaths: group.map((g) => jobs[g].out) });
+      } catch (err) {
+        console.warn(`[learnbook] Qwen-Durchgang fehlgeschlagen, Stücke einzeln:`, err instanceof Error ? err.message : err);
+      }
+    }
+    for (const g of group) {
+      if (p.isCanceled()) throw new Error("abgebrochen");
+      if (!ready(g)) {
+        if (group.length > 1) p.onProgress?.(done, jobs.length, 1);
+        const { text, voice, out } = jobs[g];
+        await synthesizeChunk({ segment: { paragraphs: [text] }, text, voice, locale: voice.locale, rate: p.rate, outPath: out });
+      }
+      done++;
+    }
+    p.onProgress?.(done, jobs.length);
+  }
+
+  const plan: Array<{ pause: number } | { file: string }> = [];
+  for (const st of steps) plan.push("pause" in st ? st : { file: jobs[st.job].slow ? await slowed(jobs[st.job].out) : jobs[st.job].out });
   const files = plan.filter((x): x is { file: string } => "file" in x);
   if (!files.length) throw new Error("Skript ohne Sprechtext");
   const sr = (await probeSampleRate(files[0].file)) ?? 24000;

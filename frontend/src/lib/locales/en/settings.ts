@@ -267,7 +267,7 @@ export const settings: Record<string, string> = {
   "ttsEngines.qwenBatch": "Qwen: parts at once",
   "ttsEngines.qwenBatchOff": "Off (one by one, as before)",
   "ttsEngines.qwenBatchN": "{n} at once",
-  "ttsEngines.qwenBatchHint": "Own voices in the original audiobook only. Several parts per pass use the GPU better; compare drift on the sample chapter.",
+  "ttsEngines.qwenBatchHint": "Own voices only, in original and learning audiobooks. Several parts per pass use the GPU better; compare drift on the sample chapter.",
   "ttsEngines.qwenBatchOnHint": "Expect roughly 1.5–1.8× the speed. If it sounds less steady, switch back to “Off”; a failed pass falls back to one by one.",
   "ttsEngines.hfToken": "Hugging Face token",
   "ttsEngines.hfTokenSet": "saved",
