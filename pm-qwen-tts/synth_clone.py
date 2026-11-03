@@ -21,6 +21,7 @@ from config import (
     X_VECTOR_ONLY_FALLBACK,
 )
 import models
+import fast
 from sampling import _apply_seed, _build_stopping_criteria, _resolve_sampling
 from audio_io import _normalize_samples
 from runner import _run_with_heartbeat_and_timeout
@@ -113,6 +114,15 @@ def _synth_clone(
         if max_new_tokens_override and max_new_tokens_override > 0
         else MAX_NEW_TOKENS
     )
+
+    # Schneller Weg (CUDA-Graphen, gleiches Modell); None = nicht verfügbar, dann wie bisher
+    fast_out = fast.clone(text, clone_prompt, ref_text, language, _resolve_sampling(temperature, top_p, top_k, repetition_penalty), effective_max, instruct)
+    if fast_out is not None:
+        samples = _normalize_samples(fast_out[0])
+        if samples.shape[0] == 0:
+            raise HTTPException(status_code=500, detail="model returned empty waveform")
+        log.info("synth done  (fast) text=%dc audio=%.1fs", len(text), samples.shape[0] / float(fast_out[1]))
+        return samples, fast_out[1]
 
     stopping_criteria, loop_detector = _build_stopping_criteria()
     gen_kwargs: dict[str, Any] = {
@@ -261,6 +271,16 @@ def _synth_clone_batch(
     clone_prompt = _get_clone_prompt(ref_audio, ref_text)
     prompt_items = clone_prompt if isinstance(clone_prompt, list) else [clone_prompt]
     effective_max = max_new_tokens_override if max_new_tokens_override and max_new_tokens_override > 0 else MAX_NEW_TOKENS
+    t_fast = time.time()
+    fast_out = fast.clone_batch(list(texts), clone_prompt, ref_text, language, _resolve_sampling(temperature, top_p, top_k, repetition_penalty), effective_max, instruct)
+    if fast_out is not None:
+        out = [(_normalize_samples(a), sr) for a, sr in fast_out]
+        if any(s.shape[0] == 0 for s, _ in out):
+            raise HTTPException(status_code=500, detail="model returned an empty waveform in batch")
+        audio_s = sum(s.shape[0] / float(sr) for s, sr in out)
+        el = time.time() - t_fast
+        log.info("batch done  (fast) n=%d in %.1fs (audio=%.1fs, rt=%.2fx)", len(texts), el, audio_s, el / audio_s if audio_s else 0.0)
+        return out
     stopping_criteria, loop_detector = _build_stopping_criteria()
     gen_kwargs: dict[str, Any] = {
         "text": list(texts),

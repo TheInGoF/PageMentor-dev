@@ -3,9 +3,12 @@ uvicorn[standard]>=0.32
 pydantic>=2.9
 # torch kommt aus dem PyTorch-Base-Image — hier NICHT pinnen, sonst
 # überschreibt pip die CUDA-Variante mit der CPU-Variante.
-qwen-tts>=0.1          # offizielles Alibaba-Package, zieht transformers
+qwen-tts==0.1.1        # offizielles Alibaba-Package, zieht transformers
                        # + tokenizers + soundfile automatisch mit
 soundfile>=0.12
 numpy>=1.26,<2.0
 scipy>=1.11             # signal.resample_poly for 24 kHz reference resampling
 pydub>=0.25            # MP3-Encoding der OpenAI-Response-Formate
+# Schneller Weg (CUDA-Graphen) mit demselben Modell; braucht torch >= 2.5.1 (Basis-Image)
+faster-qwen3-tts==0.2.6
+faster-qwen3-tts-batch==0.2.0

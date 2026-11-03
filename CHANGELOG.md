@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.125.0 – 2026-11-03
+### Change
+- Qwen-Image auf Torch 2.5.1.
+- Qwen spricht eigene Stimmen über faster-qwen3-tts (CUDA-Graphen) mit demselben Modell und denselben Gewichten, einzeln und gebündelt; bei einem Fehler übernimmt automatisch der bisherige Weg.
+
 ## 1.124.0 – 2026-11-03
 ### New
 - „Alles neu starten“ in Einstellungen → Engine → Wartung: hält alle Dienste an, beendet die Engine-Umgebung und öffnet PageMentor neu.

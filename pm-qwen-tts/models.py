@@ -100,6 +100,12 @@ def _load_model() -> None:
     t0 = time.time()
     try:
         model_path = _prepare_model_path()
+        # Schneller Weg (CUDA-Graphen): gleiche Gewichte; seine qwen-tts-Instanz dient allen anderen Wegen
+        import fast  # noqa: WPS433
+        _model = fast.load(model_path, DEVICE, _torch_dtype(DTYPE_NAME))
+        if _model is not None:
+            log.info("model ready in %.1fs (fast path)", time.time() - t0)
+            return
         _model = Qwen3TTSModel.from_pretrained(
             model_path,
             device_map=DEVICE,

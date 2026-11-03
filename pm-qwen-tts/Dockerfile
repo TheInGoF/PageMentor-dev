@@ -11,7 +11,7 @@
 # `flash_attn_2_cuda.cpython-311-…so`, die bei Python-Version-Wechseln
 # brechen. Das Wheel trägt alle ABI-Info im Dateinamen und pip legt es
 # am richtigen Platz ab.
-FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-devel AS flash-attn-build
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel AS flash-attn-build
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
@@ -36,7 +36,7 @@ RUN pip wheel --wheel-dir=/wheels --no-build-isolation --no-deps \
 # ---------------------------------------------------------------------
 # Stage 2: Runtime-Image.
 # ---------------------------------------------------------------------
-FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -52,7 +52,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# torch nicht neu auflösen: das Basis-Image bringt die CUDA-Variante mit
+RUN pip install --no-cache-dir -r requirements.txt \
+ && python -c "import torch, faster_qwen3_tts, faster_qwen3_tts_batch; print(f'[build-verify] torch {torch.__version__}, faster-qwen3-tts ready')"
 
 # Das vorgebaute flash-attn-Wheel aus Stage 1 übernehmen und installieren.
 # Der Wheel-Dateiname ist unbekannt (enthält exakte Version, Python-ABI,
