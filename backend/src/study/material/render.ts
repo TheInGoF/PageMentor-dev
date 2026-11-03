@@ -47,6 +47,13 @@ export function renderFormel(f: Any): RenderedItem {
   };
 }
 
+// Lösungsschritt: früher reiner Text, jetzt was, warum und Rechnung; Fortsetzungszeilen eingerückt, damit sie im Listenpunkt bleiben
+const step = (x: unknown): string => {
+  if (typeof x === "string") return s(x);
+  const o = (x ?? {}) as Any;
+  return [s(o.was) ? `**${s(o.was)}**` : "", s(o.warum) ? `*Warum:* ${s(o.warum)}` : "", math(o.rechnung)].filter(Boolean).join("\n   ");
+};
+
 export function renderTeilaufgabe(a: Any, t: Any): RenderedItem {
   return {
     title: `Aufgabe ${s(a.nummer)}${s(t.nummer)}${s(a.titel) ? ` · ${s(a.titel)}` : ""}`,
@@ -54,8 +61,10 @@ export function renderTeilaufgabe(a: Any, t: Any): RenderedItem {
       block("Typ erkennen", s(t.typ_erkennen)),
       list(t.gegeben, (x) => s(x)) ? `**Gegeben:**\n${list(t.gegeben, (x) => s(x))}` : "",
       block("Gesucht", s(t.gesucht)),
+      block("Idee", s(t.idee)),
       list(t.formeln, (x) => math(x)) ? `**Formeln:**\n${list(t.formeln, (x) => math(x))}` : "",
-      list(t.schritte, (x) => s(x), true) ? `**Lösungsweg:**\n${list(t.schritte, (x) => s(x), true)}` : "",
+      list(t.schritte, step, true) ? `**Lösungsweg:**\n${list(t.schritte, step, true)}` : "",
+      block("Ergebnis", s(t.ergebnis)),
       list(t.checkliste, (x) => s(x)) ? `**Checkliste:**\n${list(t.checkliste, (x) => s(x))}` : "",
       block("Achtung", s(t.stolperfalle))
     ),

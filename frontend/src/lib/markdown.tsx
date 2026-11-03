@@ -128,6 +128,12 @@ function parseBlocks(raw: string): Block[] {
       flushAll();
       continue;
     }
+    // Eingerückte Folgezeile eines Listenpunkts (Lösungsschritt mit Warum und Rechnung): gehört zum Punkt
+    const listBuf = olBuf.length ? olBuf : ulBuf;
+    if (/^\s{2,}\S/.test(rawLine) && listBuf.length && !/^([-*]|\d+[.)])\s/.test(line)) {
+      listBuf[listBuf.length - 1] += `\n${line}`;
+      continue;
+    }
     // Block-level math `$$...$$`. Must be on its own line (or own
     // paragraph). The LLM is instructed to put display formulas on
     // a separate line in the prompt — that means we treat any line
@@ -170,6 +176,10 @@ function parseBlocks(raw: string): Block[] {
   return blocks;
 }
 
+// Listenpunkt mit Folgezeilen: jede Zeile eigene Zeile
+const listItem = (item: string): ReactNode =>
+  item.includes("\n") ? item.split("\n").map((l, k) => <div key={k}>{renderInline(l)}</div>) : renderInline(item);
+
 /** Renders a markdown-ish string as React nodes. Empty input → empty
  *  fragment. Safe to call inline in a JSX expression. */
 export function renderMarkdown(text: string): ReactNode {
@@ -197,7 +207,7 @@ export function renderMarkdown(text: string): ReactNode {
             className="list-disc pl-5 space-y-1 my-1 text-sm text-neutral-200"
           >
             {block.items.map((item, j) => (
-              <li key={j}>{renderInline(item)}</li>
+              <li key={j}>{listItem(item)}</li>
             ))}
           </ul>
         );
@@ -208,7 +218,7 @@ export function renderMarkdown(text: string): ReactNode {
             className="list-decimal pl-5 space-y-1 my-1 text-sm text-neutral-200"
           >
             {block.items.map((item, j) => (
-              <li key={j}>{renderInline(item)}</li>
+              <li key={j}>{listItem(item)}</li>
             ))}
           </ol>
         );

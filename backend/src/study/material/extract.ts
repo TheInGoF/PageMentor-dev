@@ -72,7 +72,7 @@ async function modelKey(): Promise<string> {
 
 // Standard: lokale KI über die Engine, mit Cache und zweitem Versuch
 export const askModel: Ask = async (kind, text) => {
-  const key = createHash("sha1").update(`${kind}|${PROMPT_VERSION}|${await modelKey()}|${text}`).digest("hex");
+  const key = createHash("sha1").update(`${kind}|${PROMPT_VERSION[kind]}|${await modelKey()}|${text}`).digest("hex");
   const hit = db().prepare("SELECT result_json FROM llm_cache WHERE key = ?").get(key) as { result_json: string } | null;
   if (hit) return JSON.parse(hit.result_json);
   for (let attempt = 1; attempt <= 2; attempt++) {

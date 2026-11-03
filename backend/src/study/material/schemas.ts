@@ -64,14 +64,16 @@ export const SCHEMA_AUFGABEN = obj(
                 typ_erkennen: STR,
                 gegeben: arr(STR),
                 gesucht: STR,
+                idee: STR,
                 formeln: arr(STR),
-                schritte: arr(STR),
+                schritte: arr(obj({ was: STR, warum: STR, rechnung: STR }, ["was", "warum"])),
+                ergebnis: STR,
                 checkliste: arr(STR),
                 stolperfalle: STR,
                 verweis: STR,
                 unsicher: BOOL,
               },
-              ["nummer", "typ_erkennen", "gesucht", "unsicher"]
+              ["nummer", "typ_erkennen", "gesucht", "idee", "schritte", "ergebnis", "unsicher"]
             )
           ),
         },

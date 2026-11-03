@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.132.0 – 2026-11-03
+### Change
+- Aufgaben aus Klausuren und Übungen werden Schritt für Schritt erklärt: Lösungsidee, je Schritt was und warum, Rechnung mit eingesetzten Zahlen und Ergebnis mit Einordnung.
+
 ## 1.131.0 – 2026-11-03
 ### Fix
 - Große Zahlen ab 10 000 und Kommazahlen werden vor der Sprachausgabe in Worte gefasst („0,318“ → „null Komma drei eins acht“), damit die Stimmen nicht mehr daran scheitern.
