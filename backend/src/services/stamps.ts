@@ -25,7 +25,7 @@ export function gemmaStamp(kind: "chapter" | "intro", language: string, variant 
 // Stempel aus dem tatsächlich gesprochenen Text: bei deutschen Stimmen nach der Aussprache-Liste.
 // So erneuert eine geänderte Liste nur Kapitel, in denen das Wort vorkommt
 export function ttsStamp(text: string, voiceId: string, rate: string, locale: string): string {
-  const spoken = locale.startsWith("de") ? applyPronunciation(text) : text;
+  const spoken = locale.startsWith("de") ? applyPronunciation(text, undefined, voiceId.split(":")[0]) : text;
   // Engine-eigene Version: Änderungen an einer Engine erneuern nur deren Kapitel
   const engines = voiceId.split("+").map((v) => `${v.split(":")[0]}${ENGINE_VERSION[v.split(":")[0]] ?? 0}`).join(",");
   return hash(`${PIPELINE_VERSION.tts}|${engines}|${voiceId}|${rate}|${spoken}`);

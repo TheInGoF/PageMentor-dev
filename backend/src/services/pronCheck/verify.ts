@@ -9,7 +9,7 @@ import { emitLog } from "../../log/logger";
 import { defaultVoiceFor, findVoice } from "../../tts/voices";
 import { synthesizeChunk } from "../../tts/synth";
 import { concatMp3WithGaps } from "../../tts/ffmpeg/mp3";
-import { pronunciationList, savePronunciation, type PronunciationEntry } from "../pronunciation";
+import { isAbbreviation, pronunciationList, savePronunciation, type PronunciationEntry } from "../pronunciation";
 import { retrySpelling } from "../pronunciationSuggest";
 import { editDistance, findIssues, norm, type HeardWord } from "./align";
 import { isNoise } from "./noise";
@@ -106,13 +106,28 @@ export function mergeVerified(current: PronunciationEntry[], before: Pronunciati
   });
 }
 
+// Englische Wörter in Lautschrift greifen bei Qwen nicht (es spricht das Original): dort nur Abkürzungen prüfen
+export const appliesTo = (e: PronunciationEntry, engine: string | undefined) => engine !== "qwen" || isAbbreviation(e.from);
+
+function defaultGermanVoice() {
+  const voiceId = defaultVoiceFor("de");
+  return voiceId ? findVoice(voiceId, "de") : undefined;
+}
+
+// Offene Einträge, die die deutsche Standardstimme wirklich nutzt
+export function openEntries(): PronunciationEntry[] {
+  const engine = defaultGermanVoice()?.engine;
+  return pronunciationList().entries.filter((e) => !e.checked && appliesTo(e, engine));
+}
+
 // Offene Einträge mit der deutschen Standardstimme prüfen; null, wenn Whisper oder Stimme fehlen
 export async function verifyOpenEntries(opts: { busy?: () => boolean; onProgress?: (done: number, total: number) => void } = {}): Promise<VerifyResult | null> {
   if (!sttAvailable()) return null;
-  const voiceId = defaultVoiceFor("de");
-  const voice = voiceId ? findVoice(voiceId, "de") : undefined;
+  const voice = defaultGermanVoice();
   if (!voice) return null;
-  const before = pronunciationList().entries;
+  // Was die Stimme nicht nutzt, gilt für diesen Lauf als erledigt und bleibt in der Liste unverändert
+  const all = pronunciationList().entries;
+  const before = all.map((e) => (appliesTo(e, voice.engine) ? e : { ...e, checked: true }));
   if (!before.some((e) => !e.checked)) return { checked: 0, open: 0, rounds: 0 };
   const dir = join(DATA_DIR, "audio", "_wortpruefung");
   mkdirSync(dir, { recursive: true });
@@ -132,7 +147,8 @@ export async function verifyOpenEntries(opts: { busy?: () => boolean; onProgress
   };
   try {
     const { entries, result } = await verifyEntries(before, deps);
-    savePronunciation(mergeVerified(pronunciationList().entries, before, entries));
+    const tested = entries.filter((_, i) => !before[i].checked);
+    savePronunciation(mergeVerified(pronunciationList().entries, all, tested));
     const done = entries.filter((e, i) => e.checked && !before[i]?.checked).map((e) => `${e.from} → ${e.to}`);
     emitLog("info", "proncheck", `Wortprüfung: ${result.checked} erledigt, ${result.open} offen${done.length ? ` (${done.join(", ")})` : ""}`);
     return result;

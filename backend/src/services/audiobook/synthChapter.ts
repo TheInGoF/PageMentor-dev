@@ -65,7 +65,7 @@ export async function synthesizeChapter(params: {
   let success = false;
   try {
     // Deutsche Stimmen: Aussprache-Liste (Anglizismen, Produktnamen) direkt vor der Sprachausgabe
-    const speakFor = (v: Voice) => (v.locale.startsWith("de") ? (t: string) => applyPronunciation(t) : (t: string) => t);
+    const speakFor = (v: Voice) => (v.locale.startsWith("de") ? (t: string) => applyPronunciation(t, undefined, v.engine) : (t: string) => t);
     const speak = speakFor(voice);
     const maxChunk = maxChunkFor(voice.engine);
     // Abschnitte samt Stimme: Fremdsprachige Passagen gehen an die Stimme ihrer Sprache
@@ -207,8 +207,8 @@ export async function synthesizeChapter(params: {
     );
 
     const mergedPath = join(tmpDir, "merged.mp3");
-    // Pausen: 300 ms zwischen Chunks, 1200 ms am Kapitelende; Intro mit 1,5 s davor und 700 ms je Zeile
-    await concatMp3WithGaps(chunkFiles, mergedPath, params.intro ? { leadingMs: 1500, interChunkMs: 700, trailingMs: 1500 } : { interChunkMs: 300, trailingMs: 1200 });
+    // Pausen: 300 ms zwischen Chunks, 1200 ms am Kapitelende; Intro mit 1,5 s davor und einer halben Sekunde je Zeile
+    await concatMp3WithGaps(chunkFiles, mergedPath, params.intro ? { leadingMs: 1500, interChunkMs: 500, trailingMs: 1500 } : { interChunkMs: 300, trailingMs: 1200 });
 
     const cover = await ensureCover(chapter.document_id);
     const { durationMs } = await normalizeAndTag({

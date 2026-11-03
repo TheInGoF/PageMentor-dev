@@ -3,6 +3,12 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.134.0 – 2026-11-03
+### Change
+- Intro: eine halbe Sekunde Denkpause nach jeder Zeile, keine längeren Pausen mehr (Lernhörbuch-Intro bisher ohne Pause zwischen den Zeilen).
+- Qwen-Stimmen: Englische Wörter und Namen bleiben im Original statt in deutscher Lautschrift; Lautschrift von Gemma wird zurückgedreht, Abkürzungen gelten weiter.
+- Wortprüfung mit Qwen als Standardstimme prüft nur noch Abkürzungen.
+
 ## 1.133.0 – 2026-11-03
 ### Change
 - Sprachlernhörbuch: kürzere Pausen zum Nachsprechen (meist zwei, bei langen Sätzen drei Sekunden).

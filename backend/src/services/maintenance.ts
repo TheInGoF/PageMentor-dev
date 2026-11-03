@@ -18,9 +18,8 @@ import { gpuIdleSeconds } from "./ttsActivity";
 import { pronRunState } from "./pronCheck/run";
 import { cancelConceptRun, conceptRunState, enqueueConcepts, openChapters, resolveConceptModel } from "./concepts/extract";
 import { sttAvailable } from "./pronCheck/stt";
-import { verifyOpenEntries } from "./pronCheck/verify";
+import { openEntries, verifyOpenEntries } from "./pronCheck/verify";
 import { collectFromCleanup, unscannedChapters } from "./pronCheck/candidates";
-import { pronunciationList } from "./pronunciation";
 import { classifyModule, openModules } from "./disciplines/classify";
 
 const COUNTDOWN_MS = 60_000;
@@ -106,7 +105,7 @@ async function scanOpen(): Promise<MaintenanceOpen> {
     chapters = openChapters();
     modules = openModules().length;
   }
-  const words = sttAvailable() ? pronunciationList().entries.filter((e) => !e.checked).length + unscannedChapters().length : 0;
+  const words = sttAvailable() ? openEntries().length + unscannedChapters().length : 0;
   return { extract: extractQueue().length, chunks: emb.n, chunkDocs: emb.d, chapters: chapters.length, chapterDocs: new Set(chapters.map((c) => c.document_id)).size, words, modules };
 }
 
@@ -240,7 +239,7 @@ async function words(): Promise<void> {
     Object.assign(state, { phase: "pron", doc: undefined, detail: "Lautschriften aus der Bereinigung sammeln", done: 0, total: 0 });
     await collectFromCleanup().catch((err) => emitLog("warn", "maintenance", "Kandidaten aus der Bereinigung fehlgeschlagen", { err }));
   }
-  const open = pronunciationList().entries.filter((e) => !e.checked).length;
+  const open = openEntries().length;
   if (!open) return;
   Object.assign(state, { phase: "pron", doc: undefined, detail: undefined, done: 0, total: open });
   try {

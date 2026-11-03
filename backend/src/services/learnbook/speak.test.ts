@@ -42,10 +42,10 @@ describe("Lernhörbuch-Skript sprechen", () => {
     ]);
   });
 
-  test("Intro: Leerzeilen werden zu einer Sekunde Pause", () => {
+  test("Intro: jede Zeile mit einer halben Sekunde Pause, auch an Leerzeilen", () => {
     const script = introScript("Modul.\nLernhörbuch: Heft.\n\nNach dem Buch von X.\n \n\nErstellt mit PageMentor.\n");
-    expect(script).toBe("Modul.\nLernhörbuch: Heft.\n[PAUSE 1]\nNach dem Buch von X.\n[PAUSE 1]\nErstellt mit PageMentor.");
-    expect(parseScript(script).filter((p) => p.kind === "pause")).toEqual([{ kind: "pause", ms: 1000 }, { kind: "pause", ms: 1000 }]);
+    expect(script).toBe("Modul.\n[PAUSE 0.5]\nLernhörbuch: Heft.\n[PAUSE 0.5]\nNach dem Buch von X.\n[PAUSE 0.5]\nErstellt mit PageMentor.");
+    expect(parseScript(script).filter((p) => p.kind === "pause")).toEqual([1, 2, 3].map(() => ({ kind: "pause", ms: 500 })));
   });
 
   test("leere Stücke zwischen Pausen fallen weg", () => {

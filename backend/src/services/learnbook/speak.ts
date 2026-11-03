@@ -68,9 +68,14 @@ export function thinkTime(parts: ScriptPart[]): ScriptPart[] {
   });
 }
 
-// Intro-Text als Skript: Jede Leerzeile wird zu einer Sekunde Pause, die Stimme macht aus Leerzeilen sonst nichts
+// Intro-Text als Skript: jede Zeile ein eigenes Stück mit einer halben Sekunde Denkpause dazwischen, auch an
+// Leerzeilen nicht länger. Sonst spricht die Stimme die Zeilen in einem Atemzug herunter
 export function introScript(text: string): string {
-  return text.trim().replace(/[ \t]*\n(?:[ \t]*\n)+/g, "\n[PAUSE 1]\n");
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join("\n[PAUSE 0.5]\n");
 }
 
 export function audioStamp(script: string, voices: Voice[], rate: string): string {
@@ -132,7 +137,7 @@ export async function speakUnit(p: {
     if (prevLang !== undefined) steps.push({ pause: prevLang === null && part.lang === null ? GAP_MS : FOREIGN_GAP_MS });
     for (const seg of segmentText(part.text, maxChunkFor(voice.engine))) {
       // Deutsch: Zahlwort-Brei des Modells reparieren (wie beim Original-Hörbuch), dann Ausspracheliste
-      const text = ensureSentenceEnd(seg.paragraphs.map((t) => (german ? applyPronunciation(fixGermanNumeralBleed(t).text) : t)).join("\n\n"));
+      const text = ensureSentenceEnd(seg.paragraphs.map((t) => (german ? applyPronunciation(fixGermanNumeralBleed(t).text, undefined, voice.engine) : t)).join("\n\n"));
       if (!/[\p{L}\p{N}]/u.test(text)) continue;
       steps.push({ job: jobs.length });
       jobs.push({ text, voice, out: join(dir, `${hash(`${text}|${voice.id}|${p.rate}`)}.mp3`), slow: !!part.slow });

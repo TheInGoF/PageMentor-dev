@@ -73,11 +73,14 @@ function entries(): PronunciationEntry[] {
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Längere Einträge zuerst ("Qwen3-TTS" vor "Qwen"); ganze Wörter, Groß-/Kleinschreibung egal.
+// Qwen spricht Englisch richtig und Lautschrift wie "Pejdsch-Mentor" deutsch: dort bleiben englische Wörter und
+// Namen im Original, und was Gemma schon in Lautschrift geschrieben hat, wird zurückgedreht. Abkürzungen gelten für alle.
 // Danach große Zahlen und Kommazahlen in Worte: an "0,318" oder "1.250.000" scheitern die Stimmen
-export function applyPronunciation(text: string, list: PronunciationEntry[] = entries()): string {
-  const sorted = [...list].sort((a, b) => b.from.length - a.from.length);
+export function applyPronunciation(text: string, list: PronunciationEntry[] = entries(), engine?: string): string {
+  const english = engine === "qwen";
+  const pairs = list.map((e) => (english && !isAbbreviation(e.from) ? { from: e.to, to: e.from } : e)).sort((a, b) => b.from.length - a.from.length);
   let out = text;
-  for (const e of sorted) {
+  for (const e of pairs) {
     out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(e.from)}(?![\\p{L}\\p{N}])`, "giu"), e.to);
   }
   return verbalizeNumbers(out);

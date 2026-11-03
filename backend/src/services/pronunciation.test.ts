@@ -29,4 +29,9 @@ describe("Aussprache-Liste", () => {
     expect(block.indexOf("Workflow")).toBeGreaterThan(block.indexOf("F5-TTS"));
     expect(examplesBlock([])).toBe("");
   });
+  test("Qwen: englische Wörter im Original, Lautschrift von Gemma zurückgedreht, Abkürzungen bleiben", () => {
+    const out = applyPronunciation("Erstellt mit Pejdsch-Mentor und PageMentor, im Team, mit F5-TTS.", DEFAULT_PRONUNCIATION, "qwen");
+    expect(out).toBe("Erstellt mit PageMentor und PageMentor, im Team, mit Eff fünf Teh Teh Ess.");
+    expect(applyPronunciation("im Team", DEFAULT_PRONUNCIATION, "tada")).toBe("im Tiem");
+  });
 });

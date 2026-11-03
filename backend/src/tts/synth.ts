@@ -201,7 +201,7 @@ export async function synthesizePreview(params: {
   const engine = engineFor(voice.engine);
   if (!engine) throw new Error(`Unknown TTS engine: ${voice.engine}`);
   // Deutsche Stimmen: Ausspracheliste wie im Hörbuch („PageMentor“ → „Pejdsch-Mentor“)
-  const text = voice.language === "de" || params.locale.startsWith("de") ? applyPronunciation(params.text) : params.text;
+  const text = voice.language === "de" || params.locale.startsWith("de") ? applyPronunciation(params.text, undefined, voice.engine) : params.text;
   return engine.preview({
     voice,
     locale: params.locale,

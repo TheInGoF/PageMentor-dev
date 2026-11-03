@@ -434,7 +434,7 @@ export const settings: Record<string, string> = {
   "pron.title": "Pronunciation",
   "pron.custom": "own list",
   "pron.default": "default list",
-  "pron.hint": "For German voices: how a word is spoken, e.g. anglicisms and product names in German phonetic spelling. Applies to chapters, titles and intro; the next audiobook run renews changed chapters by itself.",
+  "pron.hint": "For German voices: how a word is spoken, e.g. anglicisms and product names in German phonetic spelling. Applies to chapters, titles and intro; the next audiobook run renews changed chapters by itself. Qwen speaks English correctly on its own: only abbreviations apply there, English words and names stay as written.",
   "pron.from": "Word",
   "pron.heard": "Whisper heard: {heard}",
   "pron.to": "spoken as",
