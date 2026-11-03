@@ -1,5 +1,5 @@
 // Leistungsanzeige (Diagnose → Leistung): CPU, Arbeitsspeicher, Grafikkarte und Platte alle 2 s, die letzten 15 Minuten.
-// Misst nur, solange jemand zuschaut (Abfrage in der letzten Minute), damit im Leerlauf nichts mitläuft.
+// Misst ab dem Start der App dauerhaft im Hintergrund, damit beim Öffnen der Anzeige schon der Verlauf da ist.
 // Grafikkarte über nvidia-smi des Rechners; CPU-Temperatur gibt Windows ohne Adminrechte nicht her
 import { cpus, freemem, totalmem } from "node:os";
 import { statfsSync } from "node:fs";
@@ -28,12 +28,10 @@ export interface SystemInfo {
 const INTERVAL_MS = 2000;
 // 15 Minuten: die Zeitachse ist logarithmisch, links passt viel Vergangenheit hinein
 const KEEP = 450;
-const IDLE_STOP_MS = 60_000;
 
 const samples: Sample[] = [];
 const info: SystemInfo = { cpuModel: cpus()[0]?.model?.trim() ?? "", cores: cpus().length, ramTotal: totalmem(), gpuName: null, vramTotal: null, powerLimit: null, diskFree: null, diskTotal: null };
 let timer: ReturnType<typeof setInterval> | null = null;
-let lastRequest = 0;
 let prevCpu = cpuTimes();
 let noGpu = false;
 
@@ -96,12 +94,19 @@ function readDisk(): void {
   }
 }
 
+let ticking = false;
 async function tick(): Promise<void> {
-  if (Date.now() - lastRequest > IDLE_STOP_MS) {
-    if (timer) clearInterval(timer);
-    timer = null;
-    return;
+  // nvidia-smi kann hängen: nie zwei Messungen übereinander
+  if (ticking) return;
+  ticking = true;
+  try {
+    await sample();
+  } finally {
+    ticking = false;
   }
+}
+
+async function sample(): Promise<void> {
   const cur = cpuTimes();
   const cpu = cpuPercent(prevCpu, cur);
   prevCpu = cur;
@@ -112,15 +117,18 @@ async function tick(): Promise<void> {
   if (samples.length > KEEP) samples.splice(0, samples.length - KEEP);
 }
 
-// Abfrage der Anzeige: startet die Messung bei Bedarf und liefert den Verlauf
+// Beim Start der App: Messung dauerhaft im Hintergrund
+export function startMonitor(): void {
+  if (timer || process.env.PM_MONITOR === "0") return;
+  prevCpu = cpuTimes();
+  readDisk();
+  timer = setInterval(() => void tick(), INTERVAL_MS);
+  timer.unref?.();
+  void tick();
+}
+
+// Abfrage der Anzeige: Verlauf der letzten 15 Minuten
 export function systemStats(): { info: SystemInfo; samples: Sample[]; intervalMs: number } {
-  lastRequest = Date.now();
-  if (!timer) {
-    prevCpu = cpuTimes();
-    readDisk();
-    timer = setInterval(() => void tick(), INTERVAL_MS);
-    timer.unref?.();
-    void tick();
-  }
+  startMonitor();
   return { info, samples, intervalMs: INTERVAL_MS };
 }

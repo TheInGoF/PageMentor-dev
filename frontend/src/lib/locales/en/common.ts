@@ -50,7 +50,7 @@ export const common: Record<string, string> = {
   "perf.noGpu": "No NVIDIA graphics card found (nvidia-smi missing).",
   "perf.disk": "Data drive",
   "perf.diskFree": "{free} GB free of {total} GB",
-  "perf.hint": "Last 15 minutes, every 2 seconds; the time axis is logarithmic (recent seconds wide on the right, older compressed to the left). Measured only while this view is open.",
+  "perf.hint": "Last 15 minutes, every 2 seconds; the time axis is logarithmic (recent seconds wide on the right, older compressed to the left). Measured in the background from app start.",
   "perf.now": "now",
   "logs.title": "Logs",
   "logs.empty": "No log lines yet — keep this tab open while you trigger something.",

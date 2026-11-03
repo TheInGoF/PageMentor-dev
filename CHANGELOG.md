@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.119.0 – 2026-11-03
+### Change
+- Leistungsanzeige misst ab dem Start der App dauerhaft im Hintergrund; beim Öffnen sind die letzten 15 Minuten schon da.
+
 ## 1.118.0 – 2026-11-03
 ### New
 - Fortschritt zeigt Qwen-Durchgänge mit mehreren Stücken an, z. B. „Stück 7 und 8 von 12 · 2 gleichzeitig“.

@@ -9,6 +9,7 @@ import { logRoutes, clientLogRoutes } from "./routes/logs";
 import { batchRoutes } from "./routes/batch";
 import { promptRoutes, pronunciationRoutes } from "./routes/prompts";
 import { systemRoutes } from "./routes/system";
+import { startMonitor } from "./services/system/monitor";
 import { coverRoutes } from "./routes/covers";
 import { studyRoutes } from "./routes/study";
 import { knowledgeRoutes, startQueue, watchImportFolder } from "./routes/knowledge";
@@ -170,6 +171,8 @@ startupDone();
 openUi(APP_URL);
 // Wissenspflege: prüft im Hintergrund, ob alle Hefte Embeddings und Begriffsnetz haben
 startMaintenance();
+// Leistungsanzeige (Diagnose): Verlauf ab dem Start mitschreiben
+startMonitor();
 
 // Engine im Hintergrund prüfen und starten, blockiert die App nicht
 void autoStart().catch((err) => console.error("[engine] Autostart fehlgeschlagen", err));
