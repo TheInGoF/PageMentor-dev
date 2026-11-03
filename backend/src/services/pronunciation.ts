@@ -4,6 +4,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { DATA_DIR } from "../paths";
+import { verbalizeNumbers } from "./audioPreprocess/spokenNumbers";
 
 export interface PronunciationEntry {
   from: string;
@@ -71,14 +72,15 @@ function entries(): PronunciationEntry[] {
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// Längere Einträge zuerst ("Qwen3-TTS" vor "Qwen"); ganze Wörter, Groß-/Kleinschreibung egal
+// Längere Einträge zuerst ("Qwen3-TTS" vor "Qwen"); ganze Wörter, Groß-/Kleinschreibung egal.
+// Danach große Zahlen und Kommazahlen in Worte: an "0,318" oder "1.250.000" scheitern die Stimmen
 export function applyPronunciation(text: string, list: PronunciationEntry[] = entries()): string {
   const sorted = [...list].sort((a, b) => b.from.length - a.from.length);
   let out = text;
   for (const e of sorted) {
     out = out.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(e.from)}(?![\\p{L}\\p{N}])`, "giu"), e.to);
   }
-  return out;
+  return verbalizeNumbers(out);
 }
 
 // Geprüfte Einträge als Beispiele für Gemma: so lernt sie, wie neue Wörter für die Stimme zu schreiben sind
