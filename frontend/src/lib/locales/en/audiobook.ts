@@ -16,6 +16,7 @@ export const audiobook: Record<string, string> = {
   "audiobook.cover.a": "Light",
   "audiobook.cover.c": "Colour field",
   "audiobook.cover.d": "Split",
+  "audiobook.cover.makeDefault": "Make default for all booklets",
   "audiobook.cover.useDefault": "Use the settings default",
   "audiobook.cover.default": "default",
   "audiobook.cover.hint": "With module, booklet title and the audiobook type. Applies to the M4B, chapter MP3s and Audiobookshelf from the next build or upload; book or square shape follows the Audiobookshelf library.",

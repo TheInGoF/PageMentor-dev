@@ -58,6 +58,13 @@ export function CoverPicker({ docId, kind }: { docId: string; kind: "original" |
   async function pick(style: string | null) {
     setDoc(await api.documents.patch(docId, { cover_style: style }));
   }
+  // Globaler Standard direkt von hier: gewählte Vorlage für alle Hefte ohne eigene Wahl
+  async function makeDefault() {
+    await request("/api/covers/default", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ style: current }) });
+    setDefaultStyle(await loadDefaultCover(true));
+    // Das Heft folgt dann dem Standard statt einer eigenen Wahl
+    if (doc?.cover_style) await pick(null);
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -65,9 +72,14 @@ export function CoverPicker({ docId, kind }: { docId: string; kind: "original" |
       <CoverChoices current={current} defaultStyle={defaultStyle} src={(s) => `/api/documents/${docId}/cover?style=${s}&kind=${kind}`} onPick={(s) => void pick(s)} />
       <p className="text-xs text-neutral-500">
         {t("audiobook.cover.hint")}{" "}
-        {doc?.cover_style && (
-          <button type="button" className="text-accent hover:underline" onClick={() => void pick(null)}>
+        {doc?.cover_style && doc.cover_style !== defaultStyle && (
+          <button type="button" className="text-accent hover:underline min-h-[32px]" onClick={() => void pick(null)}>
             {t("audiobook.cover.useDefault")}
+          </button>
+        )}
+        {current !== defaultStyle && (
+          <button type="button" className="text-accent hover:underline min-h-[32px] ml-2" onClick={() => void makeDefault()}>
+            {t("audiobook.cover.makeDefault")}
           </button>
         )}
       </p>
