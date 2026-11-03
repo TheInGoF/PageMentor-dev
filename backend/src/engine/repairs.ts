@@ -166,7 +166,9 @@ const imageName = (img: string) => img.split("/").pop()!.split(":")[0];
 const DOCKER_CONFIG_DIR = "/opt/pagementor/docker";
 const DOCKER = `DOCKER_CONFIG=${DOCKER_CONFIG_DIR} docker`;
 
-async function pullImages(progress: Progress): Promise<void> {
+// force: alle Pakete neu holen (Knopf „Engine aktualisieren“), auch wenn der Paketstand gleich aussieht.
+// Sonst bleibt ein Paket alt, das beim letzten Laden auf ghcr.io noch nicht neu gebaut war
+async function pullImages(progress: Progress, force = false): Promise<void> {
   // Profile der zusätzlichen Stimmen zuerst, sonst fehlen ihre Pakete
   await writeEngineEnv();
   await syncCompose();
@@ -175,7 +177,7 @@ async function pullImages(progress: Progress): Promise<void> {
   const mark = (await inDistro(`cat ${IMAGES_MARK_IN_DISTRO} 2>/dev/null || (test -f /opt/pagementor/.images-version && echo '${rev}')`, { timeoutMs: 30_000, quiet: true })).stdout.trim();
   const compose = `${DOCKER} compose -f ${COMPOSE_IN_DISTRO}`;
   const list = await inDistro(
-    mark === rev
+    mark === rev && !force
       ? `for i in $(${compose} config --images); do docker image inspect "$i" >/dev/null 2>&1 || echo "$i"; done`
       : `${compose} config --images`,
     { timeoutMs: 60_000, quiet: true }
@@ -311,14 +313,15 @@ const REPAIRS: Record<RepairId, { title: string; fn: (p: Progress) => Promise<vo
   "import-distro": { title: "Engine-Umgebung einrichten", fn: importDistro },
   provision: { title: "Docker und GPU einrichten", fn: (p) => provision(p) },
   "start-docker": { title: "Docker starten", fn: startDocker },
-  "pull-images": { title: "Programmpakete laden", fn: pullImages },
+  "pull-images": { title: "Programmpakete laden", fn: (p) => pullImages(p) },
+  "update-images": { title: "Engine aktualisieren", fn: (p) => pullImages(p, true) },
   "start-services": { title: "Dienste starten", fn: startServices },
   "pull-model": { title: "Sprachmodell laden", fn: pullModel },
   "docling-models": { title: "Docling-Modelle laden", fn: doclingModels },
-  "apply-tts-engines": { title: "Stimmen-Engines übernehmen", fn: pullImages },
+  "apply-tts-engines": { title: "Stimmen-Engines übernehmen", fn: (p) => pullImages(p) },
 };
 
-const DOWNLOADS: RepairId[] = ["pull-images", "apply-tts-engines", "pull-model", "docling-models"];
+const DOWNLOADS: RepairId[] = ["pull-images", "update-images", "apply-tts-engines", "pull-model", "docling-models"];
 
 export function repairTitle(id: RepairId): string {
   return REPAIRS[id]?.title ?? id;

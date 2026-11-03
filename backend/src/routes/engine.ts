@@ -16,7 +16,7 @@ import { setThrottle, throttleStatus } from "../engine/throttle";
 
 export const engineRoutes = new Hono();
 
-const REPAIRS = new Set(["enable-wsl", "import-distro", "provision", "start-docker", "pull-images", "start-services", "docling-models", "pull-model", "apply-tts-engines"]);
+const REPAIRS = new Set(["enable-wsl", "import-distro", "provision", "start-docker", "pull-images", "update-images", "start-services", "docling-models", "pull-model", "apply-tts-engines"]);
 const SERVICES = new Set(["ollama", "docling", "qwen-tts", "kokoro-tts", "f5-tts", "tada-tts", "gpu-arbiter", "infinity", "meilisearch"]);
 
 engineRoutes.get("/status", (c) => c.json({ ...engineState(), windows: IS_WINDOWS }));

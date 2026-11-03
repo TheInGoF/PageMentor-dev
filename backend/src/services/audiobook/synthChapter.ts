@@ -122,7 +122,6 @@ export async function synthesizeChapter(params: {
         console.warn(`[tts] could not write chunk-text dump:`, err);
       }
     };
-    const batchSize = qwenBatchSize();
 
     const chunkFiles: string[] = [];
     let skippedCount = 0;
@@ -149,6 +148,8 @@ export async function synthesizeChapter(params: {
 
       // Qwen-Batching: die folgenden offenen Abschnitte derselben eigenen Stimme gleich mitsprechen.
       // Geht der Durchgang schief, spricht die Schleife sie einzeln wie bisher
+      // Je Abschnitt neu lesen: nach einem Fehler pausiert das Batching sofort
+      const batchSize = qwenBatchSize();
       if (batchSize > 1 && canBatch(segVoice)) {
         const group = [job];
         for (let k = i + 1; k < segments.length && group.length < batchSize; k++) {

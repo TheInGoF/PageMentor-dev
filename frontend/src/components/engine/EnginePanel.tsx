@@ -115,7 +115,7 @@ export function EnginePanel() {
       {status?.windows && (
         <Expert title={t("engine.maintenance")}>
           <SettingRow label={t("engine.update")} hint={t("engine.updateHint")}>
-            <Button variant="outline" className="w-full" onClick={() => repair("pull-images")} disabled={!!status?.task}>
+            <Button variant="outline" className="w-full" onClick={() => repair("update-images")} disabled={!!status?.task}>
               {t("engine.update")}
             </Button>
           </SettingRow>

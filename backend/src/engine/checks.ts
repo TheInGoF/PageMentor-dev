@@ -29,6 +29,7 @@ export type RepairId =
   | "provision"
   | "start-docker"
   | "pull-images"
+  | "update-images"
   | "start-services"
   | "pull-model"
   | "docling-models"

@@ -141,13 +141,14 @@ export async function speakUnit(p: {
   // Sprechen; fertige Stücke liegen schon da (neuer Versuch). Qwen-Batching: offene Stücke derselben eigenen
   // Stimme zusammen in einem Durchgang; schlägt er fehl, einzeln wie bisher
   const ready = (j: number) => existsSync(jobs[j].out) && statSync(jobs[j].out).size > 0;
-  const batchSize = qwenBatchSize();
   let done = jobs.filter((_, j) => ready(j)).length;
   p.onProgress?.(done, jobs.length);
   for (let j = 0; j < jobs.length; j++) {
     if (p.isCanceled()) throw new Error("abgebrochen");
     if (ready(j)) continue;
     const group = [j];
+    // Je Durchgang neu lesen: nach einem Fehler pausiert das Batching sofort, nicht erst in der nächsten Einheit
+    const batchSize = qwenBatchSize();
     if (batchSize > 1 && canBatch(jobs[j].voice)) {
       for (let k = j + 1; k < jobs.length && group.length < batchSize; k++) {
         if (ready(k)) continue;

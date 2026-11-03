@@ -3,6 +3,11 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.121.0 – 2026-11-03
+### Fix
+- „Engine aktualisieren“ lädt alle Programmpakete neu, auch wenn der Paketstand gleich aussieht; vorher blieb ein Paket alt, das beim letzten Laden noch nicht neu gebaut war.
+- Qwen-Batching hält sich sofort an die 30-Minuten-Pause nach einem Fehler, nicht erst ab der nächsten Einheit.
+
 ## 1.120.0 – 2026-11-03
 ### Fix
 - Qwen-Batching pausiert nach einem gescheiterten Durchgang 30 Minuten, statt bei jedem Stück erneut Rechenzeit zu verlieren.
