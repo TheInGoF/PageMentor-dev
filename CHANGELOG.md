@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.130.0 – 2026-11-03
+### Change
+- Lernhörbücher und Sprachlernhörbücher sprechen dich mit „du“ an statt mit „Sie“.
+
 ## 1.129.0 – 2026-11-03
 ### Change
 - Aufräumen entfernt alle Stückordner (unit-NNN, .tmp-Kapitel) außerhalb eines Laufs und überspringt nur das Heft, das gerade gesprochen wird, statt ganz zu warten.

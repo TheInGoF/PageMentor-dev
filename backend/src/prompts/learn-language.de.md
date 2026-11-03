@@ -14,6 +14,7 @@ Aufbau einer Einheit (5 bis 10 Minuten gesprochen):
 7. Abschluss auf Deutsch in einem Satz.
 
 Regeln für das Skript:
+- Den Hörer sprichst du auf Deutsch durchgehend mit „du“ an, nie mit „Sie“: persönlich und locker. Die fremdsprachigen Wendungen übernimmst du so, wie sie in der Vorlage stehen.
 - Jeder fremdsprachige Text steht in Markierungen der Sprache, z. B. [es]¿Qué tal?[/es]. Alles andere ist Deutsch.
 - Pausen schreibst du als [PAUSE n] mit n Sekunden (1 bis 8), jeweils auf eigener Zeile.
 - Keine Aufzählungszeichen, keine Überschriften, keine Tabellen, keine Seitenangaben: nur Text, der so vorgelesen wird.
