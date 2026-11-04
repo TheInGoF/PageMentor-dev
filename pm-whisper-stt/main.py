@@ -5,6 +5,8 @@ wie eine Stimm-Engine (/tts/stt/v1/audio/transcriptions), also nie gleichzeitig 
 
     GET  /health                       503, bis das Modell geladen ist (mit activity für die Ladeanzeige)
     POST /v1/audio/transcriptions      multipart: file, language (de/en/es …), prompt (optional)
+    POST /v1/audio/phonemes            multipart: file → Laute, die wirklich gesprochen wurden (Lautschrift)
+    POST /v1/audio/phonemize           JSON text, language → Soll-Lautschrift je Wort (espeak-ng)
 """
 
 from __future__ import annotations
@@ -19,6 +21,9 @@ from contextlib import asynccontextmanager
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+import phonemes
 
 from tts_common.activity import activity, remote_size, snapshot
 from tts_common.logs import get_logger, ring
@@ -88,7 +93,7 @@ app = FastAPI(title="pm-whisper-stt", lifespan=lifespan)
 async def health():
     if st.model is None:
         return JSONResponse(status_code=503, content={"ok": False, "reason": st.error or "model_loading", "model": REPO, "activity": snapshot()})
-    return {"ok": True, "engine": "stt", "model": REPO, "load_s": st.load_s, "activity": snapshot()}
+    return {"ok": True, "engine": "stt", "model": REPO, "load_s": st.load_s, "phonemes": phonemes.status(), "activity": snapshot()}
 
 
 @app.get("/diagnostics/recent-logs")
@@ -126,3 +131,37 @@ def transcribe(file: UploadFile = File(...), language: str = Form("de"), prompt:
                     words.append({"word": w.word.strip(), "start": round(w.start, 2), "end": round(w.end, 2), "prob": round(w.probability, 3)})
     log.info("stt: %.1fs Audio in %.1fs, %d Wörter", info.duration, time.time() - t0, len(words))
     return {"text": "".join(text).strip(), "language": info.language, "duration": round(info.duration, 2), "words": words}
+
+
+# Lautschrift des Gesprochenen: ohne Wörterbuch, darum auch falsch Gesprochenes so, wie es klingt
+@app.post("/v1/audio/phonemes")
+def audio_phonemes(file: UploadFile = File(...)):
+    suffix = os.path.splitext(file.filename or "")[1] or ".mp3"
+    with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
+        tmp.write(file.file.read())
+        tmp.flush()
+        audio = _decode(tmp.name)
+    t0 = time.time()
+    try:
+        phones = phonemes.recognize(audio)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"Lautschrift-Modell nicht verfügbar: {e}") from e
+    log.info("phonemes: %.1fs Audio in %.1fs, %d Laute", len(audio) / 16000, time.time() - t0, len(phones))
+    return {"phonemes": phones, "duration": round(len(audio) / 16000, 2)}
+
+
+class PhonemizeRequest(BaseModel):
+    text: str
+    language: str = "de"
+
+
+# Soll-Lautschrift: wie ein Text in dieser Sprache klingen soll
+@app.post("/v1/audio/phonemize")
+def text_phonemize(req: PhonemizeRequest):
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="leerer Text")
+    try:
+        words = phonemes.phonemize(req.text, req.language)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"espeak-ng fehlgeschlagen: {e}") from e
+    return {"words": words, "phonemes": [p for w in words for p in w]}

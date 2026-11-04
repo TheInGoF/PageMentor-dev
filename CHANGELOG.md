@@ -3,6 +3,10 @@
 Je Version: **New** (neu), **Change** (geändert), **Fix** (behoben). Kurze Sätze, innerhalb der Gruppe alphabetisch.
 Der Windows-Build übernimmt den Abschnitt der Version als Release-Text.
 
+## 1.135.0 – 2026-11-04
+### New
+- Engine: Der Whisper-Baustein schreibt Gesprochenes zusätzlich als Lautschrift auf (Phonem-Modell auf der CPU) und liefert die Soll-Lautschrift eines Textes (espeak-ng); Grundlage für die genauere Ausspracheprüfung.
+
 ## 1.134.0 – 2026-11-03
 ### Change
 - Intro: eine halbe Sekunde Denkpause nach jeder Zeile, keine längeren Pausen mehr (Lernhörbuch-Intro bisher ohne Pause zwischen den Zeilen).
